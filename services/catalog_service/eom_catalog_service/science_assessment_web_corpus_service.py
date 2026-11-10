@@ -24,7 +24,6 @@ from eom_catalog_contracts import (
     ScienceAssessmentCorpusSummary,
     ScienceAssessmentMetadataResolution,
     ScienceAssessmentWebAcquisition,
-    ScienceAssessmentWebCorpusManifest,
     ScienceAssessmentWebCorpusManifestV2,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
@@ -596,90 +595,6 @@ def _bounded_shards(
     if current:
         shards.append(tuple(current))
     return tuple(shards)
-
-
-def _build_manifest(
-    *,
-    plan: ScienceAssessmentWebCorpusPlan,
-    acquisition: ScienceAssessmentWebAcquisition,
-    discovery: ScienceAssessmentDiscovery,
-    aggregate: dict[str, _AggregatedPdf],
-    failures: tuple[DownloadFailure, ...],
-    resolved: dict[str, _ResolvedSource],
-    new_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...],
-) -> ScienceAssessmentWebCorpusManifest:
-    documents = tuple(
-        ScienceAssessmentCorpusDocument(
-            document_id="sciencedoc_" + content_hash.removeprefix("sha256:")[:32],
-            sha256=content_hash,
-            bytes=document.bytes,
-            page_count=document.page_count,
-            original_filename=document.original_filename,
-            media_type="application/pdf",
-            document_role="PROBLEM_DOCUMENT",
-            subject_family=document.subject_family,
-            subject_label=document.subject_label,
-            issuer_type=document.issuer_type,
-            administration_year=document.administration_year,
-            grade=document.grade,
-            session_label=document.session_label,
-            publication_disposition=resolved[content_hash].disposition,
-            origins=document.origins,
-            source=resolved[content_hash].pointer,
-        )
-        for content_hash, document in sorted(aggregate.items())
-    )
-    failure_models = tuple(
-        sorted(
-            {
-                ScienceAssessmentCorpusAcquisitionFailure(
-                    post_url=value.candidate.post_url,
-                    download_url=value.candidate.download_url,
-                    error_code=value.error_code,
-                )
-                for value in failures
-            },
-            key=lambda value: (value.post_url, value.download_url, value.error_code),
-        )
-    )
-    origin_count = sum(len(value.origins) for value in documents)
-    reused = sum(value.publication_disposition == "REUSED_EXISTING" for value in documents)
-    identity = content_sha256(
-        {
-            "schema_version": "science-assessment-web-corpus-manifest/1.0",
-            "plan_id": plan.plan_id,
-            "plan_sha256": plan.plan_sha256,
-            "acquisition_sha256": acquisition.acquisition_sha256,
-        }
-    )
-    summary = ScienceAssessmentCorpusSummary(
-        unique_document_count=len(documents),
-        scanned_post_count=discovery.post_count,
-        candidate_count=len(discovery.candidates),
-        acquisition_failure_count=len(failure_models),
-        duplicate_observation_count=origin_count - len(documents),
-        reused_existing_count=reused,
-        new_intake_count=len(documents) - reused,
-        total_bytes=sum(value.bytes for value in documents),
-    )
-    value: dict[str, object] = {
-        "schema_version": "science-assessment-web-corpus-manifest/1.0",
-        "corpus_id": "sciencecorpus_" + identity.removeprefix("sha256:")[:32],
-        "plan_id": plan.plan_id,
-        "plan_sha256": plan.plan_sha256,
-        "acquisition_sha256": acquisition.acquisition_sha256,
-        "observed_at": acquisition.observed_at.isoformat().replace("+00:00", "Z"),
-        "pdf_validator": acquisition.pdf_validator.model_dump(mode="json"),
-        "documents": [item.model_dump(mode="json") for item in documents],
-        "failures": [item.model_dump(mode="json") for item in failure_models],
-        "intake_shards": [item.model_dump(mode="json") for item in new_shards],
-        "summary": summary.model_dump(mode="json"),
-        "manifest_sha256": "sha256:" + "0" * 64,
-    }
-    value["manifest_sha256"] = content_sha256(
-        {key: item for key, item in value.items() if key != "manifest_sha256"}
-    )
-    return ScienceAssessmentWebCorpusManifest.model_validate(value)
 
 
 def _build_manifest_v2(

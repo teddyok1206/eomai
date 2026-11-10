@@ -136,6 +136,15 @@ callback·설치 스크립트·역사적 조회를 함께 확인한다. 테스�
 않는다. Git source 정리와 운영 설치본·실행 pin 교체는 별개이며, 삭제한 source는 Git 이력으로
 복원한다. 이 검토가 모든 동적 호출의 부재나 전체 dead code 제거를 증명하는 것은 아니다.
 
+과학 기출 웹 수집의 신규 manifest 작성은 `science_assessment_web_corpus_service`의
+V2 경로가 담당한다. 호출이 끊긴 V1 private writer는 제거했지만, 과거 manifest의
+schema·공개 모델·조회 검증기는 보존한다. 신규 작성 검사는 V2를, historical 읽기 검사는
+V1 fixture를 직접 검증한다. 버전 이름이 오래됐다는 이유만으로 reader를 삭제하지 않는다.
+
+README는 제품 소개와 핵심 흐름만 유지한다. 기능별 설계·운영 탐색은 `docs/README.md`,
+이전 상세 상태표는 날짜가 붙은 `docs/status/README_CHECKPOINT_2026-11-10.md`로 분리했다.
+각 배포 수치와 진행 상황을 다시 README에 누적하지 않는다.
+
 cache와 완료된 build source/설치 시뮬레이션은 실제 실행 참조·정확한 target identity·
 복구용 wheel/archive/Git을 확인해 정리한다. 이름이 오래됐다는 이유로 released schema,
 staging 원본·실패 로그·인증·설치 runtime·구형 벡터를 지우지 않는다. 소켓과 symlink,

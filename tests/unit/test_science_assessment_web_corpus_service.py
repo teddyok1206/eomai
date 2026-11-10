@@ -14,8 +14,6 @@ from eom_catalog_contracts import (
     ScienceAssessmentCorpusSourcePointer,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
-    validate_science_corpus_manifest_against_acquisition,
-    validate_science_corpus_manifest_against_plan,
     validate_science_corpus_manifest_v2_against_inputs,
     validate_science_corpus_manifest_v2_against_plan,
 )
@@ -38,7 +36,6 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _aggregate_acquired,
     _AggregatedPdf,
     _bounded_shards,
-    _build_manifest,
     _build_manifest_v2,
     _materialize_corpus_manifest,
     _require_acquisition_projection,
@@ -173,11 +170,13 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
         observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
     )
 
-    manifest = _build_manifest(
+    resolution = resolve_science_assessment_metadata(acquisition)
+    manifest = _build_manifest_v2(
         plan=plan,
         acquisition=acquisition,
+        resolution=resolution,
         discovery=discovery,
-        aggregate=aggregate,
+        aggregate=_aggregate_acquired(acquired, resolution),
         failures=(),
         resolved={
             content_hash: _ResolvedSource(
@@ -195,15 +194,17 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
     assert manifest.intake_shards == ()
     assert manifest.acquisition_sha256 == acquisition.acquisition_sha256
     validate_contract(
-        "science-assessment-web-corpus-manifest",
+        "science-assessment-web-corpus-manifest-v2",
         manifest.model_dump(mode="json"),
     )
-    validate_science_corpus_manifest_against_plan(manifest, plan)
-    validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
+    validate_science_corpus_manifest_v2_against_plan(manifest, plan)
+    validate_science_corpus_manifest_v2_against_inputs(manifest, acquisition, resolution)
     drifted_document = manifest.documents[0].model_copy(update={"subject_label": "지구과학1"})
     drifted_manifest = manifest.model_copy(update={"documents": (drifted_document,)})
     with pytest.raises(ValueError, match="metadata differs"):
-        validate_science_corpus_manifest_against_acquisition(drifted_manifest, acquisition)
+        validate_science_corpus_manifest_v2_against_inputs(
+            drifted_manifest, acquisition, resolution
+        )
 
 
 def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
@@ -242,11 +243,13 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
         document_count=1,
     )
 
-    manifest = _build_manifest(
+    resolution = resolve_science_assessment_metadata(acquisition)
+    manifest = _build_manifest_v2(
         plan=plan,
         acquisition=acquisition,
+        resolution=resolution,
         discovery=discovery,
-        aggregate=aggregate,
+        aggregate=_aggregate_acquired(acquired, resolution),
         failures=(),
         resolved={
             content_hash: _ResolvedSource(
@@ -259,6 +262,9 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
 
     assert manifest.summary.new_intake_count == 1
     assert manifest.intake_shards == (shard,)
+    validate_contract("science-assessment-web-corpus-manifest-v2", manifest.model_dump(mode="json"))
+    validate_science_corpus_manifest_v2_against_plan(manifest, plan)
+    validate_science_corpus_manifest_v2_against_inputs(manifest, acquisition, resolution)
 
 
 def test_manifest_v2_binds_exact_resolution_policy_and_origins(tmp_path: Path) -> None:

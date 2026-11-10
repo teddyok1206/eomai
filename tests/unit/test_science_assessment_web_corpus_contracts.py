@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
     validate_science_acquisition_against_plan,
+    validate_science_corpus_manifest_against_acquisition,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_identifiers import content_sha256
@@ -241,3 +242,71 @@ def test_science_corpus_rejects_hash_drift_and_unlisted_host() -> None:
     manifest = ScienceAssessmentWebCorpusManifest.model_validate(manifest_value)
     with pytest.raises(ValueError, match="allowlist"):
         validate_science_corpus_manifest_against_plan(manifest, plan)
+
+
+def test_historical_v1_manifest_still_validates_against_acquisition() -> None:
+    """Retiring the unused V1 writer must not retire historical readers/validators."""
+    plan = _plan()
+    manifest_value = _manifest(plan)
+    documents = manifest_value["documents"]
+    assert isinstance(documents, list)
+    acquisition_value = _acquisition(plan)
+    observations = []
+    for document in documents:
+        observations.append(
+            {
+                key: document[key]
+                for key in (
+                    "original_filename",
+                    "subject_family",
+                    "subject_label",
+                    "issuer_type",
+                    "administration_year",
+                    "grade",
+                    "session_label",
+                    "sha256",
+                    "bytes",
+                    "page_count",
+                )
+            }
+            | document["origins"][0]
+            | {"member_path": "documents/" + document["sha256"][7:] + ".pdf"}
+        )
+    acquisition_value["successful_observations"] = observations
+    acquisition_value["summary"] = {
+        "scanned_post_count": 2,
+        "candidate_count": 2,
+        "successful_observation_count": 2,
+        "failed_observation_count": 0,
+        "rejected_link_count": 0,
+        "unique_pdf_count": 2,
+        "unique_pdf_bytes": 8192,
+    }
+    acquisition_value["acquisition_sha256"] = content_sha256(
+        {key: value for key, value in acquisition_value.items() if key != "acquisition_sha256"}
+    )
+    acquisition = ScienceAssessmentWebAcquisition.model_validate(acquisition_value)
+    manifest_value["acquisition_sha256"] = acquisition.acquisition_sha256
+    manifest_value["observed_at"] = acquisition_value["observed_at"]
+    identity = content_sha256(
+        {
+            key: manifest_value[key]
+            for key in ("schema_version", "plan_id", "plan_sha256", "acquisition_sha256")
+        }
+    )
+    manifest_value["corpus_id"] = "sciencecorpus_" + identity.removeprefix("sha256:")[:32]
+    manifest_value["manifest_sha256"] = content_sha256(
+        {key: value for key, value in manifest_value.items() if key != "manifest_sha256"}
+    )
+    validate_contract("science-assessment-web-corpus-manifest", manifest_value)
+    manifest = ScienceAssessmentWebCorpusManifest.model_validate(manifest_value)
+    validate_science_corpus_manifest_against_plan(
+        manifest, ScienceAssessmentWebCorpusPlan.model_validate(plan)
+    )
+    validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
+    drifted = manifest.documents[0].model_copy(update={"subject_label": "다른 과목"})
+    with pytest.raises(ValueError, match="metadata differs"):
+        validate_science_corpus_manifest_against_acquisition(
+            manifest.model_copy(update={"documents": (drifted, *manifest.documents[1:])}),
+            acquisition,
+        )
