@@ -58,6 +58,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/item-db-draft.js",
         "static/item-db-assembly.js",
         "static/item-db-delivery.js",
+        "static/curated-output-library.js",
         "static/content-planning-draft.js",
         "static/content-planning-copy.js",
         "static/content-planning-location.js",

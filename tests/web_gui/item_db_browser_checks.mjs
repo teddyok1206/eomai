@@ -49,30 +49,30 @@ async function api(path, options = {}) {
     fixture.hold = null;
     await new Promise(resolve => {fixture.release = resolve;});
   }
-  if (path.startsWith('/item-db/assemblies?')) return {values: fixture.saved && !fixture.savedRemoved ? [{assembly_id: 'assembly_' + '1'.repeat(32), assembly_revision_id: 'assemblyrev_' + '2'.repeat(32), title: fixture.saved.title || '', manifest_sha256: 'sha256:' + '3'.repeat(64), created_at: '2026-11-04T12:00:00Z', placement_count: fixture.saved.placements.length}] : [], next_cursor: null};
-  if (path.includes('/hwpx-builds/latest?')) return fixture.delivery || null;
+  if (path.includes('/hwpx-builds/latest?')) return fixture.delivery?.assembly_id === path.split('/')[3] ? fixture.delivery : null;
   if (path.endsWith('/hwpx-builds') && options.method === 'POST') {
-    fixture.delivery = {assembly_id: 'assembly_' + '1'.repeat(32), assembly_revision_id: 'assemblyrev_' + '2'.repeat(32), build_id: 'hwpxbuild_' + '4'.repeat(32), state: 'SUCCEEDED', download_available: true};
+    if (fixture.failBuildOnce) {fixture.failBuildOnce = false; throw new Error('합성 제작 응답 시간 초과');}
+    fixture.delivery = {assembly_id: path.split('/')[3], assembly_revision_id: options.body.assembly_revision_id,
+      build_id: 'hwpxbuild_' + '4'.repeat(32), state: 'SUCCEEDED', download_available: true};
+    if (fixture.loseCommittedBuildReply) {fixture.loseCommittedBuildReply = false; throw new Error('합성 완료 응답 유실');}
     return fixture.delivery;
   }
   if (path.includes('/hwpx-builds/hwpxbuild_')) return fixture.delivery;
   if (path === '/item-db/assemblies' && options.method === 'POST') {
     fixture.saved = options.body;
-    fixture.savedRemoved = false;
-    return {assembly_id: 'assembly_' + '1'.repeat(32), placement_count: options.body.placements.length};
+    const identity = options.headers['Idempotency-Key'];
+    fixture.saveKeys ||= [];
+    if (!fixture.saveKeys.includes(identity)) fixture.saveKeys.push(identity);
+    const suffix = fixture.saveKeys.indexOf(identity).toString(16).padStart(32, '0');
+    const receipt = {assembly_id: 'assembly_' + suffix, assembly_revision_id: 'assemblyrev_' + suffix,
+      manifest_sha256: 'sha256:' + '3'.repeat(64), state: 'INPUT_PINNED', placement_count: options.body.placements.length};
+    if (fixture.holdSave) {
+      fixture.holdSave = false;
+      await new Promise(resolve => {fixture.releaseSave = resolve;});
+    }
+    if (fixture.failSaveOnce) {fixture.failSaveOnce = false; throw new Error('합성 저장 응답 시간 초과');}
+    return fixture.invalidReceipt ? {...receipt, manifest_sha256: 'invalid'} : receipt;
   }
-  if (path.endsWith('/remove') && options.method === 'POST') {
-    fixture.savedRemoved = true;
-    if (fixture.failRemovalOnce) {fixture.failRemovalOnce = false; throw new Error('합성 삭제 응답 시간 초과');}
-    return {assembly_id: 'assembly_' + '1'.repeat(32), ...options.body, removed_at: '2026-11-05T13:00:00Z'};
-  }
-  if (path === '/item-db/assemblies/assembly_' + '1'.repeat(32)) return {
-    assembly_id: 'assembly_' + '1'.repeat(32), assembly_revision_id: 'assemblyrev_' + '2'.repeat(32),
-    manifest_sha256: 'sha256:' + '3'.repeat(64),
-    placements: fixture.saved.placements.map(value => {
-      const {position, ...pointer} = value;
-      return {...pointer, ...(pointer.placement_kind === 'EXTERNAL_SOURCE_DOCUMENT' ? {external_number: pointer.source_id.slice(-5)} : {})};
-    })};
   if (path.startsWith('/item-db/registered/search?')) {
     if (fixture.failNextSearch) {fixture.failNextSearch = false; throw new Error('합성 조회 실패');}
     const params = new URL('https://fixture' + path).searchParams;
@@ -166,6 +166,7 @@ function plan(entries, isCurrent) {
 }
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
   canPlan: () => fixture.allowPlanning,
+  canPrint: () => fixture.allowPrint !== false,
   planningSelectionHint: () => fixture.planningTarget ? '합성 교재 · 1회차' : null,
   onPlanningSelection: (pointer, label, isCurrent) => plan([{pointer, label}], isCurrent),
   onPlanningSelections: plan,
@@ -227,7 +228,7 @@ try {
   const preview = page.locator(".item-db-edition.is-final").getByRole("link", {name: "PDF 열기"});
   await preview.waitFor();
   assert.match(await preview.getAttribute("href"), /editions\/3\/preview\.pdf\?source_revision_id=extitemrev_0+10310$/);
-  await page.getByRole("button", {name: "조립 목록에 담기", exact: true}).click();
+  await page.getByRole("button", {name: "목록에 담기", exact: true}).click();
   assert.equal(await page.locator("#item-db-draft-count").innerText(), "1개");
   assert.equal(await page.locator("#item-db-tab-count").innerText(), "1");
 
@@ -324,8 +325,8 @@ try {
   assert.match(await rows.first().innerText(), /10310[\s\S]*승인 완료/);
   await rows.first().getByRole('button').click();
   await page.getByRole('button', {name: '등록 문항 미리보기', exact: true}).waitFor();
-  await page.getByRole('button', {name: '등록 문항을 조립 목록에 담기', exact: true}).waitFor();
-  assert.equal(await page.getByRole('button', {name: '등록 문항을 조립 목록에 담기', exact: true}).isEnabled(), true,
+  await page.getByRole('button', {name: '등록 문항을 목록에 담기', exact: true}).waitFor();
+  assert.equal(await page.getByRole('button', {name: '등록 문항을 목록에 담기', exact: true}).isEnabled(), true,
     'legacy exam eligibility must not hide registered-item curated selection');
   assert.match(await page.locator('#item-db-detail').innerText(), /출제 의도[\s\S]*자료 해석/);
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /교육과정 단원|물질의 규칙성/u);
@@ -365,13 +366,14 @@ try {
   await rows.first().getByRole("button").click();
   await page.getByRole("button", {name: "문항 미리보기", exact: true}).click();
   assert.equal(await page.evaluate(() => window.dbFixture.opened.length), 1);
-  await page.getByRole("button", {name: "조립 목록에 담기", exact: true}).click();
+  await page.getByRole("button", {name: "목록에 담기", exact: true}).click();
   assert.equal(await page.locator("#item-db-draft-count").innerText(), "2개");
   assert.equal(await page.locator("#item-db-tab-count").innerText(), "2");
-  await page.getByRole("tab", {name: /배치/}).click();
+  await page.getByRole("tab", {name: /간편 출력/}).click();
   assert.equal(await page.locator("#item-db-search-panel").isVisible(), false);
   assert.equal(await page.locator("#item-db-assembly-panel").isVisible(), true);
-  assert.equal(await page.locator("#mock-exam-submit").count(), 1);
+  assert.equal(await page.locator("#mock-exam-submit").count(), 0);
+  assert.equal(await page.locator('#item-db-saved-list').count(), 0, 'saved history belongs in Excel');
   const draftRows = page.locator('#item-db-draft-list tr');
   assert.deepEqual(await draftRows.locator('th').allTextContents(), ['1번', '2번']);
   assert.equal(await draftRows.first().locator('.item-db-draft-card button').count(), 0);
@@ -382,22 +384,20 @@ try {
   assert.match(await page.locator('#item-db-replacement-label').innerText(), /2번 문항 교체/u);
   await page.getByRole('button', {name: '교체 취소', exact: true}).click();
   assert.equal(await page.locator('#item-db-replacement').isVisible(), false);
-  await page.getByRole('tab', {name: /배치/}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
   const callsBeforeImport = await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length);
-  await page.locator('#item-db-assembly-name').fill('취소 후 보존할 초안');
   await page.evaluate(() => {dbFixture.rejectPlanning = true;});
   await page.locator('#item-db-draft-to-excel').click();
   assert.equal((await page.evaluate(() => dbFixture.planningImports)).length, 2, 'DB-first list did not open destination chooser');
   assert.equal(await draftRows.count(), 2, 'cancellation removed private draft');
-  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '취소 후 보존할 초안');
   await page.evaluate(() => {dbFixture.rejectPlanning = false;});
   await page.locator('#item-db-draft-to-excel').click();
   assert.equal(await draftRows.count(), 2, 'successful DB-first handoff removed private draft');
-  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '취소 후 보존할 초안');
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개');
-  assert.equal(await page.locator('#item-db-draft-save').isDisabled(), true);
-  await page.getByRole('button', {name: '기존 조립 초안 가져오기', exact: true}).click();
+  assert.equal(await page.locator('#item-db-quick-create').isDisabled(), true);
+  assert.equal(await page.locator('#item-db-quick-create').isVisible(), false);
+  await page.getByRole('button', {name: '간편 출력 목록 가져오기', exact: true}).click();
   await page.locator('#item-db-draft-to-excel').click();
   assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length), callsBeforeImport, 'selection handoff performed API mutation');
   const imported = await page.evaluate(() => dbFixture.planningImports);
@@ -405,26 +405,39 @@ try {
   assert.equal(imported[0].pointer.placement_kind, 'EXTERNAL_SOURCE_DOCUMENT');
   assert.equal(imported[1].pointer.placement_kind, 'PAST_EXAM_ITEM_REVISION');
   assert.equal(await draftRows.count(), 2, 'copy removed original DB draft');
-  await page.locator('#item-db-assembly-name').fill('통합과학 시범 조립');
-  await page.locator("#item-db-draft-save").click();
+  // Quick output fixes one immutable input then starts the existing delivery. An
+  // unknown save outcome retries its key; unknown build outcome reuses that input.
+  const savesBefore = await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').length);
+  await page.evaluate(() => {dbFixture.failSaveOnce = true;});
+  await page.locator('#item-db-quick-create').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-message').textContent.includes('합성 저장 응답 시간 초과'));
+  assert.equal(await page.locator('#item-db-quick-result a').count(), 0);
+  await page.evaluate(() => {dbFixture.failBuildOnce = true;});
+  await page.locator('#item-db-quick-create').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-quick-result').textContent.includes('합성 제작 응답 시간 초과'));
   await page.waitForFunction(() => window.dbFixture.saved?.placements.length === 2);
   assert.equal(await page.locator('#item-db-message').isVisible(), true);
   const saved = await page.evaluate(() => window.dbFixture.saved);
-  assert.equal(saved.title, '통합과학 시범 조립');
+  assert.equal(saved.title, '간편 출력 · 2문항');
   assert.equal(saved.schema_version, 'curated-document-assembly-draft/2.0');
-  await page.locator('#item-db-saved-list .item-db-saved-title').waitFor();
-  assert.equal(await page.locator('#item-db-saved-list .item-db-saved-title').innerText(), '통합과학 시범 조립');
-  await page.locator('#item-db-assembly-name').fill('아직 저장하지 않은 제목');
-  await page.getByRole('button', {name: '다시 열기', exact: true}).click();
-  await page.waitForFunction(() => document.querySelector('#item-db-assembly-name').value === '통합과학 시범 조립');
+  const saveAttempts = await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies'));
+  assert.equal(saveAttempts.length, savesBefore + 2);
+  assert.equal(saveAttempts.at(-2).headers['Idempotency-Key'], saveAttempts.at(-1).headers['Idempotency-Key']);
+  assert.deepEqual(saveAttempts.at(-2).body, saveAttempts.at(-1).body);
   assert.equal(saved.placements[0].placement_kind, "EXTERNAL_SOURCE_DOCUMENT");
   assert.equal(saved.placements[1].placement_kind, "PAST_EXAM_ITEM_REVISION");
   assert.ok(saved.placements[1].graph_snapshot_revision_id.startsWith("graphrev_"));
-  await page.getByRole('button', {name: 'HWPX 제작', exact: true}).click();
+  await page.locator('#item-db-quick-create').click();
   await page.getByRole('link', {name: 'HWPX 다운로드', exact: true}).waitFor();
   await page.getByRole('button', {name: '상태 확인', exact: true}).click();
+  await page.locator('#item-db-quick-create').click();
   const deliveryCalls = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST'));
-  assert.equal(deliveryCalls.length, 1, 'completed status reads never resubmit the assembly');
+  assert.equal(deliveryCalls.length, 2, 'completed status reads never resubmit the assembly');
+  assert.equal(deliveryCalls[0].headers['Idempotency-Key'], deliveryCalls[1].headers['Idempotency-Key']);
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').length), savesBefore + 2,
+    'retrying an existing output saved another input');
+  assert.equal(await page.evaluate(() => dbFixture.calls.some(call => call.path.startsWith('/content-planning/'))), false,
+    'quick output created content usage or print records');
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /itemrev_|graphrev_|extitemrev_/);
 
   // A replacement edits only its original draft position; saved assembly/HWPX stays pinned.
@@ -433,7 +446,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 2);
   await rows.nth(1).getByRole('button').click();
   await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   assert.equal(await page.locator('#item-db-assembly-panel').isVisible(), true);
   assert.match(await draftRows.nth(1).locator('.item-db-draft-card').innerText(), /10318/u);
   assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /10310/u);
@@ -442,7 +455,7 @@ try {
   await page.locator('#item-db-source').selectOption('PAST_EXAM');
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 1);
   await rows.first().getByRole('button').click();
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   assert.match(await draftRows.nth(1).locator('.item-db-draft-card').innerText(), /합성 시험 17번/u);
 
   // Small screens scroll the table itself, not the entire page, and show details below.
@@ -459,17 +472,17 @@ try {
   const mobileLeft = await page.locator(".item-db-panel").boundingBox();
   const mobileRight = await page.locator("#item-db-detail-panel").boundingBox();
   assert.ok(mobileRight.y >= mobileLeft.y + mobileLeft.height);
-  await page.getByRole("tab", {name: /배치/}).click();
+  await page.getByRole("tab", {name: /간편 출력/}).click();
   assert.equal(await page.locator("#item-db-draft-list").isVisible(), true);
-  assert.equal(await page.locator("#mock-exam-selections").isVisible(), true);
+  assert.equal(await page.locator("#mock-exam-selections").count(), 0);
   const assemblyWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   assert.ok(assemblyWidth <= 390, "mobile assembly tab must not overflow the viewport");
-  await page.getByRole("tab", {name: /배치/}).press("ArrowLeft");
+  await page.getByRole("tab", {name: /간편 출력/}).press("ArrowLeft");
   assert.equal(await page.locator("#item-db-search-panel").isVisible(), true);
 
   // Similarity reuses the exact lookup/detail/draft rather than a second item viewer.
   await page.setViewportSize({width: 1600, height: 1000});
-  assert.equal(await page.getByRole('tab').filter({hasText: /^(조회|배치|유사도)/u}).count(), 3);
+  assert.equal(await page.getByRole('tab').filter({hasText: /^(조회|간편 출력|유사도)/u}).count(), 3);
   assert.equal(await page.locator('#item-db-similarity-start').isEnabled(), true);
   await page.locator('#item-db-similarity-start').click();
   await page.locator('#item-db-similarity-run').click();
@@ -489,14 +502,14 @@ try {
   assert.equal(await rows.count(), 2, 'similarity navigation keeps the original lookup table');
   await page.getByRole('button', {name: '문항 미리보기', exact: true}).click();
   assert.equal(await page.evaluate(() => window.dbFixture.opened.at(-1).item_revision_id), 'itemrev_' + '9'.repeat(32));
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '3개');
   await page.getByRole('tab', {name: '유사도', exact: true}).click();
   assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.length), 1, 'opening a tab does not resubmit');
   await page.getByRole('button', {name: '고유번호 10318 조회에서 열기'}).click();
   await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
   assert.equal(await page.locator('#item-db-search-panel').isVisible(), true);
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '4개');
 
   // A list is one immutable intent; top_k is pinned and PENDING observation keeps it.
@@ -547,7 +560,7 @@ try {
   await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 1);
   await page.locator('#item-db-similarity-source-select').selectOption('1');
   await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 2);
-  await page.getByRole('tab', {name: /배치/}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
   await page.evaluate(() => window.dbFixture.releaseSimilar['extitem_' + '10318'.padStart(32, '0')]());
   await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
   assert.equal(await page.locator('#item-db-assembly-panel').isVisible(), true);
@@ -561,7 +574,7 @@ try {
   await page.getByRole('button', {name: '고유번호 10310 조회에서 열기'}).click();
   await page.waitForFunction(() => document.querySelector('#item-db-detail').textContent.includes('버전이 바뀌었습니다'));
   assert.equal(await page.locator('#item-db-similarity-start').isDisabled(), true);
-  assert.equal(await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).count(), 0);
+  assert.equal(await page.getByRole('button', {name: '목록에 담기', exact: true}).count(), 0);
   await page.evaluate(() => {window.dbFixture.staleSource = false;});
   await page.locator('#item-db-search-tab').press('End');
   assert.equal(await page.locator('#item-db-similarity-panel').isVisible(), true);
@@ -577,27 +590,7 @@ try {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({path: screenshot, fullPage: true});
   }
-  // List removal never deletes the source/manifest/output. A lost reply reuses its key.
-  await page.getByRole('tab', {name: /배치/}).click();
-  const removedBefore = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/remove')).length);
-  page.once('dialog', dialog => dialog.dismiss());
-  await page.getByRole('button', {name: /목록에서 삭제$/u}).click();
-  assert.equal(await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/remove')).length), removedBefore);
-  await page.evaluate(() => {window.dbFixture.failRemovalOnce = true;});
-  page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', {name: /목록에서 삭제$/u}).click();
-  await page.waitForFunction(() => document.querySelector('#item-db-message').textContent.includes('목록 삭제 실패'));
-  assert.equal(await page.locator('#item-db-message').isVisible(), true);
-  page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', {name: /목록에서 삭제$/u}).click();
-  await page.waitForFunction(() => !document.querySelector('#item-db-saved-list .item-db-saved-title'));
-  const removal = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/remove')).slice(-2));
-  assert.equal(removal.length, 2);
-  assert.equal(removal[0].headers['Idempotency-Key'], removal[1].headers['Idempotency-Key']);
-  assert.deepEqual(removal[0].body, removal[1].body);
-  assert.equal(await page.evaluate(() => window.dbFixture.delivery.state), 'SUCCEEDED');
-  assert.equal(await page.evaluate(() => window.dbFixture.saved.placements.length), 2);
-  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  // Existing saved output listing/removal is covered by the Excel library tests.
   await page.evaluate(() => {window.dbFixture.failNextSearch = true;});
   await page.locator("#item-db-search").click();
   await page.waitForFunction(() => document.querySelector('#item-db-result-count').textContent === '조회 실패');
@@ -647,19 +640,18 @@ try {
     dbFixture.controller.setOwner('operator_' + '2'.repeat(32));
     dbFixture.controller.openGraph(dbFixture.graph);
   });
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
-  await page.getByRole('tab', {name: /배치/}).click();
-  await page.locator('#item-db-assembly-name').fill('보존할 개인 초안');
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-title').innerText(), 'Excel에 담을 문항');
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개');
   await page.getByRole('tab', {name: '조회', exact: true}).click();
   await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
   const mutationsBeforeCollector = await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length);
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).evaluate(button => {
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).evaluate(button => {
     for (let index = 0; index < 301; index += 1) button.click();
   });
-  await page.getByRole('tab', {name: /배치/}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '301개');
   assert.equal(await draftRows.count(), 100, 'collector materialized unbounded DOM rows');
   assert.equal(await draftRows.first().locator('th').innerText(), '1번');
@@ -671,7 +663,7 @@ try {
   await draftRows.first().getByRole('button', {name: '교체', exact: true}).click();
   await page.evaluate(() => dbFixture.controller.openGraph({...dbFixture.graph,
     source_display_label: '대체 문항', item_id: 'item_' + '7'.repeat(32), item_revision_id: 'itemrev_' + '7'.repeat(32)}));
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /대체 문항/u);
   await draftRows.first().getByRole('button', {name: '위로', exact: true}).click();
   assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /합성 시험 17번/u);
@@ -680,10 +672,10 @@ try {
   assert.equal(await draftRows.last().locator('th').innerText(), '300번');
   assert.match(await draftRows.last().locator('.item-db-draft-card').innerText(), /대체 문항/u);
   await page.getByRole('tab', {name: '조회', exact: true}).click();
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
-  await page.getByRole('tab', {name: /배치/}).click();
-  assert.equal(await page.locator('#item-db-draft-save').isDisabled(), true);
-  await page.locator('#item-db-draft-save').dispatchEvent('click');
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
+  assert.equal(await page.locator('#item-db-quick-create').isDisabled(), true);
+  await page.locator('#item-db-quick-create').dispatchEvent('click');
   assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length), mutationsBeforeCollector,
     'occurrence collection invoked legacy private SAVE');
   await page.evaluate(() => {dbFixture.rejectPlanning = true;});
@@ -696,19 +688,16 @@ try {
   await page.evaluate(() => {dbFixture.rejectPlanning = false;});
   await page.locator('#item-db-draft-to-excel').click();
   assert.deepEqual(await page.evaluate(() => dbFixture.planningImports), rejected, 'handoff changed occurrence order/identity');
-  assert.equal(await page.locator('#item-db-draft-title').innerText(), '조립 순서 초안');
+  assert.equal(await page.locator('#item-db-draft-title').innerText(), '간편 출력 목록');
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개');
-  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
   assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /합성 시험 17번/u);
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개', 'successful handoff left stale selections');
-  await page.evaluate(() => {dbFixture.savedRemoved = false;});
-  await page.locator('#item-db-saved-refresh').click();
-  await page.getByRole('button', {name: '다시 열기', exact: true}).click();
-  await page.waitForFunction(() => document.querySelector('#item-db-draft-count').textContent === '2개');
-  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
+  await page.getByRole('button', {name: '간편 출력 목록 가져오기', exact: true}).click();
+  await page.getByRole('button', {name: '간편 출력 목록 가져오기', exact: true}).click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개');
   await page.evaluate(() => {dbFixture.planningTarget = false; dbFixture.controller.open();});
-  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'opening saved assembly replaced private draft');
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'Excel collection replaced private draft');
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개', 'switching modes discarded collector');
   await page.evaluate(() => {dbFixture.holdPlanning = true; dbFixture.releasePlanning = null;});
@@ -719,7 +708,6 @@ try {
   await page.evaluate(() => {dbFixture.planningTarget = false; dbFixture.controller.open(); dbFixture.releasePlanning();});
   await page.waitForFunction(() => !document.querySelector('#item-db-draft-to-excel').disabled);
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'late handoff replaced private draft');
-  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open(); dbFixture.releasePlanning = null;});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개', 'late mode-changed handoff erased collector');
   await page.locator('#item-db-draft-to-excel').click();
@@ -727,9 +715,71 @@ try {
   await page.evaluate(() => dbFixture.controller.setOwner('operator_' + '3'.repeat(32)));
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개', 'collector leaked across owners');
   await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
-  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
   await page.evaluate(() => {dbFixture.releasePlanning(); dbFixture.holdPlanning = false;});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'old owner completion erased new owner selections');
+
+  // A saved response for an old operator cannot start a build for the new one.
+  await page.evaluate(() => {dbFixture.planningTarget = false; dbFixture.controller.open();});
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
+  await page.evaluate(() => {dbFixture.holdSave = true; dbFixture.releaseSave = null;});
+  const beforeOwnerChange = await page.evaluate(() => dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST').length);
+  await page.locator('#item-db-quick-create').evaluate(button => {button.click(); button.click();});
+  await page.waitForFunction(() => typeof dbFixture.releaseSave === 'function');
+  await page.evaluate(() => dbFixture.controller.setOwner('operator_' + '4'.repeat(32)));
+  await page.evaluate(() => dbFixture.releaseSave());
+  await page.waitForFunction(() => document.querySelector('#item-db-draft-count').textContent === '0개');
+  assert.equal(await page.locator('#item-db-quick-result a').count(), 0, 'old owner output remained visible');
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST').length), beforeOwnerChange,
+    'old owner save response started a build');
+
+  // A malformed saved-input pointer must not reach the build endpoint. The same
+  // exact selection retains its save key while the reply is checked again.
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
+  const beforeDeniedOutput = await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').length);
+  await page.evaluate(() => {dbFixture.allowPrint = false; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-quick-create').isDisabled(), true);
+  await page.locator('#item-db-quick-create').dispatchEvent('click');
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').length), beforeDeniedOutput,
+    'permission-disabled quick output still submitted a saved input');
+  await page.evaluate(() => {dbFixture.allowPrint = true; dbFixture.controller.open();});
+  await page.evaluate(() => {dbFixture.invalidReceipt = true;});
+  await page.locator('#item-db-quick-create').click();
+  await page.waitForFunction(() => !document.querySelector('#item-db-quick-create').disabled);
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST').length), beforeOwnerChange);
+  assert.equal(await page.locator('#item-db-quick-result a').count(), 0);
+  await page.evaluate(() => {dbFixture.invalidReceipt = false;});
+  await page.locator('#item-db-quick-create').click();
+  await page.locator('#item-db-quick-result').getByRole('link', {name: 'HWPX 다운로드', exact: true}).waitFor();
+  const checkedReceipt = await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').slice(-2));
+  assert.equal(checkedReceipt[0].headers['Idempotency-Key'], checkedReceipt[1].headers['Idempotency-Key']);
+  assert.deepEqual(checkedReceipt[0].body, checkedReceipt[1].body);
+  const singleInput = await page.evaluate(() => structuredClone(dbFixture.saved));
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.evaluate(() => dbFixture.controller.openGraph({...dbFixture.graph,
+    item_id: 'item_' + '6'.repeat(32), item_revision_id: 'itemrev_' + '6'.repeat(32)}));
+  await page.getByRole('button', {name: '목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /간편 출력/}).click();
+  await page.evaluate(() => {dbFixture.loseCommittedBuildReply = true;});
+  await page.locator('#item-db-quick-create').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-quick-result').textContent.includes('합성 완료 응답 유실'));
+  const acceptedBuildCount = await page.evaluate(() => dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST').length);
+  await page.locator('#item-db-quick-create').click();
+  await page.locator('#item-db-quick-result').getByRole('link', {name: 'HWPX 다운로드', exact: true}).waitFor();
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST').length), acceptedBuildCount,
+    'lost success reply rerendered an already committed output');
+  const changedInput = await page.evaluate(() => dbFixture.calls.filter(call => call.path === '/item-db/assemblies').at(-1));
+  assert.equal(singleInput.placements.length, 1, 'new selection mutated the prior saved input');
+  assert.equal(changedInput.body.placements.length, 2);
+  assert.notEqual(changedInput.headers['Idempotency-Key'], checkedReceipt[1].headers['Idempotency-Key']);
+  assert.equal(await page.evaluate(() => dbFixture.calls.some(call => call.path.startsWith('/mock-exam-'))), false,
+    'quick output triggered retired automatic exam planning');
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log("item_db_browser=PASS live_writes=0");

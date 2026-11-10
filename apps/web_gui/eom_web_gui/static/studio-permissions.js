@@ -1,7 +1,5 @@
 const REQUIRED_PERMISSION_BY_ELEMENT_ID = Object.freeze({
   "structured-import-submit": "item:import_structured_content",
-  "mock-exam-submit": "deliverable:create",
-  "mock-exam-hwpx-submit": "hwpx:build_create",
   "approval-submit": "workflow:approve",
   "hwpx-build-submit": "hwpx:build_create",
   "hwpx-approval-submit": "workflow:approve",

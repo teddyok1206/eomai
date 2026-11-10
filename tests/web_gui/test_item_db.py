@@ -223,7 +223,12 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'id="item-db-similarity-progress"' in html
     assert 'id="item-db-similarity-tab-progress"' in html
     assert html.index('id="item-db-assembly-panel"') < html.index('id="item-db-draft-list"')
-    assert html.index('id="item-db-draft-list"') < html.index('id="mock-exam-selections"')
+    assert 'id="mock-exam-selections"' not in html
+    assert 'id="item-db-quick-create"' in html
+    assert 'id="item-db-quick-result"' in html
+    assert 'id="item-db-draft-save"' not in html
+    assert 'id="item-db-assembly-name"' not in html
+    assert 'id="item-db-saved-list"' not in html
     assert 'id="item-db-filter-rows"' in html
     assert 'id="item-db-match-mode"' in html
     assert 'id="item-db-source"' in html
@@ -250,7 +255,7 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'if (["U", "L", "M", "N"].includes(cell.column)) continue;' in javascript
 
 
-def test_db_assembly_draft_distinguishes_original_files_from_registered_items() -> None:
+def test_db_quick_output_keeps_exact_inputs_and_excel_selection_separate() -> None:
     html = (ROOT / "apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(encoding="utf-8")
     draft = (ROOT / "apps/web_gui/eom_web_gui/static/item-db-draft.js").read_text(encoding="utf-8")
@@ -258,7 +263,9 @@ def test_db_assembly_draft_distinguishes_original_files_from_registered_items() 
         encoding="utf-8"
     )
     assert 'id="item-db-draft-list"' in html
-    assert "아직 합본 파일을 만들거나 문항을 승인하지 않습니다." in html
+    assert 'id="item-db-quick-create"' in html
+    assert 'id="item-db-quick-result"' in html
+    assert "간편 출력" in html
     assert 'placement_kind: "EXTERNAL_SOURCE_DOCUMENT"' in draft
     assert '"PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION"' in javascript
     assert "source_revision_id: detail.entry.source_revision_id" in draft
@@ -277,6 +284,19 @@ def test_db_assembly_draft_distinguishes_original_files_from_registered_items() 
     assert "navigation === state.navigationVersion && isCurrent()" in app
     assert "const keys = new Set()" in draft
     assert "ordered.splice(index, 1)" in draft
+
+
+def test_db_quick_output_reuses_existing_saved_input_and_delivery_boundaries() -> None:
+    assembly = (ROOT / "apps/web_gui/eom_web_gui/static/item-db-assembly.js").read_text(
+        encoding="utf-8"
+    )
+    assert '"/item-db/assemblies"' in assembly
+    assert '"curated-document-assembly-draft/2.0"' in assembly
+    assert "createCuratedDeliveryControl" in assembly
+    assert "/content-planning/prints" not in assembly
+    assert "/content-planning/commands" not in assembly
+    assert "loadSaved" not in assembly
+    assert "removeSaved" not in assembly
 
 
 def test_db_assembly_draft_order_and_deduplication_in_browser_model() -> None:

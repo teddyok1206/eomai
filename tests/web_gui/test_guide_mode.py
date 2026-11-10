@@ -70,7 +70,10 @@ for(const [id,value] of context.controls){
 }
 assert.match(context.views.get('hwpx').description,/제작/);
 assert.match(context.views.get('hwpx').description,/별개/);
-assert.match(context.controls.get('mock-exam-hwpx-submit').description,/하나의 한글 파일/);
+assert.equal(context.controls.has('mock-exam-hwpx-submit'),false);
+assert.match(context.controls.get('item-db-quick-create').description,/하나의 한글 파일/);
+assert.match(context.controls.get('item-db-quick-create').description,/인쇄 기록이 생기지는/);
+assert.match(context.controls.get('excel-output-library').description,/기존 한글 파일/);
 assert.match(context.controls.get('pdf-review-correction-submit').description,
  /PDF 원본을 직접 고치는 기능은 아닙니다/);
 assert.match(context.views.get('request').description,/문항 제작 시작/);
@@ -79,7 +82,7 @@ assert.doesNotMatch(context.controls.get('request-text').description,/요청 분
 assert.equal(context.controls.has('draft-analyze'),false);
 assert.equal(context.controls.get('draft-save').title,'초안 저장');
 for(const id of ['material-title','material-main','material-learning-start','map-query',
- 'map-fit','item-db-assembly-name','item-db-similarity-top-k']) {
+ 'map-fit','item-db-quick-create','item-db-similarity-top-k']) {
  assert.ok(context.controls.has(id),id);
 }
 assert.match(context.views.get('learning').description,/PDF나 한글/);

@@ -9,6 +9,7 @@ const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
 const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js",
   "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "content-planning-destination.js", "studio-route.js",
   "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
+names.push("curated-output-library.js");
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const id = (prefix, n = 1) => `${prefix}_${n.toString(16).padStart(32, "0")}`;
 const selection = {view: "excel", deliverable_id: id("deliverable"), edition_id: id("edition"),

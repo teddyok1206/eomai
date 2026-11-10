@@ -5,6 +5,7 @@ import {createPlanningPendingStore} from "./content-planning-pending.js";
 import {loadPlanningCopy, pastePlanningCopy} from "./content-planning-copy.js";
 import {createContentPlanningLifecycle} from "./content-planning-lifecycle.js";
 import {createPlanningDestinationPicker} from "./content-planning-destination.js";
+import {createCuratedOutputLibrary} from "./curated-output-library.js";
 
 const PAGE_SIZE = 50;
 const CONTENT_TYPES = Object.freeze({MOCK_EXAM: "모의고사", TEXTBOOK: "교재", WEEKLY: "주간지", OTHER: "기타"});
@@ -33,6 +34,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
   function message(text, error = false) {const n = $("#excel-message"); n.textContent = text; n.className = `form-message${error ? " error" : ""}`;}
   const query = body => api("/content-planning/query", {method: "POST", mutation: true, body});
   const destinationPicker = createPlanningDestinationPicker({document, query});
+  const outputLibrary = createCuratedOutputLibrary({document, api, can, placeSelections, confirm});
   const comp = () => draft.composition();
   const labelKey = target => JSON.stringify(slotSelection(target));
   const section = () => comp()?.sections.find(value => value.section_id === selected);
@@ -636,6 +638,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     setOwner(value) {
       if (owner === value) return;
       destinationBusy = false; destinationPicker.setOwner(value);
+      outputLibrary.setOwner(value);
       clearDeliveries(); usageEpoch++; usageKey = null; usageCounts.clear(); owner = value; ownerEpoch++; selectionEpoch++; contentEpoch++;
       draft.reset(); labels.clear(); loaded = false; selected = null; productId = null; currentRevision = null;
       pending = null; pendingRejected = false; recoveryError = false; selectionTarget = null; busy = false; loadingSection = false;
@@ -647,6 +650,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     open() {
       active = true;
       lifecycle.open();
+      outputLibrary.open();
       if (owner && !pending) {
         try {pending = pendingStore.read(owner); pendingRejected = false; recoveryError = false; if (pending) message("이전 저장 요청이 남아 있습니다. 같은 요청 다시 확인을 눌러 결과를 이어서 확인해 주세요.");}
         catch (error) {recoveryError = true; message(error.message, true);}
@@ -654,7 +658,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       if (owner && !loaded) refreshContents();
       if (comp() && $("#excel-delivery-panel").open) loadDeliveries(); sync();
     },
-    close() {active = false; lifecycle.close(); clearDeliveries();},
+    close() {active = false; lifecycle.close(); outputLibrary.close(); clearDeliveries();},
     locationRoute,
     restoreLocation,
     selectionHint: () => selectionTarget && !locked() ? `${comp().content_title} · ${comp().sections.find(s => s.section_id === selectionTarget.sectionId).label}` : null,
@@ -663,6 +667,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     placeSelections,
     install() {
       lifecycle.install();
+      outputLibrary.install();
       $("#excel-find").addEventListener("submit", event => {event.preventDefault(); refreshContents();});
       $("#excel-more-contents").addEventListener("click", () => refreshContents(true));
       $("#excel-more-editions").addEventListener("click", () => selectProduct(productId, true));

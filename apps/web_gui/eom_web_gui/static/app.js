@@ -65,11 +65,6 @@ const state = {
   hwpxRecentBuilds: [],
   recentItems: [],
   itemPreviewRequestSequence: 0,
-  mockExamPolicy: null,
-  mockExamPlan: null,
-  mockExamAssemblyRevisionId: null,
-  mockExamHwpxBuildId: null,
-  mockExamHwpxPollTimer: null,
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
@@ -163,6 +158,7 @@ const itemDb = createItemDb({
   document,
   api,
   canPlan: () => hasPermission(state.operator, "deliverable:read") && hasPermission(state.operator, "deliverable:update"),
+  canPrint: () => ["item:read", "deliverable:create", "hwpx:build_create"].every(permission => hasPermission(state.operator, permission)),
   planningSelectionHint: () => contentPlanning.selectionHint(),
   onPlanningSelection: (pointer, label, isCurrent) => placeDbSelections([{pointer, label}], isCurrent),
   onPlanningSelections: placeDbSelections,
@@ -183,7 +179,6 @@ const itemDb = createItemDb({
     occurrence_display_label: entry.past_exam_context.occurrence_display_label,
     item_number: entry.past_exam_context.item_number,
   }),
-  onAssemblyOpen: loadMockExamPolicy,
   openRegisteredItem: async (entry) => {
     $("#item-id").value = entry.item_id;
     $("#revision-id").value = entry.item_revision_id;
@@ -1448,171 +1443,6 @@ function installItemPreview() {
   $("#item-load").addEventListener("click", loadItemPreview);
   $("#recent-items-refresh").addEventListener("click", loadRecentItems);
   $("#recent-items").addEventListener("change", loadSelectedRecentItem);
-}
-
-function installMockExamAssembly() {
-  $("#mock-exam-clear").addEventListener("click", loadMockExamPlan);
-  $("#mock-exam-submit").addEventListener("click", submitMockExamAssembly);
-  $("#mock-exam-hwpx-submit").addEventListener("click", createMockExamHwpxBuild);
-}
-
-async function loadMockExamPolicy() {
-  const root = $("#mock-exam-policy-summary");
-  try {
-    state.mockExamPolicy = await api("/mock-exam-assemblies/policy");
-    const policy = state.mockExamPolicy;
-    root.querySelector("strong").textContent = `${policy.item_count}문항 · ${(policy.total_points_milli / 1000).toFixed(0)}점`;
-    root.querySelector("span").textContent = `필수 ${policy.required_slot_count} · 균형 ${policy.balance_slot_count}`;
-    root.querySelector("p").textContent = `배점 ${policy.score_distribution.map((row) => `${(row.points_milli / 1000).toFixed(1)}점×${row.count}`).join(" · ")} · 탐구/실험 ${policy.inquiry_min_count}~${policy.inquiry_max_count}문항 · 팀장 검토 지침 ${policy.guidance_revision}판`;
-    await loadMockExamPlan();
-  } catch (failure) {
-    showMessage($("#mock-exam-message"), `배치 정책 조회 실패: ${failure.message}`, "error");
-  }
-}
-
-async function loadMockExamPlan() {
-  const message = $("#mock-exam-message");
-  state.mockExamPlan = null;
-  $("#mock-exam-submit").disabled = true;
-  setStatus($("#mock-exam-count"), "neutral", "■", "계획 중");
-  showMessage(message, "현재 Graph·검토 등급·사용 이력으로 서버 배치 계획을 계산하고 있습니다.", "neutral");
-  try {
-    state.mockExamPlan = await api("/mock-exam-assemblies/plan");
-    renderMockExamSelections();
-  } catch (failure) {
-    state.mockExamPlan = null;
-    renderMockExamSelections();
-    showMessage(message, `서버 배치 계획 조회 실패: ${failure.message}`, "error");
-  }
-}
-
-function renderMockExamSelections() {
-  const root = $("#mock-exam-selections");
-  root.replaceChildren();
-  const plan = state.mockExamPlan;
-  const expected = state.mockExamPolicy?.item_count || 25;
-  const ready = plan?.status === "READY" && plan.placements?.length === expected;
-  setStatus($("#mock-exam-count"), ready ? "success" : "warning", ready ? "✓" : "◆", ready ? `${expected}문항 계획 완료` : "후보 부족");
-  $("#mock-exam-submit").disabled = !ready;
-  if (!plan) {
-    root.append(Object.assign(document.createElement("p"), {className: "empty-state", textContent: "서버 배치 계획을 불러오지 못했습니다."}));
-    return;
-  }
-  if (!ready) {
-    const summary = Object.assign(document.createElement("p"), {
-      className: "empty-state",
-      textContent: `구조 후보 ${plan.resolved_candidate_count}개 · 검토 등급 통과 ${plan.rated_candidate_count}개라 완전한 ${expected}문항 계획을 만들 수 없습니다. 부분 시험지는 저장하지 않습니다.`,
-    });
-    root.append(summary);
-    for (const shortage of plan.shortages || []) {
-      const row = document.createElement("div");
-      row.className = "mock-exam-selection";
-      const scopeLabel = shortage.balance_large_unit_key
-        ? curriculumDisplayLabel(shortage.balance_large_unit_key)
-        : "필수 배치 조건";
-      row.append(
-        Object.assign(document.createElement("strong"), {textContent: String(shortage.position)}),
-        Object.assign(document.createElement("span"), {textContent: scopeLabel}),
-        Object.assign(document.createElement("small"), {textContent: `${shortage.reason} · 후보 ${shortage.available_candidate_count}개`}),
-      );
-      root.append(row);
-    }
-    showMessage($("#mock-exam-message"), "승인된 V2 문항과 A/B/C 검토 등급이 충분해질 때 서버가 자동으로 완전한 배치를 만듭니다.", "warning");
-    return;
-  }
-  for (const placement of plan.placements) {
-    const row = document.createElement("div");
-    row.className = "mock-exam-selection";
-    const role = placement.coverage_role === "REQUIRED"
-      ? `필수 · ${curriculumDisplayLabel(placement.coverage_unit_key)}`
-      : `균형 · ${curriculumDisplayLabel(placement.large_unit_key)}`;
-    row.append(
-      Object.assign(document.createElement("strong"), {textContent: placement.display_number}),
-      Object.assign(document.createElement("span"), {textContent: `${role} · ${(placement.points_milli / 1000).toFixed(1)}점`}),
-      Object.assign(document.createElement("small"), {textContent: `${placement.review.final_rating}등급 · ${placement.material_profile}${placement.is_inquiry ? " · 탐구/실험" : ""} · 사용 ${placement.usage_count}회`}),
-    );
-    root.append(row);
-  }
-  showMessage($("#mock-exam-message"), `서버가 ${plan.search_visited_nodes}개 탐색 노드를 검증해 완전한 ${expected}문항 계획을 고정했습니다.`, "success");
-}
-
-async function submitMockExamAssembly() {
-  const message = $("#mock-exam-message");
-  try {
-    if (state.mockExamPlan?.status !== "READY") throw new StudioApiError("ASSEMBLY_CANDIDATE_SHORTAGE");
-    const payload = {
-      idempotency_key: `mockexam-${crypto.randomUUID().replaceAll("-", "")}`,
-      deliverable_key: $("#mock-exam-key").value.trim(),
-      title: $("#mock-exam-title-input").value.trim(),
-      edition: $("#mock-exam-edition").value.trim(),
-      form_key: $("#mock-exam-form-key").value.trim(),
-      display_label: $("#mock-exam-display-label").value.trim(),
-      policy_revision_id: state.mockExamPlan.policy_revision_id,
-      policy_sha256: state.mockExamPlan.policy_sha256,
-      graph_snapshot_revision_id: state.mockExamPlan.graph_snapshot_revision_id,
-      graph_snapshot_sha256: state.mockExamPlan.graph_snapshot_sha256,
-      expected_plan_sha256: state.mockExamPlan.plan_sha256,
-      planned_at: state.mockExamPlan.planned_at,
-    };
-    if (!payload.deliverable_key || !payload.title || !payload.edition || !payload.form_key || !payload.display_label) throw new StudioApiError("시험지 기본 정보를 모두 입력하세요.");
-    $("#mock-exam-submit").disabled = true;
-    const result = await api("/mock-exam-assemblies/planned", {method: "POST", mutation: true, body: payload});
-    state.mockExamAssemblyRevisionId = result.resource_id;
-    $("#mock-exam-assembly-revision").value = result.resource_id;
-    $("#mock-exam-hwpx-submit").disabled = false;
-    $("#mock-exam-hwpx-state").textContent = "제작 가능";
-    showMessage(message, "모의고사 구성이 고정되었습니다. 전체 시험지 HWPX를 만들 수 있습니다.", "success");
-  } catch (failure) {
-    showMessage(message, `모의고사 조립 실패: ${failure.message}`, "error");
-  } finally {
-    $("#mock-exam-submit").disabled = state.mockExamPlan?.status !== "READY";
-  }
-}
-
-async function createMockExamHwpxBuild() {
-  const revision = state.mockExamAssemblyRevisionId || $("#mock-exam-assembly-revision").value.trim();
-  if (!revision.startsWith("assemblyrev_")) return toast("먼저 모의고사 서버 계획을 확정하세요.");
-  const button = $("#mock-exam-hwpx-submit");
-  button.disabled = true;
-  try {
-    const command = await api("/mock-exam-hwpx/builds", {
-      method: "POST",
-      mutation: true,
-      body: {
-        assessment_assembly_revision_id: revision,
-        idempotency_key: `mockexam-hwpx-${crypto.randomUUID().replaceAll("-", "")}`,
-      },
-    });
-    state.mockExamHwpxBuildId = command.resource_id;
-    showMessage($("#mock-exam-hwpx-message"), "전체 시험지 제작을 시작했습니다.", "success");
-    await loadMockExamHwpxBuild();
-  } catch (failure) {
-    button.disabled = false;
-    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작 실패: ${failure.message}`, "error");
-  }
-}
-
-async function loadMockExamHwpxBuild() {
-  if (!state.mockExamHwpxBuildId) return;
-  try {
-    const value = await api(`/mock-exam-hwpx/builds/${encodeURIComponent(state.mockExamHwpxBuildId)}`);
-    $("#mock-exam-hwpx-state").textContent = `${statePresentation("hwpx_build", value.state).label} · ${value.item_count}문항`;
-    const download = $("#mock-exam-hwpx-download");
-    download.hidden = !value.download_available;
-    download.href = value.download_available ? `${API}/mock-exam-hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
-    window.clearTimeout(state.mockExamHwpxPollTimer);
-    if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
-      state.mockExamHwpxPollTimer = window.setTimeout(loadMockExamHwpxBuild, 2000);
-    } else if (value.download_available) {
-      showMessage($("#mock-exam-hwpx-message"), `검증된 ${value.section_count}문항 시험지를 다운로드할 수 있습니다.`, "success");
-    } else {
-      $("#mock-exam-hwpx-submit").disabled = false;
-      showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작 실패: ${errorMessage(value.failure_code)}`, "error");
-    }
-  } catch (failure) {
-    $("#mock-exam-hwpx-submit").disabled = false;
-    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 상태 조회 실패: ${failure.message}`, "error");
-  }
 }
 
 async function loadRecentItems() {
@@ -5524,7 +5354,6 @@ async function boot() {
   installRequestDraft();
   installWorkflow();
   installItemPreview();
-  installMockExamAssembly();
   itemDb.install();
   knowledgeMap.install();
   materialLearning.install();

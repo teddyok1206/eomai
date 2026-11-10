@@ -464,11 +464,8 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-metadata dt { color: var(--eom-text-muted); }
 .item-db-metadata dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
 .item-db-draft-panel { margin-top: 20px; }
-.mock-exam-assembly-panel { margin-top: 20px; }
 .item-db-draft-panel .panel-heading h2 { font-size: 16px; }
-.item-db-draft-panel .panel-body > h3 { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--eom-border); font-size: 15px; }
-.item-db-draft-panel #item-db-saved-list { grid-template-columns: 1fr; }
-.item-db-draft-note { margin: 0 0 12px; color: var(--eom-text-muted); }
+.item-db-quick-result { display: grid; gap: 12px; margin-top: 18px; padding: 16px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); background: var(--eom-surface); }
 .item-db-draft-table-wrap { max-height: 500px; overflow: auto; }
 .item-db-draft-table { min-width: 540px; }
 .item-db-draft-table th:first-child { width: 64px; text-align: center; white-space: nowrap; }
@@ -477,9 +474,6 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-replacement { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: var(--eom-blue-50); }
 .item-db-draft-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .item-db-draft-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.item-db-draft-save-actions { align-items: end; }
-.item-db-draft-save-actions label { display: grid; gap: 6px; flex: 1; min-width: min(240px, 100%); }
-.item-db-draft-save-actions input { width: 100%; min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: var(--eom-surface); }
 .item-db-saved-summary { display: grid; gap: 3px; flex: 1; min-width: 180px; overflow-wrap: anywhere; }
 .item-db-saved-summary span { font-size: var(--eom-type-caption); color: var(--eom-text-muted); }
 @media (max-width: 1100px) {
@@ -498,15 +492,6 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .variation-field { border-color: var(--eom-blue-200); background: #f8fbff; }
 .variation-field > p { margin: 0 0 10px; color: var(--eom-graphite); font-weight: 600; }
 .variation-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
-.mock-exam-assembly-panel { margin-top: 16px; padding: 15px; }
-.mock-exam-form-grid { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
-.mock-exam-form-grid label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
-.mock-exam-form-grid input, .mock-exam-selection select { min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
-.mock-exam-selections { display: grid; gap: 7px; max-height: 520px; margin: 12px 0; overflow: auto; }
-.mock-exam-selection { display: grid; grid-template-columns: 42px minmax(260px, 1.25fr) minmax(220px, 1fr); gap: 9px; align-items: center; padding: 9px; border: 1px solid var(--eom-border); border-radius: 7px; background: #fff; }
-.mock-exam-selection strong { color: var(--eom-info-cobalt); text-align: center; }
-.mock-exam-selection span, .mock-exam-selection small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mock-exam-selection label { display: flex; align-items: center; gap: 5px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .learning-metric-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .selected-learning-batch { border-color: color-mix(in srgb, var(--eom-primary) 55%, var(--eom-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--eom-primary) 10%, transparent); }
 .learning-exam-list { display: grid; gap: 9px; padding: 14px; max-height: 680px; overflow: auto; }
@@ -792,9 +777,6 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .quality-metric-grid { grid-template-columns: repeat(3, 1fr); }
   .learning-grid { grid-template-columns: 1fr; }
   #item-db-graph-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mock-exam-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mock-exam-selection { grid-template-columns: 36px minmax(220px, 1fr) minmax(180px, .8fr); }
-  .mock-exam-selection small { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -871,7 +853,6 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .item-db-search-heading > label { flex: 1; }
   .item-db-detail-summary { padding: 12px; gap: 14px; }
   .item-db-metadata { grid-template-columns: minmax(80px, 110px) minmax(0, 1fr); gap: 10px; }
-  .mock-exam-form-grid, .mock-exam-selection { grid-template-columns: 1fr; }
   .knowledge-boundary { grid-template-columns: 1fr; }
   .knowledge-boundary span { padding: 0; border: 0; }
   .knowledge-map-row { grid-template-columns: 1fr; }

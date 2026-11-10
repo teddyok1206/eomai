@@ -9,21 +9,18 @@ function node(document, tag, className, value) {
   return element;
 }
 
-// Own only draft/list/delivery presentation. The Catalog retains all save/delete rules.
-export function createItemDbAssembly({document, api, activate, message, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelections = () => false}) {
+// Transient selection and quick delivery. Excel owns the saved-output library;
+// Catalog retains all persistence, permission, and idempotency rules.
+export function createItemDbAssembly({document, api, activate, message, canPrint = () => false, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let owner = null;
-  let savedCursor = null;
-  let savedSequence = 0;
   let pendingSave = null;
   let replacementTarget = null;
-  let loaded = false;
   let ownerGeneration = 0;
   let draftSequence = 0;
   let saving = false;
   let planning = false;
-  const deliveries = new Set();
-  const pendingRemovals = new Map();
+  let output = null;
   const draft = createItemDbDraft();
   // A DB selection is not a saved private assembly. Reuse Excel's occurrence
   // model without changing the historical private draft's 200/unique contract.
@@ -41,7 +38,7 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
 
   function refreshMode() {
     const next = Boolean(owner && planningSelectionHint());
-    if (next === excelMode) {syncPlanningControl(entries().length); return;}
+    if (next === excelMode) {renderDraft(); return;}
     excelMode = next;
     pageIndex = 0;
     cancelReplacement();
@@ -68,12 +65,15 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
     root.replaceChildren();
     const values = entries(), mode = excelMode, generation = ownerGeneration;
     const current = () => generation === ownerGeneration && mode === excelMode
-      && mode === Boolean(owner && planningSelectionHint());
-    $("#item-db-draft-title").textContent = excelMode ? "Excel에 담을 문항" : "조립 순서 초안";
+      && mode === Boolean(owner && planningSelectionHint()) && !saving && !planning;
+    $("#item-db-draft-title").textContent = excelMode ? "Excel에 담을 문항" : "간편 출력 목록";
     $("#item-db-draft-count").textContent = `${values.length}개`;
     $("#item-db-tab-count").textContent = String(values.length);
-    $("#item-db-draft-save").disabled = excelMode || saving || values.length === 0;
-    $("#item-db-assembly-name").disabled = excelMode;
+    const create = $("#item-db-quick-create");
+    create.hidden = excelMode;
+    create.disabled = excelMode || saving || planning || !owner || values.length === 0 || !canPrint();
+    create.textContent = saving ? "출력 준비 중…" : "한글 파일 만들기";
+    $("#item-db-quick-result").hidden = excelMode || !output;
     syncPlanningControl(values.length);
     $("#item-db-draft-empty").hidden = values.length > 0;
     const pageCount = Math.max(1, Math.ceil(values.length / pageSize));
@@ -83,7 +83,7 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
       selectionTools.previous.disabled = pageIndex === 0;
       selectionTools.next.disabled = pageIndex + 1 >= pageCount;
       selectionTools.page.textContent = `${pageIndex + 1} / ${pageCount}쪽`;
-      selectionTools.importDraft.disabled = !draft.entries().length || saving;
+      selectionTools.importDraft.disabled = !draft.entries().length || saving || planning;
     }
     const offset = excelMode ? pageIndex * pageSize : 0;
     const visible = excelMode ? values.slice(offset, offset + pageSize) : values;
@@ -103,7 +103,7 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
       ]) {
         const button = node(document, "button", "button quiet", caption);
         button.type = "button";
-        button.disabled = next < 0 || next >= values.length;
+        button.disabled = saving || planning || next < 0 || next >= values.length;
         button.addEventListener("click", () => {
           if (!current()) return;
           if (excelMode) collector.move(collectorSection, selection.placementId, collectorSection, next);
@@ -113,7 +113,7 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
         actions.append(button);
       }
       const remove = node(document, "button", "button quiet", "빼기");
-      remove.type = "button";
+      remove.type = "button"; remove.disabled = saving || planning;
       remove.addEventListener("click", () => {
         if (!current()) return;
         if ((excelMode ? selection.placementId : selection.pointer) === replacementTarget) cancelReplacement();
@@ -122,11 +122,11 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
         renderDraft();
       });
       const replace = node(document, "button", "button quiet", "교체");
-      replace.type = "button";
+      replace.type = "button"; replace.disabled = saving || planning;
       replace.addEventListener("click", () => {
         if (!current()) return;
         replacementTarget = excelMode ? selection.placementId : selection.pointer;
-        $("#item-db-replacement-label").textContent = `${index + 1}번 문항 교체: 조회에서 바꿀 문항을 골라 ‘조립 목록에 담기’를 누르세요.`;
+        $("#item-db-replacement-label").textContent = `${index + 1}번 문항 교체: 조회에서 바꿀 문항을 골라 ‘목록에 담기’를 누르세요.`;
         $("#item-db-replacement").hidden = false;
         activate("search");
         $("#item-db-search-tab").focus();
@@ -145,8 +145,8 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
   }
 
   function addToDraft(pointer, label) {
+    if (!owner || saving || planning) return;
     refreshMode();
-    if (!owner) return;
     const replacing = replacementTarget !== null;
     if (excelMode) {
       try {
@@ -163,186 +163,71 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
     }
     const result = replacing ? draft.replaceOne(replacementTarget, pointer, label) : draft.add(pointer, label);
     if (result === "DUPLICATE") {
-      message("이미 조립 목록에 담긴 문항입니다.");
+      message("이미 목록에 담긴 문항입니다.");
       return;
     }
     if (result === "FULL") {
-      message("조립 초안에는 문항을 최대 200개까지 담을 수 있습니다.", true);
+      message("간편 출력은 최대 200문항입니다. 더 많은 문항은 Excel에서 선택해 주세요.", true);
       return;
     }
     if (result === "MISSING") {
       cancelReplacement();
-      message("교체할 문항이 초안에서 빠졌습니다. 배치에서 다시 선택해 주세요.", true);
+      message("교체할 문항이 목록에서 빠졌습니다. 다시 선택해 주세요.", true);
       return;
     }
     if (replacing) cancelReplacement();
     renderDraft();
     if (replacing) activate("assembly");
-    message(replacing ? "선택한 위치의 문항을 교체했습니다. 순서를 저장해 주세요." : "조립 순서 초안에 담았습니다. 아직 HWPX를 만들지는 않았습니다.");
+    message(replacing ? "선택한 문항을 교체했습니다." : "목록에 담았습니다. 간편 출력하거나 Excel에 배치할 수 있습니다.");
   }
 
-  async function saveDraft() {
+  async function quickOutput() {
+    if (saving || planning || !owner || !canPrint()) return;
     refreshMode();
-    if (excelMode || saving || !owner) return;
-    const button = $("#item-db-draft-save");
-    const name = $("#item-db-assembly-name");
-    if (!name.reportValidity()) return;
-    name.value = name.value.trim();
-    const proposal = {...draft.proposal(), schema_version: "curated-document-assembly-draft/2.0", title: name.value};
+    if (excelMode) return;
+    const proposal = draft.proposal();
     if (!proposal.placements.length) return;
-    const signature = JSON.stringify(proposal);
+    const body = {...proposal, schema_version: "curated-document-assembly-draft/2.0",
+      title: `간편 출력 · ${proposal.placements.length}문항`};
+    const signature = JSON.stringify(body);
     if (!pendingSave || pendingSave.signature !== signature) {
-      pendingSave = {signature, key: `studio:curated-assembly:${crypto.randomUUID()}`};
+      pendingSave = {signature, body, key: `studio:curated-assembly:${crypto.randomUUID()}`, receipt: null};
     }
-    const operation = pendingSave;
-    const generation = ownerGeneration;
-    saving = true;
-    button.disabled = true;
-    message("조립 순서를 저장하고 있습니다.");
+    const operation = pendingSave, generation = ownerGeneration;
+    saving = true; renderDraft(); message("선택한 문항으로 한글 파일을 준비하고 있습니다.");
     try {
-      const receipt = await api("/item-db/assemblies", {
-        method: "POST", mutation: true, body: proposal,
-        headers: {"Idempotency-Key": operation.key},
-      });
-      if (generation !== ownerGeneration) return;
-      if (!/^assembly_[0-9a-f]{32}$/.test(receipt.assembly_id)
-        || receipt.placement_count !== proposal.placements.length) {
-        throw new Error("저장 결과를 확인하지 못했습니다.");
+      if (!operation.receipt) {
+        const receipt = await api("/item-db/assemblies", {method: "POST", mutation: true,
+          body: operation.body, headers: {"Idempotency-Key": operation.key}});
+        if (generation !== ownerGeneration) return;
+        if (!/^assembly_[0-9a-f]{32}$/.test(receipt.assembly_id)
+          || !/^assemblyrev_[0-9a-f]{32}$/.test(receipt.assembly_revision_id)
+          || !/^sha256:[0-9a-f]{64}$/.test(receipt.manifest_sha256)
+          || receipt.state !== "INPUT_PINNED"
+          || receipt.placement_count !== body.placements.length) {
+          throw new Error("출력할 문항 목록을 확인하지 못했습니다. 같은 버튼으로 다시 확인해 주세요.");
+        }
+        operation.receipt = receipt;
       }
-      operation.assemblyId = receipt.assembly_id;
-      message("조립 순서를 저장했습니다. 아래 목록에서 다시 열 수 있습니다.");
-      await loadSaved(true);
+      if (generation !== ownerGeneration || Boolean(planningSelectionHint())) return;
+      if (output?.operation !== operation) {
+        output?.control.dispose();
+        const control = createCuratedDeliveryControl({document, api, entry: operation.receipt, canCreate: canPrint()});
+        output = {operation, control};
+        $("#item-db-quick-result").replaceChildren(
+          node(document, "strong", "", operation.body.title), control.element);
+      }
+      $("#item-db-quick-result").hidden = false;
+      // One user action, two existing idempotent boundaries. Repeated clicks reuse
+      // the saved receipt and latest/build reads instead of generating new jobs.
+      await output.control.start();
+      if (generation === ownerGeneration && !Boolean(planningSelectionHint())) {
+        message("아래에서 제작 상태와 다운로드를 확인하세요. 이전 출력은 Excel에서 다시 열 수 있습니다.");
+      }
     } catch (error) {
-      if (generation === ownerGeneration) message(`조립 순서 저장 실패: ${error.message || "다시 시도해 주세요."}`, true);
+      if (generation === ownerGeneration) message(`간편 출력 준비 실패: ${error.message || "같은 버튼으로 다시 확인해 주세요."}`, true);
     } finally {
-      if (generation === ownerGeneration) {
-        saving = false;
-        renderDraft();
-      }
-    }
-  }
-
-  function savedLabel(placement) {
-    if (placement.placement_kind === "EXTERNAL_SOURCE_DOCUMENT") {
-      return `창작 원본 ${placement.external_number} · ${placement.edition}교 · ${placement.source_format}`;
-    }
-    return placement.placement_kind === "PAST_EXAM_ITEM_REVISION"
-      ? "기출 문항" : "등록 문항";
-  }
-
-  async function openSaved(entry) {
-    refreshMode();
-    const mode = excelMode;
-    const assemblyId = entry.assembly_id;
-    const request = ++draftSequence;
-    message("저장한 조립 순서를 불러오는 중입니다.");
-    try {
-      const saved = await api(`/item-db/assemblies/${encodeURIComponent(assemblyId)}`);
-      if (request !== draftSequence || mode !== Boolean(owner && planningSelectionHint())) return;
-      if (saved.assembly_id !== assemblyId || saved.assembly_revision_id !== entry.assembly_revision_id
-        || saved.manifest_sha256 !== entry.manifest_sha256 || !Array.isArray(saved.placements)) {
-        throw new Error("저장본이 올바르지 않습니다.");
-      }
-      const selections = saved.placements.map((placement) => {
-        const {external_number, ...pointer} = placement;
-        return {pointer, label: savedLabel(placement)};
-      });
-      if (excelMode) {resetCollector(); appendSelections(selections);}
-      else {
-        if (!draft.replace(selections)) throw new Error("저장된 순서를 불러올 수 없습니다.");
-        $("#item-db-assembly-name").value = entry.title || "";
-        pendingSave = null;
-      }
-      cancelReplacement();
-      renderDraft();
-      message(excelMode ? "저장한 순서를 Excel 선택 목록으로 가져왔습니다. 기존 조립 초안은 유지됩니다." : "저장한 조립 순서를 다시 열었습니다. 바꾼 뒤 저장하면 별도 저장본이 됩니다.");
-      $("#item-db-draft-title").scrollIntoView({block: "start"});
-    } catch (error) {
-      if (request === draftSequence) message(`저장본 열기 실패: ${error.message || "다시 시도해 주세요."}`, true);
-    }
-  }
-
-  async function removeSaved(entry) {
-    const selection = {assembly_revision_id: entry.assembly_revision_id, manifest_sha256: entry.manifest_sha256};
-    const signature = JSON.stringify(selection);
-    let operation = pendingRemovals.get(entry.assembly_id);
-    if (operation?.busy) return;
-    if (operation && operation.signature !== signature) {
-      message("저장본의 버전이 바뀌었습니다. 목록을 새로고침해 주세요.", true);
-      return;
-    }
-    if (!globalThis.confirm(`‘${entry.title || "제목 없는 조립"}’을 목록에서 삭제할까요?\n원본 문항과 이미 만든 HWPX 파일은 그대로 보존됩니다.`)) return;
-    if (!operation) {
-      operation = {signature, key: `studio:curated-remove:${crypto.randomUUID()}`, busy: false};
-      pendingRemovals.set(entry.assembly_id, operation);
-    }
-    const generation = ownerGeneration;
-    operation.busy = true;
-    message("저장한 조립 순서를 목록에서 삭제하고 있습니다.");
-    try {
-      const receipt = await api(`/item-db/assemblies/${encodeURIComponent(entry.assembly_id)}/remove`, {
-        method: "POST", mutation: true, body: selection,
-        headers: {"Idempotency-Key": operation.key},
-      });
-      if (generation !== ownerGeneration) return;
-      if (receipt.assembly_id !== entry.assembly_id || receipt.assembly_revision_id !== entry.assembly_revision_id
-        || receipt.manifest_sha256 !== entry.manifest_sha256 || !Number.isFinite(Date.parse(receipt.removed_at))) {
-        throw new Error("삭제 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인해 주세요.");
-      }
-      if (pendingSave?.assemblyId === entry.assembly_id) pendingSave = null;
-      await loadSaved(true);
-      if (generation === ownerGeneration) message("목록에서 삭제했습니다. 원본 문항과 기존 파일은 유지됩니다.");
-    } catch (error) {
-      if (generation === ownerGeneration) message(`목록 삭제 실패: ${error.message || "같은 요청으로 다시 시도해 주세요."}`, true);
-    } finally {
-      operation.busy = false;
-    }
-  }
-
-  async function loadSaved(reset = false) {
-    const request = ++savedSequence;
-    if (reset) {
-      savedCursor = null;
-      for (const delivery of deliveries) delivery.dispose();
-      deliveries.clear();
-      $("#item-db-saved-list").replaceChildren();
-    }
-    const more = $("#item-db-saved-more");
-    more.disabled = true;
-    try {
-      const params = new URLSearchParams({limit: "20"});
-      if (savedCursor) params.set("cursor", savedCursor);
-      const page = await api(`/item-db/assemblies?${params.toString()}`);
-      if (request !== savedSequence) return;
-      if (!Array.isArray(page.values)) throw new Error("저장본 목록이 올바르지 않습니다.");
-      const root = $("#item-db-saved-list");
-      for (const entry of page.values) {
-        const line = node(document, "div", "item-db-draft-row");
-        const time = new Intl.DateTimeFormat("ko-KR", {
-          timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short",
-        }).format(new Date(entry.created_at));
-        const label = node(document, "div", "item-db-saved-summary");
-        label.append(node(document, "strong", "item-db-saved-title", entry.title || "제목 없는 조립"),
-          node(document, "span", "", `${time} · ${entry.placement_count}문항`));
-        const open = node(document, "button", "button secondary", "다시 열기");
-        open.type = "button";
-        open.addEventListener("click", () => openSaved(entry));
-        const remove = node(document, "button", "button quiet", "삭제");
-        remove.type = "button";
-        remove.setAttribute("aria-label", `${entry.title || "제목 없는 조립"} 목록에서 삭제`);
-        remove.addEventListener("click", () => removeSaved(entry));
-        const delivery = createCuratedDeliveryControl({document, api, entry});
-        deliveries.add(delivery);
-        line.append(label, open, remove, delivery.element);
-        root.append(line);
-      }
-      if (!root.children.length) root.append(node(document, "p", "empty-state", "저장한 조립 순서가 없습니다."));
-      savedCursor = page.next_cursor;
-      more.hidden = !savedCursor;
-    } catch (error) {
-      if (request === savedSequence) message(`저장본 목록 조회 실패: ${error.message || "다시 시도해 주세요."}`, true);
-    } finally {
-      if (request === savedSequence) more.disabled = false;
+      if (generation === ownerGeneration) {saving = false; refreshMode();}
     }
   }
 
@@ -354,13 +239,13 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
       const previous = node(document, "button", "button quiet", "이전 100개");
       const next = node(document, "button", "button quiet", "다음 100개");
       const page = node(document, "span", "", "");
-      const importDraft = node(document, "button", "button secondary", "기존 조립 초안 가져오기");
+      const importDraft = node(document, "button", "button secondary", "간편 출력 목록 가져오기");
       for (const button of [previous, next, importDraft]) button.type = "button";
       previous.addEventListener("click", () => {if (excelMode && pageIndex > 0) {pageIndex -= 1; renderDraft();}});
       next.addEventListener("click", () => {if (excelMode) {pageIndex += 1; renderDraft();}});
       importDraft.addEventListener("click", () => {
         refreshMode();
-        if (!excelMode || saving || !draft.entries().length) return;
+        if (!excelMode || saving || planning || !draft.entries().length) return;
         try {appendSelections(draft.entries()); renderDraft();}
         catch (error) {message(error.message, true);}
       });
@@ -368,7 +253,7 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
       $("#item-db-draft-to-excel").before(root);
       selectionTools = {root, previous, next, page, importDraft};
       renderDraft();
-      $("#item-db-draft-save").addEventListener("click", saveDraft);
+      $("#item-db-quick-create").addEventListener("click", quickOutput);
       $("#item-db-draft-to-excel").addEventListener("click", async () => {
         if (saving || planning || !owner || !canPlan()) return;
         refreshMode();
@@ -385,41 +270,26 @@ export function createItemDbAssembly({document, api, activate, message, canPlan 
         } catch (error) {if (current()) message(`Excel 배치 준비 실패: ${error.message || "다시 시도해 주세요."}`, true);}
         finally {if (generation === ownerGeneration) {planning = false; renderDraft();}}
       });
-      $("#item-db-assembly-name").addEventListener("input", () => {draftSequence += 1;});
       $("#item-db-replacement-cancel").addEventListener("click", cancelReplacement);
-      $("#item-db-saved-refresh").addEventListener("click", () => loadSaved(true));
-      $("#item-db-saved-more").addEventListener("click", () => loadSaved(false));
     },
     setOwner(value) {
       if (owner === value) return false;
       owner = value;
       ownerGeneration += 1;
-      savedSequence += 1;
-      loaded = false;
-      savedCursor = null;
       pendingSave = null;
       saving = false;
       planning = false;
-      pendingRemovals.clear();
-      $("#item-db-assembly-name").value = "";
       cancelReplacement();
-      for (const delivery of deliveries) delivery.dispose();
-      deliveries.clear();
+      output?.control.dispose(); output = null;
+      $("#item-db-quick-result").replaceChildren();
       draft.replace([]);
       resetCollector();
       excelMode = Boolean(owner && planningSelectionHint());
       renderDraft();
-      $("#item-db-saved-list").replaceChildren();
       return true;
     },
-    open() {
-      refreshMode();
-      if (!loaded && owner) {
-        loaded = true;
-        loadSaved(true);
-      }
-    },
+    open: refreshMode,
     refreshMode,
-    refresh: () => loadSaved(true),
+    refresh: refreshMode,
   });
 }

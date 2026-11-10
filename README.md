@@ -49,6 +49,7 @@
 
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
+| DB 간편 출력·Excel 통합 — 운영 미반영 | DB에서는 문항 선택 후 한 번에 HWPX를 만들고, 기존 조립·출력 목록과 정식 편성은 Excel로 모으는 후속 구현을 검증했습니다. 구 모의고사 서버 배치 UI는 제거하되 API·이력은 보존하며, 다문항 AI 생성은 별도 후속 기능입니다. [경계·검증](docs/architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md) |
 | 통합 자료 학습 — 운영 반영 | PDF/HWP/HWPX 업로드·준비/복구·설명/문항 분리를 호환 배포했습니다. 실제 작은 PDF의 문항·설명·공개 풀이·공유 Graph 등록, DB 외부 목록·공식 RAG·동일 요청 재조회와 strict 공통 임베딩 입력을 확인했습니다. INDEX의 V11 입력 연결 수정·공식 source 인계 후 새 CUDA 요청의 RUNNING/PROCESSING까지 확인했으며, 전체 corpus 계산은 계속됩니다. 기존 기출·창작·AI 정본을 보존하고 새 자료 문항은 ‘외부’로 구분합니다. [설계·두 차례 검토](docs/architecture/MATERIAL_LEARNING_UPLOAD_PIPELINE.md) · [실제 운영 증거와 검증 한계](docs/operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md) |
 | Map·출처 Layer — 운영 반영 | 교과서·기출·창작·외부·AI 선택을 서버 조회에 연결했습니다. 현재 화면에 이미 뜬 점만 숨기는 필터가 아니며, 같은 Graph 버전·근거·문항 열기를 유지합니다. 브라우저 fixture와 설치본의 실제 출처별 조회·재조회·상세 읽기를 확인했고, 사용자도 운영 화면 업데이트를 확인했습니다. 검증 당시 Graph에 연결된 AI 근거는 0건입니다. [호환 릴리스·검증 범위](docs/operations/MAP_LAYERS_RELEASE_2026-11-06.md) |
 | 로컬 파일 정리 | 11월 6일 미사용 모델 캐시 11개·Conda 다운로드 473개·pip 캐시와 퇴역 EOMIS 내용을 정리해 약265GB를 추가 확보했습니다. EOMIS는 암호화한 NAS 백업과 전체 대조 후 정리했으며, 보안 차단용 빈 경로만 남겼습니다. 정리 후 SSD 여유는 약276GiB입니다. 현재 설치 모델·DB·원본·벡터·인증은 보존했고, 도중 만료된 INDEX는 같은 설정으로 복구했습니다. [퇴역·검증·복구 기록](docs/operations/LEGACY_MODEL_CACHE_RETIREMENT_2026-11-06.md) · [앞선 빌드 정리 약22.6GB](docs/operations/MAP_LAYERS_RELEASE_2026-11-06.md#로컬-디스크-정리) |

@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
 const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js", "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "content-planning-destination.js", "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
+names.push("curated-output-library.js");
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createContentPlanning} from './content-planning.js';
@@ -19,6 +20,11 @@ function publish(value) {
 async function api(path, options = {}) {
   f.calls.push({path, body: structuredClone(options.body), key: options.headers?.['Idempotency-Key']});
   const b = options.body || {};
+  if (path.startsWith('/item-db/assemblies?')) return {values: f.libraryEntry ? [f.libraryEntry] : [], next_cursor: null};
+  if (f.libraryEntry && path === '/item-db/assemblies/' + f.libraryEntry.assembly_id) {
+    if (f.libraryReadMismatch) return {...f.libraryEntry, manifest_sha256: 'sha256:' + 'f'.repeat(64), placements: f.libraryPlacements};
+    return {...f.libraryEntry, placements: structuredClone(f.libraryPlacements)};
+  }
   const lifecycleEntry = target => f.lifecycle.get(target.target_id) || {target,
     deliverable_id: f.composition.deliverable_id,
     title: target.target_kind === 'CONTENT' ? f.composition.content_title : f.composition.edition_label,
@@ -473,6 +479,41 @@ try {
   await page.evaluate(() => {fixture.sourceCurrent = false; fixture.release();});
   await page.waitForFunction(() => fixture.planResult === false);
   await assertDirtyPreserved();
+  // Old private output history now belongs to Excel, without silently becoming usage.
+  await page.evaluate(() => {
+    fixture.libraryEntry = {assembly_id: 'assembly_' + '8'.repeat(32), assembly_revision_id: 'assemblyrev_' + '9'.repeat(32),
+      manifest_sha256: 'sha256:' + 'a'.repeat(64), title: '기존 저장 조립 <img>', placement_count: 2, created_at: '2026-11-10T00:00:00Z'};
+    fixture.libraryPlacements = [
+      {...fixture.target, external_number: '10321'},
+      {...fixture.target, source_id: 'extitem_' + '5'.repeat(32), source_revision_id: 'extitemrev_' + '6'.repeat(32), external_number: '10322'},
+    ];
+    fixture.controller.open();
+  });
+  const beforeLibraryWrites = await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands') || c.path.endsWith('/prints') || c.path.endsWith('/deliveries')).length);
+  assert.equal(await page.evaluate(() => fixture.calls.filter(c => c.path.startsWith('/item-db/assemblies?')).length), 0, 'closed history loaded automatically');
+  await page.locator('#excel-output-library summary').click();
+  await page.locator('#excel-output-list').getByRole('button', {name: 'Excel에 가져오기', exact: true}).waitFor();
+  assert.match(await page.locator('#excel-output-list').textContent(), /기존 저장 조립 <img>/);
+  assert.equal(await page.locator('#excel-output-list img').count(), 0);
+  await page.evaluate(() => {fixture.libraryReadMismatch = true;});
+  await page.locator('#excel-output-list').getByRole('button', {name: 'Excel에 가져오기', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#excel-output-message').textContent.includes('선택한 저장본이 아닙니다'));
+  await assertDirtyPreserved();
+  await page.evaluate(() => {fixture.libraryReadMismatch = false;});
+  await page.locator('#excel-output-list').getByRole('button', {name: 'Excel에 가져오기', exact: true}).click();
+  await page.locator('#excel-destination-dialog').getByRole('button', {name: '취소', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#excel-output-message').textContent.includes('취소했습니다'));
+  await assertDirtyPreserved();
+  await page.locator('#excel-output-list').getByRole('button', {name: 'Excel에 가져오기', exact: true}).click();
+  await chooseDbDestination(1, 'INSERT', 1);
+  await page.waitForFunction(() => document.querySelector('#excel-output-message').textContent.includes('문항을 가져왔습니다'));
+  assert.equal(await page.locator('#excel-rows tr').count(), 2);
+  assert.equal(await page.locator('#excel-draft-state').textContent(), '저장하지 않은 배치');
+  assert.equal(await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands') || c.path.endsWith('/prints') || c.path.endsWith('/deliveries')).length), beforeLibraryWrites, 'history lookup/import created usage or output');
+  await page.locator('#excel-save').click();
+  await page.waitForFunction(() => document.querySelector('#excel-draft-state').textContent === '저장됨');
+  const librarySaved = await page.evaluate(() => fixture.rows.get(fixture.composition.sections[1].section_id).map(row => row.target));
+  assert.deepEqual(librarySaved, incoming.map(value => value.pointer), 'history import changed source order or revision');
   assert.deepEqual(errors, []);
-  console.log("CONTENT_PLANNING_BROWSER=PASS desktop/mobile/create/1200/replay/exact-usage-location/copy-insert-replace/archive-restore/owner-race/db-first-insert-replace-cancel-read-failure-stale live_writes=0");
+  console.log("CONTENT_PLANNING_BROWSER=PASS desktop/mobile/create/1200/replay/exact-usage-location/copy-insert-replace/archive-restore/owner-race/db-first-insert-replace-cancel-read-failure-stale/output-library-import live_writes=0");
 } finally {await browser.close(); server.close();}

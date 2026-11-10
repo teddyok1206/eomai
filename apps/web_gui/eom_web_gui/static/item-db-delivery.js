@@ -29,6 +29,7 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
   let disposed = false;
   let timer = null;
   let pendingKey = null;
+  let retryFromBuild = null;
 
   function key(replace = false) {
     if (!replace && pendingKey) return pendingKey;
@@ -77,7 +78,8 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
     return guarded(() => api(`${base}/${encodeURIComponent(view.build_id)}`));
   }
 
-  action.addEventListener("click", () => {
+  function start() {
+    if (disposed || busy) return;
     if (view && (view.state !== "FAILED" || !canCreate)) return refresh();
     const retry = view?.state === "FAILED";
     return guarded(async () => {
@@ -85,12 +87,17 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
         const previous = await api(`${base}/latest?${new URLSearchParams(input)}`);
         if (previous) return previous;
       }
+      if (disposed) return null;
       if (!canCreate) {status.textContent = "아직 제작된 파일이 없습니다."; return null;}
       status.textContent = "제작 요청을 보내고 있습니다.";
+      const replaceKey = retry && retryFromBuild !== view.build_id;
+      const requestKey = key(replaceKey);
+      if (retry) retryFromBuild = view.build_id;
       return api(base, {method: "POST", mutation: true, body: input,
-        headers: {"Idempotency-Key": key(retry)}});
+        headers: {"Idempotency-Key": requestKey}});
     });
-  });
+  }
+  action.addEventListener("click", start);
 
-  return {element: root, dispose() { disposed = true; if (timer !== null) clearTimer(timer); }};
+  return {element: root, start, dispose() { disposed = true; if (timer !== null) clearTimer(timer); }};
 }

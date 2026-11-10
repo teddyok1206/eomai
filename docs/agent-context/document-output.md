@@ -1,5 +1,11 @@
 # 문서 미리보기와 출력과 자료 검토
 
+DB 간편 출력은 `item-db-assembly.js`가 기존 저장 경계를 먼저 호출하고 동일
+`item-db-delivery.js`의 `start()`로 제작을 연결한다. 조회/완료 재열기는 새 제작이 아니다.
+늦은 latest 응답 후 control이 폐기되면 POST하지 않고, 실패 build의 명시적 재제작에서
+응답이 유실되면 같은 retry key를 유지한다. Excel의 `curated-output-library.js`가 개인
+출력 기록을 읽으며 기존 renderer·권한·immutable manifest를 변경하지 않는다.
+
 Excel 편성 successor는 `curated_occurrences.py`의 build-input2/render4/native-item2를
 기존 Catalog→Manager→Builder 경로에 명시적으로 dispatch한다. 구 계약의 200개·고유 target
 의미는 유지하고 새 occurrence만 반복 문항·200개 초과를 허용한다. 범위 준비는

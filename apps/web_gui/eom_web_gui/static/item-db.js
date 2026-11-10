@@ -51,7 +51,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelection = () => false, onPlanningSelections = () => false}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, canReadSource, similaritySearches, previewRegisteredItem, canPrint = () => false, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelection = () => false, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -69,7 +69,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let filterOptionsPending = false;
   let planningRequest = null;
   const filterControlUpdates = new Set();
-  const assembly = createItemDbAssembly({document, api, activate: activateTab, message, canPlan, planningSelectionHint, onPlanningSelections});
+  const assembly = createItemDbAssembly({document, api, activate: activateTab, message, canPrint, canPlan, planningSelectionHint, onPlanningSelections});
   const similarity = createItemDbSimilarityList({
     document, searches: similaritySearches, activate: activateTab,
     async previewSelection(pointer, root, isCurrent) {
@@ -412,7 +412,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         throw new Error("등록 문항의 연결 정보가 바뀌었습니다. 다시 조회해 주세요.");
       }
       selectItem("GRAPH_ITEM", entry);
-      const add = node(document, "button", "button secondary", "등록 문항을 조립 목록에 담기");
+      const add = node(document, "button", "button secondary", "등록 문항을 목록에 담기");
       add.type = "button";
       add.addEventListener("click", () => assembly.add({
         placement_kind: "REGISTERED_ITEM_REVISION", item_id: entry.item_id,
@@ -516,7 +516,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     const button = node(document, "button", "button secondary", "문항 미리보기");
     button.type = "button";
     button.addEventListener("click", () => openRegisteredItem(entry));
-    const select = node(document, "button", "button quiet", "조립 목록에 담기");
+    const select = node(document, "button", "button quiet", "목록에 담기");
     select.type = "button";
     // The released exam flag does not admit the new editable curated profile.
     // Catalog pins selections; the delivery owner validates actual render inputs.
@@ -588,7 +588,6 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     if (name === "assembly" && !assemblyLoaded) {
       assemblyLoaded = true;
       assembly.open();
-      onAssemblyOpen?.();
     }
   }
 
@@ -735,7 +734,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       if (placement) {
         const chosen = detail.editions.find((edition) => edition.edition === placement.edition);
         if (chosen) {
-          const select = node(document, "button", "button primary", "조립 목록에 담기");
+          const select = node(document, "button", "button primary", "목록에 담기");
           select.type = "button";
           select.addEventListener("click", () => assembly.add(placement,
             `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));

@@ -96,6 +96,12 @@
                 <div id="excel-sections" class="excel-list" aria-label="회차 목록"></div>
               </aside>
               <div class="panel excel-main">
+                <details id="excel-output-library"><summary>기존 조립·간편 출력</summary>
+                  <div class="excel-toolbar"><button id="excel-output-refresh" class="button quiet" type="button">목록 새로고침</button></div>
+                  <p id="excel-output-message" class="form-message" role="status" aria-live="polite"></p>
+                  <div id="excel-output-list" class="item-db-saved-results"></div>
+                  <button id="excel-output-more" class="button quiet" type="button" hidden>더 보기</button>
+                </details>
                 <details id="excel-lifecycle-panel"><summary>콘텐츠·판 보관함</summary>
                   <div class="excel-section-fields"><label>대상<select id="excel-lifecycle-target"><option value="EDITION">현재 판</option><option value="CONTENT">현재 콘텐츠</option></select></label><button id="excel-lifecycle-read" class="button quiet" type="button">상태 확인</button><span id="excel-lifecycle-status" role="status"></span></div>
                   <div class="excel-section-fields"><label>보관·복원 이유<input id="excel-lifecycle-reason" maxlength="2000" placeholder="예: 다음 판으로 전환"></label><button id="excel-lifecycle-change" class="button quiet" type="button">보관하기</button></div>
@@ -309,7 +315,7 @@
             <div class="page-heading"><h1 id="item-db-title">문항 DB</h1></div>
             <div class="item-db-tabs" role="tablist" aria-label="문항 DB 화면">
               <button id="item-db-search-tab" class="item-db-tab is-active" type="button" role="tab" aria-controls="item-db-search-panel" aria-selected="true">조회</button>
-              <button id="item-db-assembly-tab" class="item-db-tab" type="button" role="tab" aria-controls="item-db-assembly-panel" aria-selected="false">배치 <span id="item-db-tab-count">0</span></button>
+              <button id="item-db-assembly-tab" class="item-db-tab" type="button" role="tab" aria-controls="item-db-assembly-panel" aria-selected="false">간편 출력 <span id="item-db-tab-count">0</span></button>
               <button id="item-db-similarity-tab" class="item-db-tab" type="button" role="tab" aria-label="유사도" aria-controls="item-db-similarity-panel" aria-selected="false">유사도 <span id="item-db-similarity-tab-progress" class="item-db-computing-dot" aria-label="유사도 검색 진행 중" hidden></span></button>
             </div>
             <div id="item-db-replacement" class="item-db-replacement" role="status" hidden><span id="item-db-replacement-label"></span><button id="item-db-replacement-cancel" class="button quiet" type="button">교체 취소</button></div>
@@ -368,37 +374,13 @@
             </div>
             <div id="item-db-assembly-panel" role="tabpanel" aria-labelledby="item-db-assembly-tab" hidden>
             <section class="panel item-db-draft-panel" aria-labelledby="item-db-draft-title">
-              <div class="panel-heading"><h2 id="item-db-draft-title">조립 순서 초안</h2><span id="item-db-draft-count" class="status-badge tone-neutral">0개</span></div>
+              <div class="panel-heading"><h2 id="item-db-draft-title">간편 출력 목록</h2><span id="item-db-draft-count" class="status-badge tone-neutral">0개</span></div>
               <div class="panel-body">
-              <p class="item-db-draft-note">선택한 문항과 순서를 저장합니다. 아직 합본 파일을 만들거나 문항을 승인하지 않습니다.</p>
               <div class="item-db-table-wrap item-db-draft-table-wrap"><table class="item-db-table item-db-draft-table" aria-label="선택한 문항 순서"><thead><tr><th scope="col">번호</th><th scope="col">문항</th><th scope="col">편집</th></tr></thead><tbody id="item-db-draft-list"></tbody></table></div>
-              <p id="item-db-draft-empty" class="empty-state">문항을 조회해 조립 목록에 담아 주세요.</p>
-              <button id="item-db-draft-to-excel" class="button secondary" type="button" disabled>이 목록을 Excel에 배치</button>
-              <div class="form-actions item-db-draft-save-actions"><label for="item-db-assembly-name">조립 제목<input id="item-db-assembly-name" type="text" maxlength="200" placeholder="예: 3월 모의고사 1회"></label><button id="item-db-draft-save" class="button primary" type="button" disabled>조립 순서 저장</button></div>
-              <h3>저장한 조립 순서</h3>
-              <div id="item-db-saved-list" class="item-db-saved-results"><p class="empty-state">저장본을 불러오는 중입니다.</p></div>
-              <div class="form-actions"><button id="item-db-saved-refresh" class="button quiet" type="button">목록 새로고침</button><button id="item-db-saved-more" class="button quiet" type="button" hidden>더 보기</button></div>
+              <p id="item-db-draft-empty" class="empty-state">조회에서 출력할 문항을 목록에 담아 주세요.</p>
+              <div class="form-actions"><button id="item-db-quick-create" class="button primary" type="button" disabled>한글 파일 만들기</button><button id="item-db-draft-to-excel" class="button secondary" type="button" disabled>Excel에 배치</button></div>
+              <div id="item-db-quick-result" class="item-db-quick-result" aria-live="polite" hidden></div>
               </div>
-            </section>
-            <section class="panel mock-exam-assembly-panel">
-              <div class="panel-heading"><h2>모의고사 서버 배치</h2><span id="mock-exam-count" class="status-badge tone-neutral"><span class="status-icon">■</span> 계획 대기</span></div>
-              <section id="mock-exam-policy-summary" class="knowledge-boundary" aria-label="모의고사 배치 정책"><strong>배치 정책 불러오는 중</strong><span>검증 대기</span><p></p></section>
-              <div class="mock-exam-form-grid">
-                <label>시험지 식별 이름<input id="mock-exam-key" maxlength="128" placeholder="2026-integrated-science-mock-01"></label>
-                <label>시험지 제목<input id="mock-exam-title-input" maxlength="256" placeholder="2026 통합과학 모의고사 1회"></label>
-                <label>판/회차<input id="mock-exam-edition" maxlength="64" placeholder="1회"></label>
-                <label>시험지 구성<input id="mock-exam-form-key" maxlength="128" value="main"></label>
-                <label>표시 이름<input id="mock-exam-display-label" maxlength="128" value="본시험지"></label>
-              </div>
-              <p id="mock-exam-message" class="form-message" aria-live="polite"></p>
-              <div id="mock-exam-selections" class="mock-exam-selections"><p class="empty-state">서버 계획을 불러오는 중입니다.</p></div>
-              <div class="form-actions"><button id="mock-exam-clear" class="button quiet" type="button">서버 계획 새로고침</button><button id="mock-exam-submit" class="button primary" type="button" disabled>서버 계획으로 조립 확정</button></div>
-              <section class="knowledge-boundary" aria-label="시험지 HWPX 제작">
-                <strong>전체 시험지 HWPX</strong><span id="mock-exam-hwpx-state">서버 계획 확정 대기</span>
-                <input id="mock-exam-assembly-revision" type="hidden">
-                <div class="form-actions"><button id="mock-exam-hwpx-submit" class="button primary" type="button" disabled>전체 시험지 HWPX 만들기</button><a id="mock-exam-hwpx-download" class="button secondary" href="#" hidden>전체 시험지 다운로드</a></div>
-                <p id="mock-exam-hwpx-message" class="form-message" aria-live="polite">배치 리비전이 확정되면 제작할 수 있습니다.</p>
-              </section>
             </section>
             </div>
           </section>

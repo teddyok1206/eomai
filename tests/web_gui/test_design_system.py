@@ -158,7 +158,7 @@ def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths()
     assert 'data-view="approval"' not in HTML
     assert "/workflows/${encodeURIComponent(workflowId)}/approvals" not in JAVASCRIPT
     assert "<summary>제작 기술 정보</summary>" in HTML
-    assert '<input id="mock-exam-assembly-revision" type="hidden">' in HTML
+    assert 'id="mock-exam-assembly-revision"' not in HTML
     assert "<summary>학습 기술 정보</summary>" in HTML
     assert 'class="panel operational-log-panel"' in HTML
     assert 'technicalDisclosure("고정 버전 정보"' in JAVASCRIPT

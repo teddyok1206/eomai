@@ -314,7 +314,6 @@ def test_direct_browser_stream_download_and_media_routes_exist() -> None:
     assert expected <= _bff_routes()
     for fragment in (
         "/workflows/${encodeURIComponent(workflowId)}/stream",
-        "/mock-exam-hwpx/builds/${encodeURIComponent(value.build_id)}/download",
         "/hwpx/builds/${encodeURIComponent(value.build_id)}/download",
         "/pages/${encodeURIComponent(page.page_input_id)}/image",
     ):

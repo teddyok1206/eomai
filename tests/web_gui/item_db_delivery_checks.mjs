@@ -55,4 +55,33 @@ assert.equal(completed[0].output_sha256, `sha256:${"e".repeat(64)}`);
 assert.equal(calls.filter(([, method]) => method === "POST").length, creates, "completed refresh cannot render again");
 control.dispose();
 assert.equal(scheduled, null);
+
+// The one-click quick-output caller uses the same public action as the button.
+// An owner switch while the latest read is pending must not submit a build.
+let releaseLatest;
+const lateCalls = [];
+const late = createCuratedDeliveryControl({document, entry, api: async (path, options) => {
+  lateCalls.push([path, options?.method || "GET"]);
+  return new Promise(resolve => {releaseLatest = resolve;});
+}});
+const lateStart = late.start();
+late.dispose(); releaseLatest(null); await lateStart;
+assert.equal(lateCalls.length, 1);
+assert.equal(lateCalls[0][1], "GET");
+
+// An explicit retry of a failed build rotates its key once, not on every lost
+// HTTP response. The same retry must not cause multiple successor builds.
+const retryKeys = [];
+let latestRead = true;
+const failed = {...entry, build_id: `hwpxbuild_${"f".repeat(32)}`, state: "FAILED"};
+const retry = createCuratedDeliveryControl({document, entry, storage: null,
+  api: async (_path, options) => {
+    if (latestRead) {latestRead = false; return failed;}
+    retryKeys.push(options.headers["Idempotency-Key"]);
+    throw new Error("retry response lost");
+  }});
+await retry.start(); await retry.start(); await retry.start();
+assert.equal(retryKeys.length, 2);
+assert.equal(retryKeys[0], retryKeys[1]);
+retry.dispose();
 console.log("item_db_delivery=PASS");

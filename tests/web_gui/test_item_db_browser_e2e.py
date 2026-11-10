@@ -1,4 +1,4 @@
-"""Opt-in real browser checks for the repository's table/detail DB workspace."""
+"""Opt-in real browser checks for DB lookup, quick output and Excel selection."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_item_db_table_filters_pinned_detail_and_responsive_layout() -> None:
+def test_item_db_lookup_quick_output_replay_and_excel_selection_in_browser() -> None:
     if not os.environ.get("EOM_WEB_PLAYWRIGHT_MODULE"):
         pytest.skip("Opt-in browser check requires an existing Playwright test environment")
     node = shutil.which("node")

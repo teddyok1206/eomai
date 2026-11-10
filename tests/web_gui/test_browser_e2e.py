@@ -19,7 +19,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "출제 요구",
             "완성 문항",
             "문항 DB",
-            "모의고사 서버 배치",
+            "Excel",
             "HWPX 제작 및 다운로드",
             "완성 문항 등록 후 계속",
             "문항 제작 진행에서 선택",
@@ -52,6 +52,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert 'data-view-target="dashboard" aria-label="홈으로 이동"' in shell.text
         assert "근거에서 출판 문서까지" not in shell.text
         assert "일반 문항 제작 · 균형형" not in shell.text
+        assert "모의고사 서버 배치" not in shell.text
         learning_corpus = client.get("/studio/api/v1/admin/assessment-learning-corpus")
         assert learning_corpus.status_code == 200
         assert learning_corpus.json()["approved_item_count"] == 520
@@ -253,9 +254,14 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'failure.code === "API_IDEMPOTENCY_IN_PROGRESS"' in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html
-    assert 'id="mock-exam-hwpx-submit"' in html
-    assert 'id="mock-exam-hwpx-download"' in html
-    assert "async function createMockExamHwpxBuild()" in javascript
+    assert 'id="mock-exam-hwpx-submit"' not in html
+    assert 'id="mock-exam-hwpx-download"' not in html
+    assert "mockExam" not in javascript
+    assert "installMockExamAssembly" not in javascript
+    assert "/mock-exam-assemblies/" not in javascript
+    assert "/mock-exam-hwpx/" not in javascript
+    assert "onAssemblyOpen:" not in javascript
+    assert 'canPrint: () => ["item:read", "deliverable:create", "hwpx:build_create"]' in javascript
     assert 'id="codex-reauth-panel"' in html
     assert 'id="codex-challenge-reveal"' in html
     assert "비밀번호나 토큰은 입력하지 마세요." in javascript

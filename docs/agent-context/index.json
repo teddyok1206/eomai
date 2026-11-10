@@ -45,6 +45,7 @@
         "apps/application_api/eom_api/services/external_item_db_read.py",
         "apps/web_gui/eom_web_gui/static/item-db.js",
         "apps/web_gui/eom_web_gui/static/item-db-assembly.js",
+        "apps/web_gui/eom_web_gui/static/curated-output-library.js",
         "apps/web_gui/eom_web_gui/static/content-planning-location.js",
         "apps/web_gui/eom_web_gui/static/content-planning-pending.js",
         "apps/web_gui/eom_web_gui/static/content-planning-copy.js",

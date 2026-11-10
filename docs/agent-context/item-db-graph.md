@@ -125,12 +125,19 @@ section/placement/position을 확인해 그 문항이 있는 페이지로 이동
 `curated_document_assembly_service.py`와 관련 typed manifest를 확인한다. 조립 순서 저장이
 원본-only 문항의 편집 가능한 HWPX 합본 완료를 뜻하지는 않는다.
 
-조립 초안·제목·최근 저장본·목록 삭제의 화면 책임은 `item-db-assembly.js`에 있다.
-제목을 받는 draft V2는 기존 V1 placement selection으로 정규화하며, title은 논리 조립의
-작은 불변 metadata다. 삭제는 소유자의 목록에서 숨기는 공식 명령이다. revision/placement,
-진행 중 제작과 기존 HWPX 참조를 물리 삭제하지 않는다. 삭제 재시도는 exact revision/hash와
-동일 key를 유지한다. `curated_document_assembly_library.py`의 별도 closed RPC와 migration73을
-확인하고 이전 V1 계약을 고치지 않는다. 교체 대상은 가변 행 번호가 아니라 원 pointer다.
+DB의 `item-db-assembly.js`는 간편 출력·Excel용 임시 선택만 소유한다. 한 번의 출력 클릭이
+기존 draft V2 저장과 HWPX 제작으로 이어지며, 같은 선택은 receipt와 멱등 key를 재사용한다.
+개인 저장본·다운로드·목록 삭제는 Excel의 `curated-output-library.js`에서 관리한다.
+정확한 저장본을 기존 `placeSelections`로 가져오되 명시적 배치 저장 전에는 사용 이력을
+만들지 않는다. 간편 출력도 인쇄 사실이 아니다. 기존 모의고사 자동 계획 UI는 퇴역했지만
+application/API와 역사 출력은 남아 있다. 다문항 AI 생성은 별도 후속 범위다.
+설계/배포 구분은 `docs/architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md`를 확인한다.
+
+title은 조립의 작은 불변 metadata다. 목록 삭제는 소유자의 노출만 제거하며 revision/placement,
+진행 중 제작과 HWPX 참조를 물리 삭제하지 않는다. 재전송은 exact revision/hash와 동일 key다.
+`packages/catalog_contracts/eom_catalog_contracts/curated_document_assembly_library.py`의
+closed RPC, `curated_document_assembly_service.py`의 저장·목록 구현과 migration73을 확인한다.
+이전 V1 계약은 바꾸지 않으며 교체 대상은 가변 행 번호가 아니라 원 pointer다.
 
 선택형 필터 값은 `external_item_filter_options.py`의 명시적 categorical fields와 Catalog의
 `read_external_item_filter_options`를 따른다. 원본 Excel에는 Notion 속성 타입 선언이 없으므로
