@@ -227,3 +227,73 @@ PASS(10.08초), Ruff/format/core mypy PASS. 진단은 FILE_UNPROTECTED의 기존
 보호된 원 allocation과 종료된 두 unit을 official unbound reader로 대조했다. 초기 PREPARE는
 할당 시간이 아직 남아 거부됐으며 DB/Artifact 쓰기는 없었다. 시간이 만료된 뒤 같은 원
 실행의 PREPARE를 완료했고, 원 실패 기록·동일 증거 replay는 기존 application에서 수행한다.
+
+원 실패의 공식 RECORD와 동일 증거 replay는 PASS다. 실패 증거 Artifact는
+`artifact_ae9026888f324dc0ac6c08533f09765b/rev_772e7c14ff5f41bbb842d1251e6b83b8`,
+`controller-failure.json`, SHA-256
+`941b8d926750a5ec16f978645bca9ebc7b57150c968d1658eca664035e354a5d`다.
+실패는 FAILED로 보존했고 이 단계의 모델 실행·재시도는0이다.
+
+controller 보완 source `df57dac24f31ad8448c518b7804e8d3ad8284c20`의 wheel/RECORD,
+별도 immutable 설치본114 tests(8.81초), 실제 root interpreter import PASS.
+platform SHA-256 `9b4eca730d2c2c49419413cf652a6779677d0ae20a6d5373328db1a8604a463c`,
+API-contracts SHA-256 `cbdb7f58660290ef3bf7ccf8fff5163373f0fd5a2e9e1a2f36d88e4e8d83629b`.
+INDEX controller 전용2파일 선택을 적용했고12개 보존 파일과5개 peer의 PID/Invocation을
+전후 대조했다. owner source47fc5366와 service/runtime grant는 그대로다.
+선택/롤백 기록은 `/var/lib/eom-index-proc-controller-20261110`에 있다.
+각 파일 교체는 원자적이지만 두 파일 전체가 분산 transaction인 것은 아니며, 중간 실패면
+INDEX를 정지한 상태에서 before/after를 대조하는 기존 복구 원칙을 유지한다.
+
+03:54:45 UTC INDEX를 재개했다(PID3493954,
+invocation`62cd90e93dfa4b7992fd120681214e40`). 03:55:07에 CONCRETE_FACETS reconciliation이
+시작됐고03:56에 public reports/population 재검증이 통과했다. 여기까지는 신규 등록 완료
+증거가 아니므로 fixed past-exam471/520 기준선과의 증가 확인은 계속 진행한다.
+
+실제 후속 attempt `609e176fb35142e4b439c2cf7cdaa306`은 df57dac2 controller로 실행됐다.
+보호된 READY 관측 파일이 존재하고04:00 typed observer는 CUDA RUNNING1을 보고했다.
+04:01:51 UTC root controller가 Result=success/ExecMainStatus=0으로 끝났고 원 numerical
+unit은 성공 종료 후 기존 retirement 경로로 정리됐다. 기존 실패 이력은 그대로다.
+04:02 현재 owner는 결과 인덱스 등록을 수행 중이며, 새 head/기출 count 검증은 별도다.
+04:01:19 UTC 개발 Slack PROGRESS 전달 성공(등록 완료로 표시하지 않음).
+
+### 실제 새 등록 및 기존 완료 데이터 보존
+
+- 04:06:26.538122 UTC CUDA의 새 head
+  `embeddingindexrev_e154ca9908b21ea1a8f76f0705c68138`가 등록됐다.
+  CONCRETE_FACETS/ALL_ADMITTED_GRAPH_ITEMS/public-solution-text1.0,
+  동일CUDA space`39bc2c310299…`에서 binding1,028→1,032, eligible1,556 유지.
+  CPU head972는 그대로다. 이는 테스트 fixture가 아닌 운영 registry의 read-only 관측이다.
+- 04:10:01 UTC 기존 정기 typed observer는 고정 원기출520 모집단에서
+  CUDA registered target471→473, 잔여49→47을 보고했다. target-set hash 및 CUDA space
+  hash는 기존과 동일하고 historical failed Workflow 분류/수도 유지됐다.
+  이 수치를 사용자 GUI 검색 acceptance나 전체520 완료로 확대 해석하지 않는다.
+- 새 등록 후 원 baseline과 비교한 `VERIFY_FINAL`: accepted analysis2,883,
+  registered report1,038, encoding5,126, binding133,710, index revision620의
+  기존identity별 변경/누락은 모두0. 신규 encoding4/binding4/index revision1만 추가됐다.
+  완료 vectors/reports를 재생성하거나 과거 index를 지우지 않았다.
+- 원 Goal의 마지막 확인은 현재 묶음 terminal completion과 다음 discovery 진입이다.
+  04:12 현재 owner PID3493954는 같은 invocation으로 살아 있고 마무리 검증을 수행 중이다.
+
+### 복구 목표 완료 — 2026-11-10 04:21 UTC
+
+- 04:19:09.939116 UTC `BATCH_COMPLETED`, selected target4를 실제 관측했다.
+  exact Workflow `workflow_ddbc984e6f6843ef9eb86471774bb7a9`를 운영 저장소에서 읽어
+  COMPLETED, command `wfcmd_cc3c5707f3a548fea235a96a7e91549d`는 SUCCEEDED/attempts1임을
+  확인했다. 전체 묶음 시간1,442,894ms에는 discovery·검증·등록이 포함되며 GPU kernel
+  실행시간으로 해석하지 않는다.
+- 04:20:09.947529 UTC 같은 owner가 다음 CONCRETE_FACETS reconciliation에 진입했다.
+  새 요청을 수동 중복 제출하거나 이미 완료된4건을 재계산하지 않았다. CPU standby는
+  기존 overlap 경로에서 RUNNING이며 INDEX 자동 처리와10분 관측 timer는 유지한다.
+- 원 기출520 target-set 및 CUDA space의04:20 typed 관측은473/520(잔여47)이다.
+  GPU head1,032·기존 완료 identity 변경/누락0·exact Workflow/command 성공을 함께
+  확인했으므로 이번 **1,024 경계 오류 수정과 자동 처리 복구** 목표는 완료다.
+  전체520 임베딩 완료, 모든 소비 경로 재검증 또는 QUERY 후속 개선을 완료한 것은 아니다.
+- API2638304/Web2857633/QUERY2638500/creative2639715와 기존 invocation을 최종에도 보존했다.
+  INDEX owner47fc5366, INDEX 전용 root controllerdf57dac2, 공용 c915bootstrap 및 수치
+  model/runtime/input recipe/device space 불변의 release 구분을 유지한다.
+- 임시 검증 DB와 그 자격증명 state directory만 공식 cleanup으로 제거했다.
+  이는 재생성 가능한 테스트 데이터이며 운영 DB·Artifact·백업 삭제는0이다.
+
+최종 증거는 protected release/audit 기록과 해당UTC journal, task별
+`eom-index-cap-live-completion-20261110.log`, `eom-index-cap-final-heads-20261110.log`,
+`eom-index-cap-final-preserved-20261110.log`의 비밀값 없는 요약으로 추적한다.

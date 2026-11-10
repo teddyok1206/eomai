@@ -54,6 +54,14 @@ Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/r
 `docs/operations/INDEX_PUBLICATION_PERFORMANCE_2026-11-09.md`의2026-11-10 후속 기록과
 `tests/unit/test_public_index_refresh_capacity.py`를 확인한다.
 
+GPU controller가 `FILE_UNPROTECTED`로 끝나면 owner의 EOF는 선행 오류가 아닐 수 있다.
+고정 proc member는 dumpability 전환으로 storage UID0/worker가 바뀔 수 있으며 actual
+프로세스 자격과 구분한다. `read_live_native_process_member`는 identity 오류와 실제
+허용 UID 전환이 함께 있을 때만 protected read를 한 번 재시도한다. 일반 파일 보호와
+caller의 UID/GID·birth·unit 검사는 그대로다. INDEX 전용 controller delegation을 쓰면
+QUERY/controller 주 진입점·수치 runtime은 보존할 수 있다. 상세 검증은 위 운영 기록과
+`tests/unit/test_embedding_native_process_member_transition.py`를 확인한다.
+
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·
