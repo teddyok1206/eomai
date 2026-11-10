@@ -131,3 +131,24 @@ def test_chat_preparation_checks_exact_model_with_select_only_binding_access():
     assert "exact-reviewed-model" in query and "AVAILABLE" in query
     assert "latest_binding_capability" in query and "assigned_at" in query
     assert "FOR UPDATE" not in sql(session.execute.call_args.args[0])
+
+
+def test_fresh_claim_maintenance_checks_do_not_require_unrelated_table_columns():
+    session = Mock()
+    session.execute.return_value.one_or_none.return_value = NS(
+        binding_id="authbinding_" + "a" * 32,
+        current_assignment_revision_id="authassignrev_" + "b" * 32,
+    )
+    session.scalar.side_effect = [False, False, "capsnap_" + "c" * 32]
+    assert (
+        require_reserved_chat_admission(session, NS(worker_slot_id="06"), now=datetime.now(UTC))
+        is not None
+    )
+    for call, table in zip(
+        session.scalar.call_args_list[:2],
+        ("codex_auth_enrollments", "codex_control_commands"),
+        strict=True,
+    ):
+        query = sql(call.args[0])
+        assert "EXISTS (SELECT 1" in query and "SELECT *" not in query
+        assert f"{table}.binding_id" in query and f"{table}.state" in query

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, literal, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
 
@@ -169,16 +169,20 @@ def reserve_chat_slot(session: Session, *, worker_slot_id: str = "06") -> bool:
 def _require_no_binding_operation(session: Session, binding_id: str) -> None:
     if session.scalar(
         select(
-            exists().where(
-                CodexAuthEnrollmentRecord.binding_id == binding_id,
-                CodexAuthEnrollmentRecord.state.in_(_ACTIVE_ENROLLMENTS),
+            exists(
+                select(literal(1)).where(
+                    CodexAuthEnrollmentRecord.binding_id == binding_id,
+                    CodexAuthEnrollmentRecord.state.in_(_ACTIVE_ENROLLMENTS),
+                )
             )
         )
     ) or session.scalar(
         select(
-            exists().where(
-                CodexControlCommandRecord.binding_id == binding_id,
-                CodexControlCommandRecord.state.in_(("PENDING", "PROCESSING")),
+            exists(
+                select(literal(1)).where(
+                    CodexControlCommandRecord.binding_id == binding_id,
+                    CodexControlCommandRecord.state.in_(("PENDING", "PROCESSING")),
+                )
             )
         )
     ):
