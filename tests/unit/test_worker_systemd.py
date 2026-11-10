@@ -25,10 +25,12 @@ from eom_orchestrator.worker_systemd import (
     AUTH_REQUIRED_EXIT,
     AUTH_TEMPLATE_SHA256,
     CREATIVE_REPORT_WORKER_TEMPLATE_SHA256,
+    CUSTOMER_SUPPORT_WORKER_05_TEMPLATE_SHA256,
     CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
     FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS,
     FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS,
     LOGIN_TEMPLATE_SHA256,
+    PDF_DOCUMENT_REVIEW_WORKER_05_TEMPLATE_SHA256,
     PDF_DOCUMENT_REVIEW_WORKER_TEMPLATE_SHA256,
     PROBE_TEMPLATE_SHA256,
     USAGE_TEMPLATE_SHA256,
@@ -131,6 +133,11 @@ def test_fixed_unit_name_accepts_only_canonical_job_identity() -> None:
 
 def test_execution_contract_selects_only_reviewed_fixed_templates() -> None:
     support = _support_slot()
+    slot05 = support.model_copy(update={"slot_id": "05", "linux_user": "eom-cdx-05"})
+    for seconds, kind in ((900, "support"), (3600, "document-review")):
+        assert worker_unit_name_for_execution(slot05, JOB_ID, timeout_seconds=seconds) == (
+            f"eom-worker-{kind}-05@{JOB_ID}.service"
+        )
     assert (
         worker_unit_name_for_execution(
             support,
@@ -1056,6 +1063,12 @@ def test_worker_exec_rejects_assessment_png_decompression_bomb_dimensions(
 
 
 def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
+    for kind, digest in (
+        ("support", CUSTOMER_SUPPORT_WORKER_05_TEMPLATE_SHA256),
+        ("document-review", PDF_DOCUMENT_REVIEW_WORKER_05_TEMPLATE_SHA256),
+    ):
+        source = ROOT / "infra/systemd" / f"eom-worker-{kind}-05@.service"
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
     for slot_id in sorted(WORKER_TEMPLATE_SHA256):
         worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
         probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
@@ -1216,6 +1229,10 @@ def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None
     document_review_name = "eom-worker-document-review-06@.service"
     shutil.copy2(ROOT / "infra/systemd" / document_review_name, unit_root / document_review_name)
     unit_paths.append(f"/etc/systemd/system/{document_review_name}")
+    for kind in ("support", "document-review"):
+        name = f"eom-worker-{kind}-05@.service"
+        shutil.copy2(ROOT / "infra/systemd" / name, unit_root / name)
+        unit_paths.append(f"/etc/systemd/system/{name}")
 
     completed = subprocess.run(
         [
@@ -1486,6 +1503,27 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
         (
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-support-05@{JOB_ID}.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-document-review-05@{JOB_ID}.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-document-review-05@{JOB_ID}.service",
+            "restart",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
             EMBEDDING_UNIT,
             "start",
             "yes",
@@ -1712,14 +1750,14 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
         (
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
-            f"eom-worker-support-05@{JOB_ID}.service",
+            f"eom-worker-support-04@{JOB_ID}.service",
             "start",
             "no",
         ),
         (
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
-            f"eom-worker-document-review-05@{JOB_ID}.service",
+            f"eom-worker-document-review-04@{JOB_ID}.service",
             "start",
             "no",
         ),

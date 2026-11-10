@@ -794,7 +794,7 @@ def test_native_launch_has_no_inherited_environment_credentials_shell_or_six_slo
         "NO_COLOR",
         "TMPDIR",
     }
-    assert environment["HOME"].endswith("eom-cdx-chat") and "OPENAI_API_KEY" not in environment
+    assert environment["HOME"].endswith("eom-cdx-06") and "OPENAI_API_KEY" not in environment
     assert "eom-cdx-01" not in str(command + list(environment.values()))
     with pytest.raises(ValueError):
         native_chat_command(model="model;bad")
@@ -917,11 +917,14 @@ def test_identity_preparation_is_pinned_and_does_not_activate_or_copy_auth():
     root = Path(__file__).resolve().parents[2]
     script = root / "scripts/chat/provision_worker_identity.sh"
     source = script.read_text()
-    assert "EXPECTED_COMMIT" in source and "status --porcelain=v1" in source
+    assert "rev-parse HEAD" in source and "status --porcelain=v1" in source
     assert "working tree is not clean" in source
-    assert "existing chat home ownership differs" in source
-    assert "do not overwrite it" in source
-    assert "service_activation=NONE" in source and "db_migration=NONE" in source
+    assert "slot 06 private home boundary differs" in source
+    assert (
+        "WORKER=eom-cdx-06" in source and "WORKER_HOME=/srv/eom/worker-homes/eom-cdx-06" in source
+    )
+    assert "service_activation=NONE" in source and "worker_credentials=UNCHANGED" in source
+    assert "useradd" not in source and "passwd --lock" not in source
     assert "usermod" not in source and "auth.json" not in source
     assert "systemctl" not in source and "eom-cdx-01" not in source
     assert (root / "infra/chat/codex-config.toml").read_bytes() == (

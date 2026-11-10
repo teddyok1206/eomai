@@ -183,6 +183,22 @@ class GeneralChatTurnRecord(Base):
             postgresql_where=text("state IN ('QUEUED','CLAIMED','RUNNING','COMMITTING')"),
         ),
         Index("ix_chat_fifo", "created_at", "turn_id", postgresql_where=text("state = 'QUEUED'")),
+        ForeignKeyConstraint(
+            ("auth_assignment_revision_id", "auth_binding_id"),
+            (
+                "codex_auth_assignment_revisions.assignment_revision_id",
+                "codex_auth_assignment_revisions.binding_id",
+            ),
+            name="fk_chat_turn_auth_assignment",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(worker_slot_id IS NULL AND auth_binding_id IS NULL "
+            "AND auth_assignment_revision_id IS NULL) "
+            "OR (worker_slot_id='06' AND auth_binding_id IS NOT NULL "
+            "AND auth_assignment_revision_id IS NOT NULL AND claim_id IS NOT NULL)",
+            name="ck_chat_turn_auth_pin",
+        ),
     )
 
     turn_id: Mapped[str] = mapped_column(String(41), primary_key=True)
@@ -214,12 +230,26 @@ class GeneralChatTurnRecord(Base):
     dispatch_artifact_id: Mapped[str | None] = mapped_column(String(41))
     dispatch_revision_id: Mapped[str | None] = mapped_column(String(36))
     dispatch_sha256: Mapped[str | None] = mapped_column(String(71))
+    worker_slot_id: Mapped[str | None] = mapped_column(
+        String(2),
+        ForeignKey("worker_slots.slot_id", name="fk_chat_turn_worker_slot", ondelete="RESTRICT"),
+    )
+    auth_binding_id: Mapped[str | None] = mapped_column(
+        String(44),
+        ForeignKey(
+            "codex_auth_bindings.binding_id", name="fk_chat_turn_auth_binding", ondelete="RESTRICT"
+        ),
+    )
+    auth_assignment_revision_id: Mapped[str | None] = mapped_column(String(46))
 
 
 class GeneralChatCapacityRecord(Base):
     __tablename__ = "general_chat_capacity"
     __table_args__ = (
         CheckConstraint("slot_key = 'chat'", name="ck_chat_capacity_key"),
+        CheckConstraint(
+            "worker_slot_id IS NULL OR worker_slot_id='06'", name="ck_chat_reserved_worker_slot"
+        ),
         CheckConstraint("(runtime_id IS NULL) = (heartbeat_at IS NULL)", name="ck_chat_heartbeat"),
         CheckConstraint(
             "(active_turn_id IS NULL AND claim_id IS NULL AND expires_at IS NULL) OR "
@@ -238,3 +268,9 @@ class GeneralChatCapacityRecord(Base):
     )
     claim_id: Mapped[str | None] = mapped_column(String(42))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_slot_id: Mapped[str | None] = mapped_column(
+        String(2),
+        ForeignKey(
+            "worker_slots.slot_id", name="fk_chat_reserved_worker_slot", ondelete="RESTRICT"
+        ),
+    )

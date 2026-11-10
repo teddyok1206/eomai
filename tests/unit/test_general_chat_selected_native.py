@@ -4,6 +4,7 @@ import subprocess
 from types import SimpleNamespace
 
 import pytest
+from eom_orchestrator import general_chat_native_worker as worker_runtime
 from eom_orchestrator import general_chat_stdio as stdio
 from eom_orchestrator.general_chat_native import DISABLED_CHAT_FEATURES, NativeChatError
 from eom_orchestrator.general_chat_native_worker import (
@@ -14,6 +15,7 @@ from eom_orchestrator.general_chat_runtime_selection import native_runtime_from_
 from eom_protocol.general_chat_worker_messages import ChatWorkerFault
 
 from tests.unit.test_general_chat_native_worker import synthetic_native as synthetic_native
+from tests.unit.test_general_chat_resident import staged
 from tests.unit.test_general_chat_runtime_selection import selected_environment
 
 
@@ -111,17 +113,21 @@ def test_selected_worker_passes_pins_and_checks_epoch_on_each_admission(
         seen.append("epoch")
 
     monkeypatch.setattr(stdio.CodexChatStdio, "start", start)
-    channel.assert_runtime_unchanged = unchanged
+    guard = SimpleNamespace(assert_unchanged=unchanged)
+    monkeypatch.setattr(worker_runtime, "require_native_chat_capability", lambda **_: guard)
     policy = source_chat_worker_policy(model="synthetic-model", protocol=4, native_runtime=selected)
     worker = IsolatedCodexChatWorker(policy=policy)
     worker.require_admission(policy)
-    assert seen == [(policy.model, selected), "epoch"]
+    assert seen == ["epoch"]
     assert not any(event[0] == "answer" for event in events)
+    worker.answer(staged(1))
+    assert (policy.model, selected) in seen
+    assert channel.closed
 
     def changed():
         raise ValueError("same-version executable replaced")
 
-    channel.assert_runtime_unchanged = changed
+    guard.assert_unchanged = changed
     with pytest.raises(ChatWorkerFault, match="GENERAL_CHAT_WORKER_NOT_READY"):
         worker.require_admission(policy)
     worker.close()

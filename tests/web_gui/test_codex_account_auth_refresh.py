@@ -77,12 +77,89 @@ vm.runInContext(FUNCTION, context);
   };
   await context.refreshCodexAccount(exhausted);
   await context.refreshCodexAccount({...exhausted, active_lease_count: 1});
+  await context.refreshCodexAccount({...exhausted, assignment_purpose: 'GENERAL_CHAT',
+    active_chat_count: 1, chat_runtime_state: 'BUSY'});
+  await context.refreshCodexAccount({...exhausted, assignment_purpose: 'GENERAL_CHAT',
+    active_chat_count: 1, chat_runtime_state: 'UNAVAILABLE'});
   await context.refreshCodexAccount({...exhausted, active_auth_enrollment_id: 'authflow_test'});
-  assert.deepEqual(calls, ['OBSERVE', 'OBSERVE', 'READ_ONLY']);
+  assert.deepEqual(calls, ['OBSERVE', 'OBSERVE', 'OBSERVE', 'OBSERVE', 'READ_ONLY']);
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 """.replace("FUNCTION", json.dumps(function))
     completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)
     assert completed.returncode == 0, completed.stderr
+
+
+def test_reserved_chat_slot_display_and_login_busy_guard_use_real_chat_occupation() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    source = APP.read_text(encoding="utf-8")
+    functions = (
+        source[source.index("function codexSlotCard(") : source.index("function addControlDetail(")]
+        + source[
+            source.index("function renderCodexAccounts(") : source.index(
+                "function clearCodexDeviceChallenge("
+            )
+        ]
+    )
+    script = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+class Element {
+  constructor() { this.children=[];this.dataset={};this.disabled=false;
+    this.classes=new Set();this.classList={add:name=>this.classes.add(name)}; }
+  append(...values) { this.children.push(...values); }
+  replaceChildren(...values) { this.children=[...values]; }
+  setAttribute() {}
+}
+const root=new Element(),summary=new Element();
+const context = {
+  document:{createElement:()=>new Element()},
+  $:selector=>selector==='#codex-account-list'?root:summary,
+  $$:()=>[],
+  workerSlotLabel:key=>key,
+  codexAccountDisplayState:account=>account.state,
+  setStatus:(node,_tone,_icon,text)=>{node.textContent=text;},
+  setStateStatus:(node,_domain,state)=>{node.textContent=state;},
+  statePresentation:(_domain,state)=>({label:state}),
+  addControlDetail:(node,label,value)=>node.append({label,value}),
+  renderCodexUsage:()=>new Element(),
+  actionButton:(label,action)=>Object.assign(new Element(),{label,action}),
+  refreshCodexAccount:()=>{},sendAccountCommand:()=>{},
+  resumeCodexReauthentication:()=>{},openCodexReauthentication:()=>{},
+};
+vm.createContext(context);
+vm.runInContext(FUNCTIONS, context);
+const account = {binding_id:'test',slot_key:'slot06',state:'READY',capabilities:[],
+ active_lease_count:0,assignment_purpose:'GENERAL_CHAT',active_chat_count:0,
+ chat_runtime_state:'READY'};
+for (const [state,count,label,active] of [
+ ['READY',0,'대화 대기',false],['BUSY',1,'답변 중',true],
+ ['UNAVAILABLE',1,'대화 상태 확인 필요',false],['UNAVAILABLE',0,'대화 준비 중',false],
+]) {
+ context.renderCodexAccounts([{...account,chat_runtime_state:state,active_chat_count:count}]);
+ const card=root.children[0],header=card.children[0],body=card.children[1];
+ assert.equal(header.children[1].textContent,'slot06 · ChatGPT 전용');
+ assert.equal(header.children[2].textContent,label);
+ assert.equal(card.classes.has('is-active'),active);
+ const actions=body.children.at(-1).children;
+ assert.equal(actions[0].label,'상태·사용량 새로고침');
+ assert.equal(actions[0].disabled,false);
+ assert.equal(actions.at(-1).label,'계정 로그인 변경');
+ assert.equal(actions.at(-1).disabled,Boolean(count));
+ assert.equal(body.children[0].children.find(value=>value.label==='진행 중인 작업').value,0);
+ assert.equal(summary.textContent.includes('작업 중'),active);
+}
+context.renderCodexAccounts([{...account,assignment_purpose:'GENERAL_WORK',
+ chat_runtime_state:null,active_chat_count:0,active_lease_count:1}]);
+assert.equal(root.children[0].children[0].children[1].textContent,'slot06');
+assert.equal(root.children[0].children[0].children[2].textContent,'1개 작업 중');
+assert.equal(root.children[0].children[1].children.at(-1).children.at(-1).disabled,true);
+assert.equal(account.active_lease_count,0);
+""".replace("FUNCTIONS", json.dumps(functions))
+    result = subprocess.run(
+        [node, "-e", script], capture_output=True, text=True, check=False, timeout=10
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_expired_usage_window_does_not_claim_zero_remaining_after_reset() -> None:

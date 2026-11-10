@@ -79,6 +79,18 @@ for slot in 01 02 03 04 05 06; do
   fi
 done
 
+for kind in support document-review; do
+  source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${kind}-05@.service"
+  installed="${UNIT_ROOT}/eom-worker-${kind}-05@.service"
+  cmp --silent "${source}" "${installed}" || fail "slot 05 support template source drift"
+  [[ "$(stat -c '%U:%G:%a' "${installed}")" == "root:root:644" ]] || \
+    fail "slot 05 support template ownership differs"
+  if /usr/bin/systemctl --no-ask-password --wait restart \
+    "eom-worker-${kind}-05@job_0123456789abcdef0123456789abcdef.service"; then
+    fail "slot 05 support restart authorization was unexpectedly granted"
+  fi
+done
+
 negative_probe="eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
 if /usr/bin/systemctl --no-ask-password --wait restart \
   "eom-worker-analysis-03@job_0123456789abcdef0123456789abcdef.service"; then

@@ -53,6 +53,16 @@ session lock을 기다린 뒤 token 철회를 재확인한다. Web의 자격 변
 GUI의 네 슬롯 RUNNING만으로 Graph 등록·INDEX가 정상이라고 판정하지 않는다.
 반대로 publication·source 준비 구간에서 슬롯이 잠시 비면 실제 queue/claim을 확인한다.
 
+6번 채팅 전용 예약은 `general_chat_capacity.worker_slot_id`가 정본이다. 일반 claim은
+예약된 슬롯을 제외하고, 채팅 claim은 현재 auth assignment를 pin한다. 별도 채팅 queue를
+Workflow lease로 위장하지 않는다. API의 `active_chat_count`는 held chat claim이며
+`chat_runtime_state`는 heartbeat/admission 관측이다. stale 점유도 계정 변경을 계속 막지만
+읽기 전용 사용량 관측은 허용한다. 실제 활성화는 예약 행과 설치 release를 확인해야 한다.
+설계·운영 경계는 `docs/architecture/GENERAL_CHAT_SLOT06_RESERVATION.md`를 본다.
+
+실행 설정 화면은 current released revision과 편집 중인 새 draft만 다룬다. 과거 revision을
+숨기는 UI 정책은 evaluation/실행 plan의 immutable 참조 삭제를 뜻하지 않는다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/general-chat.js`
@@ -67,6 +77,9 @@ GUI의 네 슬롯 RUNNING만으로 Graph 등록·INDEX가 정상이라고 판정
 - `apps/application_api/eom_api/services/idempotency_service.py`
 - `services/orchestrator/eom_orchestrator/worker_usage.py`
 - `services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py`
+- `services/orchestrator/eom_orchestrator/chat_slot_reservation.py`
+- `services/orchestrator/eom_orchestrator/chat_support_routing.py`
+- `apps/application_api/eom_api/services/control_plane_adapter.py`
 
 ## 검증과 근거
 

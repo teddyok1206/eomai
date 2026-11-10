@@ -54,6 +54,8 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord
+from eom_orchestrator.general_chat_state import chat_runtime_available
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
@@ -92,6 +94,9 @@ class ControlPlaneAdapter:
             )
             if not bindings:
                 return ()
+            # One indexed singleton read; chat occupation is not a fabricated Workflow lease.
+            chat_capacity = session.get(GeneralChatCapacityRecord, "chat")
+            projected_at = datetime.now(UTC)
             binding_ids = [row.binding_id for row in bindings]
             slot_keys_by_binding = {row.binding_id: f"slot{row.worker_slot_id}" for row in bindings}
             ranked_snapshots = (
@@ -268,6 +273,8 @@ class ControlPlaneAdapter:
                     usage_observation=usage_by_binding.get(binding.binding_id),
                     model_catalog=catalog_by_binding.get(binding.binding_id),
                     capability_snapshot=snapshot_views.get(latest.get(binding.binding_id, "")),
+                    chat_capacity=chat_capacity,
+                    projected_at=projected_at,
                 )
                 for binding in bindings
             )
@@ -612,7 +619,31 @@ class ControlPlaneAdapter:
         usage_observation: CodexUsageObservationView | None,
         model_catalog: CodexModelCatalogView | None = None,
         capability_snapshot: CodexCapabilitySnapshotView | None = None,
+        chat_capacity: GeneralChatCapacityRecord | None = None,
+        projected_at: datetime | None = None,
     ) -> CodexAccountView:
+        chat_reserved = (
+            chat_capacity is not None and chat_capacity.worker_slot_id == row.worker_slot_id
+        )
+        chat_state: Literal["READY", "BUSY", "UNAVAILABLE"] | None = None
+        active_chat_count = 0
+        if chat_reserved:
+            assert chat_capacity is not None
+            now = projected_at or datetime.now(UTC)
+            active_chat_count = int(chat_capacity.active_turn_id is not None)
+            available = (
+                chat_runtime_available(
+                    runtime_id=chat_capacity.runtime_id,
+                    heartbeat_at=chat_capacity.heartbeat_at,
+                    expires_at=chat_capacity.expires_at,
+                    now=now,
+                )
+                and row.state == "READY"
+                and row.valid_until is not None
+                and row.valid_until > now
+                and active_auth_enrollment is None
+            )
+            chat_state = ("BUSY" if active_chat_count else "READY") if available else "UNAVAILABLE"
         return CodexAccountView(
             binding_id=row.binding_id,
             slot_key=f"slot{row.worker_slot_id}",
@@ -625,6 +656,9 @@ class ControlPlaneAdapter:
             resource_version=row.resource_version,
             capabilities=capabilities,
             active_lease_count=active_lease_count,
+            assignment_purpose="GENERAL_CHAT" if chat_reserved else "GENERAL_WORK",
+            active_chat_count=active_chat_count,
+            chat_runtime_state=chat_state,
             last_successful_job_id=last_successful_job_id,
             active_auth_enrollment_id=(
                 active_auth_enrollment[0] if active_auth_enrollment is not None else None

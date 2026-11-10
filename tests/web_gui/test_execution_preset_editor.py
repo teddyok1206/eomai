@@ -252,6 +252,126 @@ def _grounded_preset() -> dict[str, object]:
     return value
 
 
+def test_model_editor_offers_only_current_authoring_or_review_presets(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the preset selection regression")
+    module = tmp_path / "execution-preset-editor.mjs"
+    module.write_bytes(
+        (ROOT / "apps/web_gui/eom_web_gui/static/execution-preset-editor.js").read_bytes()
+    )
+    script = f"""
+import assert from 'node:assert/strict';
+import {{guidedPresetBases}} from {json.dumps(module.as_uri())};
+let input = ''; for await (const chunk of process.stdin) input += chunk;
+const preset = JSON.parse(input);
+const before = JSON.stringify(preset);
+for (const role of ['authoring', 'review', 'support', 'image', 'item_management']) {{
+  const value = structuredClone(preset);
+  const current = value.revisions[0];
+  current.role_policies = [{{...current.role_policies[0], role}}];
+  // An old authoring policy must not make a support-only current policy editable.
+  const historical = structuredClone(preset.revisions[0]);
+  historical.preset_revision_id = 'execpresetrev_' + '9'.repeat(32);
+  historical.revision_number = 1;
+  value.revisions.unshift(historical);
+  const bases = guidedPresetBases([value]);
+  assert.equal(bases.length, ['authoring', 'review'].includes(role) ? 1 : 0);
+  if (bases.length) assert.equal(bases[0].preset_revision_id, preset.current_revision_id);
+}}
+assert.equal(guidedPresetBases([{{...preset, state:'RETIRED'}}]).length, 0);
+assert.equal(guidedPresetBases([{{...preset, current_revision_id:null}}]).length, 0);
+assert.equal(JSON.stringify(preset), before);
+"""
+    completed = subprocess.run(
+        [node, "--input-type=module", "--eval", script],
+        check=False,
+        input=json.dumps(_grounded_preset()),
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_preset_cards_hide_history_without_mutating_pinned_revisions(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the preset presentation regression")
+    module = tmp_path / "execution-preset-editor.mjs"
+    module.write_bytes(
+        (ROOT / "apps/web_gui/eom_web_gui/static/execution-preset-editor.js").read_bytes()
+    )
+    source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    start = source.index("function renderExecutionPresets(presets) {")
+    end = source.index("\nasync function deprecatePreset", start)
+    script = f"""
+import assert from 'node:assert/strict';
+import {{guidedPresetBases}} from {json.dumps(module.as_uri())};
+let input = ''; for await (const chunk of process.stdin) input += chunk;
+const preset = JSON.parse(input), current = preset.revisions[0];
+const revision = (number, state, seed) => ({{...structuredClone(current),
+ preset_revision_id:'execpresetrev_' + seed.repeat(32), revision_number:number,
+ display_name:'OLD_OR_DRAFT_' + number, state}});
+preset.revisions = [revision(1,'DRAFT','8'), revision(2,'RELEASED','9'),
+ revision(7,'DRAFT','a'), current, revision(5,'DRAFT','b')];
+const support = structuredClone(preset);
+support.preset_id = 'execpreset_' + 'c'.repeat(32);
+support.revisions.find(value => value.preset_revision_id === support.current_revision_id)
+ .role_policies = [{{...current.role_policies[0],role:'support'}}];
+const retired = {{...preset, state:'RETIRED'}};
+const missingCurrent = {{...preset, current_revision_id:'execpresetrev_'+'e'.repeat(32)}};
+const noCurrent = {{...preset, current_revision_id:null}};
+const values = [preset, support, retired, missingCurrent, noCurrent];
+const before = JSON.stringify(values);
+const node = () => ({{children:[],append(...items){{this.children.push(...items);}},
+ replaceChildren(...items){{this.children=[...items];}}}});
+const root = node();
+const document = {{createElement:node}};
+const $ = () => root;
+const controlCard = (title,state) => {{const card=node(),details=node();
+ Object.assign(card,{{title,state,details}});return {{card,details}};}};
+const addControlDetail = (details,label,value) => details.append({{label,value}});
+const technicalDisclosure = (label,value) => ({{label,value}});
+const actionButton = (label,action) => ({{label,action}});
+const presetRoleLabel = value => value;
+const inspected = [], deprecated = [];
+const presetEditor = {{inspectDraft:(...args)=>inspected.push(args)}};
+const deprecatePreset = (...args) => deprecated.push(args);
+{source[start:end]}
+renderExecutionPresets(values);
+assert.equal(root.children.length, 2);
+for (const card of root.children) {{
+ assert.equal(card.title, current.display_name);
+ assert.equal(card.details.children.some(value=>value.label==='고정 버전 수'), false);
+ assert.equal(card.children[0].value['현재 고정 버전 ID'], preset.current_revision_id);
+}}
+const actions = root.children[0].children.at(-1).children;
+assert.deepEqual(actions.map(value=>value.label), ['초안 확인·적용','사용 중단']);
+actions[0].action();
+assert.equal(inspected[0][1].revision_number, 7);
+actions[1].action();
+assert.deepEqual(deprecated, [[preset.preset_id,current.revision_number]]);
+assert.deepEqual(root.children[1].children.at(-1).children.map(value=>value.label), ['사용 중단']);
+assert.equal(JSON.stringify(values), before);
+// Consumed drafts behind the current release are not pending settings.
+renderExecutionPresets([{{...preset,revisions:preset.revisions.filter(value=>value.revision_number<=4)}}]);
+assert.deepEqual(root.children[0].children.at(-1).children.map(value=>value.label), ['사용 중단']);
+renderExecutionPresets([retired,missingCurrent,noCurrent]);
+assert.equal(root.children.length, 1);
+assert.equal(root.children[0].textContent, '사용 중인 실행 설정이 없습니다.');
+"""
+    completed = subprocess.run(
+        [node, "--input-type=module", "--eval", script],
+        check=False,
+        input=json.dumps(_grounded_preset()),
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 @pytest.mark.parametrize(
     "case",
     [

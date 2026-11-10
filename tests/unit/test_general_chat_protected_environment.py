@@ -22,7 +22,7 @@ def test_secret_first_install_is_durable_private_and_never_replaces_existing(tmp
     assert target.read_bytes() == payload and list(tmp_path.iterdir()) == [target]
 
 
-@pytest.mark.parametrize("mode", [0o600, 0o644])
+@pytest.mark.parametrize("mode", [0o600, 0o640, 0o644])
 def test_intended_mode_is_complete_before_no_replace_publication(tmp_path, monkeypatch, mode):
     target = tmp_path / "prepared.conf"
     original_link = os.link

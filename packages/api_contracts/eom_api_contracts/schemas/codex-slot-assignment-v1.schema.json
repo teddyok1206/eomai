@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/codex-slot-assignment/1.0",
+  "title": "Additive Codex account slot-assignment projection",
+  "description": "The assignment fields of CodexAccountView. A held chat claim is not a Workflow lease or proof of a fresh runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assignment_purpose", "active_chat_count", "chat_runtime_state"],
+  "properties": {
+    "assignment_purpose": {
+      "enum": ["GENERAL_WORK", "GENERAL_CHAT"],
+      "default": "GENERAL_WORK"
+    },
+    "active_chat_count": {
+      "type": "integer", "minimum": 0, "maximum": 1, "default": 0
+    },
+    "chat_runtime_state": {
+      "enum": [null, "READY", "BUSY", "UNAVAILABLE"],
+      "default": null
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"assignment_purpose": {"const": "GENERAL_WORK"}}},
+      "then": {"properties": {
+        "active_chat_count": {"const": 0},
+        "chat_runtime_state": {"const": null}
+      }},
+      "else": {"properties": {"chat_runtime_state": {"enum": ["READY", "BUSY", "UNAVAILABLE"]}}}
+    },
+    {
+      "if": {"properties": {"chat_runtime_state": {"const": "BUSY"}}},
+      "then": {"properties": {"active_chat_count": {"const": 1}}}
+    },
+    {
+      "if": {"properties": {"chat_runtime_state": {"const": "READY"}}},
+      "then": {"properties": {"active_chat_count": {"const": 0}}}
+    }
+  ]
+}

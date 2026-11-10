@@ -78,9 +78,7 @@ def test_chat_models_have_pointer_only_rows_and_independent_indexed_capacity() -
         assert not {"text", "reply", "messages", "content", "transcript"} & set(
             table.columns.keys()
         )
-        assert not {"worker_slot_id", "worker_lease_id", "native_thread_id"} & set(
-            table.columns.keys()
-        )
+        assert not {"worker_lease_id", "native_thread_id"} & set(table.columns.keys())
         assert all(len(str(value.name).encode()) <= 63 for value in table.constraints if value.name)
         assert all(len(str(value.name).encode()) <= 63 for value in table.indexes)
     turn = cast(Table, GeneralChatTurnRecord.__table__)
@@ -89,6 +87,8 @@ def test_chat_models_have_pointer_only_rows_and_independent_indexed_capacity() -
         "fk_chat_input_revision",
         "fk_chat_request_revision",
         "fk_chat_output_revision",
+        "fk_chat_turn_worker_slot",
+        "fk_chat_turn_auth_assignment",
     } <= foreign
     indexes = {str(value.name): value for value in turn.indexes}
     assert set(indexes) == {"uq_chat_one_active", "ix_chat_fifo"}

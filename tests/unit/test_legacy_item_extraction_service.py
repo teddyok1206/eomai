@@ -411,7 +411,16 @@ def test_page_source_must_match_exact_reviewed_bundle_member_and_role() -> None:
         ((), False),
     ],
 )
-def test_capacity_contract_allows_only_slot06(slots: tuple[str, ...], passes: bool) -> None:
+def test_historical_capacity_contract_still_allows_only_slot06(
+    monkeypatch: pytest.MonkeyPatch, slots: tuple[str, ...], passes: bool
+) -> None:
+    from tests.unit.test_chat_support_routing import legacy_capacity_source
+
+    monkeypatch.setattr(
+        "eom_catalog_service.legacy_item_extraction_service.resolve_released_capacity_policy",
+        lambda *_args: legacy_capacity_source(),
+    )
+
     class CapacitySession:
         @staticmethod
         def scalars(_query: object) -> tuple[str, ...]:
@@ -423,6 +432,58 @@ def test_capacity_contract_allows_only_slot06(slots: tuple[str, ...], passes: bo
     else:
         with pytest.raises(LegacyItemExtractionServiceError) as captured:
             service._require_dedicated_slot(cast(Any, CapacitySession()), "capacityrev_" + "1" * 32)
+        assert captured.value.code == "LEGACY_ITEM_EXTRACTION_CAPACITY_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("slots", "policy_key", "passes"),
+    [
+        (("05",), "slot05-interactive-support", True),
+        (("06",), "slot05-interactive-support", False),
+        (("05", "06"), "slot05-interactive-support", False),
+        (("05",), "unrelated-policy", False),
+        ((), "slot05-interactive-support", False),
+    ],
+)
+def test_routed_extraction_uses_the_exact_single_slot_successor(
+    monkeypatch: pytest.MonkeyPatch, slots: tuple[str, ...], policy_key: str, passes: bool
+) -> None:
+    from eom_orchestrator.chat_support_routing import slot05_capacity_document
+    from eom_workflow import WorkerCapacityPolicy
+
+    from tests.unit.test_chat_support_routing import capacity_source, legacy_capacity_source
+
+    capacity = WorkerCapacityPolicy.model_validate(
+        slot05_capacity_document(capacity_source(), legacy_capacity_source())
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.legacy_item_extraction_service.resolve_released_capacity_policy",
+        lambda *_args: capacity,
+    )
+
+    class CapacitySession:
+        @staticmethod
+        def scalars(_query: object) -> tuple[str, ...]:
+            return slots
+
+        @staticmethod
+        def get(_model: object, _identity: object) -> object:
+            return SimpleNamespace(policy_key=policy_key)
+
+    session = CapacitySession()
+    service = _service(session)
+    if passes:
+        assert (
+            service._require_dedicated_slot(
+                cast(Any, session), capacity.capacity_policy_revision_id
+            )
+            == "05"
+        )
+    else:
+        with pytest.raises(LegacyItemExtractionServiceError) as captured:
+            service._require_dedicated_slot(
+                cast(Any, session), capacity.capacity_policy_revision_id
+            )
         assert captured.value.code == "LEGACY_ITEM_EXTRACTION_CAPACITY_INVALID"
 
 

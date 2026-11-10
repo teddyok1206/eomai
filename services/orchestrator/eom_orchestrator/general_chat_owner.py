@@ -63,6 +63,7 @@ from eom_protocol.general_chat_views import (
 from eom_protocol.models import UtcDatetime
 from pydantic import Field
 
+from eom_orchestrator.chat_slot_reservation import require_reserved_chat_admission
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_evidence import (
     chat_pointer,
@@ -183,6 +184,19 @@ class GeneralChatConversationOwner:
                     state="UNAVAILABLE",
                     unavailable_reason="전용 대화 서비스의 실행 상태를 확인 중입니다.",
                 )
+            if capacity.worker_slot_id is not None:
+                try:
+                    turn = (
+                        self.repository.turn(session, capacity.active_turn_id)
+                        if capacity.active_turn_id is not None
+                        else None
+                    )
+                    require_reserved_chat_admission(session, capacity, now=now, turn=turn)
+                except ChatError:
+                    return GeneralChatSlot(
+                        state="UNAVAILABLE",
+                        unavailable_reason="대화용 계정의 사용 가능 상태를 확인 중입니다.",
+                    )
             return GeneralChatSlot(state="BUSY" if capacity.active_turn_id else "READY")
 
     def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList:

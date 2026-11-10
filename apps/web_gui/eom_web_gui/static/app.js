@@ -7,6 +7,7 @@ import {
   reconcileCurriculumSelection,
 } from "./curriculum-selector.js";
 import {createExecutionPresetEditor} from "./execution-preset-controller.js";
+import {guidedPresetBases} from "./execution-preset-editor.js";
 import {
   hwpxTargetFromAdminRevision,
   hwpxTargetFromBuild,
@@ -3019,13 +3020,17 @@ function controlCard(title, stateValue, domain = "generic") {
 
 function codexSlotCard(account) {
   const activeLeaseCount = Number(account.active_lease_count) || 0;
+  const activeChatCount = Number(account.active_chat_count) || 0;
+  const chatReserved = account.assignment_purpose === "GENERAL_CHAT";
+  const chatRunning = activeChatCount > 0 && account.chat_runtime_state === "BUSY";
   const displayState = codexAccountDisplayState(account);
   const card = document.createElement("details");
   card.className = "control-card codex-slot-card";
   card.dataset.bindingId = account.binding_id;
-  if (activeLeaseCount > 0) {
+  if (activeLeaseCount > 0 || chatRunning) {
     card.classList.add("is-active");
-  } else if (displayState !== "READY" && displayState !== "USAGE_EXHAUSTED") {
+  } else if (chatReserved && account.chat_runtime_state === "UNAVAILABLE"
+    || displayState !== "READY" && displayState !== "USAGE_EXHAUSTED") {
     card.classList.add("is-unavailable");
   }
 
@@ -3035,10 +3040,15 @@ function codexSlotCard(account) {
   activity.className = "codex-slot-activity";
   activity.setAttribute("aria-hidden", "true");
   const heading = document.createElement("h3");
-  heading.textContent = workerSlotLabel(account.slot_key);
+  heading.textContent = `${workerSlotLabel(account.slot_key)}${chatReserved ? " · ChatGPT 전용" : ""}`;
   const badge = document.createElement("span");
   if (activeLeaseCount > 0) {
     setStatus(badge, "success", "●", `${activeLeaseCount}개 작업 중`);
+  } else if (activeChatCount > 0) {
+    setStatus(badge, chatRunning ? "success" : "warning", chatRunning ? "●" : "○",
+      chatRunning ? "답변 중" : "대화 상태 확인 필요");
+  } else if (chatReserved && displayState === "READY") {
+    setStatus(badge, "neutral", "○", account.chat_runtime_state === "READY" ? "대화 대기" : "대화 준비 중");
   } else {
     setStateStatus(badge, "codex_account", displayState);
   }
@@ -3186,9 +3196,11 @@ function renderCodexAccounts(accounts) {
     $$("#codex-account-list .codex-slot-card[open]").map((element) => element.dataset.bindingId),
   );
   root.replaceChildren();
-  const activeSlotCount = accounts.filter((account) => Number(account.active_lease_count) > 0).length;
+  const activeSlotCount = accounts.filter((account) => Number(account.active_lease_count) > 0
+    || Number(account.active_chat_count) > 0 && account.chat_runtime_state === "BUSY").length;
   const activeJobCount = accounts.reduce(
-    (total, account) => total + (Number(account.active_lease_count) || 0),
+    (total, account) => total + (Number(account.active_lease_count) || 0)
+      + (account.chat_runtime_state === "BUSY" ? Number(account.active_chat_count) || 0 : 0),
     0,
   );
   if (activeSlotCount > 0) {
@@ -3215,6 +3227,7 @@ function renderCodexAccounts(accounts) {
     card.open = openBindings.has(account.binding_id);
     const capabilities = (account.capabilities || []).map((value) => `${value.model}/${value.reasoning_effort}`).join(", ") || "관측 없음";
     addControlDetail(facts, "계정", account.account_label);
+    addControlDetail(facts, "용도", account.assignment_purpose === "GENERAL_CHAT" ? "ChatGPT 전용" : "일반 작업");
     addControlDetail(facts, "계정 상태", statePresentation("codex_account", codexAccountDisplayState(account)).label);
     addControlDetail(facts, "계정 연결 ID", account.binding_id);
     addControlDetail(facts, "Codex 버전", account.codex_cli_version);
@@ -3228,6 +3241,11 @@ function renderCodexAccounts(accounts) {
       addControlDetail(facts, "모델 목록 확인 시각", formatSeoulDateTime(catalog.observed_at));
     }
     addControlDetail(facts, "진행 중인 작업", account.active_lease_count);
+    if (account.assignment_purpose === "GENERAL_CHAT") {
+      addControlDetail(facts, "대화 작업", account.chat_runtime_state === "BUSY" ? "답변 중"
+        : Number(account.active_chat_count) > 0 ? "상태 확인 필요"
+        : account.chat_runtime_state === "READY" ? "대기" : "준비 중");
+    }
     addControlDetail(facts, "최근 성공 작업", account.last_successful_job_id);
     addControlDetail(facts, "확인 시각", account.observed_at);
     addControlDetail(facts, "로그인 변경", account.active_auth_enrollment_state ? statePresentation("generic", account.active_auth_enrollment_state).label : "없음");
@@ -3248,7 +3266,7 @@ function renderCodexAccounts(accounts) {
       ? actionButton("로그인 변경 계속", () => resumeCodexReauthentication(account))
       : actionButton("계정 로그인 변경", () => openCodexReauthentication(account));
     reauth.className = "button danger";
-    if (!account.active_auth_enrollment_id && account.active_lease_count > 0) {
+    if (!account.active_auth_enrollment_id && (account.active_lease_count > 0 || account.active_chat_count > 0)) {
       reauth.disabled = true;
       reauth.title = "현재 작업이 끝난 뒤 로그인 계정을 변경할 수 있습니다.";
     }
@@ -3472,30 +3490,36 @@ async function pollControlCommand(commandId) {
 function renderExecutionPresets(presets) {
   const root = $("#execution-preset-list");
   root.replaceChildren();
-  if (!presets.length) {
+  // Historical revisions remain available to pinned runs, but are not working settings.
+  const currentPresets = presets.flatMap((preset) => {
+    const current = preset.revisions?.find((revision) => revision.preset_revision_id === preset.current_revision_id);
+    return preset.state === "ACTIVE" && current?.state === "RELEASED" ? [{preset, current}] : [];
+  });
+  if (!currentPresets.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "등록된 실행 설정이 없습니다.";
+    empty.textContent = "사용 중인 실행 설정이 없습니다.";
     root.append(empty);
     return;
   }
-  for (const preset of presets) {
-    const revisions = Array.isArray(preset.revisions) ? [...preset.revisions].sort((left, right) => right.revision_number - left.revision_number) : [];
-    const latest = revisions[0];
-    const current = revisions.find((revision) => revision.preset_revision_id === preset.current_revision_id);
-    const {card, details} = controlCard(current?.display_name || "고정 실행 설정", preset.state, "execution_preset");
-    addControlDetail(details, "고정 버전 수", revisions.length);
-    addControlDetail(details, "모델·추론 설정", current ? current.role_policies.map((policy) => `${presetRoleLabel(policy.role)}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", ") : null);
-    addControlDetail(details, "검증 결과", current && current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
+  const editablePresetIds = new Set(guidedPresetBases(presets).map((preset) => preset.preset_id));
+  for (const {preset, current} of currentPresets) {
+    const {card, details} = controlCard(current.display_name, preset.state, "execution_preset");
+    addControlDetail(details, "모델·추론 설정", current.role_policies.map((policy) => `${presetRoleLabel(policy.role)}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", "));
+    addControlDetail(details, "검증 결과", current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
     card.append(technicalDisclosure("설정 기술 정보", {
       "실행 설정 ID": preset.preset_id,
       "현재 고정 버전 ID": preset.current_revision_id,
-      "정책 내용 검증값": current ? current.content_sha256 : null,
+      "정책 내용 검증값": current.content_sha256,
     }));
     const actions = document.createElement("div");
     actions.className = "form-actions";
-    if (latest && latest.state === "DRAFT") actions.append(actionButton("초안 확인·적용", () => presetEditor.inspectDraft(preset, latest)));
-    if (current && preset.state === "ACTIVE") actions.append(actionButton("사용 중단", () => deprecatePreset(preset.preset_id, current.revision_number), true));
+    // An un-applied successor is active editing work, unlike the draft behind a release.
+    const pendingDraft = editablePresetIds.has(preset.preset_id) ? preset.revisions.reduce((latest, revision) =>
+      revision.state === "DRAFT" && revision.revision_number > (latest?.revision_number ?? current.revision_number)
+        ? revision : latest, null) : null;
+    if (pendingDraft) actions.append(actionButton("초안 확인·적용", () => presetEditor.inspectDraft(preset, pendingDraft)));
+    actions.append(actionButton("사용 중단", () => deprecatePreset(preset.preset_id, current.revision_number), true));
     card.append(actions);
     root.append(card);
   }

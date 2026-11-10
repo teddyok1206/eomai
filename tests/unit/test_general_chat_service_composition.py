@@ -176,12 +176,15 @@ def test_worker_entrypoint_never_imports_owner_storage_or_database_adapters():
 def test_systemd_units_keep_separate_capacity_durable_handoff_and_graceful_drain():
     worker = (ROOT / "infra/systemd/eom-general-chat-worker.service").read_text()
     owner = (ROOT / "infra/systemd/eom-general-chat.service").read_text()
-    assert "User=eom-cdx-chat\nGroup=eom-cdx-chat\n" in worker
+    assert "User=eom-cdx-06\nGroup=eom-cdx-06\n" in worker
     assert "SupplementaryGroups=" not in worker and "InaccessiblePaths=/mnt/nas" in worker
     assert "StateDirectory=eom-general-chat-worker\nStateDirectoryMode=0700" in worker
-    assert "ReadOnlyPaths=/srv/eom/worker-homes/eom-cdx-chat/.codex/config.toml" in worker
+    assert (
+        "BindReadOnlyPaths=/etc/eom/general-chat-native.toml:"
+        "/srv/eom/worker-homes/eom-cdx-06/.codex/config.toml" in worker
+    )
     assert "User=eom-general-chat\nGroup=eom-api\n" in owner
-    assert "SupplementaryGroups=eom eom-cdx-chat" in owner
+    assert "SupplementaryGroups=eom eom-cdx-06" in owner
     assert "Wants=eom-general-chat-worker.service" in owner
     assert "Requires=eom-general-chat-worker.service" not in owner
     assert "InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /srv/eom/worker-homes" in owner
@@ -204,9 +207,9 @@ def test_chat_owner_retains_its_own_group_for_fixed_private_query_socket():
     assert fields["User"] == "eom-general-chat" and fields["Group"] == "eom-api"
     assert set(fields["SupplementaryGroups"].split()) == {
         "eom",
-        "eom-cdx-chat",
+        "eom-cdx-06",
         "eom-general-chat",
     }
     worker = (ROOT / "infra/systemd/eom-general-chat-worker.service").read_text()
     assert "SupplementaryGroups=" not in worker
-    assert "User=eom-cdx-chat\nGroup=eom-cdx-chat\n" in worker
+    assert "User=eom-cdx-06\nGroup=eom-cdx-06\n" in worker

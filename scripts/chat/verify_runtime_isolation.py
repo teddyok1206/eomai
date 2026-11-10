@@ -21,7 +21,7 @@ from uuid import uuid4
 REPOSITORY = Path("/home/eom/EOM")
 PYTHON = "/srv/eom/conda/envs/eom-api/bin/python"
 UNITS = {"owner": "eom-general-chat.service", "worker": "eom-general-chat-worker.service"}
-USERS = {"owner": "eom-general-chat", "worker": "eom-cdx-chat"}
+USERS = {"owner": "eom-general-chat", "worker": "eom-cdx-06"}
 OMITTED = frozenset(
     {
         "EnvironmentFile",
@@ -68,13 +68,16 @@ KEPT = frozenset(
         "InaccessiblePaths",
         "ReadWritePaths",
         "ReadOnlyPaths",
+        "BindReadOnlyPaths",
         "UMask",
         "MemoryMax",
         "TasksMax",
         "KillMode",
     }
 )
-LIST_KEYS = frozenset({"Environment", "InaccessiblePaths", "ReadWritePaths", "ReadOnlyPaths"})
+LIST_KEYS = frozenset(
+    {"Environment", "InaccessiblePaths", "ReadWritePaths", "ReadOnlyPaths", "BindReadOnlyPaths"}
+)
 
 
 class IsolationProbeError(RuntimeError):
@@ -136,8 +139,8 @@ def sandbox_properties(source: str, component: str) -> dict[str, str]:
     if component == "worker":
         environment.update(
             {
-                "HOME=/srv/eom/worker-homes/eom-cdx-chat",
-                "CODEX_HOME=/srv/eom/worker-homes/eom-cdx-chat/.codex",
+                "HOME=/srv/eom/worker-homes/eom-cdx-06",
+                "CODEX_HOME=/srv/eom/worker-homes/eom-cdx-06/.codex",
                 "EOM_GENERAL_CHAT_PROTOCOL_VERSION=3",
             }
         )
@@ -266,10 +269,16 @@ def probe_data(properties: dict[str, str], component: str) -> NamespaceProbe:
         ("local_models", "/srv/eom/models"),
     ]
     if component == "worker":
-        shared.extend([("nas", "/mnt/nas/eom/artifacts"), ("staging", "/srv/eom/staging")])
+        shared.extend(
+            [
+                ("nas", "/mnt/nas/eom/artifacts"),
+                ("staging", "/srv/eom/staging"),
+                ("retired_chat_home", "/srv/eom/worker-homes/eom-cdx-chat"),
+            ]
+        )
         shared.extend(
             (f"legacy_home_{index:02}", f"/srv/eom/worker-homes/eom-cdx-{index:02}")
-            for index in range(1, 7)
+            for index in range(1, 6)
         )
         shared.extend(
             (f"legacy_workspace_{index:02}", f"/srv/eom/workspaces/eom-cdx-{index:02}")
@@ -305,7 +314,7 @@ def probe_data(properties: dict[str, str], component: str) -> NamespaceProbe:
         "required_groups": sorted(required),
         "denied": [(label, path, Path(path).exists()) for label, path in shared],
         "state": "/var/lib/" + properties["StateDirectory"],
-        "config": "/srv/eom/worker-homes/eom-cdx-chat/.codex/config.toml",
+        "config": "/srv/eom/worker-homes/eom-cdx-06/.codex/config.toml",
         "workspace": "/srv/eom/workspaces/general-chat/native",
         "nas": "/mnt/nas/eom/artifacts",
         "docker": ("/var/run/docker.sock", Path("/var/run/docker.sock").exists()),

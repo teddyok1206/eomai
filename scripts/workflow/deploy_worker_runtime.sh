@@ -105,6 +105,8 @@ SOURCES=(
   "${REPOSITORY}/infra/systemd/eom-workflow-runner.service"
   "${REPOSITORY}/infra/systemd/eom-worker-analysis-03@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-analysis-04@.service"
+  "${REPOSITORY}/infra/systemd/eom-worker-support-05@.service"
+  "${REPOSITORY}/infra/systemd/eom-worker-document-review-05@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-document-review-06@.service"
   "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules"
@@ -209,6 +211,11 @@ if [[ ${ACTION} == install ]]; then
       "${REPOSITORY}/infra/systemd/eom-worker-usage-${slot}@.service" \
       "${UNIT_ROOT}/eom-worker-usage-${slot}@.service"
   done
+  for kind in support document-review; do
+    install -o root -g root -m 0644 \
+      "${REPOSITORY}/infra/systemd/eom-worker-${kind}-05@.service" \
+      "${UNIT_ROOT}/eom-worker-${kind}-05@.service"
+  done
   systemctl daemon-reload
   systemctl enable "${BROKER_SERVICE}" >/dev/null
   systemctl start "${BROKER_SERVICE}"
@@ -226,6 +233,8 @@ systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}/eom-worker-analysis-03@.service" \
   "${UNIT_ROOT}/eom-worker-analysis-04@.service" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" \
+  "${UNIT_ROOT}/eom-worker-support-05@.service" \
+  "${UNIT_ROOT}/eom-worker-document-review-05@.service" \
   "${UNIT_ROOT}/eom-worker-support-06@.service" \
   "${UNIT_ROOT}/eom-worker-document-review-06@.service" \
   "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05,06}@.service \
@@ -233,6 +242,12 @@ systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05,06}.service \
   "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05,06}@.service \
   "${UNIT_ROOT}"/eom-worker-usage-{01,02,03,04,05,06}@.service
+
+for kind in support document-review; do
+  require_regular "${UNIT_ROOT}/eom-worker-${kind}-05@.service" root:root:644
+  cmp -s "${REPOSITORY}/infra/systemd/eom-worker-${kind}-05@.service" \
+    "${UNIT_ROOT}/eom-worker-${kind}-05@.service" || fail "slot 05 support unit source drift"
+done
 
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \

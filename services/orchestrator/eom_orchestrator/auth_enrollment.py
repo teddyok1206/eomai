@@ -25,6 +25,10 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from eom_orchestrator.chat_slot_reservation import (
+    binding_has_active_chat,
+    lock_reserved_chat_capacity,
+)
 from eom_orchestrator.control_models import (
     CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
@@ -144,6 +148,7 @@ def create_codex_auth_enrollment(
         raise ControlPlaneError("CONTROL_AUTH_BINDING_MISSING", "auth binding is missing")
     if binding.resource_version != request.expected_binding_resource_version:
         raise ControlPlaneError("CONTROL_RESOURCE_VERSION_CONFLICT", "auth binding version changed")
+    lock_reserved_chat_capacity(session, binding.worker_slot_id)
     active = session.scalar(
         select(CodexAuthEnrollmentRecord.enrollment_id).where(
             CodexAuthEnrollmentRecord.binding_id == request.binding_id,
@@ -405,16 +410,20 @@ def create_auth_assignment_revision(
 
 def held_lease_exists(session: Session, *, binding_id: str) -> bool:
     return (
-        session.scalar(
-            select(func.count())
-            .select_from(WorkerLeaseRecord)
-            .where(
-                WorkerLeaseRecord.binding_id == binding_id,
-                WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+        binding_has_active_chat(session, binding_id)
+        or (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkerLeaseRecord)
+                .where(
+                    WorkerLeaseRecord.binding_id == binding_id,
+                    WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                )
             )
+            or 0
         )
-        or 0
-    ) > 0
+        > 0
+    )
 
 
 def require_no_active_auth_enrollment(session: Session, *, binding_id: str) -> None:

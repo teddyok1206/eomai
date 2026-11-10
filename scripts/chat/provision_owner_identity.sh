@@ -13,7 +13,7 @@ fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 [[ -z "$(git -C "${REPOSITORY}" status --porcelain=v1)" ]] || fail "working tree is not clean"
 [[ "$(systemctl show eom-general-chat.service --property=ActiveState --value)" == inactive ]] || \
   fail "owner service is not stopped"
-for group in eom-api eom eom-cdx-chat; do
+for group in eom-api eom eom-cdx-06; do
   getent group "${group}" >/dev/null || fail "required service group is absent"
 done
 [[ ! -L ${OWNER_HOME} ]] || fail "owner state must not be a symlink"

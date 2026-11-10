@@ -26,6 +26,46 @@ COLUMN_PRIVILEGES: Final = MappingProxyType(
     {
         ("operators", "SELECT"): frozenset({"operator_id", "status", "deleted_at"}),
         ("jobs", "UPDATE"): frozenset({"status", "updated_at", "completed_at"}),
+        ("worker_slots", "SELECT"): frozenset({"slot_id", "enabled"}),
+        ("codex_auth_bindings", "SELECT"): frozenset(
+            {
+                "binding_id",
+                "worker_slot_id",
+                "state",
+                "valid_until",
+                "current_assignment_revision_id",
+                "codex_cli_version",
+            }
+        ),
+        ("codex_auth_assignment_revisions", "SELECT"): frozenset(
+            {
+                "assignment_revision_id",
+                "assigned_at",
+            }
+        ),
+        ("codex_auth_enrollments", "SELECT"): frozenset({"binding_id", "state"}),
+        ("worker_leases", "SELECT"): frozenset({"state"}),
+        ("worker_capacity_policies", "SELECT"): frozenset({"current_revision_id", "state"}),
+        ("worker_capacity_policy_revisions", "SELECT"): frozenset(
+            {
+                "capacity_policy_revision_id",
+                "max_active_codex",
+                "state",
+            }
+        ),
+        ("codex_control_commands", "SELECT"): frozenset({"binding_id", "state"}),
+        ("codex_capability_snapshots", "SELECT"): frozenset(
+            {
+                "capability_snapshot_id",
+                "binding_id",
+                "valid_until",
+                "observed_at",
+                "codex_cli_version",
+            }
+        ),
+        ("codex_capability_entries", "SELECT"): frozenset(
+            {"capability_snapshot_id", "model", "state"}
+        ),
     }
 )
 CHECKED_PRIVILEGES: Final = (

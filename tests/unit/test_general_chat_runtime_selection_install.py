@@ -147,6 +147,20 @@ def installed_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Instal
     units.mkdir()
     monkeypatch.setattr(installation, "CONFIG_ROOT", configuration)
     monkeypatch.setattr(installation, "UNIT_ROOT", units)
+    # Ownership transition is independently exercised with exact file metadata.
+    workspace, worker_state = tmp_path / "workspace", tmp_path / "worker-state"
+    monkeypatch.setattr(installation, "WORKSPACE", workspace)
+    monkeypatch.setattr(installation, "WORKER_STATE", worker_state)
+    layout = tuple(
+        (path, SimpleNamespace(st_uid=os.getuid(), st_gid=os.getgid()), os.getuid(), os.getgid())
+        for path in (workspace, workspace / "native", worker_state, worker_state / "handoff")
+    )
+    monkeypatch.setattr(installation, "worker_layout_preflight", lambda: layout)
+    monkeypatch.setattr(installation, "stage_worker_layout", lambda _: None)
+    monkeypatch.setattr(installation, "CHAT_CONFIG_SOURCE", configuration / "native.toml")
+    monkeypatch.setattr(installation, "CHAT_CONFIG", configuration / "slot-config.toml")
+    (configuration / "native.toml").write_bytes(b"synthetic-config")
+    (configuration / "slot-config.toml").write_bytes(b"synthetic-slot-config")
     target = configuration / "general-chat-model.env"
     release = configuration / "general-chat-release.env"
     before = installation.configuration_payloads(COMMIT, MODEL, rag_policy=POLICY)[target]

@@ -135,7 +135,7 @@ from eom_workflow.similarity_control import (
     parse_post_registration_grounded_plan,
 )
 from pydantic import ValidationError
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -146,6 +146,10 @@ from eom_orchestrator.artifacts import (
     stage_structured_artifact,
 )
 from eom_orchestrator.capacity_controller import CodexCapacityController, LeaseClaim
+from eom_orchestrator.chat_slot_reservation import (
+    WORKER_HOST_CAPACITY_LOCK_ID,
+    reserved_chat_slot_id,
+)
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
@@ -1134,7 +1138,9 @@ class Orchestrator:
             elif recovered_run is None:
                 plan_step = None
                 plan_id = None
-                slot = self.registry.select(role)
+                with self.sessions() as session:
+                    reserved = reserved_chat_slot_id(session)
+                slot = self.registry.select(role, excluded_slot_ids=(reserved,) if reserved else ())
             if recovered_run is None:
                 assert slot is not None
                 evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
@@ -1157,6 +1163,14 @@ class Orchestrator:
                     material_requirement=material_requirement,
                 )
                 with transaction(self.sessions) as session:
+                    # Reservation activation uses the same fence and rejects this claimed Job.
+                    session.execute(
+                        select(func.pg_advisory_xact_lock(WORKER_HOST_CAPACITY_LOCK_ID))
+                    )
+                    if reserved_chat_slot_id(session) == slot.slot_id:
+                        raise ControlPlaneError(
+                            "CONTROL_SLOT_RESERVED", "worker slot is reserved for chat"
+                        )
                     claimed = session.get(JobRecord, job_id)
                     if claimed is None:
                         raise RuntimeError("created workflow job disappeared")

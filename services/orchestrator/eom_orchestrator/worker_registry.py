@@ -134,9 +134,13 @@ class WorkerRegistry:
     def global_codex_concurrency(self) -> int:
         return self.config.limits.global_codex_concurrency
 
-    def select(self, role: str) -> WorkerSlot:
+    def select(self, role: str, *, excluded_slot_ids: tuple[str, ...] = ()) -> WorkerSlot:
         candidates = sorted(
-            (slot for slot in self.config.slots if slot.role == role and slot.enabled),
+            (
+                slot
+                for slot in self.config.slots
+                if slot.role == role and slot.enabled and slot.slot_id not in excluded_slot_ids
+            ),
             key=lambda slot: slot.slot_id,
         )
         if not candidates:

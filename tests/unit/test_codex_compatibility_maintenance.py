@@ -94,14 +94,15 @@ def test_read_only_pre_stop_check_reuses_work_queries_without_a_session_lock() -
 
 
 def test_scoped_preflight_checks_fixed_worker_claims_without_gpu_job_query() -> None:
-    engine, connection = _database([False, False])
+    engine, connection = _database([False, False, False])
     cast(Mock, engine.connect).return_value = nullcontext(connection)
     maintenance.assert_codex_slot_compatibility_database_quiescent(engine)
     connection.commit.assert_called_once()
     statements = [str(call.args[0]) for call in connection.scalar.call_args_list]
-    assert len(statements) == 2
+    assert len(statements) == 3
     assert "worker_leases" in statements[0]
     assert "codex_control_commands" in statements[1]
+    assert "general_chat_capacity" in statements[2]
     assert all("jobs" not in statement for statement in statements)
 
 

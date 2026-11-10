@@ -162,6 +162,7 @@ export function guidedPresetBases(presets) {
         || new Set(revision.role_policies.map((policy) => policy.role)).size !== revision.role_policies.length) {
         throw new Error("PRESET_ROLE_POLICY_INVALID");
       }
+      if (!revision.role_policies.some((policy) => EDITABLE_ROLES.has(policy.role))) continue;
       bases.push({
         preset_id: requiredString(preset.preset_id, "PRESET_ID_INVALID"),
         preset_key: requiredString(preset.preset_key, "PRESET_KEY_INVALID"),

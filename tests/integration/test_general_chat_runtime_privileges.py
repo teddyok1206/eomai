@@ -27,6 +27,7 @@ from tests.integration.general_chat_fixtures import (
     RUNTIME,
     ChatFixture,
 )
+from tests.integration.test_chat_slot_reservation import reserved  # noqa: F401
 from tests.unit.test_general_chat_resident import answer
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -125,7 +126,8 @@ def test_actual_limited_role_completes_two_private_owner_histories_and_publicati
         "SELECT password_hash FROM app.operator_credentials WHERE false",
         "SELECT username FROM app.operators WHERE false",
         "UPDATE app.operators SET status=status WHERE false",
-        "SELECT slot_id FROM app.worker_slots WHERE false",
+        "SELECT linux_user FROM app.worker_slots WHERE false",
+        "UPDATE app.codex_auth_bindings SET state=state WHERE false",
         "UPDATE app.jobs SET request=request WHERE false",
         "UPDATE app.artifact_revisions SET approved=approved WHERE false",
         "DELETE FROM app.general_chat_turns WHERE false",
@@ -178,3 +180,20 @@ def test_missing_required_column_grant_is_detected(limited_chat, chat):
             connection.execute(
                 text('GRANT SELECT (status) ON app.operators TO "' + manifest.runtime_role + '"')
             )
+
+
+def test_actual_limited_role_claims_reserved_slot_using_read_only_identity_projection(
+    reserved,  # noqa: F811 -- shared pytest fixture, not a Python function call
+    limited_chat,
+):
+    chat, _, _, _, _ = reserved
+    _, _, owner, execution, _ = limited_chat
+    chat.submit(chat.create())
+    claim = execution.claim_next(runtime_id=RUNTIME)
+    assert claim is not None
+    request = execution.prepare(claim, identity=IDENTITY)
+    execution.complete(claim, answer(request))
+    view = owner.conversation(
+        actor_id=chat.actors[0], conversation_id=claim.conversation_id, cursor=None
+    )
+    assert view.messages[-1].state == "COMPLETED"

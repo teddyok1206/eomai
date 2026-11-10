@@ -220,7 +220,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     $("chat-slot").textContent = {READY: "● 대화 전용 · 준비됨", BUSY: "● 대화 전용 · 응답 중",
       UNAVAILABLE: "○ 대화 전용 · 준비 중"}[value.state];
     $("chat-slot").className = `status-badge tone-${value.state === "UNAVAILABLE" ? "neutral" : "success"}`;
-    $("chat-slot").title = value.unavailable_reason || "기존 작업 슬롯과 분리된 대화 전용 슬롯";
+    $("chat-slot").title = value.unavailable_reason || "대화에 전용으로 배정된 슬롯";
     controls();
   }
 

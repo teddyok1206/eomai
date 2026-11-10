@@ -29,6 +29,10 @@ from eom_orchestrator.auth_enrollment_capability_admission import (
     load_enrollment_model_verification_report,
 )
 from eom_orchestrator.capability_observer import UnverifiedCapabilityAssignment
+from eom_orchestrator.chat_slot_reservation import (
+    active_reserved_chat_count,
+    binding_has_active_chat,
+)
 from eom_orchestrator.codex_compatibility_maintenance import CodexCompatibilityMaintenance
 from eom_orchestrator.codex_runtime_compatibility import (
     execute_pinned_codex_compatibility,
@@ -292,7 +296,12 @@ def run_enrollment_model_verification(
                     )
                 )
             )
-            if target_held is not None or not ceilings or held >= min(ceilings):
+            if (
+                target_held is not None
+                or binding_has_active_chat(session, request.cases[0].binding_id)
+                or not ceilings
+                or held + active_reserved_chat_count(session) >= min(ceilings)
+            ):
                 raise ControlPlaneError("CODEX_AUTH_VERIFICATION_BUSY", "worker capacity is full")
             pools = session.execute(
                 select(WorkerCapacityPoolRecord.max_active, func.count(WorkerLeaseRecord.lease_id))

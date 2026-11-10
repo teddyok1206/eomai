@@ -1,5 +1,5 @@
 [Unit]
-Description=EOM dedicated resident native chat worker (separate from slots 01-06)
+Description=EOM reserved slot 06 native chat worker
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=600
@@ -7,11 +7,11 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-User=eom-cdx-chat
-Group=eom-cdx-chat
+User=eom-cdx-06
+Group=eom-cdx-06
 WorkingDirectory=/srv/eom/workspaces/general-chat/native
-Environment=HOME=/srv/eom/worker-homes/eom-cdx-chat
-Environment=CODEX_HOME=/srv/eom/worker-homes/eom-cdx-chat/.codex
+Environment=HOME=/srv/eom/worker-homes/eom-cdx-06
+Environment=CODEX_HOME=/srv/eom/worker-homes/eom-cdx-06/.codex
 Environment=LANG=C.UTF-8
 Environment=EOM_GENERAL_CHAT_PROTOCOL_VERSION=3
 # Non-secret explicit model pin; never an API key or auth copy.
@@ -46,12 +46,13 @@ InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom/secrets
 InaccessiblePaths=-/var/run/docker.sock
 InaccessiblePaths=/srv/eom/staging
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-01 /srv/eom/worker-homes/eom-cdx-02 /srv/eom/worker-homes/eom-cdx-03
-InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-04 /srv/eom/worker-homes/eom-cdx-05 /srv/eom/worker-homes/eom-cdx-06
+InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-04 /srv/eom/worker-homes/eom-cdx-05 -/srv/eom/worker-homes/eom-cdx-chat
 InaccessiblePaths=/srv/eom/workspaces/eom-cdx-01 /srv/eom/workspaces/eom-cdx-02 /srv/eom/workspaces/eom-cdx-03
 InaccessiblePaths=/srv/eom/workspaces/eom-cdx-04 /srv/eom/workspaces/eom-cdx-05 /srv/eom/workspaces/eom-cdx-06
 InaccessiblePaths=-/srv/eom/models
-ReadWritePaths=/srv/eom/worker-homes/eom-cdx-chat
-ReadOnlyPaths=/srv/eom/worker-homes/eom-cdx-chat/.codex/config.toml
+ReadWritePaths=/srv/eom/worker-homes/eom-cdx-06
+# Namespace-only override: preserve the slot's existing configuration bytes.
+BindReadOnlyPaths=/etc/eom/general-chat-native.toml:/srv/eom/worker-homes/eom-cdx-06/.codex/config.toml
 ReadOnlyPaths=/srv/eom/workspaces/general-chat/native
 
 UMask=0077

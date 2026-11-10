@@ -48,6 +48,10 @@ SPECIALIZED_WORKER_UNIT_BY_CONTRACT = MappingProxyType(
         ("04", "item_management", FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS): (
             "eom-worker-analysis-04"
         ),
+        ("05", "support", FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS): "eom-worker-support-05",
+        ("05", "support", FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS): (
+            "eom-worker-document-review-05"
+        ),
         ("06", "support", FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS): ("eom-worker-support-06"),
         ("06", "support", FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS): (
             "eom-worker-document-review-06"
@@ -78,6 +82,12 @@ WORKER_TEMPLATE_SHA256 = {
 }
 CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256 = (
     "1c8672c001c0670b405dba697e7d6e91ea89e97a783ef98c8f4829a81d553ce2"
+)
+CUSTOMER_SUPPORT_WORKER_05_TEMPLATE_SHA256 = (
+    "90dfdf2f726501b2ef310b3141fe3469bd4c349d5f11345cd7a93b540b5f5d6a"
+)
+PDF_DOCUMENT_REVIEW_WORKER_05_TEMPLATE_SHA256 = (
+    "380613c2d0991a6a1e6f7e331a6c879d47d2079a8e72a0dea2998aafe7cfc600"
 )
 CREATIVE_REPORT_WORKER_TEMPLATE_SHA256 = (
     "6dbb69ee2846762ba0f8cbc3e89a3e57f686dff648283397d777805ac4cd8b71"
@@ -448,16 +458,24 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
                 expected_mode=0o644,
                 expected_sha256=CREATIVE_REPORT_WORKER_TEMPLATE_SHA256,
             )
-        if slot_id == "06":
+        if slot_id in {"05", "06"}:
             _validate_root_owned_artifact(
-                SYSTEMD_UNIT_ROOT / "eom-worker-support-06@.service",
+                SYSTEMD_UNIT_ROOT / f"eom-worker-support-{slot_id}@.service",
                 expected_mode=0o644,
-                expected_sha256=CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
+                expected_sha256=(
+                    CUSTOMER_SUPPORT_WORKER_05_TEMPLATE_SHA256
+                    if slot_id == "05"
+                    else CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256
+                ),
             )
             _validate_root_owned_artifact(
-                SYSTEMD_UNIT_ROOT / "eom-worker-document-review-06@.service",
+                SYSTEMD_UNIT_ROOT / f"eom-worker-document-review-{slot_id}@.service",
                 expected_mode=0o644,
-                expected_sha256=PDF_DOCUMENT_REVIEW_WORKER_TEMPLATE_SHA256,
+                expected_sha256=(
+                    PDF_DOCUMENT_REVIEW_WORKER_05_TEMPLATE_SHA256
+                    if slot_id == "05"
+                    else PDF_DOCUMENT_REVIEW_WORKER_TEMPLATE_SHA256
+                ),
             )
         _validate_root_owned_artifact(
             SYSTEMD_UNIT_ROOT / f"eom-worker-probe-{slot_id}@.service",
@@ -633,9 +651,10 @@ def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitAct
         unit_names.append(f"eom-worker-analysis-03@{validate_job_id(job_id)}.service")
     if validate_slot(slot) == "04":
         unit_names.append(f"eom-worker-analysis-04@{validate_job_id(job_id)}.service")
-    if validate_slot(slot) == "06":
-        unit_names.append(f"eom-worker-support-06@{validate_job_id(job_id)}.service")
-        unit_names.append(f"eom-worker-document-review-06@{validate_job_id(job_id)}.service")
+    if validate_slot(slot) in {"05", "06"}:
+        slot_id = validate_slot(slot)
+        unit_names.append(f"eom-worker-support-{slot_id}@{validate_job_id(job_id)}.service")
+        unit_names.append(f"eom-worker-document-review-{slot_id}@{validate_job_id(job_id)}.service")
     observations = tuple(_inspect_exact_worker_unit(unit_name) for unit_name in unit_names)
     if any(observation.state == "UNKNOWN" for observation in observations):
         return WorkerUnitActivity("UNKNOWN", standard_unit, None)

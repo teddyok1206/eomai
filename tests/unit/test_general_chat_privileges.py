@@ -41,6 +41,11 @@ def expected_rows():
                 for value in ("SELECT", "INSERT", "UPDATE", "REFERENCES")
             ]
             columns.append((table, column, *flags))
+    for (table, privilege), names in COLUMN_PRIVILEGES.items():
+        if table in {"operators", "jobs"}:
+            continue
+        for column in names:
+            columns.append((table, column, privilege == "SELECT", False, False, False))
     return tables, columns
 
 

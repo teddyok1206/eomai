@@ -22,6 +22,11 @@ from eom_orchestrator.capability_observer import (
 )
 from eom_orchestrator.capability_snapshot_queries import current_assignment_snapshot_clause
 from eom_orchestrator.capacity_controller import set_auth_binding_operational_state
+from eom_orchestrator.chat_slot_reservation import (
+    active_chat_slot_clause,
+    binding_has_active_chat,
+    lock_reserved_chat_capacity,
+)
 from eom_orchestrator.control_commands import (
     claim_next_codex_control_command,
     terminalize_codex_control_command,
@@ -110,6 +115,8 @@ class CodexControlCommandProcessor:
                 target.binding_id,
                 with_for_update=True,
             )
+            if binding is not None:
+                lock_reserved_chat_capacity(session, binding.worker_slot_id)
             if (
                 binding is None
                 or binding.resource_version != target.expected_resource_version
@@ -474,6 +481,7 @@ def _next_automatic_observation_target(
             WorkerSlotRecord.slot_id.in_(FIXED_WORKER_SLOT_IDS),
             CodexAuthBindingRecord.state.notin_(("DRAINING", "DISABLED")),
             ~held_lease,
+            ~active_chat_slot_clause(CodexAuthBindingRecord.worker_slot_id),
             ~pending_command,
             or_(
                 and_(
@@ -541,7 +549,7 @@ def _automatic_observation_is_due(
 
 
 def _binding_has_held_lease(session: Session, *, binding: CodexAuthBindingRecord) -> bool:
-    return (
+    return binding_has_active_chat(session, binding.binding_id) or (
         session.scalar(
             select(
                 exists().where(
@@ -576,6 +584,7 @@ def _locked_binding(
         raise ControlPlaneError("CONTROL_AUTH_BINDING_MISSING", "auth binding is missing")
     if binding.resource_version != expected_resource_version:
         raise ControlPlaneError("CONTROL_RESOURCE_VERSION_CONFLICT", "auth binding version changed")
+    lock_reserved_chat_capacity(session, binding.worker_slot_id)
     return binding
 
 

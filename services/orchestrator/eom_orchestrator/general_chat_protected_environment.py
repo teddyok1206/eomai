@@ -63,13 +63,13 @@ def read_chat_environment(path: Path, *, uid: int, gid: int, mode: int) -> dict[
 
 
 def install_chat_environment(
-    path: Path, payload: bytes, *, uid: int, gid: int, mode: Literal[0o600, 0o644] = 0o600
+    path: Path, payload: bytes, *, uid: int, gid: int, mode: Literal[0o600, 0o640, 0o644] = 0o600
 ) -> None:
     """No-replace durable first installation; exact existing bytes are retained."""
     if (
         not 0 < len(payload) <= ENVIRONMENT_LIMIT
         or type(mode) is not int
-        or mode not in {0o600, 0o644}
+        or mode not in {0o600, 0o640, 0o644}
     ):
         raise ChatError("GENERAL_CHAT_PROTECTED_ENVIRONMENT_INVALID")
     temporary = path.with_name("." + path.name + "." + uuid4().hex)

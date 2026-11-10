@@ -23,13 +23,15 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
     ResolvedExecutionPlanRecord,
     ResolvedExecutionPlanStepRecord,
+    WorkerCapacityPolicyRecord,
     WorkerCapacityPoolSlotRecord,
 )
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_resolver import resolve_legacy_item_extraction_plan
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_workflow import WorkflowRequest
+from eom_orchestrator.preset_model_selection import resolve_released_capacity_policy
+from eom_workflow import WorkerCapacityPolicy, WorkerCapacityPolicyV3, WorkflowRequest
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
@@ -65,7 +67,6 @@ WORKFLOW_KEY = "legacy-item-extraction"
 WORKFLOW_VERSION = "1.0.0"
 WORKFLOW_ROLE_PROTOCOL = "workflow-role/1.14.0"
 WORKER_POOL_KEY = "legacy-extraction"
-DEDICATED_SLOT_ID = "06"
 MAX_POINTER_MEMBER_BYTES = 512 * 1024 * 1024
 type ReviewedBundleMemberIdentity = tuple[str, str, str, str, str, str, str]
 
@@ -506,7 +507,26 @@ class LegacyItemExtractionApplicationService:
         ):
             self._stale("Artifact member pointer is stale")
 
-    def _require_dedicated_slot(self, session: Session, capacity_revision_id: str) -> None:
+    def _require_dedicated_slot(self, session: Session, capacity_revision_id: str) -> str:
+        capacity = resolve_released_capacity_policy(session, capacity_revision_id)
+        # Historical V3 is immutable. The explicit chat-reservation successor
+        # keeps source-only extraction isolated to a single non-chat worker.
+        if isinstance(capacity, WorkerCapacityPolicyV3):
+            expected_slot = "06"
+        elif isinstance(capacity, WorkerCapacityPolicy):
+            logical = session.get(WorkerCapacityPolicyRecord, capacity.capacity_policy_id)
+            if logical is None or logical.policy_key != "slot05-interactive-support":
+                self._fail(
+                    "LEGACY_ITEM_EXTRACTION_CAPACITY_INVALID",
+                    "legacy item extraction capacity purpose differs",
+                )
+            expected_slot = "05"
+        else:
+            self._fail(
+                "LEGACY_ITEM_EXTRACTION_CAPACITY_INVALID",
+                "legacy item extraction capacity family differs",
+            )
+        pool = next((pool for pool in capacity.pools if pool.pool_key == WORKER_POOL_KEY), None)
         slots = tuple(
             session.scalars(
                 select(WorkerCapacityPoolSlotRecord.slot_id)
@@ -518,11 +538,18 @@ class LegacyItemExtractionApplicationService:
                 .order_by(WorkerCapacityPoolSlotRecord.slot_id)
             )
         )
-        if slots != (DEDICATED_SLOT_ID,):
+        if (
+            pool is None
+            or pool.slot_keys != ("slot" + expected_slot,)
+            or pool.roles != ("support",)
+            or pool.max_active != 1
+            or slots != (expected_slot,)
+        ):
             self._fail(
                 "LEGACY_ITEM_EXTRACTION_CAPACITY_INVALID",
                 "legacy item extraction pool is not isolated to its dedicated slot",
             )
+        return expected_slot
 
     def _projection(
         self,
@@ -620,7 +647,9 @@ class LegacyItemExtractionApplicationService:
             preset_id=plan.preset_id,
             preset_revision_id=plan.preset_revision_id,
             worker_pool_key=step_plan.worker_pool_key,
-            dedicated_slot_id=DEDICATED_SLOT_ID,
+            dedicated_slot_id=self._require_dedicated_slot(
+                session, plan.capacity_policy_revision_id
+            ),
             start_command_id=commands[0].command_id,
             platform_job_id=job.job_id if job is not None else None,
             worker_slot_id=job.worker_slot_id if job is not None else None,

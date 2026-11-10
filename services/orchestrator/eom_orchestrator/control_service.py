@@ -52,6 +52,13 @@ from eom_orchestrator.capability_snapshot_queries import (
     current_assignment_snapshot_clause,
     latest_binding_snapshot_clause,
 )
+from eom_orchestrator.chat_slot_reservation import (
+    WORKER_HOST_CAPACITY_LOCK_ID as WORKER_HOST_CAPACITY_LOCK_ID,
+)
+from eom_orchestrator.chat_slot_reservation import (
+    active_reserved_chat_count,
+    ordinary_slot_allowed_clause,
+)
 from eom_orchestrator.control_models import (
     CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
@@ -87,7 +94,6 @@ MAX_CONTROL_DOCUMENT_BYTES = 512 * 1024
 HELD_LEASE_STATES = ("ACTIVE", "RECONCILING")
 # One transaction-scoped host lock serializes capacity checks even while immutable policy
 # revisions coexist. The hexadecimal payload reads ``EOMCAP`` and is stable across processes.
-WORKER_HOST_CAPACITY_LOCK_ID = 0x454F4D4341500001
 # Shared automatic-learning guards and the two authoritative current-pointer publishers use this
 # transaction lock.  It preserves the pin-vs-publication boundary without granting the Catalog
 # runtime UPDATE privilege on control-plane identity tables.
@@ -1620,7 +1626,7 @@ def acquire_worker_lease(
         raise ControlPlaneError(
             "CONTROL_CAPACITY_ROLE_MISMATCH", "plan role is absent from its capacity pool"
         )
-    if _held_count(session) >= policy.max_active_codex:
+    if _held_count(session) + active_reserved_chat_count(session) >= policy.max_active_codex:
         raise ControlPlaneError("CONTROL_CAPACITY_EXHAUSTED", "global worker capacity is full")
     if (
         _held_count(
@@ -1676,6 +1682,7 @@ def acquire_worker_lease(
             == plan.capacity_policy_revision_id,
             WorkerCapacityPoolSlotRecord.pool_key == step.worker_pool_key,
             WorkerSlotRecord.enabled.is_(True),
+            ordinary_slot_allowed_clause(WorkerSlotRecord.slot_id),
             capacity_worker_role_clause(
                 policy, pool_key=step.worker_pool_key, execution_role=step.role
             ),

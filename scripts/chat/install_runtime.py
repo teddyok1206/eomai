@@ -1,7 +1,7 @@
 #!/srv/eom/conda/envs/eom-api/bin/python
-"""Stage/activate the fixed dedicated Codex slot after the existing release install.
+"""Stage/activate chat on the reserved existing slot 06 after release install.
 
-No migrations, wheel installation, authentication transfer or six-slot mutation.
+No migrations, wheel installation, authentication transfer or worker-account mutation.
 Root-owned targets are first-install-or-exact-replay. Nonsecret release/model
 configuration and source-pinned units can advance from verified predecessors
 while both chat services are stopped. Credentials and history are never replaced.
@@ -10,6 +10,7 @@ while both chat services are stopped. Credentials and history are never replaced
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import pwd
 import re
@@ -38,6 +39,12 @@ from eom_orchestrator.general_chat_protected_environment import (
 from eom_orchestrator.general_chat_runtime_selection import RUNTIME_ENVIRONMENT_KEYS
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_orchestrator.general_chat_state import ChatError, safe_chat_error_code
+from eom_orchestrator.general_chat_stdio import (
+    CHAT_CONFIG,
+    CHAT_CONFIG_BYTES,
+    CHAT_CONFIG_SOURCE,
+    CHAT_USER,
+)
 from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy
 from eom_protocol.general_chat_worker_messages import CodexCliIdentity
 
@@ -48,7 +55,10 @@ UNIT_ROOT = Path("/etc/systemd/system")
 CONFIG_ROOT = Path("/etc/eom")
 SOURCE_TMPFILE = Path("/etc/tmpfiles.d/eom-general-chat-query-read.conf")
 SECRET = CONFIG_ROOT / "secrets/general-chat.env"
-AUTH = Path("/srv/eom/worker-homes/eom-cdx-chat/.codex/auth.json")
+AUTH = Path("/srv/eom/worker-homes/eom-cdx-06/.codex/auth.json")
+WORKSPACE = Path("/srv/eom/workspaces/general-chat")
+WORKER_STATE = Path("/var/lib/eom-general-chat-worker")
+MOUNTPOINT_BYTES = b"# EOM chat namespace mount point; no slot settings are configured here.\n"
 CODEX_BINARY = Path("/usr/local/bin/codex")
 NATIVE_RUNTIME_KEYS = tuple(RUNTIME_ENVIRONMENT_KEYS.values())
 
@@ -93,6 +103,163 @@ def require_chat_services_stopped() -> None:
         # journal or operation history. Never stage over a live process.
         if state not in {"inactive", "failed"} or pid != "0":
             raise ChatError("GENERAL_CHAT_INSTALL_MUST_BE_STOPPED")
+
+
+def worker_layout_preflight() -> tuple[tuple[Path, os.stat_result, int, int], ...]:
+    """Validate exact chat-owned paths before preserving bytes and changing owners.
+
+    No slot HOME child is returned as a mutation target. A stopped predecessor
+    may own the private handoff; mixed old/new owners allow safe interrupted replay.
+    """
+    for parent in (WORKSPACE.parent, WORKER_STATE.parent, CHAT_CONFIG_SOURCE.parent):
+        require_root_directory(parent)
+    worker = pwd.getpwnam(CHAT_USER)
+    owners = {(worker.pw_uid, worker.pw_gid)}
+    try:
+        previous = pwd.getpwnam("eom-cdx-chat")
+    except KeyError:
+        previous = None
+    if previous is not None:
+        owners.add((previous.pw_uid, previous.pw_gid))
+    root_groups = {(0, gid) for _, gid in owners}
+    changes: list[tuple[Path, os.stat_result, int, int]] = []
+    for path, allowed, mode, uid in (
+        (WORKSPACE, root_groups, 0o750, 0),
+        (WORKSPACE / "native", root_groups, 0o750, 0),
+        (WORKER_STATE, owners, 0o700, worker.pw_uid),
+        (WORKER_STATE / "handoff", owners, 0o700, worker.pw_uid),
+    ):
+        if not path.exists() and not path.is_symlink():
+            continue
+        node = path.lstat()
+        if (
+            not stat.S_ISDIR(node.st_mode)
+            or (node.st_uid, node.st_gid) not in allowed
+            or stat.S_IMODE(node.st_mode) != mode
+        ):
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+        changes.append((path, node, uid, worker.pw_gid))
+    for directory, allowed_names in ((WORKSPACE, {"native"}), (WORKER_STATE, {"handoff"})):
+        if directory.exists() and {path.name for path in directory.iterdir()} - allowed_names:
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    if (WORKSPACE / "native").exists() and any((WORKSPACE / "native").iterdir()):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    handoff = WORKER_STATE / "handoff"
+    if handoff.exists():
+        for path in sorted(handoff.iterdir()):
+            node = path.lstat()
+            if (
+                re.fullmatch(r"chatclaim_[0-9a-f]{32}\.(pending|result)\.json", path.name) is None
+                or not stat.S_ISREG(node.st_mode)
+                or (node.st_uid, node.st_gid) not in owners
+                or stat.S_IMODE(node.st_mode) not in {0o400, 0o600}
+                or node.st_nlink != 1
+                or not 0 <= node.st_size <= 256000
+            ):
+                raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+            changes.append((path, node, worker.pw_uid, worker.pw_gid))
+    if (CHAT_CONFIG_SOURCE.exists() or CHAT_CONFIG_SOURCE.is_symlink()) and (
+        read_chat_preparation_file(CHAT_CONFIG_SOURCE, uid=0, gid=worker.pw_gid, mode=0o640)
+        != CHAT_CONFIG_BYTES
+    ):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    if CHAT_CONFIG.exists() or CHAT_CONFIG.is_symlink():
+        target = CHAT_CONFIG.lstat()
+        if (
+            not stat.S_ISREG(target.st_mode)
+            or target.st_nlink != 1
+            or target.st_uid not in {0, worker.pw_uid}
+            or target.st_gid != worker.pw_gid
+            or stat.S_IMODE(target.st_mode) & 0o027
+        ):
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    return tuple(changes)
+
+
+def stage_worker_layout(targets: tuple[tuple[Path, os.stat_result, int, int], ...]) -> None:
+    """Reown only the checked chat state; never rewrite handoff bytes or slot auth."""
+    require_chat_services_stopped()
+
+    def identity(node: os.stat_result) -> tuple[int, ...]:
+        return (
+            node.st_dev,
+            node.st_ino,
+            node.st_mode,
+            node.st_uid,
+            node.st_gid,
+            node.st_nlink,
+            node.st_size,
+            node.st_mtime_ns,
+            node.st_ctime_ns,
+        )
+
+    if tuple(
+        (path, identity(node), uid, gid) for path, node, uid, gid in worker_layout_preflight()
+    ) != tuple((path, identity(node), uid, gid) for path, node, uid, gid in targets):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    ownership_changes = [
+        {
+            "path": str(path),
+            "device": node.st_dev,
+            "inode": node.st_ino,
+            "mode": stat.S_IMODE(node.st_mode),
+            "previous_uid": node.st_uid,
+            "previous_gid": node.st_gid,
+            "selected_uid": uid,
+            "selected_gid": gid,
+        }
+        for path, node, uid, gid in targets
+        if (node.st_uid, node.st_gid) != (uid, gid)
+    ]
+    if ownership_changes:
+        # Capture only metadata before mutation. This is an attempted transition,
+        # not a promise that all paths changed; recovery rechecks each inode.
+        print(json.dumps({"chat_slot06_ownership_preflight": ownership_changes}, sort_keys=True))
+    for path, expected, uid, gid in targets:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            node = os.fstat(descriptor)
+            if identity(node) != identity(expected):
+                raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+            if (node.st_uid, node.st_gid) != (uid, gid):
+                os.fchown(descriptor, uid, gid)
+                os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    worker = pwd.getpwnam(CHAT_USER)
+    for path, mode, uid in (
+        (WORKSPACE, 0o750, 0),
+        (WORKSPACE / "native", 0o750, 0),
+        (WORKER_STATE, 0o700, worker.pw_uid),
+        (WORKER_STATE / "handoff", 0o700, worker.pw_uid),
+    ):
+        if not path.exists():
+            path.mkdir(mode=mode)
+            os.chown(path, uid, worker.pw_gid, follow_symlinks=False)
+            os.chmod(path, mode, follow_symlinks=False)
+    if not CHAT_CONFIG_SOURCE.exists():
+        install_chat_environment(
+            CHAT_CONFIG_SOURCE, CHAT_CONFIG_BYTES, uid=0, gid=worker.pw_gid, mode=0o640
+        )
+    if not CHAT_CONFIG.exists():
+        # systemd needs a file mount point. Only create an absent, comment-only
+        # file; never replace a user's slot configuration or authentication.
+        install_chat_environment(
+            CHAT_CONFIG, MOUNTPOINT_BYTES, uid=0, gid=worker.pw_gid, mode=0o640
+        )
+        node = CHAT_CONFIG.lstat()
+        print(
+            json.dumps(
+                {
+                    "chat_slot06_mountpoint_created": str(CHAT_CONFIG),
+                    "sha256": sha256_bytes(MOUNTPOINT_BYTES),
+                    "device": node.st_dev,
+                    "inode": node.st_ino,
+                },
+                sort_keys=True,
+            )
+        )
+    worker_layout_preflight()
 
 
 def require_installed_release(commit: str) -> None:
@@ -357,7 +524,7 @@ def stage(
     for parent in (UNIT_ROOT, CONFIG_ROOT):
         require_root_directory(parent)
     # Enrolled worker auth is inspected only for metadata; never read/copy tokens.
-    worker = pwd.getpwnam("eom-cdx-chat")
+    worker = pwd.getpwnam(CHAT_USER)
     auth = AUTH.lstat()
     if (
         not stat.S_ISREG(auth.st_mode)
@@ -495,6 +662,7 @@ def stage(
                 existing_units[target] = True
                 continue
         existing_units[target] = require_replay(target, payload, mode=0o644)
+    layout_targets = worker_layout_preflight()
     source_prepared = source_endpoint_preflight(commit) if config.private_query_source else None
     source_needs_staging = source_prepared is not None and (
         not source_prepared[1] or not source_endpoint().path.parent.exists()
@@ -514,8 +682,16 @@ def stage(
             and not updates
             and not advance_release
             and not source_needs_staging
+            and all(
+                (node.st_uid, node.st_gid) == (uid, gid) for _, node, uid, gid in layout_targets
+            )
+            and CHAT_CONFIG_SOURCE.exists()
+            and CHAT_CONFIG.exists()
+            and {WORKSPACE, WORKSPACE / "native", WORKER_STATE, WORKER_STATE / "handoff"}
+            <= {path for path, _, _, _ in layout_targets}
         ):
             return
+    stage_worker_layout(layout_targets)
     if source_needs_staging:
         assert source_prepared is not None
         stage_source_endpoint(source_prepared[0], present=source_prepared[1])
@@ -656,7 +832,8 @@ def main() -> int:
             activate()
         print("general_chat_runtime=" + ("READY" if args.action == "activate" else "STAGED"))
         print(
-            "external_api_client=NONE\nexisting_six_slots=UNCHANGED\ninstaller_model_submissions=0"
+            "external_api_client=NONE\nworker_credentials=UNCHANGED\nchat_worker_slot=06\n"
+            "reservation_activation=APPLICATION_MANAGED\ninstaller_model_submissions=0"
         )
         return 0
     except Exception as error:

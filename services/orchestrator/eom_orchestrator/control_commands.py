@@ -24,6 +24,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.auth_enrollment import require_no_active_auth_enrollment
+from eom_orchestrator.chat_slot_reservation import lock_reserved_chat_capacity
 from eom_orchestrator.control_models import CodexAuthBindingRecord, CodexControlCommandRecord
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 
@@ -103,6 +104,7 @@ def enqueue_codex_control_command(
         raise ControlPlaneError("CONTROL_AUTH_BINDING_MISSING", "auth binding is missing")
     if binding.resource_version != command.expected_resource_version:
         raise ControlPlaneError("CONTROL_RESOURCE_VERSION_CONFLICT", "auth binding version changed")
+    lock_reserved_chat_capacity(session, binding.worker_slot_id)
     if command.command_type in {"OBSERVE", "ENABLE"}:
         require_no_active_auth_enrollment(session, binding_id=binding.binding_id)
     operator = session.get(OperatorRecord, command.requested_by_operator_id)

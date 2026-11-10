@@ -38,7 +38,7 @@ def test_security_properties_come_from_source_including_repeated_path_directives
     assert values["Restart"] == "no" and values["RuntimeMaxSec"] == "30"
     assert "ExecStartPre" not in values and "EnvironmentFile" not in values
     if component == "owner":
-        assert values["SupplementaryGroups"] == "eom eom-cdx-chat eom-general-chat"
+        assert values["SupplementaryGroups"] == "eom eom-cdx-06 eom-general-chat"
         assert values["IPAddressDeny"] == "any" and values["IPAddressAllow"] == "localhost"
     else:
         assert "SupplementaryGroups" not in values
@@ -47,7 +47,7 @@ def test_security_properties_come_from_source_including_repeated_path_directives
 @pytest.mark.parametrize(
     ("old", "new", "code"),
     [
-        ("User=eom-cdx-chat", "User=root", "SOURCE_IDENTITY_INVALID"),
+        ("User=eom-cdx-06", "User=root", "SOURCE_IDENTITY_INVALID"),
         ("StateDirectoryMode=0700", "StateDirectoryMode=0755", "SOURCE_IDENTITY_INVALID"),
         ("Environment=LANG=C.UTF-8", "Environment=TOKEN=synthetic", "ENVIRONMENT_UNREVIEWED"),
         ("PrivateTmp=true", "PrivateTmp=true\nRootDirectory=/unreviewed", "DIRECTIVE_UNREVIEWED"),

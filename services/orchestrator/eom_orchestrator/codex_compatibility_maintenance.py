@@ -244,6 +244,13 @@ def assert_codex_slot_compatibility_work_absent(connection: Connection) -> None:
             exists().where(CodexControlCommandRecord.state == "PROCESSING"),
             "CODEX_COMPATIBILITY_CONTROL_BUSY",
         ),
+        (
+            exists().where(
+                GeneralChatCapacityRecord.worker_slot_id.is_not(None),
+                GeneralChatCapacityRecord.active_turn_id.is_not(None),
+            ),
+            "CODEX_COMPATIBILITY_CHAT_BUSY",
+        ),
     ):
         busy = connection.scalar(select(predicate))
         if type(busy) is not bool:

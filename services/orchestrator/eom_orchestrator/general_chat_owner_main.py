@@ -51,7 +51,7 @@ def main() -> int:
     try:
         require_chat_owner_identity()
         config = ChatOwnerConfiguration.from_environment(os.environ)
-        owner, worker = pwd.getpwnam("eom-general-chat"), pwd.getpwnam("eom-cdx-chat")
+        owner, worker = pwd.getpwnam("eom-general-chat"), pwd.getpwnam("eom-cdx-06")
         api, api_group = pwd.getpwnam("eom-api"), grp.getgrnam("eom-api")
         metadata = chat_owner_engine(config, pool_size=12)
         engines.append(metadata)

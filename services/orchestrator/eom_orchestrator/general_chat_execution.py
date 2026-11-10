@@ -64,8 +64,14 @@ from eom_protocol.general_chat_worker_messages import (
     read_chat_worker_ticket,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from eom_orchestrator.chat_slot_reservation import (
+    WORKER_HOST_CAPACITY_LOCK_ID,
+    require_chat_host_capacity,
+    require_reserved_chat_admission,
+)
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_evidence import (
     chat_pointer,
@@ -330,6 +336,7 @@ class GeneralChatExecutionService:
     def claim_next(self, *, runtime_id: str) -> ChatClaim | None:
         now = self.clock()
         with self.repository.sessions.begin() as session:
+            session.execute(select(func.pg_advisory_xact_lock(WORKER_HOST_CAPACITY_LOCK_ID)))
             capacity = self.repository.capacity(session, lock=True)
             if (
                 capacity.runtime_id != runtime_id
@@ -344,10 +351,24 @@ class GeneralChatExecutionService:
             turn = self.repository.next_queued(session)
             if turn is None:
                 return None
+            try:
+                binding = require_reserved_chat_admission(session, capacity, now=now)
+                if binding is not None:
+                    require_chat_host_capacity(session)
+            except ChatError as error:
+                if error.code != "GENERAL_CHAT_NOT_READY":
+                    raise
+                # Auth maintenance or shared capacity pressure leaves the original FIFO
+                # intent queued; it is neither a failed answer nor permission to retry inference.
+                return None
             require_chat_transition(turn.state, ChatTurnState.CLAIMED)
             claim_id = "chatclaim_" + uuid4().hex
             turn.state = ChatTurnState.CLAIMED.value
             turn.claim_id = claim_id
+            if binding is not None:
+                turn.worker_slot_id = binding.slot_id
+                turn.auth_binding_id = binding.binding_id
+                turn.auth_assignment_revision_id = binding.assignment_revision_id
             capacity.active_turn_id = turn.turn_id
             capacity.claim_id = claim_id
             capacity.expires_at = now + timedelta(minutes=30)
@@ -522,7 +543,11 @@ class GeneralChatExecutionService:
     def _prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatInputContract:
         identity = ChatExecutionIdentity.model_validate(identity.model_dump(mode="json"))
         with self.repository.sessions.begin() as session:
-            _, turn = self._live_claim(session, claim)
+            capacity, turn = self._live_claim(session, claim)
+            if turn.state == "CLAIMED":
+                require_reserved_chat_admission(
+                    session, capacity, now=self.clock(), model=identity.policy.model, turn=turn
+                )
             if turn.state == "RUNNING":
                 replay = turn
                 context = None

@@ -35,10 +35,12 @@ from eom_orchestrator.general_chat_native import (
     NativeChatError,
 )
 
-CHAT_USER = "eom-cdx-chat"
-CHAT_HOME = Path("/srv/eom/worker-homes/eom-cdx-chat")
+CHAT_USER = "eom-cdx-06"
+CHAT_HOME = Path("/srv/eom/worker-homes/eom-cdx-06")
 CHAT_WORKSPACE = Path("/srv/eom/workspaces/general-chat/native")
 CHAT_CONFIG = CHAT_HOME / ".codex/config.toml"
+CHAT_CONFIG_SOURCE = Path("/etc/eom/general-chat-native.toml")
+CHAT_CONFIG_BYTES = b"# EOM dedicated text-only chat. Configuration is pinned by the launcher.\n"
 CODEX_BINARY = Path("/usr/local/bin/codex")
 FIXED_PATH = "/usr/local/bin:/usr/bin:/bin"
 EXPECTED_VERSION = "codex-cli 0.160.0"
@@ -128,9 +130,7 @@ def require_native_chat_identity() -> None:
             raise NativeChatError("CHAT_ISOLATION_NOT_READY")
         # Empty, root-installed config excludes MCP/plugin providers. CLI overrides
         # pin all policy values; the service must mount this file read-only.
-        expected_config = (
-            b"# EOM dedicated text-only chat. Configuration is pinned by the launcher.\n"
-        )
+        expected_config = CHAT_CONFIG_BYTES
         if config.st_size != len(expected_config) or CHAT_CONFIG.read_bytes() != expected_config:
             raise NativeChatError("CHAT_ISOLATION_NOT_READY")
         if not os.statvfs(CHAT_CONFIG).f_flag & os.ST_RDONLY:

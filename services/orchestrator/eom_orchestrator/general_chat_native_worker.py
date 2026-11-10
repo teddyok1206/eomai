@@ -38,6 +38,9 @@ from eom_orchestrator.general_chat_rag_native import RAG_CHAT_INSTRUCTIONS
 from eom_orchestrator.general_chat_stdio import (
     CHAT_WORKSPACE,
     CodexChatStdio,
+    native_chat_command,
+    native_chat_environment,
+    require_native_chat_capability,
     require_native_chat_identity,
 )
 
@@ -72,41 +75,31 @@ class IsolatedCodexChatWorker:
             native_runtime=self.policy.native_runtime,
         ):
             raise ChatWorkerFault(ChatWorkerError.NOT_READY)
-        # Stdio.start checks fixed UID/private home, effective CLI capabilities,
-        # pinned root-owned config mounted read-only and a cleared environment.
-        channel: CodexChatStdio | None = None
-        try:
-            if self.policy.native_runtime is None:
-                channel = CodexChatStdio.start(model=self.policy.model)
-            else:
-                channel = CodexChatStdio.start(
-                    model=self.policy.model, native_runtime=self.policy.native_runtime
-                )
-            session = CodexChatSession(channel, model=self.policy.model, cwd=str(CHAT_WORKSPACE))
-            session.initialize()
-        except Exception:
-            if channel is not None:
-                with suppress(Exception):
-                    channel.close()
-            raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
-        self.channel = channel
-        self.session = session
+        self.channel: CodexChatStdio | None = None
+        self.session: CodexChatSession | None = None
         self.retirement_requested = Event()
+        self.closed = Event()
+        try:
+            require_native_chat_identity()
+            # Inspection does not create a login-bearing native session. The
+            # reserved slot may change account while the chat worker is idle.
+            self.runtime_guard = require_native_chat_capability(
+                command=native_chat_command(model=self.policy.model),
+                environment=native_chat_environment(),
+                native_runtime=self.policy.native_runtime,
+            )
+        except Exception:
+            raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
 
     def require_admission(self, policy: ChatWorkerPolicy) -> None:
-        if (
-            policy != self.policy
-            or not self.session.ready
-            or self.channel.closed
-            or self.channel.process.poll() is not None
-        ):
+        if policy != self.policy or self.closed.is_set() or self.retirement_requested.is_set():
             raise ChatWorkerFault(ChatWorkerError.NOT_READY)
         try:
             # Safe during an answer: OS/config/liveness only, no native RPC on the
             # shared stdio channel, generation, login or token refresh here.
             require_native_chat_identity()
-            if self.policy.native_runtime is not None:
-                self.channel.assert_runtime_unchanged()
+            if self.runtime_guard is not None:
+                self.runtime_guard.assert_unchanged()
         except Exception:
             raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
 
@@ -115,26 +108,62 @@ class IsolatedCodexChatWorker:
     ) -> ChatTurnResult:
         self.require_admission(self.policy)
         try:
+            if isinstance(request, (RagChatTurnInput, AgentChatTurnInput)) and tools is None:
+                raise ChatWorkerFault(ChatWorkerError.INVALID)
+            self._start_turn()
+            assert self.session is not None
+            result: ChatTurnResult
             if isinstance(request, RagChatTurnInput):
-                if tools is None:
-                    raise ChatWorkerFault(ChatWorkerError.INVALID)
-                return self.session.answer(request, tools=cast(ChatRagToolPort, tools))
-            if isinstance(request, AgentChatTurnInput):
-                if tools is None:
-                    raise ChatWorkerFault(ChatWorkerError.INVALID)
-                return self.session.answer(request, tools=cast(ChatToolPort, tools))
-            return self.session.answer(request)
+                result = self.session.answer(request, tools=cast(ChatRagToolPort, tools))
+            elif isinstance(request, AgentChatTurnInput):
+                result = self.session.answer(request, tools=cast(ChatToolPort, tools))
+            else:
+                result = self.session.answer(request)
+            if not self.session.ready:
+                self.retirement_requested.set()
+            # Account-bearing process termination precedes result publication.
+            self._close_turn()
+            return result
         except Exception:
             # Poisoned/unknown native state cannot be reused. The worker server
             # drains this handler and preserves its local pending/result evidence
             # before the service exits; this never retries the question.
             self.retirement_requested.set()
             with suppress(Exception):
-                self.close()
+                self._close_turn()
             raise
+
+    def _start_turn(self) -> None:
+        try:
+            if self.policy.native_runtime is None:
+                self.channel = CodexChatStdio.start(model=self.policy.model)
+            else:
+                self.channel = CodexChatStdio.start(
+                    model=self.policy.model, native_runtime=self.policy.native_runtime
+                )
+            self.session = CodexChatSession(
+                self.channel, model=self.policy.model, cwd=str(CHAT_WORKSPACE)
+            )
+            self.session.initialize()
+        except Exception:
+            with suppress(Exception):
+                self._close_turn()
+            raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
+
+    def _close_turn(self) -> None:
+        channel = self.channel
+        session = self.session
+        try:
+            if session is not None:
+                session.close()
         finally:
-            if not self.session.ready or self.channel.closed:
-                self.retirement_requested.set()
+            if channel is not None:
+                channel.close()
+                if channel.process.poll() is None:
+                    raise ChatWorkerFault(ChatWorkerError.RECOVERY)
+            self.session = None
+            self.channel = None
 
     def close(self) -> None:
-        self.session.close()
+        self.closed.set()
+        self._close_turn()

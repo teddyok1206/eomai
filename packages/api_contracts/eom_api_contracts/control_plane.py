@@ -273,6 +273,9 @@ class CodexAccountView(ApiModel):
     resource_version: int = Field(ge=1)
     capabilities: tuple[CodexCapabilityView, ...]
     active_lease_count: int = Field(ge=0)
+    assignment_purpose: Literal["GENERAL_WORK", "GENERAL_CHAT"] = "GENERAL_WORK"
+    active_chat_count: int = Field(default=0, ge=0, le=1)
+    chat_runtime_state: Literal["READY", "BUSY", "UNAVAILABLE"] | None = None
     last_successful_job_id: OpaqueId | None
     active_auth_enrollment_id: str | None = Field(default=None, pattern=r"^authflow_[0-9a-f]{32}$")
     active_auth_enrollment_state: (
@@ -293,6 +296,19 @@ class CodexAccountView(ApiModel):
     def coherent_active_enrollment(self) -> CodexAccountView:
         if (self.active_auth_enrollment_id is None) != (self.active_auth_enrollment_state is None):
             raise ValueError("active auth enrollment identity and state must be paired")
+        return self
+
+    @model_validator(mode="after")
+    def coherent_chat_assignment(self) -> CodexAccountView:
+        if self.assignment_purpose == "GENERAL_WORK":
+            if self.active_chat_count or self.chat_runtime_state is not None:
+                raise ValueError("ordinary slot cannot carry a chat assignment")
+        elif self.chat_runtime_state is None:
+            raise ValueError("reserved chat slot requires a runtime observation")
+        if self.chat_runtime_state in {"READY", "BUSY"} and self.active_chat_count != int(
+            self.chat_runtime_state == "BUSY"
+        ):
+            raise ValueError("chat activity and runtime observation differ")
         return self
 
 
