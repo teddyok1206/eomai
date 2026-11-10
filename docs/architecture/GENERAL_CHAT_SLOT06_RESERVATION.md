@@ -19,6 +19,25 @@
 - 일반 lease 획득은 예약된 슬롯을 제외한다. heartbeat 만료/채팅 유휴가 예약을 해제하지
   않으므로 채팅 장애 때문에 일반 작업이 같은 HOME을 사용하지 않는다.
 
+### API 슬롯 표시의 읽기 경계
+
+슬롯 목록의 정본은 기존 capacity singleton이다. 새 entity/revision/cache/queue는 없다.
+API control-plane read adapter는 `slot_key` indexed lookup으로 물리 예약·runtime identity·
+heartbeat·active turn pointer·expiry의 작은 불변 projection만 읽는다. 기존 FK와 claim
+owner를 바꾸지 않으며 transcript나 claim token은 읽지 않는다. 규모/비용은 슬롯 수와
+무관한 단일 PK 조회이며 같은 목록의 여섯 슬롯에 재사용한다.
+
+API runtime에는 이 여섯 column의 SELECT를 공식 privilege profile로 부여한다.
+전체 ORM 행 로딩은 금지하고 명시적 열 조회를 쓴다. 상태 변경·사적 대화 읽기는
+계속 owner 전용이다. 기존 계정 명령의 binding → capacity row lock에만 필요한
+`UPDATE(slot_key)`는 CHECK로 'chat'에 고정된 singleton key에 한정한다. claim·예약·
+heartbeat는 변경할 수 없고 전체 UPDATE/INSERT/DELETE도 부여하지 않는다.
+현재 상태 목록 읽기에는 잠금·재시도·새 멱등 기록이 필요 없고,
+heartbeat 만료는 UNAVAILABLE로 표시한다. 별도 상태 복사나 신규 RPC 대신 이미 존재하는
+control-plane read 경계를 쓰며, table-wide SELECT보다 좁은 권한으로 검증한다.
+실제 제한 API 역할로 목록 조회·금지 열/쓰기/사적 대화 접근 거부를 disposable DB에서
+검증한다. owner 역할 테스트만으로 API 배포 검증을 대신하지 않는다.
+
 ## 데이터와 동시성
 
 1. 논리 채팅/turn/claim/immutable dispatch/result identity는 그대로 보존한다. 예약은

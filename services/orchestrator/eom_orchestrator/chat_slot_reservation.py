@@ -42,23 +42,24 @@ def reserved_chat_slot_id(session: Session) -> str | None:
 
 
 def ordinary_slot_allowed_clause(slot_id: SQLColumnExpression[str]) -> ColumnElement[bool]:
-    return ~exists().where(GeneralChatCapacityRecord.worker_slot_id == slot_id)
+    return ~exists(select(literal(1)).where(GeneralChatCapacityRecord.worker_slot_id == slot_id))
 
 
 def active_chat_slot_clause(slot_id: SQLColumnExpression[str]) -> ColumnElement[bool]:
     # Expired unknown execution is still busy, just like a reconciling worker lease.
-    return exists().where(
-        GeneralChatCapacityRecord.worker_slot_id == slot_id,
-        GeneralChatCapacityRecord.active_turn_id.is_not(None),
+    return exists(
+        select(literal(1)).where(
+            GeneralChatCapacityRecord.worker_slot_id == slot_id,
+            GeneralChatCapacityRecord.active_turn_id.is_not(None),
+        )
     )
 
 
-def lock_reserved_chat_capacity(
-    session: Session, worker_slot_id: str
-) -> GeneralChatCapacityRecord | None:
+def lock_reserved_chat_capacity(session: Session, worker_slot_id: str) -> None:
     """Control already holds binding; chat holds capacity and only SELECTs binding."""
-    return session.scalar(
-        select(GeneralChatCapacityRecord)
+    # Control needs a row lock, not the owner's claim token or writable capacity.
+    session.scalar(
+        select(GeneralChatCapacityRecord.slot_key)
         .where(GeneralChatCapacityRecord.worker_slot_id == worker_slot_id)
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -69,9 +70,11 @@ def binding_has_active_chat(session: Session, binding_id: str) -> bool:
     return (
         session.scalar(
             select(
-                exists().where(
-                    CodexAuthBindingRecord.binding_id == binding_id,
-                    active_chat_slot_clause(CodexAuthBindingRecord.worker_slot_id),
+                exists(
+                    select(literal(1)).where(
+                        CodexAuthBindingRecord.binding_id == binding_id,
+                        active_chat_slot_clause(CodexAuthBindingRecord.worker_slot_id),
+                    )
                 )
             )
         )

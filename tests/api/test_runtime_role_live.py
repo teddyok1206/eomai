@@ -12,6 +12,74 @@ from psycopg import sql
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+def test_slot_projection_actual_api_role_keeps_private_chat_denied_and_control_lock() -> None:
+    if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
+        pytest.skip("run through guarded disposable API database")
+    from eom_api.services.control_plane_adapter import ControlPlaneAdapter
+    from eom_orchestrator.chat_slot_reservation import (
+        binding_has_active_chat,
+        lock_reserved_chat_capacity,
+    )
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    values = dict(
+        line.split("=", 1)
+        for line in Path(os.environ["EOM_API_TEST_RUNTIME_ENV"]).read_text().splitlines()
+    )
+    owner = psycopg.connect(os.environ["EOM_DATABASE_URL"].replace("+psycopg", ""))
+    with owner, owner.cursor() as cursor:
+        cursor.execute("SELECT current_database()")
+        assert cursor.fetchone()[0].startswith("eom_api_test_")
+        for number in range(1, 7):
+            slot_id = f"{number:02}"
+            cursor.execute(
+                "INSERT INTO app.worker_slots (slot_id,linux_user,role,enabled,gpu) "
+                "VALUES (%s,%s,'support',true,false) ON CONFLICT (slot_id) DO NOTHING",
+                (slot_id, f"test-slot-projection-{slot_id}"),
+            )
+            cursor.execute(
+                "INSERT INTO app.codex_auth_bindings "
+                "(binding_id,worker_slot_id,account_label,state,observed_at,"
+                "valid_until,resource_version) "
+                "VALUES (%s,%s,'test-projection','READY',clock_timestamp(),"
+                "clock_timestamp()+interval '1 hour',1) ON CONFLICT (worker_slot_id) DO NOTHING",
+                ("authbinding_" + str(number) * 32, slot_id),
+            )
+        cursor.execute(
+            "UPDATE app.general_chat_capacity SET worker_slot_id='06',runtime_id='test-runtime',"
+            "heartbeat_at=clock_timestamp() WHERE slot_key='chat'"
+        )
+
+    engine = create_engine(values["EOM_API_DATABASE_URL"])
+    try:
+        accounts = ControlPlaneAdapter(engine).list_accounts()
+        assert len(accounts) == 6
+        selected = next(row for row in accounts if row.slot_key == "slot06")
+        assert selected.assignment_purpose == "GENERAL_CHAT"
+        assert selected.chat_runtime_state == "READY"
+        assert selected.active_chat_count == 0
+        with Session(engine) as session:
+            lock_reserved_chat_capacity(session, "06")
+            assert not binding_has_active_chat(session, selected.binding_id)
+            session.rollback()
+        with psycopg.connect(values["EOM_API_DATABASE_URL"].replace("+psycopg", "")) as runtime:
+            for statement in (
+                "SELECT * FROM app.general_chat_capacity",
+                "SELECT claim_id FROM app.general_chat_capacity",
+                "SELECT * FROM app.general_chat_turns",
+                "SELECT * FROM app.general_chat_conversations",
+                "UPDATE app.general_chat_capacity SET worker_slot_id=NULL WHERE false",
+                "UPDATE app.general_chat_capacity SET heartbeat_at=clock_timestamp() WHERE false",
+                "DELETE FROM app.general_chat_capacity WHERE false",
+            ):
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    runtime.execute(statement)
+                runtime.rollback()
+    finally:
+        engine.dispose()
+
+
 def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
     if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
         pytest.skip("run through scripts/api/testdb_run.sh with a disposable database")

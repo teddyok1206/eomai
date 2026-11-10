@@ -56,6 +56,7 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "job_events" in INSERT_TABLES
     assert "worker_lease_events" in INSERT_TABLES
     assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "general_chat_capacity": ("slot_key",),
         "item_db_similarity_searches": (
             "pinned_query",
             "children_json",

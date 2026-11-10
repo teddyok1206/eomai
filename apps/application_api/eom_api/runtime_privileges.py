@@ -237,6 +237,10 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
 # Keep these column grants separate from table-wide UPDATE so the API role cannot rewrite identity,
 # provenance, lease ownership, command payload, or append-only event history.
 UPDATE_COLUMN_PRIVILEGES: Final[tuple[UpdateColumnPrivilege, ...]] = (
+    # PostgreSQL requires UPDATE privilege for FOR UPDATE. The singleton key is
+    # CHECK-constrained to 'chat': this permits locking, not changing ownership,
+    # heartbeat, reservation, claim or conversation state.
+    ("general_chat_capacity", ("slot_key",)),
     (
         "item_db_similarity_searches",
         ("pinned_query", "children_json", "state", "device", "error_code", "updated_at"),
@@ -249,6 +253,19 @@ UPDATE_COLUMN_PRIVILEGES: Final[tuple[UpdateColumnPrivilege, ...]] = (
 # Discovery reads identity/source classification and lexical keys only. In
 # particular, do not give this adapter origin author/rights metadata or DML.
 SELECT_COLUMN_PRIVILEGES: Final[tuple[ColumnPrivilege, ...]] = (
+    # Public slot occupancy is shared control metadata, not private conversation
+    # content. Keep the claim token and all chat DML/transcript tables inaccessible.
+    (
+        "general_chat_capacity",
+        (
+            "slot_key",
+            "worker_slot_id",
+            "runtime_id",
+            "heartbeat_at",
+            "active_turn_id",
+            "expires_at",
+        ),
+    ),
     (
         "item_origin_profiles",
         ("item_id", "item_revision_id", "item_manifest_sha256", "source_domain"),

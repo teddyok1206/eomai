@@ -169,6 +169,7 @@ def test_runtime_privilege_matrix_covers_exact_mock_exam_retirement_dml() -> Non
     assert "workflow_step_runs" not in INSERT_TABLES
     assert "workflow_step_runs" not in UPDATE_TABLES
     assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "general_chat_capacity": ("slot_key",),
         "item_db_similarity_searches": (
             "pinned_query",
             "children_json",
@@ -235,6 +236,14 @@ def test_runtime_privilege_readiness_rejects_a_missing_grant() -> None:
 
 def test_discovery_columns_exclude_origin_authors_rights_and_writes() -> None:
     assert dict(SELECT_COLUMN_PRIVILEGES) == {
+        "general_chat_capacity": (
+            "slot_key",
+            "worker_slot_id",
+            "runtime_id",
+            "heartbeat_at",
+            "active_turn_id",
+            "expires_at",
+        ),
         "item_origin_profiles": (
             "item_id",
             "item_revision_id",
@@ -247,3 +256,13 @@ def test_discovery_columns_exclude_origin_authors_rights_and_writes() -> None:
         assert table not in READ_TABLES
         assert table not in INSERT_TABLES
         assert table not in UPDATE_TABLES
+
+
+def test_slot_projection_does_not_grant_private_chat_or_claim_access() -> None:
+    columns = dict(SELECT_COLUMN_PRIVILEGES)["general_chat_capacity"]
+    assert "claim_id" not in columns
+    for table in ("general_chat_conversations", "general_chat_turns"):
+        assert table not in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES
+        assert table not in dict(SELECT_COLUMN_PRIVILEGES)

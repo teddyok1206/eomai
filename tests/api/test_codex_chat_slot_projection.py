@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from eom_api.services.control_plane_adapter import ControlPlaneAdapter
+from eom_api.services.control_plane_adapter import ControlPlaneAdapter, _ChatSlotState
 from eom_api_contracts.control_plane import CodexAccountView
 from eom_orchestrator.control_models import CodexAuthBindingRecord
 from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord
@@ -56,7 +56,17 @@ def project(
         last_successful_job_id=None,
         active_auth_enrollment=None,
         usage_observation=None,
-        chat_capacity=chat,
+        chat_capacity=(
+            _ChatSlotState(
+                chat.worker_slot_id,
+                chat.runtime_id,
+                chat.heartbeat_at,
+                chat.active_turn_id,
+                chat.expires_at,
+            )
+            if chat is not None
+            else None
+        ),
         projected_at=NOW,
     )
 
@@ -150,17 +160,30 @@ def test_account_list_reads_chat_singleton_once_for_all_six_slots() -> None:
     class Session:
         reads = 0
 
-        def get(self, model: type, identifier: str) -> GeneralChatCapacityRecord:
-            assert model is GeneralChatCapacityRecord and identifier == "chat"
-            self.reads += 1
-            return chat
-
         def scalars(self, statement: Any) -> tuple:
             if statement.column_descriptions[0]["entity"] is CodexAuthBindingRecord:
                 return rows
             return ()
 
         def execute(self, statement: Any) -> SimpleNamespace:
+            if statement.column_descriptions[0]["entity"] is GeneralChatCapacityRecord:
+                self.reads += 1
+                assert tuple(column.name for column in statement.selected_columns) == (
+                    "worker_slot_id",
+                    "runtime_id",
+                    "heartbeat_at",
+                    "active_turn_id",
+                    "expires_at",
+                )
+                return SimpleNamespace(
+                    one_or_none=lambda: (
+                        chat.worker_slot_id,
+                        chat.runtime_id,
+                        chat.heartbeat_at,
+                        chat.active_turn_id,
+                        chat.expires_at,
+                    )
+                )
             return SimpleNamespace(all=lambda: [])
 
     session = Session()

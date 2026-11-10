@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, Never, cast
 
@@ -75,6 +76,15 @@ from sqlalchemy import Engine, func, select
 from eom_api.errors import ApiError
 
 
+@dataclass(frozen=True)
+class _ChatSlotState:
+    worker_slot_id: str | None
+    runtime_id: str | None
+    heartbeat_at: datetime | None
+    active_turn_id: str | None
+    expires_at: datetime | None
+
+
 class ControlPlaneAdapter:
     """Keep HTTP presentation outside immutable lifecycle and queue transactions."""
 
@@ -95,7 +105,16 @@ class ControlPlaneAdapter:
             if not bindings:
                 return ()
             # One indexed singleton read; chat occupation is not a fabricated Workflow lease.
-            chat_capacity = session.get(GeneralChatCapacityRecord, "chat")
+            chat_row = session.execute(
+                select(
+                    GeneralChatCapacityRecord.worker_slot_id,
+                    GeneralChatCapacityRecord.runtime_id,
+                    GeneralChatCapacityRecord.heartbeat_at,
+                    GeneralChatCapacityRecord.active_turn_id,
+                    GeneralChatCapacityRecord.expires_at,
+                ).where(GeneralChatCapacityRecord.slot_key == "chat")
+            ).one_or_none()
+            chat_capacity = _ChatSlotState(*chat_row) if chat_row is not None else None
             projected_at = datetime.now(UTC)
             binding_ids = [row.binding_id for row in bindings]
             slot_keys_by_binding = {row.binding_id: f"slot{row.worker_slot_id}" for row in bindings}
@@ -619,7 +638,7 @@ class ControlPlaneAdapter:
         usage_observation: CodexUsageObservationView | None,
         model_catalog: CodexModelCatalogView | None = None,
         capability_snapshot: CodexCapabilitySnapshotView | None = None,
-        chat_capacity: GeneralChatCapacityRecord | None = None,
+        chat_capacity: _ChatSlotState | None = None,
         projected_at: datetime | None = None,
     ) -> CodexAccountView:
         chat_reserved = (
