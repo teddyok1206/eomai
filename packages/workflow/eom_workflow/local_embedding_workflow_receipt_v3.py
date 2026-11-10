@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Literal, Self
 
+from eom_catalog_contracts.embedding_contract_values import raw_public_solution_contract_value
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingInput,
@@ -280,7 +281,7 @@ def validate_local_embedding_workflow_receipt_v3(
     plan = parse_local_embedding_source_plan_v3(plan)
     validate_local_embedding_request_references_v3(request, plan, policy)
     index = PublicSolutionEmbeddingIndex.model_validate(
-        raw_similarity_contract_value(index_coverage.index)
+        raw_public_solution_contract_value(index_coverage.index)
     )
     validate_public_solution_receipt_context_values(
         receipt,

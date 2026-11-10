@@ -111,13 +111,13 @@ def parse_supported_embedding_index(value: object) -> SupportedEmbeddingIndex:
         return PublicSolutionEmbeddingIndexV4.model_validate(
             raw_public_solution_contract_value(value)
         )
-    document = raw_similarity_contract_value(value)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "embedding-index-manifest/3.0"
+    if isinstance(value, PublicSolutionEmbeddingIndex) or (
+        isinstance(value, dict) and value.get("schema_version") == "embedding-index-manifest/3.0"
     ):
-        return PublicSolutionEmbeddingIndex.model_validate(document)
-    return parse_legacy_index(document)
+        return PublicSolutionEmbeddingIndex.model_validate(
+            raw_public_solution_contract_value(value)
+        )
+    return parse_legacy_index(raw_similarity_contract_value(value))
 
 
 def parse_supported_embedding_binding(value: object) -> SupportedEmbeddingBinding:

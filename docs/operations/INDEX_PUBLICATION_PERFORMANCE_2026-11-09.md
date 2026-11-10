@@ -107,3 +107,45 @@ selected targets 4, view CONCRETE_FACETS, 전체 대상 1,556인 CUDA 처리다.
 `elapsed_ms`는 discovery·수치 실행·등록까지 포함하며 순수 GPU kernel 시간이 아니다.
 다음 묶음은 다른 문항이므로 동일 설정·묶음 크기의 실운영 비교로만 해석한다.
 이전 15:56:50의 CPU 완료나 겹치는 stage 누적시간을 CUDA 전체시간과 합치지 않는다.
+
+## 2026-11-10 — 공개 인덱스 재검증의 크기 경계 복구
+
+11월 9일 23:07:01 UTC INDEX가 `IndexRefreshContractError`로 종료됐다. 실제 설치본
+`8c4cf4db`의 `embedding_index_refresh_plan:302`가 public index4/5를 읽기 전에
+구형 `raw_similarity_contract_value`를 호출했고, 해당 parser의 1,024개 배열 상한
+(`embedding_contract_values:55`)에 걸렸다. 공개 index3/4/5의 released schema와
+기존 전용 raw parser는 이미 16,384개를 허용한다. GPU/로그인 오류가 아니다.
+11월 10일 03:10 UTC read-only 관측은 고정 기출520 중 CUDA 등록471, 잔여49,
+non-terminal Workflow0이었다. 이는 모든 종류·모든 view의 완료율은 아니다.
+
+수정 경계는 Catalog의 순수 membership 비교다. 기존 public schema-first 모델의 전용
+raw parser로 이전 manifest를 검증하고, legacy index1/2의 1,024개 제한은 유지한다.
+정본은 기존 Artifact pointer와 hash-pinned index이며, source/권한/provenance 검사,
+정렬·중복·포인터 hash·현재 Graph/space 일치는 생략하지 않는다. 접근은 bounded
+tuple의 O(N log N) 정렬과 O(N) map/set 비교이며 새 영속 데이터·캐시·DB 변경은 없다.
+실패 이력을 덮거나 제한을 전역 해제하지 않고, 완료 encoding/report/index를 재사용한다.
+
+검증 순서: 기존 source에서 1,024 초과 회귀 재현 → public3/4/5와 legacy 경계·변조
+검증 → 설치 wheel 및 owner-only 호환 릴리스 → completed 데이터 보존 대조 →
+기존 자동 INDEX 재개 → 실제 다음 등록과 기출 증가 확인. API/Web/QUERY와 수치
+runtime/model/projection/device space는 바꾸지 않는다. 무수정 restart만 하면 같은
+오류가 반복되므로 재시작을 해결의 증거로 삼지 않는다. 아래에 실제 결과를 기록한다.
+
+### 원인 확정과 소스 검증
+
+읽기 전용 head 조회로 CUDA 공통 인덱스가 **1,028 bindings**, CPU972, eligible1,556임을
+확인했다. CUDA head의 commit은 11월 9일22:31:48 UTC이며, 해당 묶음의 정상 종료와
+후속 CPU 성공 이후 다음 discovery가 구형 parser에서 멈췄다. 생성 결과의 실패가 아니다.
+
+공개 전체 index의 refresh, version dispatcher, index3 schema-first, receipt3의 index
+재검증만 수정했다. 기존 JSON Schema bytes·배열 한도·모델·수치 입력은 바꾸지 않았다.
+유효한 1,028개 fixture를 구 코드에 전달했을 때 index3/4/5 모두 동일 실패를 재현했다.
+수정본 capacity33개, 기존 index/owner/producer92개, completion/device/selection38개
+unit PASS. 중복·hash·constructed extra 거부와 legacy1/2의1,024 제한을 유지한다.
+Ruff/format과 변경 core4개 mypy PASS. 임시 DB registry/transaction 검증은 별도 진행한다.
+
+검토에서 발견한 별도 경계는 현재 INDEX5 복구에 섞지 않았다: source-plan3의
+NativeEmbeddingContract 전체 입력 제한, QUERY 전용 device-index-pair raw wrapper.
+현재 source-plan4/5와 DOCUMENT INDEX에서는 해당 경로를 호출하지 않는다. 이번 변경은
+공개 인덱스 **manifest**의 크기 규칙을 바로잡는 것이며 구형 workflow 용량 확대나
+QUERY 신규 릴리스로 확대 해석하지 않는다.

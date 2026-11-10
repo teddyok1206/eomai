@@ -46,6 +46,12 @@ Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/r
 재사용하지만, 각 payload 검증·source 권한·현재 provenance·벡터 finite/L2 검사는 유지한다.
 입력 text/모델/space/수치 batch size는 바꾸지 않는다. 실제 운영 선택은 release 기록으로 확인한다.
 
+공개 index3/4/5의 전체 manifest는 `raw_public_solution_contract_value`의16,384 경계를
+쓴다. membership 재검증·version dispatch·receipt의 전체 index를 legacy1,024 reader로
+먼저 감싸면 정상 저장된 큰 head도 다음 discovery에서 거부된다. legacy1/2·개별 shard와
+페이지 제한은 그대로이며, manifest 용량과 구형 workflow/source-plan 입력 용량을 혼동하지
+않는다. 현행 INDEX5 복구 근거는 위 운영 성능 문서의2026-11-10 후속 기록을 확인한다.
+
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·

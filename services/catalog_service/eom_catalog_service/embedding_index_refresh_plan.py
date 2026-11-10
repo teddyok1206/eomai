@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from eom_catalog_contracts.embedding_contract_values import raw_public_solution_contract_value
 from eom_catalog_contracts.embedding_index_families import (
     SupportedEmbeddingBinding,
     SupportedEmbeddingIndex,
@@ -299,11 +300,11 @@ def _public_index_membership_refresh_reason(
             }
             index = (
                 PublicSolutionEmbeddingIndexV4.model_validate(
-                    raw_similarity_contract_value(previous[1])
+                    raw_public_solution_contract_value(previous[1])
                 )
                 if registered
                 else PublicSolutionEmbeddingIndex.model_validate(
-                    raw_similarity_contract_value(previous[1])
+                    raw_public_solution_contract_value(previous[1])
                 )
             )
             if (

@@ -6,7 +6,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ConfigDict, Field, model_validator
 
-from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_contract_values import raw_public_solution_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     EmbeddingSpace,
@@ -110,7 +110,7 @@ class _PublicSolutionIndexValue(FrozenModel):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
-        value = raw_similarity_contract_value(value)
+        value = raw_public_solution_contract_value(value)
         if not isinstance(value, dict) or len(canonical_json_bytes(value)) > 64 * 1024**2:
             raise ValueError("PUBLIC_SOLUTION_INDEX_METADATA_INVALID")
         validate_contract(
