@@ -125,7 +125,7 @@ def test_same_version_native_binary_change_drops_v2_global_pairs() -> None:
     assert len(policy.models) == 1 and policy.models[0].bindings is not None
 
 
-def test_previous_scoped_pairs_are_not_carried_forward() -> None:
+def test_tested_slots_replace_previous_scoped_pairs() -> None:
     prior = _render()
     document = report_document()
     for container in (document["request"]["cases"], document["cases"]):
@@ -134,6 +134,130 @@ def test_previous_scoped_pairs_are_not_carried_forward() -> None:
     document["request_sha256"] = content_sha256(document["request"])
     policy = _render(document, baseline_policy=prior)
     assert [item.model for item in policy.models] == ["Terra", "next-synthetic-model"]
+
+
+def _slot_report(slots: tuple[str, ...], model: str = "synthetic-model") -> dict[str, Any]:
+    document = report_document()
+    request_case = document["request"]["cases"][0]
+    result_case = document["cases"][0]
+    cases = [
+        {
+            **request_case,
+            "slot_id": slot,
+            "case_id": "compatcase_" + str(int(slot) + 1) * 32,
+            "binding_id": "authbinding_" + str(int(slot) + 1) * 32,
+            "model": model,
+        }
+        for slot in slots
+    ]
+    document["request"]["cases"] = cases
+    document["request"]["max_model_calls"] = len(cases)
+    document["request_sha256"] = content_sha256(document["request"])
+    document["cases"] = [
+        {**result_case, **case, "job_id": "job_" + str(int(case["slot_id"]) + 1) * 32}
+        for case in cases
+    ]
+    document["model_calls"] = len(cases)
+    return document
+
+
+def _scoped_pairs(policy: ReviewedCapabilityPolicy) -> set[tuple[str, str, str]]:
+    return {
+        (pin.slot_id, item.model, str(effort))
+        for item in policy.models
+        for pin in item.bindings or ()
+        if isinstance(pin, admission.ReviewedCapabilityBindingV3)
+        for effort in item.reasoning_efforts
+    }
+
+
+def test_support_only_update_preserves_other_five_slots_and_replays_exactly() -> None:
+    full = _slot_report(tuple(COMPATIBILITY_SLOT_ROLES))
+    prior = _render(full, baseline_policy=_baseline("0.146.0"))
+    support = _slot_report(("06",), "chat-model")
+    selected = _render(support, baseline_policy=prior, bindings=_bindings(full))
+    assert _scoped_pairs(selected) == {
+        (slot, "synthetic-model", "medium") for slot in ("01", "02", "03", "04", "05")
+    } | {("06", "chat-model", "medium")}
+    assert _render(support, baseline_policy=selected, bindings=_bindings(full)) == selected
+    assert len(selected.models) == 2
+
+
+@pytest.mark.parametrize(
+    "field", ("cli_binary_sha256", "cli_launcher_sha256", "worker_exec_sha256", "contract_sha256")
+)
+def test_support_update_cannot_carry_scopes_to_changed_runtime(field: str) -> None:
+    prior = _render(_slot_report(tuple(COMPATIBILITY_SLOT_ROLES)))
+    support = _slot_report(("06",), "chat-model")
+    support["runtime"][field] = "sha256:" + "f" * 64
+    selected = _render(support, baseline_policy=prior)
+    assert _scoped_pairs(selected) == {("06", "chat-model", "medium")}
+
+
+@pytest.mark.parametrize("slot", ("01", "03"))
+@pytest.mark.parametrize("changed", ("assignment_revision_id", "binding_id"))
+def test_untested_changed_account_is_not_restored(slot: str, changed: str) -> None:
+    full = _slot_report(tuple(COMPATIBILITY_SLOT_ROLES))
+    prior = _render(full, baseline_policy=_baseline("0.146.0"))
+    bindings = list(_bindings(full))
+    pin = bindings[int(slot) - 1]
+    values = dict(
+        slot_id=pin.slot_id,
+        binding_id=pin.binding_id,
+        assignment_revision_id=pin.assignment_revision_id,
+        resource_version=pin.resource_version,
+    )
+    values[changed] = (
+        ASSIGNMENT if changed == "assignment_revision_id" else "authbinding_" + "f" * 32
+    )
+    bindings[int(slot) - 1] = CompatibilityAdmissionBinding(**values)
+    selected = _render(
+        _slot_report(("06",), "chat-model"), baseline_policy=prior, bindings=tuple(bindings)
+    )
+    excluded = {"01", "02"} if slot == "01" else {"03"}
+    assert {entry[0] for entry in _scoped_pairs(selected)} == set(
+        COMPATIBILITY_SLOT_ROLES
+    ) - excluded
+
+
+def test_untested_binding_moved_to_another_role_is_not_restored() -> None:
+    full = _slot_report(tuple(COMPATIBILITY_SLOT_ROLES))
+    prior = _render(full, baseline_policy=_baseline("0.146.0"))
+    bindings = list(_bindings(full))
+    left, right = bindings[2:4]
+    bindings[2] = CompatibilityAdmissionBinding("03", right.binding_id, None, 7)
+    bindings[3] = CompatibilityAdmissionBinding("04", left.binding_id, None, 7)
+    selected = _render(
+        _slot_report(("06",), "chat-model"), baseline_policy=prior, bindings=tuple(bindings)
+    )
+    assert {entry[0] for entry in _scoped_pairs(selected)} == {"01", "02", "05", "06"}
+
+
+def test_failed_retested_slot_loses_old_pass_without_dropping_others() -> None:
+    full = _slot_report(tuple(COMPATIBILITY_SLOT_ROLES))
+    prior = _render(full, baseline_policy=_baseline("0.146.0"))
+    report = _slot_report(("06", "03"), "chat-model")
+    report["cases"][1].update(status="FAIL", error_code="WORKER_EXEC_FAILED", result_sha256=None)
+    selected = _render(report, baseline_policy=prior, bindings=_bindings(full))
+    assert _scoped_pairs(selected) == {
+        (slot, "synthetic-model", "medium") for slot in ("01", "02", "04", "05")
+    } | {("06", "chat-model", "medium")}
+
+
+def test_v2_scopes_without_role_pins_are_not_carried_to_untested_slots() -> None:
+    prior = _render(
+        _slot_report(tuple(COMPATIBILITY_SLOT_ROLES)), baseline_policy=_baseline("0.146.0")
+    )
+    raw = prior.model_dump(mode="json")
+    raw["version"] = 2
+    for item in raw["models"]:
+        for pin in item["bindings"]:
+            del pin["slot_id"], pin["role"]
+    selected = _render(
+        _slot_report(("06",), "chat-model"),
+        baseline_policy=ReviewedCapabilityPolicy.model_validate(raw),
+    )
+    assert _scoped_pairs(selected) == {("06", "chat-model", "medium")}
 
 
 def test_new_effort_for_existing_global_model_remains_scoped() -> None:
@@ -515,6 +639,7 @@ def test_automatic_refresh_degrades_unverified_v2_without_crashing_or_writing_sn
         "eom-worker-auth-01.service",
     )
     session = SimpleNamespace(
+        scalar=lambda *_args, **_kwargs: None,
         get=lambda model, *_args, **_kwargs: (
             binding
             if model is CodexAuthBindingRecord
@@ -523,7 +648,7 @@ def test_automatic_refresh_degrades_unverified_v2_without_crashing_or_writing_sn
                 if model is WorkerSlotRecord
                 else None
             )
-        )
+        ),
     )
 
     @contextmanager

@@ -303,11 +303,11 @@ def render_compatibility_policy(
     bindings: tuple[CompatibilityAdmissionBinding, ...],
     now: datetime,
 ) -> ReviewedCapabilityPolicy:
-    """Keep compatible globals and admit exact passing pairs by current role binding.
+    """Replace tested slots, preserving unchanged V3 admission on untested slots.
 
     Keyed sets keep aggregation/storage O(cases + entries); canonical sorting is
     O(entries log entries), with at most 64 cases/32 emitted entries.
-    Previous scoped claims are not a fresh report and are never silently carried forward.
+    Retained scopes are predecessor admission, not a new PASS in the current report.
     """
 
     if now.tzinfo is None or now.utcoffset() != timedelta(0):
@@ -339,8 +339,8 @@ def render_compatibility_policy(
     # authoring account must not withhold independent image/support roles.
     if not intersection and not any(passed[slot] for slot in ("03", "04", "05", "06")):
         raise _invalid("no exact model/effort pair passed both required bindings")
-    passed["01"] = intersection
-    passed["02"] = intersection
+    passed["01"] = intersection.copy()
+    passed["02"] = intersection.copy()
     retain_baseline = (
         baseline_policy.expected_codex_cli_version == current_runtime.cli_version
         and (
@@ -352,6 +352,28 @@ def render_compatibility_policy(
         if retain_baseline
         else ()
     )
+    if retain_baseline and baseline_policy.version == 3:
+        tested_slots = {case.slot_id for case in report.cases}
+        by_binding = {binding.binding_id: binding for binding in bindings}
+        for item in baseline_policy.models:
+            for pin in item.bindings or ():
+                prior_binding = by_binding.get(pin.binding_id)
+                if (
+                    isinstance(pin, ReviewedCapabilityBindingV3)
+                    and prior_binding is not None
+                    and prior_binding.slot_id not in tested_slots
+                    and pin.slot_id == prior_binding.slot_id
+                    and pin.role == COMPATIBILITY_SLOT_ROLES[prior_binding.slot_id]
+                    and pin.assignment_revision_id == prior_binding.assignment_revision_id
+                ):
+                    passed[prior_binding.slot_id].update(
+                        (item.model, str(effort)) for effort in item.reasoning_efforts
+                    )
+        # A changed/failed authoring assignment cannot leave an unpaired review
+        # admission behind (or vice versa), even when only support was tested.
+        retained_pair = passed["01"] & passed["02"]
+        passed["01"] = retained_pair
+        passed["02"] = retained_pair
     global_pairs = {
         (item.model, str(effort)) for item in baseline for effort in item.reasoning_efforts
     }

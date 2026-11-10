@@ -37,3 +37,36 @@ bounded keyed lookup over six slots and linear aggregation over at most 64 cases
 The simpler all-or-nothing projection is insufficient because one account's quota
 otherwise disables independently verified roles. A quota-limited account remains
 unable to execute; no failed report is rewritten or treated as a PASS.
+
+## Scoped update preservation (2026-11-10)
+
+The previous projection replaced every scoped entry even when a report tested only
+slot 06. This removed slots 01–05 from the allowlist despite unchanged runtime and
+account assignments. The existing Orchestrator policy projection now owns a bounded
+**slot-scoped replacement**, not a second registry or a new worker protocol.
+
+- Canonical inputs remain the protected installed predecessor policy, committed report
+  pointer/hash, exact runtime hashes and current binding/assignment/slot/role records.
+  Logical bindings, immutable assignments and policy hashes remain distinct.
+- Preserve only V3 scopes on **untested slots**, with the same runtime and exact current
+  binding/assignment/slot/role. Tested slots replace all their previous scoped models;
+  failed cases do not retain an old PASS. V2 scoped entries require fresh validation.
+  Global compatibility behavior is unchanged. Authoring/review still require a common
+  admitted pair; losing one current assignment also removes the orphaned peer pair.
+- Use maps/sets over six slots and at most 64 cases/32 entries. Lookup/aggregation is
+  linear, canonical grouping/sorting O(entries log entries), with no DB/index/schema change.
+- The existing installer resolves committed evidence, rechecks runtime/current bindings,
+  uses an exact predecessor hash and filesystem lock, and atomically writes a new policy
+  with a recoverable predecessor. Identical replay must produce identical bytes. No
+  direct binding-state UPDATE, failed-history rewrite, model retry or auth-file change.
+- The protected installer remains the filesystem adapter; policy decisions stay in
+  `codex_compatibility_policy`. Existing control OBSERVE refreshes auth/capability state.
+- Repairing the already-dropped scopes requires the exact protected predecessor backup
+  plus the current committed slot-06 report, not an arbitrary old policy or a guessed
+  model. Revalidate all pointers/runtime/current assignments and preserve the current
+  06 scope before installation. If any pin changed, do not revive that scope.
+
+Replacing all scopes is simpler but loses unrelated admitted work. Unconditionally
+unioning policies is also incorrect: it could restore failed tests, changed accounts
+or old executable versions. This narrow projection preserves only unaffected evidence.
+Historical policy bytes and report schemas keep their original meaning.
