@@ -128,3 +128,30 @@ fresh thread, no duplicate start, partial-text suppression, malformed terminal
 events, timeout/EOF and cleanup failure. Successful source tests or worker
 readiness do not prove that the account's usage allowance has recovered; an
 actual new answer remains a separate acceptance check.
+
+### Installed checkpoint, 2026-11-10 06:03 UTC
+
+- Main source: `c0d4300b`. The installed hotfix `3ba2079c` is based on the
+  previous installed `87a78e54`, not the unrelated newer platform changes on main.
+  Wheel byte comparison permits only the native adapter and release metadata;
+  API contracts are unchanged. Web remains `243ec39e`.
+- Source chat suite: 875 PASS. The hotfix source and its separate installed
+  package each passed the 157-test native/worker/lifecycle/coordinator suite.
+  Ruff, format, mypy, wheel RECORD and dependency checks passed. No live model
+  request or production pytest was executed.
+- The first rollout reverted safely because QUERY startup requires the private
+  chat source socket, which the rollout had started too late. Its failed record
+  and completed rollback remain preserved. The corrected order is worker → chat
+  owner/private source → QUERY → Web; no application policy was weakened.
+- Corrected rollout, installed source/member hash, HTTPS login 200, API READY,
+  owner sockets and fresh chat heartbeat passed. INDEX retained its exact PID,
+  invocation and protected configuration; the creative producer resumed after
+  its supported natural drain. Material runtime, schema 0076, models and account
+  configuration were preserved.
+- The original 05:33 FAILED turn/code/timestamps are unchanged. A new live answer
+  has **not** been verified, and this deployment does not reset the account's
+  usage allowance.
+
+Protected rollback/installation evidence:
+`/var/lib/eom-chat-native-compatible-release-20261110-3ba2079c5ab0-order-corrected`.
+The same prefix without `-order-corrected` retains the first failed rollout.

@@ -75,6 +75,13 @@ API commit/wheel/code-member hash pin을 함께 본다. API/Web만 교체하는 
 API 시작까지 기존 1.1초 guard를 유지하며, rollback도 프로세스를 먼저 멈춘 다음
 파일을 복구하고 시작한다. 실패한 배포 기록을 지우지 않는다.
 
+공유 채팅 adapter 배포에는 owner뿐 아니라 `eom-general-chat-worker`도 교체 대상이다.
+private chat 검색이 켜진 QUERY는 시작할 때 chat source socket을 검사한다. 따라서
+API/Catalog 준비 → 채팅 worker 준비 → 채팅 owner의 일반·private source socket 준비 →
+QUERY 준비 → Web 재개 순서를 따른다. QUERY가 뜬 다음 채팅 owner를 시작하려고 기다리면
+순환 대기가 생긴다. rollback에도 같은 의존 순서를 적용한다. 한도 초과 자체와 이 배포
+순서 오류는 별개의 원인이며, 둘을 새 모델 요청이나 인증 변경으로 우회하지 않는다.
+
 creative 종료 요청은 새 source advance/publication을 멈추고, 이미 실행한 publication의
 close가 끝나기 전까지 cohort fence와 `DRAINING` 상태를 유지한다. service template의
 30분 한도는 유한 운영 종료 예산이지 모든 NAS/DB 지연의 성공 보장이 아니다. 배포는
