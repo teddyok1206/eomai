@@ -171,3 +171,30 @@ def test_unknown_native_exception_poison_requests_retirement_without_retry(
     with pytest.raises(ChatWorkerFault):
         worker.answer(staged(1))
     assert calls == [staged(1)]
+
+
+def test_confirmed_failure_with_healthy_native_session_does_not_retire_worker(
+    synthetic_native, monkeypatch
+):
+    events, channel = synthetic_native
+    selected = source_chat_worker_policy(model="synthetic-model")
+    worker = IsolatedCodexChatWorker(policy=selected)
+    failed_request = staged(1)
+    failed = answer(failed_request).model_copy(
+        update={"status": "FAILED", "reply": "", "failure_code": "CODEX_TURN_FAILED"}
+    )
+    original_answer = worker.session.answer
+    calls = []
+
+    def answer_with_confirmed_failure(request):
+        calls.append(request.turn_id)
+        return failed if request.turn_id == failed_request.turn_id else original_answer(request)
+
+    monkeypatch.setattr(worker.session, "answer", answer_with_confirmed_failure)
+    assert worker.answer(failed_request) == failed
+    assert not channel.closed and not worker.retirement_requested.is_set()
+    worker.require_admission(selected)
+    assert worker.answer(staged(2)) == answer(staged(2))
+    assert calls == [failed_request.turn_id, staged(2).turn_id]
+    assert failed.status == "FAILED" and failed.reply == ""
+    assert len([event for event in events if event[0] == "initialize"]) == 1

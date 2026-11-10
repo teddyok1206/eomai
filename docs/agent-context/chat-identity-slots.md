@@ -15,6 +15,12 @@ Codex 알림의 추가로 대화가 실패하면 thread/turn을 확인한 adapte
 알 수 없는 알림을 전부 답변으로 붙이거나 모든 schema 검사를 끄지 않는다. 기존 실패 turn을
 자동 재실행/성공으로 바꾸지 않는다. 대화 삭제는 사용자 소유와 lifecycle 경계를 따른다.
 
+한도 초과 같은 `error` 알림은 그 자체로 turn 종료가 아니다. 정확한 thread/turn의
+terminal 실패를 확인하고 정상 thread 정리를 마친 경우에만 worker를 유지한다.
+timeout·잘못된 identity·정리 실패는 기존대로 폐기한다. 자동 추론 재전송은 없다.
+현재 공개 실패 코드와 안전한 native 원인 로그를 구분하며, worker 정상과 계정 한도
+회복도 다르다. 상세는 `GENERAL_CHAT_CODEX_RUNTIME_EVOLUTION.md`의 terminal 실패 절을 본다.
+
 ## 로그인과 계정
 
 Web session/cookie/CSRF와 API access/refresh/re-authentication 경계는 별개다.

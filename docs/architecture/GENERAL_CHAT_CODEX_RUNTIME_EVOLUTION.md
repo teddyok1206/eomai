@@ -94,3 +94,37 @@ strict disabled features; old-policy lookup/recovery; dispatch V5 publication an
 resolution; pointer/hash/idempotency/concurrency/dependency boundaries; installer
 exact-predecessor update/replay; authenticated new-version text and RAG canaries.
 Mutating PostgreSQL tests use the existing guarded disposable database only.
+
+## Terminal native failures — 2026-11-10
+
+The live chat rejection at 05:33 UTC was `usageLimitExceeded`. The adapter
+previously treated the first `error` notification as a terminal response and
+closed the native process. This confused a service rejection with an uncertain
+transport/protocol failure and unnecessarily retired the dedicated worker.
+
+The native adapter now validates the selected thread/turn and the installed
+Codex 0.162.1 error envelope, including boolean `willRetry`, then consumes the
+actual `turn/completed` event. Native retries stay within that same turn; EOM
+never resubmits `turn/start`. Only a well-formed terminal `failed` result can
+return the existing `CODEX_TURN_FAILED` result after normal thread disposal.
+Success and known failure share tool-completion checks, unsubscribe, pending
+housekeeping validation and retired-thread bookkeeping. Partial answer text and
+free-form error bodies never enter a failed result, log or execution grant.
+
+Malformed identity/status/items, timeout/EOF and uncertain cleanup still close
+the process. A failed result is not changed to success, and existing failed
+turns are not replayed. Existing public schema bytes, policy/model/auth pins,
+DB state machine and Artifact ownership are unchanged. Bounded ordered event
+consumption and set membership are unchanged; no retry queue or cache is added.
+The public six-code failure enum remains unchanged: the precise quota category
+is currently an allowlisted diagnostic, not a new public failure field.
+
+The selected CLI's generated `v2/ErrorNotification.json` and
+`v2/TurnCompletedNotification.json` were checked against the
+[official App Server error lifecycle](https://learn.chatgpt.com/docs/app-server).
+Generation used no model request or credential inspection. Regression coverage
+includes native retry then success, terminal quota failure then a new user's
+fresh thread, no duplicate start, partial-text suppression, malformed terminal
+events, timeout/EOF and cleanup failure. Successful source tests or worker
+readiness do not prove that the account's usage allowance has recovered; an
+actual new answer remains a separate acceptance check.

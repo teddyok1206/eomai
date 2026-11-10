@@ -82,6 +82,14 @@ def final_event(*, status="completed", items=None, error=None):
     )
 
 
+def turn_error(category="usageLimitExceeded"):
+    return {
+        "message": "private account and prompt details",
+        "codexErrorInfo": category,
+        "additionalDetails": None,
+    }
+
+
 class Channel:
     def __init__(self, events=None):
         self.sent = []
@@ -368,6 +376,216 @@ def test_native_handle_reuse_is_rejected_before_inference_for_another_owner():
     assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
 
 
+@pytest.mark.parametrize("early", [False, True])
+def test_retrying_native_error_waits_for_terminal_answer_without_resubmitting(early, caplog):
+    channel = Channel(
+        [
+            event("error", error=turn_error("rateLimitExceeded"), willRetry=True),
+            event("item/completed", item=answer_item(text="완료된 답변")),
+            final_event(),
+        ]
+    )
+    channel.early_events = early
+    native, _ = session(channel)
+    result = native.answer(request())
+    assert result.status == "SUCCEEDED" and result.reply == "완료된 답변"
+    assert native.ready and not channel.closed
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    assert channel.sent[-1]["method"] == "thread/unsubscribe"
+    assert "private account" not in result.model_dump_json() + caplog.text
+
+
+@pytest.mark.parametrize("early", [False, True])
+@pytest.mark.parametrize("notification", [False, True])
+def test_confirmed_terminal_failure_disposes_thread_and_keeps_next_owner_isolated(
+    early, notification, caplog
+):
+    events = [event("item/completed", item=answer_item(text="uncommitted partial answer"))]
+    if notification:
+        events.append(event("error", error=turn_error(), willRetry=False))
+    events.append(
+        final_event(
+            status="failed",
+            items=[answer_item(text="uncommitted partial answer")],
+            error=turn_error(),
+        )
+    )
+    channel = Channel(events)
+    channel.early_events = early
+    native, _ = session(channel)
+    staged = request()
+    failed = native.answer(staged)
+    assert failed.status == "FAILED" and failed.reply == ""
+    assert failed.failure_code == "CODEX_TURN_FAILED"
+    assert read_chat_turn_result(failed.model_dump(mode="json"), request=staged) == failed
+    assert native.ready and not channel.closed
+    assert channel.sent[-1]["method"] == "thread/unsubscribe"
+    assert channel.sent[-1]["params"] == {"threadId": "thread-1"}
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    assert "private account" not in failed.model_dump_json() + caplog.text
+    assert "uncommitted partial answer" not in failed.model_dump_json() + caplog.text
+
+    channel.events = [
+        event("thread/closed", thread_id="thread-1"),
+        event("item/completed", thread_id="thread-2", item=answer_item(text="다른 사용자의 답변")),
+        event(
+            "turn/completed",
+            thread_id="thread-2",
+            turn={"id": "turn-1", "status": "completed", "items": [], "error": None},
+        ),
+    ]
+    next_request = request(suffix="2")
+    succeeded = native.answer(next_request)
+    assert succeeded.status == "SUCCEEDED" and succeeded.reply == "다른 사용자의 답변"
+    assert succeeded.conversation_id == next_request.conversation_id
+    assert failed.status == "FAILED" and failed.reply == ""
+    assert native.ready and not channel.closed
+    assert sum(value.get("method") == "thread/start" for value in channel.sent) == 2
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 2
+    assert not any(
+        value.get("method") in {"thread/resume", "thread/fork", "thread/inject_items"}
+        for value in channel.sent
+    )
+
+
+@pytest.mark.parametrize("will_retry", [False, True])
+@pytest.mark.parametrize(
+    "problem,expected",
+    [
+        (TimeoutError("private timeout"), "CODEX_TIMEOUT"),
+        (OSError("private pipe EOF"), "CODEX_UNAVAILABLE"),
+    ],
+)
+def test_error_notification_without_confirmed_terminal_result_is_uncertain(
+    will_retry, problem, expected, caplog
+):
+    native, channel = session(
+        Channel([event("error", error=turn_error(), willRetry=will_retry), problem])
+    )
+    result = native.answer(request())
+    assert result.status == "FAILED" and result.failure_code == expected and result.reply == ""
+    assert channel.closed and not native.ready
+    assert not any(value.get("method") == "thread/unsubscribe" for value in channel.sent)
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    assert "private" not in result.model_dump_json() + caplog.text
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"threadId": "other-thread"},
+        {"turnId": "other-turn"},
+        {"turnId": None},
+        {"willRetry": None},
+        {"willRetry": 1},
+        {"willRetry": "true"},
+        {"error": None},
+        {"error": []},
+        {"error": {"message": 42, "codexErrorInfo": "usageLimitExceeded"}},
+        {"error": {"codexErrorInfo": "usageLimitExceeded"}},
+    ],
+)
+def test_error_notification_identity_and_shape_must_be_valid_before_terminal_reuse(patch):
+    notification = event("error", error=turn_error(), willRetry=False)
+    notification["params"].update(patch)
+    native, channel = session(
+        Channel([notification, final_event(status="failed", error=turn_error())])
+    )
+    result = native.answer(request())
+    assert result.failure_code == "CODEX_PROTOCOL_INVALID" and result.reply == ""
+    assert channel.closed and not native.ready
+    assert not any(value.get("method") == "thread/unsubscribe" for value in channel.sent)
+
+
+def test_error_notification_requires_explicit_retry_semantics():
+    native, channel = session(
+        Channel(
+            [event("error", error=turn_error()), final_event(status="failed", error=turn_error())]
+        )
+    )
+    result = native.answer(request())
+    assert result.failure_code == "CODEX_PROTOCOL_INVALID" and result.reply == ""
+    assert channel.closed and not native.ready
+
+
+def test_non_retrying_error_cannot_be_overridden_by_claimed_success():
+    native, channel = session(
+        Channel(
+            [
+                event("error", error=turn_error(), willRetry=False),
+                final_event(items=[answer_item()]),
+            ]
+        )
+    )
+    result = native.answer(request())
+    assert result.failure_code == "CODEX_PROTOCOL_INVALID" and result.reply == ""
+    assert channel.closed and not native.ready
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"id": "other-turn"},
+        {"status": "inProgress"},
+        {"status": "interrupted"},
+        {"status": "completed"},
+        {"items": None},
+        {"items": {}},
+        {"error": None},
+        {"error": {}},
+        {"error": {"message": 42}},
+    ],
+)
+def test_malformed_failed_turn_cannot_leave_native_process_reusable(patch):
+    terminal = final_event(status="failed", error=turn_error())
+    terminal["params"]["turn"].update(patch)
+    native, channel = session(Channel([terminal]))
+    result = native.answer(request())
+    assert result.failure_code == "CODEX_PROTOCOL_INVALID" and result.reply == ""
+    assert channel.closed and not native.ready
+
+
+@pytest.mark.parametrize("kind", ["commandExecution", "fileChange", "dynamicToolCall"])
+def test_failed_turn_still_checks_forbidden_terminal_items(kind):
+    native, channel = session(
+        Channel([final_event(status="failed", items=[answer_item(kind=kind)], error=turn_error())])
+    )
+    result = native.answer(request())
+    assert result.failure_code == "CHAT_ISOLATION_NOT_READY" and result.reply == ""
+    assert channel.closed and not native.ready
+    assert not any(value.get("method") == "thread/unsubscribe" for value in channel.sent)
+
+
+@pytest.mark.parametrize("cleanup_failure", ["rpc", "timeout", "late-content", "wrong-thread"])
+def test_terminal_failure_cleanup_must_succeed_before_native_reuse(cleanup_failure):
+    class CleanupChannel(Channel):
+        def send(self, document):
+            if document.get("method") != "thread/unsubscribe":
+                return super().send(document)
+            self.sent.append(copy.deepcopy(document))
+            if cleanup_failure == "rpc":
+                self.queue.append({"id": document["id"], "error": {"message": "private cleanup"}})
+            elif cleanup_failure == "timeout":
+                self.queue.append(TimeoutError("private cleanup"))
+            else:
+                self.queue.extend(
+                    [
+                        event("item/completed", item=answer_item())
+                        if cleanup_failure == "late-content"
+                        else event("thread/closed", thread_id="other-thread"),
+                        {"id": document["id"], "result": {}},
+                    ]
+                )
+
+    native, channel = session(CleanupChannel([final_event(status="failed", error=turn_error())]))
+    result = native.answer(request())
+    assert result.status == "FAILED" and result.reply == ""
+    assert channel.closed and not native.ready
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    with pytest.raises(NativeChatError, match="CODEX_UNAVAILABLE"):
+        native.answer(request(suffix="2"))
+
+
 @pytest.mark.parametrize("status", ["failed", "interrupted", "inProgress"])
 def test_terminal_failure_never_promotes_partial_answer_or_retries(status):
     native, channel = session(
@@ -376,7 +594,7 @@ def test_terminal_failure_never_promotes_partial_answer_or_retries(status):
     result = native.answer(request())
     assert (
         result.status == "FAILED"
-        and result.failure_code == "CODEX_TURN_FAILED"
+        and result.failure_code == "CODEX_PROTOCOL_INVALID"
         and result.reply == ""
     )
     assert channel.closed and not native.ready

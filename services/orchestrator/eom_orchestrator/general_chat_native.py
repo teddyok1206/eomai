@@ -152,6 +152,13 @@ class NativeChatError(Exception):
         self.code = code
 
 
+class _CompletedTurnFailure(NativeChatError):
+    """A fenced terminal failure, not an uncertain or poisoned native session."""
+
+    def __init__(self) -> None:
+        super().__init__("CODEX_TURN_FAILED")
+
+
 class ChatNativeChannel(Protocol):
     def send(self, document: Mapping[str, object]) -> None: ...
     def receive(self, *, deadline: float) -> Mapping[str, object]: ...
@@ -184,7 +191,25 @@ def _diagnostic_method(value: object) -> str:
     return "invalid_notification"
 
 
-def _native_turn_failure(error: object) -> NativeChatError:
+def _validate_turn_error(value: object) -> None:
+    """Validate the native error envelope without using its body as instructions."""
+    error = _object(value)
+    if not isinstance(error.get("message"), str):
+        raise NativeChatError()
+    details = error.get("additionalDetails")
+    if details is not None and not isinstance(details, str):
+        raise NativeChatError()
+    info = error.get("codexErrorInfo")
+    if info is not None and not isinstance(info, (str, dict)):
+        raise NativeChatError()
+    misalignment = error.get("misalignment")
+    if misalignment is not None:
+        _object(misalignment)
+    # Codex 0.162 permits open string/object categories and opaque misalignment
+    # data. Neither grants continuation, changes authority, nor enters a reply.
+
+
+def _native_turn_failure(error: object) -> _CompletedTurnFailure:
     """Log closed native categories only; never retain free-form error bodies."""
     known = frozenset(
         {
@@ -201,7 +226,7 @@ def _native_turn_failure(error: object) -> NativeChatError:
     info = error.get("codexErrorInfo") if isinstance(error, dict) else None
     reason = info if isinstance(info, str) and info in known else "unclassified"
     LOGGER.warning("GENERAL_CHAT_NATIVE_TURN_REJECTED category=%s", reason)
-    return NativeChatError("CODEX_TURN_FAILED")
+    return _CompletedTurnFailure()
 
 
 class CodexChatSession:
@@ -469,18 +494,15 @@ class CodexChatSession:
             initial_items = turn.get("items")
             if not isinstance(initial_items, list):
                 raise NativeChatError()
-            reply = self._finish(thread_id=thread_id, turn_id=turn_id, initial_items=initial_items)
-            result = self._result(request, reply=reply, failure=None)
-            if self._answered_tools != set(self._tool_items):
-                raise NativeChatError()
-            # Dispose of the process-local thread before admitting another owner.
-            self._rpc("thread/unsubscribe", {"threadId": thread_id})
-            self._drain_finished_thread(thread_id)
-            self._retired_threads.add(thread_id)
-            # Bound process-local handles and native thread memory. The resident
-            # worker can renew its native process between turns, never mid-turn.
-            if len(self._retired_threads) >= 256:
-                self.close()
+            try:
+                reply = self._finish(
+                    thread_id=thread_id, turn_id=turn_id, initial_items=initial_items
+                )
+            except _CompletedTurnFailure as exc:
+                result = self._result(request, reply="", failure=exc.code)
+            else:
+                result = self._result(request, reply=reply, failure=None)
+            self._dispose_finished_thread(thread_id)
             return result
         except TimeoutError:
             failure = "CODEX_TIMEOUT"
@@ -498,6 +520,18 @@ class CodexChatSession:
         )
         self.close()
         return self._result(request, reply="", failure=failure)
+
+    def _dispose_finished_thread(self, thread_id: str) -> None:
+        if self._answered_tools != set(self._tool_items):
+            raise NativeChatError()
+        # Both successful and known-failed turns must release their ephemeral
+        # thread before another owner is admitted. Cleanup uncertainty closes the
+        # session through answer's ordinary fail-closed path.
+        self._rpc("thread/unsubscribe", {"threadId": thread_id})
+        self._drain_finished_thread(thread_id)
+        self._retired_threads.add(thread_id)
+        if len(self._retired_threads) >= 256:
+            self.close()
 
     def _drain_finished_thread(self, thread_id: str) -> None:
         for event in self._pending:
@@ -519,6 +553,7 @@ class CodexChatSession:
     def _finish(self, *, thread_id: str, turn_id: str, initial_items: list[object]) -> str:
         answers: dict[str, str] = {}
         delta_lengths: dict[str, int] = {}
+        failure_announced = False
         for item in initial_items:
             self._item(_object(item), answers, completed=False)
         while True:
@@ -557,13 +592,18 @@ class CodexChatSession:
                     for item in items:
                         self._item(_object(item), answers, completed=False)
                     continue
-                if turn.get("status") != "completed" or turn.get("error") is not None:
-                    raise _native_turn_failure(turn.get("error"))
+                status = turn.get("status")
+                if status == "failed":
+                    _validate_turn_error(turn.get("error"))
+                elif status != "completed" or turn.get("error") is not None or failure_announced:
+                    raise NativeChatError()
                 items = turn.get("items")
                 if not isinstance(items, list):
                     raise NativeChatError()
                 for item in items:
                     self._item(_object(item), answers)
+                if status == "failed":
+                    raise _native_turn_failure(turn.get("error"))
                 reply = "\n\n".join(answers.values())
                 if not reply.strip() or len(reply) > 32000:
                     raise NativeChatError()
@@ -678,7 +718,13 @@ class CodexChatSession:
                 # Never expose private reasoning or treat it as an assistant answer.
                 continue
             elif method == "error":
-                raise _native_turn_failure(params.get("error"))
+                _validate_turn_error(params.get("error"))
+                will_retry = params.get("willRetry")
+                if type(will_retry) is not bool or failure_announced:
+                    raise NativeChatError()
+                failure_announced = not will_retry
+                # Native retry notifications are not terminal results. Consume
+                # the exact turn/completed; never issue another turn/start here.
             else:
                 raise NativeChatError()
 
