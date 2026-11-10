@@ -12,10 +12,10 @@
 | HWPX 제작 | 문항·표·수식·그림을 편집 가능한 문서로 출력합니다. 선택 가능한 HWPX 교정에서는 원본을 보존하고 수정 글자를 빨간색으로 표시합니다. |
 | 근거·유사도 검색 | GraphRAG와 로컬 임베딩으로 기출·등록 문항·풀이보고서의 관련 근거를 찾습니다. |
 | Map | 데이터 → Map에서 실제 Graph의 교과서·기출·창작·외부·AI 연결을 읽기 전용으로 탐색합니다. 출처를 선택하면 같은 Graph 전체에서 해당 근거를 찾고, 공통 개념은 여러 출처의 색으로 표시합니다. 근거 확인·문항 미리보기·DB 조회로 이어지며, 그래프 배치 거리는 유사도 점수가 아닙니다. |
-| 문항 DB | 메타데이터 표와 선택 문항 상세를 나란히 보고, 여러 조건으로 검색·엑셀 저장·원본 다운로드·PDF 미리보기·조립 순서 저장을 합니다. 배치의 저장한 순서에서 편집 가능한 HWPX 합본 제작·상태 확인·다운로드를 연결했으며, 운영 실제 파일 검증은 아래 체크포인트에서 구분합니다. |
+| 문항 DB | 메타데이터 표와 선택 문항 상세를 나란히 보고, 여러 조건으로 검색·엑셀 저장·원본 다운로드·PDF 미리보기를 합니다. 간편 출력에서는 선택한 문항을 순서대로 편집 가능한 HWPX로 만들며, 정식 편성·사용 이력과 기존 조립·출력 기록은 Excel에서 관리합니다. |
 | Excel 콘텐츠 편성 — 운영 사용 가능 | 자유 콘텐츠·판·회차에 DB 문항을 배치하고 다음 판으로 복사합니다. 반복 사용 표시, 연도별 사용·미사용, 변경·인쇄 이력과 선택 회차 HWPX를 제공합니다. 실제 HTTPS 저장·복사·이력·HWPX 다운로드와 재조회, DB에서 바로 배치한 문항의 저장·새로고침 유지까지 확인했습니다. [설계](docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md) · [검증·배포 상태](docs/operations/EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md) |
 | 내부 자료 대화 | 일반 → ChatGPT에서 전용 Codex 슬롯으로 대화하고, 허용된 내부 검색 도구로 자료를 참고합니다. |
-| 시험지 제작 | 25문항 생산과 검토를 관리하고, 문항들을 묶은 시험지 HWPX를 만듭니다. |
+| 시험지 제작 | Excel에서 문항을 편성해 시험지 HWPX를 만듭니다. 기존 25문항 자동 생산 API·이력은 보존하되 구 배치 UI는 퇴역했으며, 다문항 AI 생성 화면은 별도 후속 기능입니다. |
 
 관리자는 계정·역할·실행 설정을 관리합니다. 사용자는 자신의 로그인 정보와 작업 상태를 확인할 수 있습니다.
 
@@ -49,7 +49,7 @@
 
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
-| DB 간편 출력·Excel 통합 — 운영 미반영 | DB에서는 문항 선택 후 한 번에 HWPX를 만들고, 기존 조립·출력 목록과 정식 편성은 Excel로 모으는 후속 구현을 검증했습니다. 구 모의고사 서버 배치 UI는 제거하되 API·이력은 보존하며, 다문항 AI 생성은 별도 후속 기능입니다. [경계·검증](docs/architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md) |
+| DB 간편 출력·Excel 통합 — 운영 반영 | DB에서는 문항 선택 후 한 번에 HWPX를 만들고, 기존 조립·출력 목록과 정식 편성은 Excel로 모았습니다. Web `2e6ec36c` 설치·HTTPS 파일 일치·READY를 확인했고 GPU·검색·슬롯 서비스는 재시작하지 않았습니다. 새 동선의 운영 사용자 확인은 대기 중입니다. 구 모의고사 UI는 제거하되 API·이력은 보존하며, 다문항 AI 생성은 별도 후속 기능입니다. [경계·검증·배포](docs/architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md) |
 | 통합 자료 학습 — 운영 반영 | PDF/HWP/HWPX 업로드·준비/복구·설명/문항 분리를 호환 배포했습니다. 실제 작은 PDF의 문항·설명·공개 풀이·공유 Graph 등록, DB 외부 목록·공식 RAG·동일 요청 재조회와 strict 공통 임베딩 입력을 확인했습니다. INDEX의 V11 입력 연결 수정·공식 source 인계 후 새 CUDA 요청의 RUNNING/PROCESSING까지 확인했으며, 전체 corpus 계산은 계속됩니다. 기존 기출·창작·AI 정본을 보존하고 새 자료 문항은 ‘외부’로 구분합니다. [설계·두 차례 검토](docs/architecture/MATERIAL_LEARNING_UPLOAD_PIPELINE.md) · [실제 운영 증거와 검증 한계](docs/operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md) |
 | Map·출처 Layer — 운영 반영 | 교과서·기출·창작·외부·AI 선택을 서버 조회에 연결했습니다. 현재 화면에 이미 뜬 점만 숨기는 필터가 아니며, 같은 Graph 버전·근거·문항 열기를 유지합니다. 브라우저 fixture와 설치본의 실제 출처별 조회·재조회·상세 읽기를 확인했고, 사용자도 운영 화면 업데이트를 확인했습니다. 검증 당시 Graph에 연결된 AI 근거는 0건입니다. [호환 릴리스·검증 범위](docs/operations/MAP_LAYERS_RELEASE_2026-11-06.md) |
 | 로컬 파일 정리 | 11월 6일 미사용 모델 캐시 11개·Conda 다운로드 473개·pip 캐시와 퇴역 EOMIS 내용을 정리해 약265GB를 추가 확보했습니다. EOMIS는 암호화한 NAS 백업과 전체 대조 후 정리했으며, 보안 차단용 빈 경로만 남겼습니다. 정리 후 SSD 여유는 약276GiB입니다. 현재 설치 모델·DB·원본·벡터·인증은 보존했고, 도중 만료된 INDEX는 같은 설정으로 복구했습니다. [퇴역·검증·복구 기록](docs/operations/LEGACY_MODEL_CACHE_RETIREMENT_2026-11-06.md) · [앞선 빌드 정리 약22.6GB](docs/operations/MAP_LAYERS_RELEASE_2026-11-06.md#로컬-디스크-정리) |
@@ -57,7 +57,7 @@
 | 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력은 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결합니다. HWP 본문 그림 조회와 HWPX 표 전용 문항의 참고란 제외를 검증했습니다. 이후 발생한 Graph 동시 반영 충돌과 선택 문항의 임베딩 plan 버전 오판을 수정·배포했고, 03–06 실제 동시 실행·새 Graph 등록·새 CUDA 인덱스 저장과 재사용을 확인했습니다. 전체 1,053개 처리와 임베딩은 백그라운드 작업이며, 원본 변환·추출 예외는 별도로 보존합니다. 보류했던 가변 구조의 HWPX 출력 확장은 아래 합본 경로에서 진행합니다. [입력·운영 기록](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) · [11월 4일 복구·실제 실행 증거](docs/operations/BACKGROUND_NATIVE_RECOVERY_2026-11-04.md) · [자원 부족 대기·복구 운영 기록](docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md) |
 | 생성 문항 → GraphRAG·증분 임베딩 | 실제 검색·결과 조회·같은 요청 재전송 검증 완료. [운영 검증](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md) |
 | 일반 채팅 | 부가 알림 호환 수정 배포 및 새 메시지의 실제 답변·완료 상태 확인. [배포 기록](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md) |
-| 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비·조립 순서 저장과 재열기를 지원합니다. 표/상세 분할 화면과 배치의 HWPX 제작 버튼을 운영 반영했습니다. [기존 운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) · [합본 배포·남은 검증](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
+| 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비와 표/상세 분할 화면을 지원합니다. 기존 배치는 위의 간편 출력·Excel 동선으로 통합했으며 조립 정본과 HWPX 이력은 보존했습니다. [기존 운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) · [합본 배포·검증 범위](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
 | 한글→PDF 수식·번호 보존 — 운영 반영 | 글꼴 명령어·단독 연산자·이온 전하의 변환을 보완했고, 후속으로 좁은 번호 칸의①–⑤가 수식과 겹치던 여백을 수정했습니다. 실제 원본12건 반복 변환 후 운영 PDF 준비·다운로드·동일 결과 재사용을 확인했습니다. 원본·이전 PDF 세대·학습/GPU/슬롯은 보존했습니다. [수식 검증·한계](docs/operations/OFFICE_PDF_EQUATION_RELEASE_2026-11-06.md) · [번호 보정·운영 증거](docs/operations/OFFICE_PDF_CHOICE_LABEL_RELEASE_2026-11-07.md) |
 | 편집 가능한 합본 | 호환 운영 배포 후 원본 두 문항 및 기출·원본·등록 창작 혼합의 실제 저장 순서에서 제작→독립 검증→정식 Artifact→HTTPS 다운로드와 동일 결과 재조회를 확인했습니다. 실제 내려받은 두 HWPX도 Office에서 열렸습니다. 콘텐츠팀 2/3 출력은 설치 Builder와 격리 DB의 실제 렌더·발행·다운로드까지 검증했습니다. 현재 AI 샘플에는 accepted analysis/Graph 등록이 없어 AI를 포함한 운영 합본 검증은 남아 있습니다. [설계·완료 조건](docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md) · [범위·입력 예외·남은 검증](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
 | DB 유사도 목록·기록 | 1–32문항과 문항별 상위 결과 수·기준 문항 미리보기·사용자별 최근 기록을 지원합니다. 실제 검색 결과 표시·문항 열기·같은 기록 재조회를 사용자가 확인했습니다. 완료 순위와 정확한 버전을 작은 Artifact로 저장해 재사용하며, 11월 5일 같은 기록의 최초 저장 조회179.9초→재조회17.6초와 계산1회 유지를 확인했습니다. 한 사례의 실측이며 응답시간 보장은 아닙니다. [운영 체크포인트](docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md) |

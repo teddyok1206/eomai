@@ -3,7 +3,8 @@
 2026-11-10. 사용자 결정: DB에는 간편 출력만 남기고 정식 편성·저장·사용 이력은
 Excel로 모은다. DB의 모의고사 서버 배치는 화면에서 퇴역한다. 향후 여러 문항 AI
 생성 기능에서 기존 생산·조립 경계를 검토해 재사용하되 이번에 그 기능을 만들지 않는다.
-이 문서는 구현 범위이며 운영 배포나 사용자 검증 완료를 뜻하지 않는다.
+구현 범위와 운영 설치 증거를 아래에서 구분한다. 운영 설치만으로 새 동선의 사용자
+확인이나 새 HWPX의 육안 검수까지 완료했다고 간주하지 않는다.
 
 ## 사용자 동선
 
@@ -72,5 +73,35 @@ Web-only 후보로 구현했다. `item-db-assembly.js`는 간편 출력/Excel �
 - 테스트는 합성 입력/응답을 사용하는 실제 browser와 non-live API fixture다. 운영 실제
   HWPX를 새로 만들거나 사람의 한글 레이아웃 검수를 수행했다는 뜻은 아니다.
 
-운영 배포·운영 사용자 확인은 아직 수행하지 않았다. 기존 API 계약을 재사용하므로
-후속 배포 대상은 Web이며 DB migration/API/GPU/worker 재시작은 필요하지 않다.
+## 운영 배포 — 2026-11-10
+
+사용자의 커밋·운영 배포 요청에 따라 05:08:32 UTC에 Web만 반영했다.
+
+| 항목 | 확인 결과 |
+| --- | --- |
+| 설치 source | `2e6ec36c3945a8d1fe477a81931915cc0f5f6b8d` |
+| 이전 Web source | `098d7d5c684a12f29c0217e284daa98ae94d04b2` |
+| 새 wheel SHA-256 | `0f654fedfd2d98764841906e11f7f526109aa4dcb9015d10edae5ed376417dd3` |
+| build·installed simulation·실제 서비스 계정 검증 | PASS, 설치 파일 73개 RECORD 검증 |
+| 실제 HTTPS | READY, 로그인 화면 200, 미인증 session 조회 401 |
+| 배포 파일 | 변경·추가 static 10개가 HTTPS 응답과 wheel에서 byte 단위 일치 |
+| 다른 서비스 | API·Catalog·INDEX·QUERY·창작 학습·자료 학습·채팅·HWPX의 PID와 InvocationID 보존 |
+| 데이터 영향 | DB migration/직접 변경·모델 실행·새 HWPX 제작 0, Web 설정 hash 유지 |
+| 새 동선의 운영 사용자 확인 | PENDING; 자동 검증으로 대체하지 않음 |
+
+독립 릴리스 검토에서 Web-only 호환 범위를 확인했다. 배포 전 집중 suite는 92 PASS이며,
+목록 닫기/다시 열기와 병렬 삭제 경합 수정 후 관련 실제 browser suite 12 PASS를 추가 확인했다.
+실제 HWPX 출력 엔진은 변경하지 않았고, 이번 배포 확인에서 운영 조립·제작 요청을 새로
+생성하지 않았다. 이전 HWPX의 실제 사용 증거도 새 화면 검증으로 재해석하지 않는다.
+
+운영 기록은 `/var/lib/eom-db-quick-output-release-20261110/prepared.json`과
+`activated.json`이다. root 보호 기록에 wheel/source/config hash, 서비스 비교를 보존했다.
+직전 rollback wheel은
+`/tmp/eom-web-gui-build/quick-output-protected-20261110/previous/dist/eom_web_gui-0.1.0-py3-none-any.whl`
+이며 SHA-256은 `65e6613a96a71bb6fa78419c3152d922718ae4e3c3fbdad81acb410e10c82bfa`다.
+복구는 Web stop → 기존 `scripts/web_gui/install_release.sh`의 wheel/hash/source 검증 설치 →
+Web start·READY 검증 순서이며, 다른 서비스와 데이터는 되돌리지 않는다. 이번 배포에서
+rollback은 실행하지 않았다. Web 재시작으로 기존 로그인 세션은 다시 로그인해야 할 수 있다.
+
+남은 사용자 확인은 `데이터 → DB → 간편 출력`과
+`데이터 → Excel → 기존 조립·간편 출력`의 새 동선 확인이다.
