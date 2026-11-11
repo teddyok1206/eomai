@@ -4287,3 +4287,23 @@ Invocation62cd90e93dfa4b7992fd120681214e40 및 API/Web/슬롯 보존을 before/a
 실제 root bootstrap은 새 release, INDEX delegation은 df57인 구성을 typed config와
 보호된 bootstrap hash로 함께 검증했다. 원 두 검색은 numerical launch0으로 보존하며
 새 사용자 검색의 실제 결과는 여전히 미확인이다.
+
+### 05:44 UTC 검색 — 일시적인 관측 실패와 실제 실행 상태의 구분
+
+새 요청 `dbsearch_78a1fd8bc5f90b15ad29250cd5f2c1e1`의 상태 조회는 global reload 중
+provider 관측 5초 timeout을 받았다. Web은 이 예외에서 polling을 끝내므로 계산/준비가
+계속되어도 화면에는 오류만 남았다. 기존 목록 controller에서 해당 stable code에만
+5/10/20초의 제한된 동일 요청 재확인을 추가한다. 새 submit/새 key/권한 변경은 없으며
+성공 시 실패 횟수를 초기화하고, 최대 횟수·다른 오류·계정/검색 변경 시 중단한다.
+수동 확인은 기존 timer를 취소하여 한 번에 하나만 확인한다. 완료 결과 재확인은 기존
+저장 결과를 유지한다. JSON/schema/DB 변경이나 새 공통 retry framework는 없다.
+
+관련 Web 검사 12 PASS, production JS 회귀는 transient→성공, 최대 retry, 수동 확인,
+계정 변경 뒤 지연 callback, 인증/권한/stale 오류 자동 retry 금지를 포함한다.
+
+주의: parent `embedding_batch_plan`의 SUCCEEDED는 CPU 경로에서 **binding 준비 완료**다.
+최종 QUERY Workflow 완료 증거가 아니다. 이번 parent는 05:48에 SUCCEEDED지만 child는
+RUNNING/ALLOCATED이고 CPU handoff는 05:49에 exit1, numerical CPU unit은 미실행이다.
+처음 이를 검색 계산 완료로 사용자에게 설명한 것은 잘못이며 바로잡았다. 원 요청과
+실패 unit을 보존하고 handoff 오류 및 실행 인증 만료를 따로 추적한다. 실제 결과 목록,
+문항 열기, 재조회 검증은 아직 완료되지 않았다.

@@ -7,6 +7,7 @@ const pointerKey = (pointer) => JSON.stringify(Object.fromEntries(Object.entries
 const sourceKey = (pointer) => pointer.kind === "GRAPH_ITEM" ? pointer.item_revision_id : pointer.source_revision_id;
 const intentKey = (selections, topK) => JSON.stringify([selections.map(pointerKey), topK]);
 const sourcePending = (record) => ["ITEM_DB_SIMILARITY_NOT_REGISTERED", "ITEM_DB_SIMILARITY_NOT_INDEXED"].includes(record?.error_code);
+const OBSERVATION_RETRY_DELAYS = [5000, 10000, 20000];
 
 function fromPointer(pointer) {
   return itemDbSimilaritySelection(pointer.kind, pointer.kind === "GRAPH_ITEM"
@@ -26,6 +27,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
   let pendingIntent = null;
   let busy = false;
   let polling = null;
+  let observationFailures = 0;
   let elapsedTimer = null;
   let previewGeneration = 0;
   let displayKey = null;
@@ -68,6 +70,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
     polling = null;
     if (elapsedTimer !== null) clearInterval(elapsedTimer);
     elapsedTimer = null;
+    observationFailures = 0;
   }
 
   function progress() {
@@ -210,6 +213,8 @@ export function createItemDbSimilarityList({document, searches, previewSelection
 
   async function check() {
     if (!current || busy) return;
+    if (polling !== null) clearTimeout(polling);
+    polling = null;
     if (["READY", "FAILED"].includes(current.status)) {
       if (current.children[ordinal]?.selection) return selectAnchor();
       controls(); return;
@@ -222,10 +227,25 @@ export function createItemDbSimilarityList({document, searches, previewSelection
       if (request !== generation || capturedEpoch !== epoch) return;
       if (intentKey(value.selections, value.top_k) !== intentKey(current.selections, current.top_k)) throw new Error("원래 검색의 문항 또는 결과 개수가 바뀌었습니다.");
       current = value;
+      observationFailures = 0;
       if (current.children[ordinal]?.selection) await selectAnchor();
       else message(value.status === "FAILED" ? "검색을 완료하지 못했습니다. 기존 실패 기록은 보존됩니다." : "검색을 진행하고 있습니다.", value.status === "FAILED");
     } catch (error) {
-      if (request === generation && capturedEpoch === epoch) message(`검색 상태를 확인하지 못했습니다: ${error.message}`, true);
+      if (request !== generation || capturedEpoch !== epoch) return;
+      // A failed observation does not cancel the admitted calculation. Recheck the same
+      // durable request only; never turn a transport error into a new search submission.
+      if (error.code === "REFERENCE_QUERY_PREPARE_UNAVAILABLE"
+        && ["PREPARING", "PENDING"].includes(current.status)
+        && observationFailures < OBSERVATION_RETRY_DELAYS.length) {
+        const delay = OBSERVATION_RETRY_DELAYS[observationFailures++];
+        message("검색 상태 연결이 잠시 지연되어 같은 요청을 다시 확인하고 있습니다.");
+        polling = setTimeout(() => {
+          if (request === generation && capturedEpoch === epoch && current?.search_id === searchId) return check();
+        }, delay);
+      } else {
+        stopPolling();
+        message(`검색 상태를 확인하지 못했습니다: ${error.message}`, true);
+      }
       return;
     } finally {
       if (request === generation && capturedEpoch === epoch) {busy = false; controls();}
@@ -266,7 +286,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
     available: () => Boolean(searches),
     install() {
       $("#item-db-similarity-run").addEventListener("click", run);
-      $("#item-db-similarity-refresh").addEventListener("click", check);
+      $("#item-db-similarity-refresh").addEventListener("click", () => {observationFailures = 0; return check();});
       $("#item-db-similarity-history-refresh").addEventListener("click", recent);
       $("#item-db-similarity-source-select").addEventListener("change", async () => {
         const next = Number($("#item-db-similarity-source-select").value);

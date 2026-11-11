@@ -135,6 +135,11 @@ hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint
 전체 풀이/NAS 문항/벡터를 다시 decode·순위 계산하지 않으며, 달라진 source나 손상된 저장
 결과를 latest/새 계산으로 숨기지 않는다. 최초 저장은 기존 전체 검증을 한 번 거친다.
 
+목록 UI는 `REFERENCE_QUERY_PREPARE_UNAVAILABLE` 관측 실패만 같은 search ID로
+5/10/20초에 제한 재확인한다. 새 검색 제출·인증 우회가 아니며 계정/요청 변경 또는
+다른 오류에는 자동 재확인하지 않는다. parent batch의 SUCCEEDED는 CPU fallback에서
+binding 준비 완료일 수 있다. 결과 완료는 child Workflow/selection으로 확인한다.
+
 ## 먼저 열 파일
 
 - `apps/application_api/eom_api/services/item_db_similarity_searches.py`

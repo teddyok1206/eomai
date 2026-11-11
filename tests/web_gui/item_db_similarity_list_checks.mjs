@@ -4,8 +4,10 @@ import {createItemDbSimilarityList} from "../../apps/web_gui/eom_web_gui/static/
 import {itemDbSimilaritySelection} from "../../apps/web_gui/eom_web_gui/static/item-db-similarity.js";
 
 globalThis.crypto ??= webcrypto;
-globalThis.setTimeout = () => 1;
-globalThis.clearTimeout = () => {};
+const timers = new Map();
+let timerId = 0;
+globalThis.setTimeout = (callback, delay) => {timers.set(++timerId, {callback, delay}); return timerId;};
+globalThis.clearTimeout = id => timers.delete(id);
 globalThis.setInterval = () => 2;
 globalThis.clearInterval = () => {};
 class Element {
@@ -25,6 +27,7 @@ const graph = number => ({source_class: "PAST_EXAM", item_id: `item_${String(num
 const selections = [1, 2].map(number => itemDbSimilaritySelection("GRAPH_ITEM", graph(number)));
 const calls = [];
 let record;
+let observationError = null;
 const searches = {
   async recent() {calls.push("history"); return {values: record ? [record] : [], next_cursor: null};},
   async submit(values, topK, key) {
@@ -35,6 +38,7 @@ const searches = {
   },
   async check(id) {
     calls.push({operation: "CHECK", id});
+    if (observationError) throw Object.assign(new Error("synthetic observation failure"), {code: observationError});
     record = {...record, status: "READY", children: record.selections.map((pointer, ordinal) => ({ordinal,
       source_item_revision_id: pointer.item_revision_id, state: "COMPLETED", selection: {workflow_id: "workflow_" + String(ordinal + 1).repeat(32)}}))};
     return record;
@@ -103,4 +107,60 @@ controller.setOwner(null);
 assert.equal(document.querySelector("#item-db-similarity-results").children.length, 1);
 assert.equal(document.querySelector("#item-db-similarity-source-preview").children.length, 0);
 assert.equal(document.querySelector("#item-db-similarity-history").children.length, 0);
+
+// A temporary owner observation failure must not strand a successful background calculation.
+controller.setOwner("operator_" + "1".repeat(32));
+controller.start(selections[0], "기준 문항 하나");
+observationError = "REFERENCE_QUERY_PREPARE_UNAVAILABLE";
+const submitsBeforeRetry = calls.filter(value => value.operation === "SUBMIT").length;
+await document.querySelector("#item-db-similarity-run").events.get("click")();
+assert.match(document.querySelector("#item-db-similarity-message").textContent, /같은 요청/u);
+async function tick(delay) {
+  assert.equal(timers.size, 1, "only one observation timer may be pending");
+  const [id, timer] = [...timers][0];
+  assert.equal(timer.delay, delay);
+  timers.delete(id);
+  await timer.callback();
+}
+await tick(5000);
+await tick(10000);
+observationError = null;
+await tick(20000);
+assert.equal(record.status, "READY");
+assert.equal(timers.size, 0);
+assert.equal(calls.filter(value => value.operation === "SUBMIT").length, submitsBeforeRetry + 1);
+assert(calls.filter(value => value.operation === "CHECK").every(value => value.id === record.search_id));
+const readsAfterRetry = calls.filter(value => value.operation === "RESULT_GET").length;
+await document.querySelector("#item-db-similarity-refresh").events.get("click")();
+assert.equal(calls.filter(value => value.operation === "RESULT_GET").length, readsAfterRetry);
+
+// Bound retries; explicit confirmation cancels a queued timer instead of creating a second loop.
+observationError = "REFERENCE_QUERY_PREPARE_UNAVAILABLE";
+await document.querySelector("#item-db-similarity-run").events.get("click")();
+const pendingTimer = [...timers.keys()][0];
+await document.querySelector("#item-db-similarity-refresh").events.get("click")();
+assert(!timers.has(pendingTimer));
+await tick(5000);
+await tick(10000);
+await tick(20000);
+assert.equal(timers.size, 0);
+assert.match(document.querySelector("#item-db-similarity-message").textContent, /확인하지 못했습니다/u);
+
+// A queued or late callback from the previous owner must never observe another owner's search.
+await document.querySelector("#item-db-similarity-refresh").events.get("click")();
+const oldCallback = [...timers.values()][0].callback;
+controller.setOwner(null);
+assert.equal(timers.size, 0);
+const checksBeforeLogout = calls.filter(value => value.operation === "CHECK").length;
+await oldCallback();
+assert.equal(calls.filter(value => value.operation === "CHECK").length, checksBeforeLogout);
+
+controller.setOwner("operator_" + "2".repeat(32));
+controller.start(selections[0], "기준 문항 하나");
+for (const code of ["AUTH_REAUTHENTICATION_REQUIRED", "PERMISSION_DENIED", "ITEM_DB_SIMILARITY_RESULT_STALE", "UNEXPECTED_ERROR"]) {
+  observationError = code;
+  await document.querySelector("#item-db-similarity-run").events.get("click")();
+  assert.equal(timers.size, 0, `${code} must not be automatically retried`);
+}
+controller.setOwner(null);
 console.log("item_db_list_history_result_reads=PASS model_runs=0");
