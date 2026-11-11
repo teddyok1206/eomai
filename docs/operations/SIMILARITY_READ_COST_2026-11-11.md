@@ -102,3 +102,25 @@ Studio login200은 확인했지만 이것을 새 검색 성공으로 대신하�
 **아직 남은 것:** 새 GUI 검색의 준비→GPU→첫 결과 목록→문항 열기→같은 요청 재조회
 측정. 새 검색은 아직 관측되지 않았다. 이미 확인한 저장 결과 재조회55% 단축과 구분하며
 전체 목표는 계속 ACTIVE다. 기존 임베딩·원 결과·실패 이력은 모두 보존했다.
+
+## 설치본 직접 확인과 완료 감사
+
+같은 pinned manifest를 실제 QUERY owner interpreter
+`/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12`와 설치 source11d826d2로
+읽기 전용 확인했다. 파일 읽기0.08194초, cold decode3.57093초, 별도 복사한 동일 bytes의
+warm decode0.00145/0.00131초였다. 모델 객체 크기 추정30,046,212bytes와 원 hash는
+source 검사와 같다. 새 GPU/모델/검색 실행은 없으며, GUI 전체 지연으로 해석하지 않는다.
+검증용 disposable DB는 공식 cleanup으로 제거했다. 운영 데이터에는 테스트하지 않았다.
+
+| 목표 요구 | 확인된 근거 | 판정 |
+|---|---|---|
+| 기존 결과·순서·정본 보존 | 같은 search/selector/ranking revision·SHA 유지, 사용자 목록·열기 확인 | PASS |
+| 현재 권한·provenance 보존 | before/after SQL closure, warm cache의 철회·변조 거부, disposable 동시성 회귀 | PASS |
+| 완료 기록 재조회 개선·중복 계산 없음 | 실제 HTTP22.735→10.241초, native launch1회 그대로, 사용자 확인 | PASS |
+| 최초 검색 반복 해석 개선 | strict decoder 재사용 소스·설치본 측정 및 QUERY/Catalog 배포 | 구현·배포 PASS; 실제 전체 시간 PENDING |
+| 동일 QUERY 재사용·GPU 연속 처리 검토 | 동일 요청 재사용 유지; 다른 요청 reuse는 새 증명 필요; finite batch 모델 load1회/encode N회 회귀 | 검토 완료; 별도 상주 서비스 추가 안 함 |
+| 배포 후 새 GUI 검색→목록→문항 열기→동일 요청 재조회 | 후속 조회 시각까지 새 search row 없음 | PENDING |
+
+다음 행동은 이미 요청한 사용자 GUI 검색1건을 관측하는 것이다. 새 요청 없이 ready 상태나
+내부 benchmark만으로 완료 선언하지 않는다. 사용자 세션을 만들어내거나 과거 operator
+기록으로 새 실행 권한을 대신하지 않으며, 새 요청이 없다는 이유로 개선 범위를 확장하지 않는다.
