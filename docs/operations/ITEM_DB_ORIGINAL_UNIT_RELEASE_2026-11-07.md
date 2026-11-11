@@ -53,3 +53,28 @@ DB migration은 없고 기존 head `20261105_0074`를 유지한다.
 운영 증거는 위 보호 경로의 `activated.json`, `prepared.json`, `rollback.json`,
 `source-unit-read-verification.json`에 보존한다. API/Web 사용자는 새로고침 후
 `데이터 → DB → 조회 → 문항 정보`에서 소속 단원을 확인할 수 있다.
+
+## 유사도 결과 목록 적용 — 2026-11-11 UTC
+
+- 코드/운영 API·platform·Catalog: `680fff7296a8b1028692bcc8f7be620d93e29dcb`.
+  Web `1a617d80`, QUERY owner/controller `377b196e`는 유지하고 API provider 및
+  그에 종속된 설정 hash만 호환 갱신했다. migration `20261110_0077` 변경 없음.
+- 결과 목록의 `unit_label`을 Graph 연결 단원 대신 등록 당시 원본 Q/R의
+  `대단원 → 소단원`으로 표시한다. 원본 단원이 없는 경우 빈 값(`—`)이며
+  원본 조회 오류는 추정값으로 숨기지 않는다. 단건 상세와 동일한 Catalog resolver다.
+- 최대64개 결과를 두 번의 indexed batch SQL + O(k) map으로 결합한다.
+  결과마다 별도 HTTP/SQL 조회를 추가하지 않았다. 순위·점수·벡터·완료 기록 불변.
+- source 단위/검색 application/문맥 87개, API 권한·조회 24개,
+  disposable PostgreSQL source/등록/출력 34개 PASS. Ruff·focused mypy·wheel RECORD PASS.
+  단건 SQL 기대값을 batch 형태에 맞춘 과정의 실패는 개발 로그에 남겨 두었고 최종 재실행 통과.
+- 운영의 실제 API DB 역할로 설치된 batch 조회와 상세 원본 조회를 3문항 대조:
+  모두 동일, 원본 단원 있음, batch SQL 2회. 읽기 전용이며 사용자 세션을 만들지 않았다.
+- API·Web·Catalog·QUERY·채팅·runner active, creative producer 재개.
+  INDEX/자료 학습의 실행 identity와 고정 설정, GPU/CPU 수치 runtime 보존.
+  새 검색·모델 실행·업무 DB write·벡터 재생성 없음.
+- 보호된 준비/rollback/설치 증거:
+  `/var/lib/eom-similarity-original-unit-20261111`.
+  실제 GUI에서 변경된 단원 열의 확인은 별도 사용자 응답을 기다린다.
+
+사용자가 이번 수정 전에 실제 유사도 결과 목록 표시를 확인했다. 해당 검색의
+첫 계산/조회 지연은 이번 단원 표시 변경으로 해결했다고 주장하지 않는다.
