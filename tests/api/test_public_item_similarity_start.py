@@ -5,6 +5,11 @@ SQLite does not qualify PostgreSQL constraints, native execution or live IAM.
 
 import pytest
 from eom_api.errors import ApiError
+from eom_api.services import command_adapter as module
+from eom_api.services.current_item_authoring_admission import (
+    require_current_item_authoring_grounding,
+    require_current_item_authoring_pack,
+)
 from eom_api.services.item_similarity_start import (
     PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY,
     SIMILARITY_PREPARATION_ACCEPTANCE_KEY,
@@ -34,10 +39,17 @@ def public_case(start_case, request, tmp_path, monkeypatch):
 @pytest.mark.parametrize("start_case", (False, True), indirect=True)
 def test_public_start_atomically_persists_exact_plan_family_and_acceptance2_then_replays_one_start(
     public_case,
+    monkeypatch,
 ):
     value = public_case
     first = value.adapter.start_workflow(
         value.request, value.actor, idempotency_key=KEY, prepared_similarity=value.prepared
+    )
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_grounding", require_current_item_authoring_grounding
+    )
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_pack", require_current_item_authoring_pack
     )
     assert (
         value.adapter.start_workflow(

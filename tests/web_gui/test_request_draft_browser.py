@@ -39,7 +39,6 @@ const formFields = {
   difficulty: field('medium'), material_form: field('AUTO'),
   material_panel_count: field('1'), image_supporting_data: field('NONE'),
   source_intake_batch_id: field(),
-  knowledge_grounding: field(),
   curriculum_large_unit_key: field('eom.is.large.3'),
   curriculum_middle_unit_key: field('eom.is.middle.3-2'),
   curriculum_small_unit_key: field(),
@@ -167,6 +166,8 @@ assert.equal(calls[1].options.body.subject, '통합과학');
 assert.equal(calls[1].options.body.choice_count, 5);
 assert.equal(calls[1].options.body.equation_required, true);
 assert.equal(calls[1].options.body.quality_profile, 'balanced');
+assert.equal(calls[1].options.body.knowledge_grounding, true);
+assert.equal('knowledge_grounding' in formFields, false);
 assert.equal('quality_profile' in formFields, false);
 const presetFields = ['execution_preset_key', 'execution_preset_revision_id',
   'model', 'reasoning_effort'];
@@ -266,6 +267,7 @@ assert.deepEqual(plain(submissionCalls()[0].options.body), {
 });
 context.resetDraftEditor();
 formFields.authoring_guidance.value = normalizedGuidance;
+state.curriculumSelection = {large: 'eom.is.large.3', middle: unit.key, small: ''};
 assert.equal(context.draftUpdateBody().quality_profile, 'balanced');
 """
     )
@@ -402,7 +404,6 @@ state.draft = {request_draft_id: draftId, draft_spec_sha256: specHash,
     variation_axes: ['CONTEXT', 'REASONING_PATH']}};
 state.variationSourceEntry = {item_revision_id: sourceRevisionId};
 axes = ['REASONING_PATH', 'CONTEXT'];
-formFields.knowledge_grounding.checked = true;
 formFields.material_form.value = 'TABLE';
 formFields.material_panel_count.value = '2';
 await context.submitDraft();
@@ -425,7 +426,6 @@ def test_empty_variation_axes_and_missing_grounding_unit_fail_before_any_write()
     _run_browser_checks(
         r"""
 state.variationSourceEntry = {item_revision_id: sourceRevisionId};
-formFields.knowledge_grounding.checked = true;
 assert.throws(() => context.draftUpdateBody(), /변형 축/);
 state.variationSourceEntry = null;
 state.curriculumSelection = {large: '', middle: '', small: ''};
@@ -442,6 +442,9 @@ def test_editor_mapping_uses_optional_topic_fallback_and_material_contract() -> 
 formFields.topic.value = '';
 assert.equal(context.draftUpdateBody().topic, unit.label);
 state.curriculumSelection = {large: '', middle: '', small: ''};
+assert.throws(() => context.draftUpdateBody(), /대단원|중단원/);
+state.curriculumSelection = {large: 'eom.is.large.3', middle: unit.key, small: ''};
+state.curriculumUnitsByKey = new Map();
 assert.equal(context.draftUpdateBody().topic, normalizedGuidance);
 state.curriculumOutline = null;
 assert.equal(context.draftUpdateBody().subject, '통합과학');
@@ -561,7 +564,6 @@ state.draft = {request_draft_id: draftId, draft_spec_sha256: specHash,
   past_exam_variation: {source_item_revision_id: sourceRevisionId,
     variation_axes: ['CONTEXT', 'REASONING_PATH']}};
 state.variationSourceEntry = variationEntry;
-formFields.knowledge_grounding.checked = true;
 for (const input of axisInputs) {
   input.checked = ['CONTEXT', 'REASONING_PATH'].includes(input.value);
 }
@@ -625,9 +627,26 @@ assert.equal(nodes.get('#draft-sha').textContent, '-');
 assert.equal(axisInputs.some(input => input.checked), false);
 assert.equal(submissionCalls().length, 0);
 formFields.authoring_guidance.value = '새 초안으로 작성한 두 번째 통합과학 문항 요구입니다.';
+state.curriculumSelection = {large: 'eom.is.large.3', middle: unit.key, small: ''};
 await context.submitDraft();
 assert.equal(calls.filter(call => call.path === '/request-drafts').length, 2);
 assert.equal(submissionCalls().length, 1);
 assert.equal(state.draftAction, null);
+"""
+    )
+
+
+def test_unavailable_graph_never_falls_back_but_draft_can_be_saved() -> None:
+    _run_browser_checks(
+        r"""
+state.curriculumOutline.graph_grounding_available = false;
+await context.submitDraft();
+assert.equal(calls.length, 0);
+assert.match(nodes.get('#draft-message').textContent, /교과서.*준비되지 않았습니다/);
+assert.equal(state.draftAction, null);
+await context.saveDraft();
+assert.equal(calls.length, 2);
+assert.equal(calls[1].options.body.knowledge_grounding, true);
+assert.equal(submissionCalls().length, 0);
 """
     )

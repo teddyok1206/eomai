@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     EvidenceBudget,
     ExternalItemLearningWorkInput,
     KnowledgeAnalysisBaseResultPointer,
@@ -750,6 +751,8 @@ class ResolvedExecutionPlanV3(FrozenModel):
             "resolved-execution-plan/24.0",
             "resolved-execution-plan/30.0",
             "resolved-execution-plan/31.0",
+            "resolved-execution-plan/35.0",
+            "resolved-execution-plan/36.0",
         }:
             allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (
@@ -840,6 +843,14 @@ class ResolvedExecutionPlanV19(ResolvedExecutionPlanV17):
     schema_version: Literal["resolved-execution-plan/19.0"] = "resolved-execution-plan/19.0"  # type: ignore[assignment]
     workflow_definition_version: Literal["1.16.0"] = "1.16.0"  # type: ignore[assignment]
     resolver_version: Literal["19.0.0"] = "19.0.0"  # type: ignore[assignment]
+
+
+class ResolvedExecutionPlanV35(ResolvedExecutionPlanV19):
+    """Exact past-exam variation plus textbook grounding; existing 1.16 topology."""
+
+    schema_version: Literal["resolved-execution-plan/35.0"] = "resolved-execution-plan/35.0"  # type: ignore[assignment]
+    resolver_version: Literal["35.0.0"] = "35.0.0"  # type: ignore[assignment]
+    retrieval_requirement: EducationalRetrievalRequirementV3  # type: ignore[assignment]
 
 
 class ResolvedExecutionPlanV20(ResolvedExecutionPlanV18):

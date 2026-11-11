@@ -15,8 +15,10 @@ from eom_identifiers import canonical_json_bytes
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_orchestrator import orchestrator as owner_module
+from eom_orchestrator.chat_slot_reservation import WORKER_HOST_CAPACITY_LOCK_ID
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
@@ -370,7 +372,9 @@ def test_production_composition_supplies_the_same_explicit_provider_without_touc
     engine.dispose()
 
 
-@pytest.mark.parametrize("context_kind", ("correct", "missing", "foreign_workflow"))
+@pytest.mark.parametrize(
+    "context_kind", ("correct", "missing", "foreign_workflow", "reserved_chat")
+)
 def test_real_orchestrator_callback_receives_context_and_materializes_exact_sidecars_before_model(
     tmp_path, monkeypatch, context_kind
 ):
@@ -389,8 +393,23 @@ def test_real_orchestrator_callback_receives_context_and_materializes_exact_side
     record = base_session.records[(ResolvedExecutionPlanRecord, case["plan_id"])]
     record.plan_id = plan.plan_id
     record.workflow_id = plan.workflow_id
+    fence_events = []
+
+    def execute(statement):
+        assert "pg_advisory_xact_lock" in str(statement)
+        assert tuple(statement.compile().params.values()) == (WORKER_HOST_CAPACITY_LOCK_ID,)
+        fence_events.append("host_lock")
+
+    def scalar(statement):
+        if statement.column_descriptions[0]["entity"] is GeneralChatCapacityRecord:
+            assert fence_events == ["host_lock"]
+            fence_events.append("reserved_chat")
+            return "01" if context_kind == "reserved_chat" else "06"
+        return record
+
     session = SimpleNamespace(
-        scalar=lambda statement: record,
+        execute=execute,
+        scalar=scalar,
         get=lambda model, identity: (
             jobs[0] if model is JobRecord else base_session.get(model, identity)
         ),
@@ -464,6 +483,7 @@ def test_real_orchestrator_callback_receives_context_and_materializes_exact_side
         similarity_context=context,
     )
     assert result.status == "FAILED" and len(jobs) == 1
+    assert fence_events == ["host_lock", "reserved_chat"]
     if context_kind == "correct":
         assert (
             workspace / "references/similarity/context.json"
@@ -475,6 +495,10 @@ def test_real_orchestrator_callback_receives_context_and_materializes_exact_side
             "source_payload"
         ]
         assert failures == ["workflow worker I/O failed"]
+    elif context_kind == "reserved_chat":
+        assert not (workspace / "references").exists()
+        assert failures == ["CONTROL_SLOT_RESERVED"]
+        orchestrator.worker_adapter.run_resolved_structured.assert_not_called()
     else:
         assert not (workspace / "references").exists()
         assert failures == [

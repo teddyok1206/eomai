@@ -30,7 +30,7 @@ from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
 from eom_workflow.public_similarity_control import (
-    PUBLIC_SIMILARITY_PACK_VERSION,
+    PUBLIC_SIMILARITY_PACK_VERSIONS,
     PreparedPublicSimilarityPlan,
     SupportedPublicSimilarityExecutionPlan,
     validate_public_similarity_plan_context,
@@ -146,7 +146,7 @@ def check_similarity_start(
             family_matches = (
                 type(preparation.plan) is PreparedPublicSimilarityPlan
                 and type(preparation.publication) is PublishedPublicSolutionSimilarityContext
-                and preparation.resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION
+                and preparation.resolution.content_pack_version in PUBLIC_SIMILARITY_PACK_VERSIONS
             )
         else:
             family_matches = False

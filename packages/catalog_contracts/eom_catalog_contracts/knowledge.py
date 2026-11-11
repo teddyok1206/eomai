@@ -3945,6 +3945,21 @@ class EducationalRetrievalRequirementV2(FrozenModel):
         return self
 
 
+class EducationalRetrievalRequirementV3(EducationalRetrievalRequirementV2):
+    """One pinned past exam plus textbook evidence within the selected curriculum."""
+
+    schema_version: Literal["educational-retrieval-requirement/3.0"] = (
+        "educational-retrieval-requirement/3.0"  # type: ignore[assignment]
+    )
+    curriculum_root_key: str = Field(  # type: ignore[assignment]
+        pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"
+    )
+    source_classes: tuple[Literal["PAST_EXAM"], Literal["TEXTBOOK"]] = (  # type: ignore[assignment]
+        "PAST_EXAM",
+        "TEXTBOOK",
+    )
+
+
 class EducationRetrievalRequest(FrozenModel):
     schema_version: Literal["education-retrieval-request/1.0"] = "education-retrieval-request/1.0"
     retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")

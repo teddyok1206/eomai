@@ -137,7 +137,7 @@ try {
 
   assert.equal(await form.locator("textarea").count(), 1);
   assert.equal(await page.locator("#draft-analyze").count(), 0);
-  for (const field of ["language", "subject", "choice_count", "equation_required", "quality_profile"]) {
+  for (const field of ["language", "subject", "choice_count", "equation_required", "quality_profile", "knowledge_grounding"]) {
     assert.equal(await form.locator(`[name="${field}"]`).count(), 0);
   }
   assert.equal(await form.locator('[name="task_type"]').inputValue(), "conceptual");
@@ -153,6 +153,11 @@ try {
   await form.locator('[name="task_type"]').selectOption("data_interpretation");
   await form.locator('[name="material_form"]').selectOption("TABLE");
   await form.locator('[name="material_panel_count"]').selectOption("2");
+  await page.evaluate(() => {window.requestFixture.state.curriculumOutline.graph_grounding_available = false;});
+  await page.locator("#draft-submit").click(); await ready();
+  assert.equal((await calls()).length, 0, "unavailable Graph must never fall back to general authoring");
+  assert.match(await page.locator("#draft-message").textContent(), /교과서.*준비되지 않았습니다/);
+  await page.evaluate(() => {window.requestFixture.state.curriculumOutline.graph_grounding_available = true;});
   await page.locator("#draft-save").click(); await ready();
   let observed = await calls();
   assert.equal(observed.length, 2);
@@ -166,6 +171,7 @@ try {
   assert.equal(firstUpdate.material_requirement.panel_count, 2);
   assert.equal(firstUpdate.choice_count, 5);
   assert.equal(firstUpdate.equation_required, true);
+  assert.equal(firstUpdate.knowledge_grounding, true);
   assert.equal(await guidance.inputValue(), firstText, "saved response must not overwrite editor");
   assert.equal(await page.evaluate(() => window.requestFixture.submissions.length), 0);
   await page.locator("#draft-submit").click(); await ready();
@@ -176,12 +182,17 @@ try {
   assert.equal(await page.locator("#draft-id").textContent(), "-");
   await guidance.fill("세포 내 물질의 이동을 새로운 상황에서 판단하는 문항을 만들어주세요.");
   await page.locator("#draft-submit").click(); await ready();
+  assert.match(await page.locator("#draft-message").textContent(), /대단원.*중단원/);
+  assert.equal(await page.evaluate(() => window.requestFixture.submissions.length), 1);
+  await form.locator('[name="curriculum_middle_unit_key"]').selectOption("eom.is.middle.3-7");
+  await page.locator("#draft-submit").click(); await ready();
   assert.notEqual(await page.locator("#draft-id").textContent(), firstId);
   assert.equal(await page.evaluate(() => window.requestFixture.submissions.length), 2);
 
   // Real input events invalidate the saved snapshot; native disabled controls stop double clicks.
   await newDraft();
   await guidance.fill("처음 작성한 생명 시스템의 자료를 해석하는 문항을 만들어주세요.");
+  await form.locator('[name="curriculum_middle_unit_key"]').selectOption("eom.is.middle.3-7");
   await page.evaluate(() => {window.requestFixture.holdNext = {method: "PUT"};});
   await page.locator("#draft-submit").click();
   await page.waitForFunction(() => window.requestFixture.blocked);

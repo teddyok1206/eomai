@@ -6,6 +6,17 @@
 control/preset·Graph 근거를 고정하고, 이후 검토 피드백과 재개도 원래 실행 identity를 따른다.
 실행 중 설정에 최신 버전이 생겼다고 기존 실행을 몰래 바꾸지 않는다.
 
+신규 출제의 현재 근거 정책은 API `current_item_authoring_admission.py`가 replay 반환 뒤
+검사한다. Web 체크박스가 권한이나 정책이 아니며, 구 초안의 일반 모드 flag를 실행에
+재사용하지 않는다. Catalog `create_item_production`은 교과서를 요청한 신규 문항 준비에서
+실제 TEXTBOOK GROUNDING entry를 확보하고 기존 준비 결과도 exact revision으로 확인한다.
+`item_textbook_context.py`는 기존 accepted-analysis reader로 최대 3개의 교과서 승인 분석
+본문을 읽어 context에 넣고 Graph의 accepted/source/anchor 핀을 대조한다. 제목만 있는 구
+context는 새 출제 근거로 재사용하지 않는다. 교과서 원문을 직접 인용한 것으로 표시하지 않는다.
+과거 기출변형/production의 기출 전용 계약과 이 새 정책의 호환 범위는
+`../architecture/CONTENT_TEAM_AUTHORING_PROMPT_V5_DESIGN.md`의 2026-11-11 절을 확인한다.
+소스 구현은 운영 활성화의 증거가 아니다.
+
 출제자와 검토자는 직접 대화하지 않는다. Runner가 directive와 역할 결과·step attempt를
 연결해 최대 3차 개선 경로를 관리한다. 검토 차수와 인프라 retry 횟수는 별개이며,
 `WORKER_RESULT_INVALID` 같은 결과 문제를 어떤 correction 경로가 받을 수 있는지는

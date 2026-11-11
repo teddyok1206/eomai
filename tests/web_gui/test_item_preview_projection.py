@@ -268,16 +268,21 @@ def test_preview_preserves_blank_cells_used_by_canonical_exam_tables() -> None:
     assert table.rows == (("A", ""),)
 
 
-def test_content_team_statement_ids_are_valid_stable_presentation_ids() -> None:
-    components = [_content_component()]
+@pytest.mark.parametrize("version", ("2.0", "3.0"))
+def test_content_team_statement_ids_are_valid_stable_presentation_ids(version: str) -> None:
+    components = [_content_component(f"eom.assessment.item-content/{version}")]
     content = _content(visuals=[], visual_layout="NONE")
+    content["schema_version"] = version
     content["statements"] = [
         {"label": "ㄱ", "text": "첫 번째 진술"},
         {"label": "ㄴ", "text": "두 번째 진술"},
         {"label": "ㄷ", "text": "세 번째 진술"},
     ]
     assert isinstance(content["explanations"], dict)
-    content["explanations"]["correct_answer"] = "ㄱ. 옳다.\nㄴ. 옳다.\nㄷ. 옳다."
+    correct = "공통 계산의 근거이다.\n\nㄱ. 첫 번째 판단이다.\nㄴ. 두 번째 판단이다."
+    wrong = "ㄷ. 세 번째 판단이다."
+    content["explanations"]["correct_answer"] = correct
+    content["explanations"]["wrong_answer"] = wrong
 
     projected = project_item_content(
         content=content,
@@ -293,6 +298,15 @@ def test_content_team_statement_ids_are_valid_stable_presentation_ids() -> None:
         "statement_s2",
         "statement_s3",
     )
+    assert projected.explanation == f"{correct}\n\n오답 해설\n{wrong}"
+    assert tuple(value.statement_id for value in projected.statement_explanations) == (
+        "statement_s1",
+        "statement_s2",
+        "statement_s3",
+    )
+    assert all(value.text in projected.explanation for value in projected.statement_explanations)
+    assert content["explanations"]["correct_answer"] == correct
+    assert content["explanations"]["wrong_answer"] == wrong
 
 
 @pytest.mark.parametrize(

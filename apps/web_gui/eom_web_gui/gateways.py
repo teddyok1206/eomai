@@ -2693,7 +2693,11 @@ class HttpApplicationGateway:
             self._reference_item_start_enabled
             and isinstance(retrieval, dict)
             and (
-                retrieval.get("schema_version") == "educational-retrieval-requirement/2.0"
+                retrieval.get("schema_version")
+                in {
+                    "educational-retrieval-requirement/2.0",
+                    "educational-retrieval-requirement/3.0",
+                }
                 or (
                     retrieval.get("schema_version") == "educational-retrieval-requirement/1.0"
                     and payload.get("definition_key") == "generic-item-development"

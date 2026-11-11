@@ -3,6 +3,8 @@
 SQLite checks atomic application metadata, not PostgreSQL constraints or live IAM.
 The numerical QUERY, source Evidence/control admission and resolver's final record
 owner remain explicit synthetic seams. No production database or model is used.
+The historical Pack/plan fixtures use historical admission only while constructing
+their original execution. Exact replay below restores today's real admission guards.
 """
 
 from __future__ import annotations
@@ -19,6 +21,10 @@ import pytest
 from eom_api.errors import ApiError
 from eom_api.services import command_adapter as module
 from eom_api.services.command_adapter import CommandAdapter
+from eom_api.services.current_item_authoring_admission import (
+    require_current_item_authoring_grounding,
+    require_current_item_authoring_pack,
+)
 from eom_api.services.item_similarity_preparation import ItemSimilarityStartPreparationService
 from eom_api.services.item_similarity_publication_client import (
     CatalogItemSimilarityPublicationClient,
@@ -62,6 +68,13 @@ KEY = "api:" + "7" * 64
 
 @pytest.fixture
 def start_case(tmp_path, monkeypatch, request):
+    # These fixtures pin predecessor plans 23/24/30/31 and their original Pack.
+    # Keep their transaction/identity tests instead of relabeling old artifacts as
+    # the current textbook successor. Current admission is tested independently.
+    monkeypatch.setattr(module, "require_current_item_authoring_grounding", lambda _value: None)
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_pack", lambda _value, _runtime: None
+    )
     data = start_source(tmp_path, monkeypatch, ordinary=getattr(request, "param", False))
     source, api_request = data.source, data.request
     prepared = prepare(source)
@@ -245,9 +258,17 @@ def test_socket_preparation_producer_is_accepted_as_the_first_and_only_plan23(
 
 
 @pytest.mark.parametrize("with_preparation", (False, True))
-def test_exact_receipt_replay_uses_no_current_controls_or_catalog(start_case, with_preparation):
+def test_exact_receipt_replay_uses_no_current_controls_or_catalog(
+    start_case, with_preparation, monkeypatch
+):
     value = start_case
     original = start(value)
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_grounding", require_current_item_authoring_grounding
+    )
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_pack", require_current_item_authoring_pack
+    )
     value.client.create_item_production_evidence.side_effect = AssertionError("no new Catalog work")
     value.adapter.catalog.bind_request.side_effect = AssertionError("no current pack resolution")
     assert start(value, prepared=with_preparation) == original

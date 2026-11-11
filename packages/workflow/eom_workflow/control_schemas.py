@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v35": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v35.schema.json",
+            "resources/control-plane/resolved-execution-plan-v35.schema.json",
+            "35.0",
+            "sha256:d0a4fcac0e02526fb185190817ea220ebe1201208b229fe87fa45caa875425c5",
+        ),
+        "resolved-execution-plan-v36": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v36.schema.json",
+            "resources/control-plane/resolved-execution-plan-v36.schema.json",
+            "36.0",
+            "sha256:9ece5076657fdf2bec1394a206cdcd57241e823bbedd58b5d69d7e64ce64fd34",
+        ),
         "resolved-execution-plan-v34": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v34.schema.json",
             "resources/control-plane/resolved-execution-plan-v34.schema.json",
@@ -963,6 +975,7 @@ def _control_schema_registry() -> Registry[Any]:
         "past-exam-variation-request",
         "educational-retrieval-requirement",
         "educational-retrieval-requirement-v2",
+        "educational-retrieval-requirement-v3",
         "item-inference-transfer",
         "item-inference-transfer-experiment",
         "item-inference-transfer-embedding",

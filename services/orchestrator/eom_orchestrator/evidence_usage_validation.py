@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     candidate_visible_image_instruction_paths,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_workflow import (
     AuthoringEvidenceUsageValidationReceipt,
     AuthoringEvidenceUsageValidationReceiptV2,
@@ -499,6 +500,7 @@ def _validate_authoring_result(
         result.output.draft.model_dump(mode="json"),
     )
     _validate_variation_source_citation(plan, materials.manifest, usage.citations)
+    _validate_authoring_textbook_use(plan, materials.manifest, usage.citations)
     _validate_required_image_presentation(
         plan,
         materials.manifest,
@@ -513,6 +515,78 @@ def _validate_authoring_result(
         result.output.draft.model_dump(mode="json"),
     )
     return canonical_citation_set_sha256(usage.citations)
+
+
+def _textbook_grounding_ids(manifest: EvidenceManifest) -> frozenset[str]:
+    return frozenset(
+        entry.evidence_id
+        for entry in manifest.entries
+        if entry.source.source_class == "TEXTBOOK"
+        and entry.source.source_kind in {"CONTENT_INTAKE_FILE", "DOCUMENT_REVISION"}
+        and entry.use == "GROUNDING"
+        and not entry.answer_bearing
+    )
+
+
+def _validate_authoring_textbook_use(
+    plan: ResolvedExecutionPlanV3,
+    manifest: EvidenceManifest,
+    citations: Sequence[EvidenceUsageCitationV1],
+) -> None:
+    """The exact successor Pack requires actual use, without reinterpreting old pins."""
+
+    if plan.content_pack_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.19"]:
+        return
+    textbook_ids = _textbook_grounding_ids(manifest)
+    if not any(
+        citation.application == "CONCEPT_GROUNDING" and citation.evidence_id in textbook_ids
+        for citation in citations
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_TEXTBOOK_GROUNDING_UNUSED",
+            "the pinned authoring Pack requires an applied textbook grounding citation",
+        )
+
+
+def _validate_review_textbook_use(
+    plan: ResolvedExecutionPlanV3,
+    materials: ResolvedEvidenceMaterials,
+    result: ContentTeamReviewRoleResultV12,
+) -> None:
+    """Use validated IDs in scientific judgments, curriculum assessment, and their targets."""
+
+    if plan.content_pack_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.19"]:
+        return
+    textbook_ids = _textbook_grounding_ids(materials.manifest)
+    report = result.output.independent_review_report
+    scientific_ids = {
+        evidence_id for claim in report.answer_review.claims for evidence_id in claim.evidence_ids
+    }
+    for choice in report.choice_diagnostics:
+        scientific_ids.update(choice.evidence_ids)
+    for statement in report.statement_diagnostics:
+        scientific_ids.update(statement.evidence_ids)
+    if not (
+        textbook_ids.intersection(scientific_ids)
+        and textbook_ids.intersection(report.curriculum_assessment.evidence_ids)
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REVIEW_TEXTBOOK_UNUSED",
+            "textbook grounding must support scientific judgments and curriculum assessment",
+        )
+    covered_kinds = {
+        target.target_kind
+        for target in report.verification_targets
+        if target.target_kind in {"SCIENTIFIC_CLAIM", "CURRICULUM_SCOPE"}
+        and target.evidence_status != "NOT_APPLICABLE"
+        and "TEXTBOOK" in target.required_source_classes
+        and textbook_ids.intersection(target.selected_evidence_ids)
+    }
+    if covered_kinds != {"SCIENTIFIC_CLAIM", "CURRICULUM_SCOPE"}:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REVIEW_TEXTBOOK_TARGET_UNUSED",
+            "scientific and curriculum verification targets must bind the textbook grounding",
+        )
 
 
 def _validate_variation_source_citation(
@@ -952,6 +1026,7 @@ def _validate_review_result_v12(
     _validate_independent_review_report(materials, result, draft)
     report_hash = content_sha256(result.output.independent_review_report.model_dump(mode="json"))
     review_evidence_hash = canonical_review_evidence_set_sha256(result)
+    _validate_review_textbook_use(plan, materials, result)
     return _review_receipt_v3(
         plan,
         result_artifact=result_artifact,

@@ -68,7 +68,9 @@ def test_actual_public_api_clients_reuse_exact_publication_and_context_without_l
         assert owner.publish_public.call_count == reads.read.call_count == 2
         owner.publish.assert_not_called()
         assert all(
-            call.args[0].schema_version == "system-rag-similarity-read-request/4.0"
+            call.args[0].schema_version == "system-rag-similarity-read-request/5.0"
+            and call.args[0].actor_id == value.data.actor.actor_id
+            and call.args[0].selection == value.selection
             for call in reads.read.call_args_list
         )
     finally:

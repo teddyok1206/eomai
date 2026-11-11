@@ -34,6 +34,7 @@ from eom_catalog_contracts import (
     DocumentReviewTextbookEvidenceSource,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     EvidenceBudget,
     EvidenceBundlePublicationResultV5,
     FulfillUsagePlan,
@@ -99,6 +100,10 @@ from eom_api.errors import ApiError
 from eom_api.services.catalog_application_client import (
     CatalogApplicationClient,
     CatalogApplicationClientError,
+)
+from eom_api.services.current_item_authoring_admission import (
+    require_current_item_authoring_grounding,
+    require_current_item_authoring_pack,
 )
 from eom_api.services.item_similarity_start import (
     CheckedSimilarityStart,
@@ -181,12 +186,16 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                 "Curriculum selection is invalid",
                 "Graph-grounded item authoring requires one curriculum selection.",
             )
-        if not exact_variation:
+        if not exact_variation or isinstance(
+            request.educational_retrieval, EducationalRetrievalRequirementV3
+        ):
             retrieval_data["curriculum_root_key"] = curriculum_scope.graph_root_stable_key
             retrieval_data["topic_keys"] = []
     if retrieval_data is not None:
         retrieval_model = (
-            EducationalRetrievalRequirementV2
+            EducationalRetrievalRequirementV3
+            if isinstance(request.educational_retrieval, EducationalRetrievalRequirementV3)
+            else EducationalRetrievalRequirementV2
             if exact_variation
             else EducationalRetrievalRequirement
         )
@@ -347,6 +356,7 @@ class CommandAdapter:
         )
         if replay is not None:
             return replay
+        require_current_item_authoring_grounding(workflow_request)
         past_exam_source_material_requirement: ContentTeamMaterialRequirementV2 | None = None
         knowledge_preset = None
         knowledge_evidence = None
@@ -490,6 +500,7 @@ class CommandAdapter:
                     past_exam_source_material_requirement=past_exam_source_material_requirement,
                     session=selection_session,
                 )
+                require_current_item_authoring_pack(workflow_request, selection_context)
                 selected_resolution = selected_workflow_resolution(
                     definition=preflight_definition,
                     runtime_context=selection_context,
@@ -588,6 +599,7 @@ class CommandAdapter:
                 if workflow_request.content_pack is not None
                 else None
             )
+            require_current_item_authoring_pack(workflow_request, runtime_context)
             if runtime_context is not None and workflow_request.expected_resolution is not None:
                 expected = workflow_request.expected_resolution
                 pack = runtime_context["content_pack"]

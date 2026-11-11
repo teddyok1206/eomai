@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import tempfile
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     CurriculumRetrievalScope,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
+    EducationalRetrievalRequirementV2,
     EducationRetrievalAccessPolicy,
     EducationRetrievalRequestV2,
     EvidenceBudget,
@@ -90,6 +91,11 @@ from eom_catalog_service.inference_transfer_scope import (
     InferenceTransferPopulationScope,
     require_item_revision_selection,
 )
+from eom_catalog_service.item_textbook_context import (
+    ItemTextbookContextError,
+    TextbookContextSelection,
+    materialize_item_textbook_context,
+)
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     ItemSourceReadRelations,
@@ -118,6 +124,10 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
+from eom_catalog_service.knowledge_graph_publication_service import (
+    KnowledgeGraphPublicationError,
+    KnowledgeGraphPublicationService,
+)
 from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceAuthorization,
     LocalIndexingSourceError,
@@ -255,6 +265,7 @@ type ItemProductionEvidencePublicationContract = (
 MAX_RETRIEVAL_CANDIDATES = 256
 MAX_POINTER_ROWS_PER_NODE = 32
 MAX_CONTEXT_BYTES = 64 * 1024
+TEXTBOOK_CONTEXT_HEADER = "Grounding materialization: approved-textbook-analysis/1.0"
 MAX_REQUEST_ARTIFACT_CACHE_BYTES = 64 * 1024 * 1024
 # Retention bound only: members beyond it still receive the full original validation.
 MAX_REQUEST_ARTIFACT_CACHE_MEMBERS = 4096
@@ -312,6 +323,7 @@ class KnowledgeRetrievalCandidate:
     relevance_milli: int
     answer_bearing: bool
     solution: ResolvedSolutionEvidence | None = None
+    textbook_context: str | None = None
 
 
 # Keep the existing internal/test name; consumers use the supported public type.
@@ -381,6 +393,25 @@ type _ResolvedKnowledgeSource = (
     | EducationalDocumentKnowledgeSourceV5
     | ApprovedPastExamItemKnowledgeSourceV3
 )
+
+
+def _source_matches_item_preparation_target(
+    command: CreateEvidenceBundleCommand, source: _ResolvedKnowledgeSource
+) -> bool:
+    """Keep one exact variation Item; curriculum textbooks are context, not extra originals."""
+    if command.target_item_revision_id is None:
+        return True
+    if isinstance(source, ApprovedItemKnowledgeSourceV2):
+        return (
+            source.source_class == "PAST_EXAM"
+            and source.item_revision_id == command.target_item_revision_id
+        )
+    return (
+        command.query_kind == "ITEM_PREPARATION"
+        and command.curriculum_scope is not None
+        and "TEXTBOOK" in command.source_classes
+        and source.source_class == "TEXTBOOK"
+    )
 
 
 @dataclass(frozen=True, order=True, slots=True)
@@ -739,6 +770,7 @@ class KnowledgeRetrievalApplicationService:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
+        self.textbook_analyses = KnowledgeGraphPublicationService(engine, self.settings)
 
     def read_released_access_policy(
         self, access_policy_revision_id: str
@@ -779,6 +811,10 @@ class KnowledgeRetrievalApplicationService:
         solution_evidence_required = (
             command.solution_evidence_requirement == "REQUIRE_ACCEPTED_SOLUTION_REPORT"
         )
+        textbook_required = (
+            command.requirement.query_kind == "ITEM_PREPARATION"
+            and "TEXTBOOK" in command.requirement.source_classes
+        )
         internal_key = "item-evidence:" + content_sha256(
             {"idempotency_key": command.idempotency_key}
         ).removeprefix("sha256:")
@@ -806,6 +842,9 @@ class KnowledgeRetrievalApplicationService:
                     result,
                     required=solution_evidence_required,
                 )
+                if textbook_required:
+                    self._require_published_textbook(session, result.evidence_bundle_revision_id)
+                    self._require_textbook_context(result)
                 return result
             corpus = session.scalar(
                 select(KnowledgeCorpusRecord).where(
@@ -883,7 +922,7 @@ class KnowledgeRetrievalApplicationService:
             "topic_keys": list(command.requirement.topic_keys),
             "target_item_revision_id": (
                 command.requirement.past_exam_variation.source_item_revision_id
-                if command.requirement.schema_version == "educational-retrieval-requirement/2.0"
+                if isinstance(command.requirement, EducationalRetrievalRequirementV2)
                 else None
             ),
             "required_item_elements": list(command.requirement.required_item_elements),
@@ -903,11 +942,22 @@ class KnowledgeRetrievalApplicationService:
                 if key not in {"idempotency_key", "submission_sha256"}
             }
         )
-        published = self.create(
-            CreateEvidenceBundleCommand.model_validate(inner_value),
-            include_solution_evidence=solution_evidence_required,
-            require_solution_evidence=solution_evidence_required,
-        )
+        inner_command = CreateEvidenceBundleCommand.model_validate(inner_value)
+        if textbook_required:
+            published = self._create(
+                inner_command,
+                include_solution_evidence=solution_evidence_required,
+                require_solution_evidence=solution_evidence_required,
+                source_family=EvidenceSourceFamily.RELEASED_CONSUMER,
+                required_grounding_class="TEXTBOOK",
+            )
+        else:
+            # Historical exact-reference/document consumers retain their original scope.
+            published = self.create(
+                inner_command,
+                include_solution_evidence=solution_evidence_required,
+                require_solution_evidence=solution_evidence_required,
+            )
         with self.sessions() as session:
             request = session.get(EducationRetrievalRequestRecord, published.retrieval_request_id)
             revision = session.get(
@@ -923,7 +973,62 @@ class KnowledgeRetrievalApplicationService:
                 result,
                 required=solution_evidence_required,
             )
+            if textbook_required:
+                self._require_published_textbook(session, result.evidence_bundle_revision_id)
+                self._require_textbook_context(result)
             return result
+
+    def _require_textbook_context(
+        self, publication: EvidencePublicationContract | ItemProductionEvidencePublicationContract
+    ) -> None:
+        """Old labels-only preparations are preserved, not reused as new textbook content."""
+        if isinstance(publication, EvidenceBundlePublicationResult):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_TEXTBOOK_TEXT_INVALID",
+                "the historical publication has no supported textbook context pointer",
+            )
+        pointer = publication.context_artifact
+        try:
+            payload = self.artifacts.read_member(
+                artifact_id=pointer.artifact_id,
+                revision_id=pointer.artifact_revision_id,
+                member_path=pointer.member_path,
+                sha256=pointer.sha256,
+                media_type=pointer.media_type,
+                schema_ref=pointer.schema_ref,
+                max_bytes=MAX_CONTEXT_BYTES,
+            )
+            if not payload.startswith(
+                f"# EOM Evidence Bundle\n\n{TEXTBOOK_CONTEXT_HEADER}\n".encode()
+            ):
+                raise ValueError("textbook analysis materialization is absent")
+        except (OSError, ValueError) as exc:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_TEXTBOOK_TEXT_INVALID",
+                "the pinned textbook context does not contain approved analysis text",
+            ) from exc
+
+    @staticmethod
+    def _require_published_textbook(session: Session, revision_id: str) -> None:
+        """Check the exact published selection, including same-key publication races."""
+        entry = session.scalar(
+            select(EvidenceBundleEntryRecord.evidence_id)
+            .where(
+                EvidenceBundleEntryRecord.evidence_bundle_revision_id == revision_id,
+                EvidenceBundleEntryRecord.source_class == "TEXTBOOK",
+                EvidenceBundleEntryRecord.source_kind.in_(
+                    ("CONTENT_INTAKE_FILE", "DOCUMENT_REVISION")
+                ),
+                EvidenceBundleEntryRecord.evidence_use == "GROUNDING",
+                EvidenceBundleEntryRecord.answer_bearing.is_(False),
+            )
+            .limit(1)
+        )
+        if entry is None:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_TEXTBOOK_REQUIRED",
+                "item production requires a published textbook grounding entry",
+            )
 
     def read_published_item_evidence_in_session(
         self,
@@ -1101,6 +1206,12 @@ class KnowledgeRetrievalApplicationService:
             or curriculum_key != command.requirement.curriculum_root_key
             or request.query_kind != command.requirement.query_kind
             or request.topic_keys != command.requirement.topic_keys
+            or request.target_item_revision_id
+            != (
+                command.requirement.past_exam_variation.source_item_revision_id
+                if isinstance(command.requirement, EducationalRetrievalRequirementV2)
+                else None
+            )
             or request.required_item_elements != command.requirement.required_item_elements
             or request.source_classes != command.requirement.source_classes
             or request.evidence_budget != command.evidence_budget
@@ -1148,6 +1259,7 @@ class KnowledgeRetrievalApplicationService:
         include_solution_evidence: bool,
         require_solution_evidence: bool,
         source_family: EvidenceSourceFamily,
+        required_grounding_class: Literal["TEXTBOOK"] | None = None,
     ) -> EvidencePublicationContract:
         existing = self._existing(command)
         if existing is not None:
@@ -1163,6 +1275,10 @@ class KnowledgeRetrievalApplicationService:
                 existing,
                 required=require_solution_evidence,
             )
+            if required_grounding_class is not None:
+                with self.sessions() as session:
+                    self._require_published_textbook(session, existing.evidence_bundle_revision_id)
+                self._require_textbook_context(existing)
             return existing
         created_at = datetime.now(UTC)
         retrieval_request_id = _typed_id(
@@ -1194,9 +1310,12 @@ class KnowledgeRetrievalApplicationService:
                 include_solution_evidence=include_solution_evidence,
                 source_family=source_family,
             )
+            if required_grounding_class is not None:
+                candidates = self._with_textbook_context(session, request, candidates)
             entries, context_markdown = self._rank_and_render(
                 request=request,
                 candidates=candidates,
+                required_grounding_class=required_grounding_class,
             )
             if require_solution_evidence and not any(
                 isinstance(entry, EvidenceEntryV5) and entry.solution_evidence is not None
@@ -2388,11 +2507,7 @@ class KnowledgeRetrievalApplicationService:
             )
             if source.source_class not in command.source_classes:
                 continue
-            if command.target_item_revision_id is not None and (
-                not isinstance(source, ApprovedItemKnowledgeSourceV2)
-                or source.item_revision_id != command.target_item_revision_id
-                or source.source_class != "PAST_EXAM"
-            ):
+            if not _source_matches_item_preparation_target(command, source):
                 continue
             values.append(
                 _Candidate(
@@ -2705,11 +2820,57 @@ class KnowledgeRetrievalApplicationService:
             read_relations=cache.item_relations,
         )
 
+    def _with_textbook_context(
+        self,
+        session: Session,
+        request: EducationRetrievalRequestV2,
+        candidates: tuple[_Candidate, ...],
+    ) -> tuple[_Candidate, ...]:
+        """Materialize at most three ranked textbook analyses at the existing input boundary."""
+        books: dict[str, _Candidate] = {}
+        for candidate in candidates:
+            if candidate.source.source_class != "TEXTBOOK" or candidate.answer_bearing:
+                continue
+            books.setdefault(candidate.analysis_run_id, candidate)
+            if len(books) >= min(3, request.evidence_budget.max_documents):
+                break
+        if not books:
+            return candidates
+        try:
+            contexts = materialize_item_textbook_context(
+                session,
+                analyses=self.textbook_analyses,
+                graph_snapshot_revision_id=request.graph_snapshot.graph_snapshot_revision_id,
+                selections=tuple(
+                    TextbookContextSelection(
+                        analysis_run_id=candidate.analysis_run_id,
+                        source=candidate.source,
+                        node_ids=candidate.node_ids,
+                        anchor_ids=candidate.anchor_ids,
+                    )
+                    for candidate in books.values()
+                ),
+            )
+        except (ItemTextbookContextError, KnowledgeGraphPublicationError) as exc:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_TEXTBOOK_TEXT_INVALID",
+                "approved textbook text does not match the selected Graph evidence",
+            ) from exc
+        return tuple(
+            replace(candidate, textbook_context=contexts[candidate.analysis_run_id])
+            if candidate.source.source_class == "TEXTBOOK"
+            else candidate
+            for candidate in candidates
+            if candidate.source.source_class != "TEXTBOOK"
+            or books.get(candidate.analysis_run_id) is candidate
+        )
+
     @staticmethod
     def _rank_and_render(
         *,
         request: EducationRetrievalRequestV2,
         candidates: tuple[_Candidate, ...],
+        required_grounding_class: Literal["TEXTBOOK"] | None = None,
     ) -> tuple[tuple[EvidenceEntryContract, ...], str]:
         header_lines = [
             "# EOM Evidence Bundle",
@@ -2720,6 +2881,8 @@ class KnowledgeRetrievalApplicationService:
             "## Ranked evidence",
             "",
         ]
+        if required_grounding_class is not None:
+            header_lines.insert(2, TEXTBOOK_CONTEXT_HEADER)
         selected: list[EvidenceEntryContract] = []
         selected_lines: dict[str, str] = {}
         selected_immutable_sources: set[tuple[str, str, str]] = set()
@@ -2733,8 +2896,28 @@ class KnowledgeRetrievalApplicationService:
             isinstance(candidate.source, EducationalDocumentKnowledgeSourceV5)
             for candidate in candidates
         )
-        for candidate in candidates:
+        # Try required grounding until one actually fits, then resume the original ranking.
+        # A too-large leading textbook must not let optional patterns consume its budget;
+        # selecting every textbook first would instead starve solution-report references.
+        pending = deque(
+            candidate
+            for candidate in candidates
+            if required_grounding_class is None
+            or (
+                candidate.source.source_class == required_grounding_class
+                and not candidate.answer_bearing
+            )
+        )
+        grounding_reserved = required_grounding_class is None
+        while pending:
+            candidate = pending.popleft()
             source = candidate.source
+            if (
+                required_grounding_class is not None
+                and source.source_class == required_grounding_class
+                and not candidate.textbook_context
+            ):
+                continue
             source_document = isinstance(
                 source,
                 ContentIntakeKnowledgeSourceV2
@@ -2871,6 +3054,8 @@ class KnowledgeRetrievalApplicationService:
                 f"class={source.source_class} source=`{source_identity}` "
                 f"nodes={','.join(entry.graph_node_ids)}: {label}"
             )
+            if candidate.textbook_context is not None:
+                line = f"{line}\n{candidate.textbook_context}"
             if candidate.solution is not None:
                 reusable = json.dumps(
                     {
@@ -2900,8 +3085,19 @@ class KnowledgeRetrievalApplicationService:
             items = new_items
             nodes = new_nodes
             claim_count = int(new_claim_count)
+            if not grounding_reserved:
+                grounding_reserved = True
+                pending = deque(candidates)
             if len(selected) >= 128:
                 break
+        if required_grounding_class is not None and not any(
+            entry.source.source_class == required_grounding_class and entry.use == "GROUNDING"
+            for entry in selected
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_TEXTBOOK_REQUIRED",
+                "no authorized textbook grounding fits the item production evidence budget",
+            )
         if not selected:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_BUDGET_EXHAUSTED",

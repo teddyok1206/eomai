@@ -2599,6 +2599,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "19.0",
             "sha256:1dc59dcae45f521dd7c39e2d7e5ebbdbfe89580e9c2173abf5e98cae9ad7610b",
         ),
+        "catalog-application-request-v20": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v20.schema.json",
+            "resources/catalog-application/catalog-application-request-v20.schema.json",
+            "20.0",
+            "sha256:17647b71b7daab20612c78d35b8839cce15693ce5e66d273277ac58ba80004da",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -3345,6 +3351,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/educational-retrieval-requirement-v2.schema.json",
             "2.0",
             "sha256:887f77a30e2076a836d5353525de6de5285f14cf7f7c38a0594844f88b0e5e77",
+        ),
+        "educational-retrieval-requirement-v3": CatalogSchemaResource(
+            "schemas/knowledge/educational-retrieval-requirement-v3.schema.json",
+            "resources/knowledge/educational-retrieval-requirement-v3.schema.json",
+            "3.0",
+            "sha256:fe9a1c625c7e311571338b5f43898838a98b218307f6b2f6d8dcf7d808faff07",
         ),
         "education-retrieval-request": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-request-v1.schema.json",

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/workflow-start/7.0",
+  "title": "EOM Workflow Start V7",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/api/v1/workflow-start/6.0"
+    },
+    {
+      "$ref": "#/$defs/textbook_variation_start"
+    }
+  ],
+  "$defs": {
+    "textbook_variation_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "corpus_key",
+        "query_kind",
+        "curriculum_root_key",
+        "topic_keys",
+        "required_item_elements",
+        "source_classes",
+        "past_exam_variation"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "educational-retrieval-requirement/3.0"
+        },
+        "corpus_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+        },
+        "query_kind": {
+          "const": "ITEM_PREPARATION"
+        },
+        "curriculum_root_key": {
+          "type": "null",
+          "default": null
+        },
+        "topic_keys": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "required_item_elements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "paragraph",
+              "table",
+              "image",
+              "equation",
+              "statement_set",
+              "choice"
+            ]
+          }
+        },
+        "source_classes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "PAST_EXAM"
+            },
+            {
+              "const": "TEXTBOOK"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "past_exam_variation": {
+          "$ref": "eom://schemas/knowledge/past-exam-variation-request/1.0"
+        }
+      }
+    },
+    "textbook_variation_start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definition_key",
+        "definition_version",
+        "request_name",
+        "image_mode",
+        "pack_key",
+        "execution_preset_key",
+        "item_brief",
+        "educational_retrieval"
+      ],
+      "properties": {
+        "definition_key": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/definition_key"
+        },
+        "definition_version": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/definition_version"
+        },
+        "request_name": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/request_name"
+        },
+        "image_mode": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/image_mode"
+        },
+        "pack_key": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/pack_key"
+        },
+        "environment": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/environment"
+        },
+        "source_intake_batch_ids": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/source_intake_batch_ids"
+        },
+        "registry_mode": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/registry_mode"
+        },
+        "item_id": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/item_id"
+        },
+        "base_revision_id": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/base_revision_id"
+        },
+        "item_brief": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/content_team_item_brief_v5"
+            },
+            {
+              "properties": {
+                "curriculum_selected_unit_key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "curriculum_selected_unit_key"
+              ]
+            }
+          ]
+        },
+        "stimulus_asset_key": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/stimulus_asset_key"
+        },
+        "execution_preset_key": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/execution_preset_key"
+        },
+        "educational_retrieval": {
+          "$ref": "#/$defs/textbook_variation_intent"
+        },
+        "production_occurrence": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/production_occurrence"
+        },
+        "expected_resolution": {
+          "$ref": "eom://schemas/api/v1/workflow-start/6.0#/$defs/post_registration_variation_review_start/properties/expected_resolution"
+        }
+      }
+    }
+  }
+}

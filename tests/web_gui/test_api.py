@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from eom_web_gui.contracts import CustomerSupportCaseView, StudioProblem
+from eom_web_gui.contracts import CustomerSupportCaseView, RequestDraftUpdate, StudioProblem
 from jsonschema import Draft202012Validator
 
 from tests.web_gui.helpers import (
@@ -390,7 +390,7 @@ def test_early_request_boundary_problem_keeps_correlation_and_security_headers()
 
 
 def test_request_draft_workflow_submission_and_replay() -> None:
-    client, gateway = make_client()
+    client, gateway = make_client(gateway=FakeGateway(graph_grounding_available=True))
     with client:
         session = login(client)
         headers = {"X-CSRF-Token": session["csrf_token"]}
@@ -430,7 +430,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "source_intake_batch_id": INTAKE_ID,
                 "authoring_guidance": "포물체 운동의 두 성분을 함께 해석하는 계산 문항을 출제한다.",
                 "knowledge_grounding": False,
-                "curriculum_selected_unit_key": None,
+                "curriculum_selected_unit_key": "eom.is.middle.3-3",
             },
             headers=headers,
         )
@@ -441,6 +441,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
             json=payload,
             headers=headers,
         )
+        gateway.graph_grounding_available = False
         second = client.post(
             f"/studio/api/v1/request-drafts/{value['request_draft_id']}/submissions",
             json=payload,
@@ -451,16 +452,25 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         assert second.json()["replayed"] is True
         assert first.json()["draft_spec_sha256"] == updated.json()["draft_spec_sha256"]
         assert gateway.start_calls == 1
+        assert gateway.last_start_payload["execution_preset_key"] == "knowledge-grounded-item"
+        assert "educational_retrieval" in gateway.last_start_payload
 
 
 def test_request_draft_replay_fails_closed_after_spec_change() -> None:
-    client, gateway = make_client()
+    client, gateway = make_client(gateway=FakeGateway(graph_grounding_available=True))
     with client:
         session = login(client)
         headers = {"X-CSRF-Token": session["csrf_token"]}
         draft = client.post(
             "/studio/api/v1/request-drafts",
             json={"original_request_text": "충분히 긴 통합과학 개념 문항 생성 요청입니다."},
+            headers=headers,
+        ).json()
+        values = {name: draft[name] for name in RequestDraftUpdate.model_fields}
+        values["curriculum_selected_unit_key"] = "eom.is.middle.3-3"
+        draft = client.put(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}",
+            json=values,
             headers=headers,
         ).json()
         replay_key = "studio:changed-draft-conflict-0001"
@@ -501,7 +511,7 @@ def test_request_draft_replay_fails_closed_after_spec_change() -> None:
         assert gateway.start_calls == 1
 
 
-def test_request_draft_submission_allows_source_free_general_knowledge() -> None:
+def test_request_draft_submission_rejects_unscoped_general_knowledge() -> None:
     client, gateway = make_client()
     with client:
         session = login(client)
@@ -515,14 +525,13 @@ def test_request_draft_submission_allows_source_free_general_knowledge() -> None
             json={"idempotency_key": "studio:missing-intake-0001"},
             headers={"X-CSRF-Token": session["csrf_token"]},
         )
-        assert response.status_code == 202
-        assert response.json()["mode"] == "KNOWLEDGE_ITEM"
-        assert gateway.start_calls == 1
-        assert gateway.last_start_payload is not None
-        assert "educational_retrieval" not in gateway.last_start_payload
+        assert response.status_code == 409
+        assert response.json()["error_code"] == "REQUEST_DRAFT_CURRICULUM_REQUIRED"
+        assert gateway.start_calls == 0
+        assert gateway.last_start_payload is None
 
 
-def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> None:
+def test_request_draft_submission_uses_bounded_graph_grounding() -> None:
     client, gateway = make_client(gateway=FakeGateway(graph_grounding_available=True))
     with client:
         session = login(client)
@@ -573,7 +582,10 @@ def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> Non
         assert gateway.last_start_payload["execution_preset_key"] == "knowledge-grounded-item"
 
 
-def test_grounded_submission_rechecks_capability_before_any_workflow_call() -> None:
+@pytest.mark.parametrize("legacy_grounding_flag", [True, False])
+def test_grounded_submission_rechecks_capability_before_any_workflow_call(
+    legacy_grounding_flag: bool,
+) -> None:
     client, gateway = make_client()
     with client:
         session = login(client)
@@ -601,7 +613,7 @@ def test_grounded_submission_rechecks_capability_before_any_workflow_call() -> N
                 "quality_profile": "deep",
                 "source_intake_batch_id": None,
                 "authoring_guidance": "판 경계 자료를 해석하고 지각 변동을 추론한다.",
-                "knowledge_grounding": True,
+                "knowledge_grounding": legacy_grounding_flag,
                 "curriculum_selected_unit_key": "eom.is.middle.3-2",
             },
             headers=headers,

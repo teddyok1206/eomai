@@ -936,6 +936,51 @@ def _client(server: CatalogApplicationServer) -> CatalogApplicationClient:
     )
 
 
+@pytest.mark.parametrize("requirement_version", ("2.0", "3.0"))
+def test_variation_evidence_socket_selects_exact_requirement_wire(
+    tmp_path: Path, requirement_version: str
+) -> None:
+    command = _variation_evidence_command()
+    if requirement_version == "3.0":
+        value = command.model_dump(mode="json")
+        value["requirement"].update(
+            schema_version="educational-retrieval-requirement/3.0",
+            curriculum_root_key="curriculum:eom.is.middle.1-1",
+            source_classes=["PAST_EXAM", "TEXTBOOK"],
+        )
+        value["submission_sha256"] = content_sha256(
+            {
+                key: item
+                for key, item in value.items()
+                if key not in {"idempotency_key", "submission_sha256"}
+            }
+        )
+        command = CreateItemProductionEvidenceCommand.model_validate(value)
+    observed: list[CreateItemProductionEvidenceCommand] = []
+
+    class InspectRequirement(FakeKnowledgeRetrieval):
+        def create_item_production(
+            self, command: CreateItemProductionEvidenceCommand
+        ) -> EvidenceBundlePublicationResultV2:
+            observed.append(command)
+            return super().create_item_production(command)
+
+    server = _server(tmp_path, knowledge_retrieval=InspectRequirement())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = _client(server).create_item_production_evidence(command)
+        assert result.requester_permissions_sha256 == content_sha256(
+            {"permission_keys": list(command.requester_permission_keys)}
+        )
+        assert observed == [command]
+        assert observed[0].requirement.schema_version.endswith(requirement_version)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_chat_owner_peer_is_read_only_not_a_catalog_mutation_peer(tmp_path: Path) -> None:
     import socket
 

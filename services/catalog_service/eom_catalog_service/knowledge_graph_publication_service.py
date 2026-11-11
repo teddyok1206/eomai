@@ -168,7 +168,6 @@ from eom_catalog_service.past_exam_origin_resolution import (
     past_exam_origin_inputs,
     resolve_past_exam_origins,
 )
-from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
 
 KNOWLEDGE_GRAPH_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.0"
@@ -538,6 +537,10 @@ def _snapshot_source_revision(
 
 class KnowledgeGraphPublicationService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
+        # Compose the write adapter here: importing the read boundary must not initialize
+        # the Registry -> WorkflowRunner -> Catalog retrieval package chain.
+        from eom_catalog_service.registry_service import RegistryService
+
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)

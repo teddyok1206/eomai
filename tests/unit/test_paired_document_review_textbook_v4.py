@@ -259,7 +259,9 @@ def test_paired_textbook_projection_requires_its_exact_commit_receipt(
     monkeypatch.setattr(
         query_module,
         "load_persisted_workflow_request",
-        lambda _value: SimpleNamespace(document_review_textbook_evidence=binding),
+        lambda _value: query_module.WorkflowRequest.model_construct(
+            document_review_textbook_evidence=binding
+        ),
     )
     workflow.definition_version = "1.5.0"
     step.result_schema = "pdf-document-review-result@6.0"

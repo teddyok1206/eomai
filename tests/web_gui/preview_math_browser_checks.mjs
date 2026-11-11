@@ -118,9 +118,41 @@ try {
   assert.equal(await page.locator("#plain mfrac").count(), 17);
   assert.equal(await page.locator("#plain .equation-display").last().textContent(), "a²+b₁=2");
   assert.equal(await page.evaluate(() => canonicalUnchanged), true);
+  // The same controller must render content-team statement bodies once while
+  // retaining separate overview/statement bodies for historical BLOCKS_V1.
+  const explanationChecks = await page.evaluate(() => {
+    const rows = [
+      {statement_id: "g", text: "첫 번째 판단의 근거는 $x^2$이다."},
+      {statement_id: "n", text: "두 번째 판단의 근거는 $y_1$이다."},
+      {statement_id: "d", text: "세 번째 판단은 성립하지 않는다."},
+    ];
+    const preview = {schema_version: "4.0", preview_state: "AVAILABLE", item_revision_id: "synthetic",
+      title: "합성 해설 검증", answer: "③", choices: [], authoring_intent: "평가 의도", concept_source: "근거",
+      blocks: [{block_id: "claims", type: "statement_set", statements: rows.map((row, index) => ({
+        statement_id: row.statement_id, label: "ㄱㄴㄷ"[index], text: "판단할 진술",
+      }))}], statement_explanations: rows};
+    return ["BLOCKS_V1", "CONTENT_TEAM_V2", "BLOCKS_V1", "CONTENT_TEAM_V3", "BLOCKS_V1"].map(profile => {
+      preview.content_profile = profile;
+      preview.explanation = profile === "BLOCKS_V1" ? "공통 계산의 근거이다."
+        : `공통 계산의 근거이다.\n\nㄱ. ${rows[0].text}\n\nㄴ. ${rows[1].text}\n\n오답 해설\n\nㄷ. ${rows[2].text}`;
+      const before = JSON.stringify(preview);
+      renderItemPreview(preview);
+      return {profile, unchanged: JSON.stringify(preview) === before,
+        separate: $("#preview-statement-explanations").children.length,
+        mathCount: document.querySelectorAll("#preview-explanation math, #preview-statement-explanations math").length,
+        occurrenceCounts: ["첫 번째 판단의 근거", "두 번째 판단의 근거", "세 번째 판단은 성립하지 않는다"].map(text =>
+          ($("#preview-explanation").textContent + $("#preview-statement-explanations").textContent).split(text).length - 1)};
+    });
+  });
+  for (const check of explanationChecks) {
+    assert.equal(check.unchanged, true);
+    assert.equal(check.separate, check.profile === "BLOCKS_V1" ? 3 : 0);
+    assert.equal(check.mathCount, 2);
+    assert.deepEqual(check.occurrenceCounts, [1, 1, 1]);
+  }
   assert.deepEqual(errors, []);
   assert(requests.every(url => url.startsWith("https://preview.invalid/assets/")), "no external resource loads");
-  console.log("preview_math_browser=PASS inline/display/fields/security/bounds/immutable-content");
+  console.log("preview_math_browser=PASS inline/display/fields/security/bounds/immutable-content/explanations-once");
 } finally {
   await browser.close();
 }

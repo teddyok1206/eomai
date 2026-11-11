@@ -10,6 +10,11 @@ from unittest.mock import Mock
 import pytest
 from eom_api.app import create_app
 from eom_api.errors import ApiError
+from eom_api.services import command_adapter as module
+from eom_api.services.current_item_authoring_admission import (
+    require_current_item_authoring_grounding,
+    require_current_item_authoring_pack,
+)
 from eom_api.services.idempotency_service import IdempotencyClaim, IdempotencyService
 from eom_api.services.reference_item_preparation import HttpReferenceItemStartPreparation
 from eom_api.services.reference_item_start import ReferenceItemStartApplicationService
@@ -118,7 +123,7 @@ def test_reply_schema_first_and_packaged_mirror():
             WorkflowReferenceStartReply.model_validate(value)
 
 
-def test_no_item_workflow_plan_or_command_is_created_while_native_pending(start_case):
+def test_no_item_workflow_plan_or_command_is_created_while_native_pending(start_case, monkeypatch):
     case = start_case
     preparation = Mock()
     preparation.prepare.return_value = ReferenceItemStartPending(WORKFLOW)
@@ -143,6 +148,12 @@ def test_no_item_workflow_plan_or_command_is_created_while_native_pending(start_
     )
     assert isinstance(first, tuple) and len(case.records) == 1
     assert case.records[0][0] == "resolved-execution-plan/23.0"
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_grounding", require_current_item_authoring_grounding
+    )
+    monkeypatch.setattr(
+        module, "require_current_item_authoring_pack", require_current_item_authoring_pack
+    )
     preparation.prepare.side_effect = AssertionError("receipt replay must not prepare again")
     case.client.create_item_production_evidence.side_effect = AssertionError(
         "no Evidence replay IO"

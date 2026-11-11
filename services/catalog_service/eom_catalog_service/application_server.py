@@ -939,6 +939,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             schemas = catalog_application_schema_route(
                 operation,
                 content_schema_version=content_schema_version,
+                retrieval_requirement_schema_version=(
+                    value["requirement"].get("schema_version")
+                    if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                    and isinstance(value.get("requirement"), dict)
+                    else None
+                ),
             )
             validate_contract(schemas.request_schema, value)
             request = CatalogApplicationRequest.model_validate(value).root

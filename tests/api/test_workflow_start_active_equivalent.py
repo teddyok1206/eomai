@@ -26,6 +26,7 @@ def test_active_equivalent_returns_its_existing_start_command(
     workflow = SimpleNamespace(workflow_id="workflow_" + "2" * 32, lock_version=7)
     definition = SimpleNamespace(definition_hash="sha256:" + "3" * 64)
     workflow_request = SimpleNamespace(
+        request_name="PLACEHOLDER_REQUEST",
         educational_retrieval=None,
         expected_resolution=None,
         content_pack=None,

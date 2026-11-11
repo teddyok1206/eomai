@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v20",
+  "title": "EOM Catalog Textbook-Grounded Variation Evidence Request V20",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "requirement",
+    "evidence_budget",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requester_role",
+    "requester_permission_keys",
+    "requested_by",
+    "solution_evidence_requirement",
+    "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "operation": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/operation"
+    },
+    "requirement": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/educational-retrieval-requirement/1.0"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/educational-retrieval-requirement/2.0"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/educational-retrieval-requirement/3.0"
+        }
+      ]
+    },
+    "evidence_budget": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/evidence_budget"
+    },
+    "access_policy_revision_id": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/access_policy_revision_id"
+    },
+    "access_policy_sha256": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/access_policy_sha256"
+    },
+    "requester_role": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/requester_role"
+    },
+    "requester_permission_keys": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/requester_permission_keys"
+    },
+    "requested_by": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/requested_by"
+    },
+    "solution_evidence_requirement": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/solution_evidence_requirement"
+    },
+    "idempotency_key": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/idempotency_key"
+    },
+    "submission_sha256": {
+      "$ref": "eom://schemas/catalog-application/catalog-application-request-v17#/properties/submission_sha256"
+    }
+  }
+}

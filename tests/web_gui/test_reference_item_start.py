@@ -129,10 +129,17 @@ async def test_compatible_ordinary_request_uses_same_opt_in_endpoint_and_exact_k
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("enabled,variation", [(False, True), (True, True), (True, False)])
-async def test_only_explicitly_enabled_reference_requests_use_new_operation(enabled, variation):
+@pytest.mark.parametrize("retrieval_version", ("2.0", "3.0"))
+async def test_only_explicitly_enabled_reference_requests_use_new_operation(
+    enabled, variation, retrieval_version
+):
     requests = []
     payload = (
-        {"educational_retrieval": {"schema_version": "educational-retrieval-requirement/2.0"}}
+        {
+            "educational_retrieval": {
+                "schema_version": f"educational-retrieval-requirement/{retrieval_version}"
+            }
+        }
         if variation
         else {}
     )

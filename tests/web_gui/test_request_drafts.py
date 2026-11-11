@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from eom_web_gui.contracts import DraftSubmission, RequestDraftInput, RequestDraftUpdate
+from eom_web_gui.contracts import (
+    DraftSubmission,
+    RequestDraft,
+    RequestDraftInput,
+    RequestDraftUpdate,
+)
 from eom_web_gui.request_drafts import (
     DEMO_REQUEST,
     normalize_request,
@@ -15,6 +20,13 @@ from pydantic import ValidationError
 
 NOW = datetime(2026, 8, 21, 8, 0, tzinfo=UTC)
 INTAKE_ID = "intake_00000000000000000000000000000001"
+
+
+def _select_curriculum(draft: RequestDraft) -> RequestDraft:
+    """A historical false flag remains readable but cannot select ungrounded work."""
+    values = {name: getattr(draft, name) for name in RequestDraftUpdate.model_fields}
+    values["curriculum_selected_unit_key"] = "eom.is.middle.3-3"
+    return update_draft(draft, RequestDraftUpdate.model_validate(values), now=NOW)
 
 
 def test_demo_request_normalization_is_deterministic_and_structured() -> None:
@@ -44,12 +56,15 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="3" * 32
     )
-    payload = workflow_start_payload(draft)
+    payload = workflow_start_payload(
+        _select_curriculum(draft), graph_corpus_key="integrated-science-textbooks"
+    )
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
     assert payload["definition_version"] == "1.16.0"
     assert payload["image_mode"] == "required"
     assert payload["pack_key"] == "generated-knowledge-item"
-    assert payload["execution_preset_key"] == "standard-item"
+    assert payload["execution_preset_key"] == "knowledge-grounded-item"
+    assert "educational_retrieval" in payload
     assert payload["source_intake_batch_ids"] == []
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
@@ -208,14 +223,22 @@ def test_full_spec_hash_fits_submission_idempotency_contract() -> None:
     assert DraftSubmission(idempotency_key=key).idempotency_key == key
 
 
-def test_workflow_payload_allows_source_free_general_knowledge() -> None:
+def test_workflow_payload_rejects_source_free_general_knowledge() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="5" * 32
     )
-    payload = workflow_start_payload(draft)
-    assert payload["source_intake_batch_ids"] == []
-    assert payload["stimulus_asset_key"] is None
-    assert "educational_retrieval" not in payload
+    with pytest.raises(ValueError, match="selected curriculum unit"):
+        workflow_start_payload(draft, graph_corpus_key="integrated-science-textbooks")
+
+
+@pytest.mark.parametrize("corpus_key", [None, "", "untrusted/path"])
+def test_legacy_false_flag_cannot_bypass_verified_corpus(corpus_key: str | None) -> None:
+    draft = _select_curriculum(
+        normalize_request(RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW)
+    )
+    assert draft.knowledge_grounding is False
+    with pytest.raises(ValueError, match="API-verified production corpus"):
+        workflow_start_payload(draft, graph_corpus_key=corpus_key)
 
 
 def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None:

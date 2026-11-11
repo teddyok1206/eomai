@@ -706,13 +706,11 @@ function changeCurriculumSelection(level, value) {
 }
 
 function syncGraphGroundingCapability() {
-  const input = $("#draft-form").elements.knowledge_grounding;
   const available = state.curriculumOutline?.graph_grounding_available === true;
-  input.disabled = !available;
-  if (!available) input.checked = false;
-  $("#graph-grounding-status").textContent = available
-    ? "공개된 지식 연결을 선택한 교육과정 범위에 적용합니다."
-    : "지식 연결 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.";
+  const status = $("#graph-grounding-status");
+  status.hidden = available;
+  status.textContent = available ? ""
+    : "교과서·참고 자료 연결을 확인하고 있습니다. 준비되면 문항 제작을 시작할 수 있습니다.";
 }
 
 function syncCurriculumSelectorAvailability() {
@@ -757,7 +755,7 @@ function installRequestDraft() {
     state.variationSourceEntry = null;
     syncPastExamVariation(null);
     setStatus($("#draft-state"), "neutral", "■", "작성 중");
-    showMessage($("#draft-message"), "일반 신규 문항 출제로 전환했습니다.", "success");
+    showMessage($("#draft-message"), "새 문항 출제로 전환했습니다.", "success");
   });
   const form = $("#draft-form");
   const markDraftEdited = () => {
@@ -837,9 +835,6 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
   syncMaterialPanelCount();
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
   form.elements.authoring_guidance.value = draft.authoring_guidance;
-  const graphGroundingAvailable = state.curriculumOutline?.graph_grounding_available === true;
-  form.elements.knowledge_grounding.checked = draft.knowledge_grounding && graphGroundingAvailable;
-  form.elements.knowledge_grounding.disabled = !graphGroundingAvailable;
   syncPastExamVariation(draft.past_exam_variation || null);
   syncCurriculumSelectorAvailability();
   const selectedKey = draft.curriculum_selected_unit_key || "";
@@ -867,8 +862,8 @@ function draftUpdateBody() {
     throw new Error("만들고 싶은 문항의 내용을 10~2,000자로 적어주세요.");
   }
   const selectedUnitKey = deepestCurriculumUnitKey(state.curriculumSelection) || null;
-  if (form.elements.knowledge_grounding.checked && selectedUnitKey === null) {
-    throw new Error("교육 지식 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
+  if (selectedUnitKey === null) {
+    throw new Error("출제할 대단원 또는 중단원을 선택하세요.");
   }
   const materialForm = form.elements.material_form.value;
   const materialPanelCount = ["TABLE", "IMAGE", "MIXED"].includes(materialForm)
@@ -904,7 +899,7 @@ function draftUpdateBody() {
     quality_profile: state.draft?.quality_profile ?? "balanced",
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
     authoring_guidance: guidance,
-    knowledge_grounding: form.elements.knowledge_grounding.checked,
+    knowledge_grounding: true,
     curriculum_selected_unit_key: selectedUnitKey,
     past_exam_variation: variation ? {
       source_item_revision_id: variation.item_revision_id || variation.source_item_revision_id,
@@ -962,7 +957,6 @@ async function beginPastExamVariation(entry) {
     form.elements.material_panel_count.value = String(sourceMaterial.panel_count || 1);
     form.elements.image_supporting_data.value = sourceMaterial.image_supporting_data || "NONE";
     syncMaterialPanelCount();
-    form.elements.knowledge_grounding.checked = true;
     const variation = {
       source_item_revision_id: entry.item_revision_id,
       variation_axes: ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
@@ -1025,6 +1019,9 @@ async function submitDraft() {
   syncDraftControls();
   try {
     const snapshot = draftUpdateBody();
+    if (state.curriculumOutline?.graph_grounding_available !== true) {
+      throw new Error("교과서·참고 자료 연결이 준비되지 않았습니다. 잠시 후 다시 시도하세요.");
+    }
     const editorRevision = state.draftEditorRevision;
     const draft = await persistDraft(snapshot);
     if (editorRevision !== state.draftEditorRevision) {
@@ -1578,7 +1575,11 @@ function renderItemPreview(preview) {
   }
   const statementExplanations = $("#preview-statement-explanations");
   statementExplanations.replaceChildren();
-  for (const value of preview.statement_explanations || []) {
+  // Content-team sections already contain every statement explanation. Their
+  // structured copies remain in the DTO, but are not a second visible section.
+  const separateStatementExplanations = ["CONTENT_TEAM_V2", "CONTENT_TEAM_V3"].includes(preview.content_profile)
+    ? [] : preview.statement_explanations || [];
+  for (const value of separateStatementExplanations) {
     const row = document.createElement("p");
     row.className = "statement-explanation";
     const label = document.createElement("strong");

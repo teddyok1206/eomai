@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.web_gui.helpers import INTAKE_ID, ITEM_ID, REVISION_ID, WORKFLOW_ID, login, make_client
+from tests.web_gui.helpers import (
+    INTAKE_ID,
+    ITEM_ID,
+    REVISION_ID,
+    WORKFLOW_ID,
+    FakeGateway,
+    login,
+    make_client,
+)
 
 
 def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
     """Exercise the complete browser/BFF contract with isolated in-process fixtures."""
-    client, gateway = make_client()
+    client, gateway = make_client(gateway=FakeGateway(graph_grounding_available=True))
     with client:
         assert client.get("/studio/login").status_code == 200
         session = login(client)
@@ -33,7 +41,6 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "중단원 선택",
             "소단원 목록 준비 중",
             "어떤 문항을 만들까요?",
-            "지식 연결 준비 중",
             "출제·검토 모델 설정",
             "새 설정 초안 생성 전 확인",
             "설정 확인 및 적용",
@@ -210,7 +217,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "document.createElement" in javascript
     assert 'select name="curriculum_large_unit_key" disabled' not in html
     assert 'select name="curriculum_middle_unit_key" disabled' not in html
-    assert 'input name="knowledge_grounding" type="checkbox" disabled' in html
+    assert 'name="knowledge_grounding"' not in html
+    assert "elements.knowledge_grounding" not in javascript
     assert "graph_grounding_available === true" in javascript
     assert 'workflow.state === "COMPLETED" && registration' in javascript
     assert "hwpxTargetFromWorkflow(bundle)" in javascript

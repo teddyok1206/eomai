@@ -233,7 +233,7 @@ def test_variation_workflow_and_pack_form_one_immutable_successor_family() -> No
         assert required in review
 
 
-def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_generation() -> None:
+def test_request_draft_keeps_exact_source_and_requires_textbook_grounded_generation() -> None:
     now = datetime(2026, 9, 29, tzinfo=UTC)
     draft = normalize_request(
         RequestDraftInput(
@@ -242,9 +242,8 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
         now=now,
         token="a" * 32,
     )
-    plain = workflow_start_payload(draft)
-    assert plain["definition_version"] == "1.16.0"
-    assert "educational_retrieval" not in plain
+    with pytest.raises(ValueError, match="selected curriculum unit"):
+        workflow_start_payload(draft)
 
     update = RequestDraftUpdate.model_validate(
         {
@@ -266,11 +265,26 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
             },
         }
     )
+    plain = workflow_start_payload(
+        update_draft(draft, update.model_copy(update={"past_exam_variation": None}), now=now),
+        graph_corpus_key="integrated-science-textbooks",
+    )
+    assert plain["definition_version"] == "1.16.0"
+    assert plain["execution_preset_key"] == "knowledge-grounded-item"
+    assert plain["educational_retrieval"]["schema_version"] == (
+        "educational-retrieval-requirement/1.0"
+    )
     varied = update_draft(draft, update, now=now)
     payload = workflow_start_payload(varied, graph_corpus_key="integrated-science-textbooks")
     assert payload["definition_version"] == "1.16.0"
     assert payload["registry_mode"] == "CREATE_ITEM"
-    assert payload["educational_retrieval"] == _variation_requirement().model_dump(mode="json")
+    assert payload["educational_retrieval"] == (
+        _variation_requirement().model_dump(mode="json")
+        | {
+            "schema_version": "educational-retrieval-requirement/3.0",
+            "source_classes": ["PAST_EXAM", "TEXTBOOK"],
+        }
+    )
     assert WorkflowStartRequest.model_validate(payload).definition_version == "1.16.0"
 
     studio = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")

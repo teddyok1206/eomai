@@ -25,6 +25,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV18,
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
+    ResolvedExecutionPlanV35,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -39,6 +40,7 @@ from eom_workflow.control_plane import BundleRevisionPointer, WorkerRole
 from eom_workflow.public_similarity_control import (
     ResolvedExecutionPlanV30,
     ResolvedExecutionPlanV31,
+    ResolvedExecutionPlanV36,
 )
 from eom_workflow.similarity_control import ResolvedExecutionPlanV23, ResolvedExecutionPlanV24
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -1123,6 +1125,8 @@ def record_knowledge_backed_execution_plan(
         "resolved-execution-plan/24.0": "resolved-execution-plan-v24",
         "resolved-execution-plan/30.0": "resolved-execution-plan-v30",
         "resolved-execution-plan/31.0": "resolved-execution-plan-v31",
+        "resolved-execution-plan/35.0": "resolved-execution-plan-v35",
+        "resolved-execution-plan/36.0": "resolved-execution-plan-v36",
     }.get(str(schema_version), "resolved-execution-plan-v3")
     model_type: type[
         ResolvedExecutionPlanV3
@@ -1150,6 +1154,10 @@ def record_knowledge_backed_execution_plan(
         model_type = ResolvedExecutionPlanV30
     elif schema_version == "resolved-execution-plan/31.0":
         model_type = ResolvedExecutionPlanV31
+    elif schema_version == "resolved-execution-plan/35.0":
+        model_type = ResolvedExecutionPlanV35
+    elif schema_version == "resolved-execution-plan/36.0":
+        model_type = ResolvedExecutionPlanV36
     else:
         model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)

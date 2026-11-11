@@ -7,15 +7,18 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from eom_api.errors import ApiError
 from eom_api.services.command_adapter import CommandAdapter, _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import EvidenceBudget
+from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from eom_workflow import compile_definition
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.repository import workflow_request_storage_document
 
 from tests.api.test_knowledge_backed_workflow_start import _request
+from tests.unit.test_textbook_variation_wire_contracts import _start as _textbook_variation_start
 
 
 def _actor() -> ActorContext:
@@ -60,18 +63,22 @@ class _ReadSession:
         return self.definition
 
 
-@pytest.mark.parametrize("mode", ("standard", "knowledge", "variation"))
+@pytest.mark.parametrize("mode", ("standard", "knowledge", "variation", "textbook_variation"))
 def test_fresh_item_admission_bounds_completed_reuse_to_exact_selected_preset(
     monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
     grounded = mode != "standard"
-    definition = _definition("1.14.0" if mode == "variation" else "1.13.0")
+    definition = _definition(
+        "1.16.0" if mode == "textbook_variation" else "1.14.0" if mode == "variation" else "1.13.0"
+    )
     request = _request("1.13.0")
     if not grounded:
         request = WorkflowStartRequest.model_validate(
             request.model_dump(mode="json")
             | {"execution_preset_key": "standard-item", "educational_retrieval": None}
         )
+    elif mode == "textbook_variation":
+        request = WorkflowStartRequest.model_validate(_textbook_variation_start())
     elif mode == "variation":
         assert request.educational_retrieval is not None
         request = WorkflowStartRequest.model_validate(
@@ -90,6 +97,15 @@ def test_fresh_item_admission_bounds_completed_reuse_to_exact_selected_preset(
                         "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
                     },
                 },
+            }
+        )
+    else:
+        assert request.educational_retrieval is not None
+        request = WorkflowStartRequest.model_validate(
+            request.model_dump(mode="json")
+            | {
+                "educational_retrieval": request.educational_retrieval.model_dump(mode="json")
+                | {"source_classes": ["PAST_EXAM", "TEXTBOOK"]}
             }
         )
     command = SimpleNamespace(command_id="wfcmd_" + "1" * 32)
@@ -114,7 +130,18 @@ def test_fresh_item_admission_bounds_completed_reuse_to_exact_selected_preset(
     adapter._resolve_past_exam_source_material_requirement = (  # type: ignore[method-assign]
         lambda _request: None
     )
-    adapter.catalog = cast(Any, SimpleNamespace(bind_request=lambda *_args, **_kwargs: {}))
+    adapter.catalog = cast(
+        Any,
+        SimpleNamespace(
+            bind_request=lambda *_args, **_kwargs: {
+                "content_pack": {
+                    "pack_key": "generated-knowledge-item",
+                    "version": "1.20.19",
+                    "release_sha256": SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.19"],
+                }
+            }
+        ),
+    )
     adapter.catalog_application = cast(
         Any, SimpleNamespace(create_item_production_evidence=lambda _command: object())
     )
@@ -148,6 +175,17 @@ def test_fresh_item_admission_bounds_completed_reuse_to_exact_selected_preset(
     )
     monkeypatch.setattr("eom_api.services.command_adapter.create_workflow_instance", create)
     monkeypatch.setattr("eom_api.services.command_adapter.transaction", fake_transaction)
+
+    if mode not in {"knowledge", "textbook_variation"}:
+        with pytest.raises(ApiError) as captured:
+            adapter.start_workflow(request, _actor(), idempotency_key="api:" + "7" * 64)
+        assert captured.value.error_code == (
+            "WORKFLOW_GRAPH_GROUNDING_REQUIRED"
+            if mode == "standard"
+            else "WORKFLOW_TEXTBOOK_REQUIRED"
+        )
+        assert events == []
+        return
 
     assert adapter.start_workflow(request, _actor(), idempotency_key="api:" + "7" * 64) == (
         command.command_id,

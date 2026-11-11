@@ -48,9 +48,9 @@ def _draft(client: TestClient, headers: dict[str, str], mode: str, text: str) ->
     draft: dict[str, Any] = response.json()
     values = {name: draft[name] for name in RequestDraftUpdate.model_fields}
     values["quality_profile"] = "deep"  # A resumed legacy draft is not a preset choice.
+    values["curriculum_selected_unit_key"] = "eom.is.middle.3-2"
     if mode != "normal":
         values["knowledge_grounding"] = True
-        values["curriculum_selected_unit_key"] = "eom.is.middle.3-2"
     if mode == "variation":
         values["past_exam_variation"] = {
             "source_item_revision_id": "itemrev_" + "9" * 32,
@@ -105,7 +105,7 @@ def test_request_resolves_default_at_submission_and_preserves_old_replay(mode: s
         second = _submit(client, headers, new_draft)
         assert second["command"]["resource_id"] != first["command"]["resource_id"]
         assert gateway.accepted[1][2] == gateway.current_revision
-        expected_key = "standard-item" if mode == "normal" else "knowledge-grounded-item"
+        expected_key = "knowledge-grounded-item"
         assert [record[1] for record in gateway.accepted] == [expected_key, expected_key]
 
 

@@ -38,6 +38,7 @@ from eom_catalog_contracts.knowledge import (
     CurriculumRetrievalScope,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     EvidenceBudget,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
@@ -424,7 +425,11 @@ class CreateItemProductionEvidenceCommand(FrozenModel):
     """Private preset-resolved request; Catalog alone selects the current graph snapshot."""
 
     operation: Literal["CREATE_ITEM_PRODUCTION_EVIDENCE"] = "CREATE_ITEM_PRODUCTION_EVIDENCE"
-    requirement: EducationalRetrievalRequirementV2 | EducationalRetrievalRequirement
+    requirement: (
+        EducationalRetrievalRequirementV3
+        | EducationalRetrievalRequirementV2
+        | EducationalRetrievalRequirement
+    )
     evidence_budget: EvidenceBudget
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
     access_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -736,6 +741,7 @@ def catalog_application_schema_route(
     *,
     content_schema_version: str | None = None,
     review_result_schema: str | None = None,
+    retrieval_requirement_schema_version: str | None = None,
 ) -> CatalogApplicationSchemaRoute:
     """Resolve the immutable schema pair for one wire payload family.
 
@@ -748,6 +754,13 @@ def catalog_application_schema_route(
         historical_route = CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
     except KeyError as exc:
         raise ValueError("unsupported catalog application operation") from exc
+    if (
+        operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+        and retrieval_requirement_schema_version == "educational-retrieval-requirement/3.0"
+    ):
+        return CatalogApplicationSchemaRoute(
+            "catalog-application-request-v20", "catalog-application-response-v15"
+        )
     if (
         operation
         in {

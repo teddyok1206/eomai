@@ -156,6 +156,12 @@
     "hwpx": {"label": "HWPX 제작", "audience": "USER", "description": "승인된 문항을 HWPX 파일로 제작합니다."}
   },
   "errors": {
+    "REQUEST_DRAFT_CURRICULUM_REQUIRED": {"label": "출제할 단원을 선택해 주세요.", "audience": "USER", "action": "선택한 단원의 교과서와 참고 자료를 확인한 뒤 문항을 만듭니다."},
+    "WORKFLOW_GRAPH_GROUNDING_REQUIRED": {"label": "교과서와 참고 자료 연결이 필요한 요청입니다.", "audience": "USER", "action": "새 문항 요청 화면에서 단원을 선택해 주세요. 참고 자료 없이 문항을 만들지는 않습니다."},
+    "WORKFLOW_TEXTBOOK_REQUIRED": {"label": "이 출제 방식에 교과서 근거 연결이 필요합니다.", "audience": "USER", "action": "관리자에게 문의해 주세요. 교과서 없이 출제를 시작하지 않았습니다."},
+    "WORKFLOW_TEXTBOOK_POLICY_NOT_READY": {"label": "교과서 근거를 필수로 확인하는 출제 설정이 아직 준비되지 않았습니다.", "audience": "USER", "action": "관리자에게 출제 설정 갱신을 요청해 주세요. 문항 제작은 시작하지 않았습니다."},
+    "KNOWLEDGE_RETRIEVAL_TEXTBOOK_TEXT_INVALID": {"label": "교과서 분석 내용을 정확히 불러오지 못했습니다.", "audience": "USER", "action": "관리자에게 문의해 주세요. 교과서 내용 없이 출제를 진행하지 않았습니다."},
+    "KNOWLEDGE_RETRIEVAL_TEXTBOOK_REQUIRED": {"label": "선택한 범위에서 출제에 사용할 교과서 근거를 확보하지 못했습니다.", "audience": "USER", "action": "단원 선택을 확인하거나 관리자에게 해당 단원의 교과서 등록 상태를 문의해 주세요."},
     "CHAT_KNOWLEDGE_GRAPH_UNAVAILABLE": {"label": "개념·시험 검색을 아직 사용할 수 없습니다.", "audience": "USER", "action": "최근 문항 조회는 이용할 수 있습니다. 잠시 후 다시 검색하세요."},
     "CHAT_KNOWLEDGE_ITEM_UNAVAILABLE": {"label": "선택한 문항 버전을 더 이상 조회할 수 없습니다.", "audience": "USER", "action": "자료를 다시 검색해 문항을 선택하세요."},
     "CHAT_KNOWLEDGE_HASH_MISMATCH": {"label": "자료 버전 확인값이 일치하지 않습니다.", "audience": "USER", "action": "다시 검색한 뒤에도 같으면 문의 번호를 관리자에게 알려주세요."},

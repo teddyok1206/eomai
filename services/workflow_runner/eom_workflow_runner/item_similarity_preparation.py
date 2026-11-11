@@ -56,7 +56,7 @@ from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, WorkflowRequest
 from eom_workflow.public_similarity_control import (
-    PUBLIC_SIMILARITY_PACK_VERSION,
+    PUBLIC_SIMILARITY_PACK_VERSIONS,
     PreparedPublicSimilarityPlan,
 )
 from eom_workflow.similarity_control import PreparedSimilarityPlan
@@ -172,7 +172,7 @@ def validate_item_similarity_start_controls(
             or expected.workflow_definition_key != "generic-item-development"
             or expected.workflow_definition_version != "1.16.0"
             or expected.content_pack_key != "generated-knowledge-item"
-            or expected.content_pack_version not in {"1.20.17", PUBLIC_SIMILARITY_PACK_VERSION}
+            or expected.content_pack_version not in {"1.20.17", *PUBLIC_SIMILARITY_PACK_VERSIONS}
             or expected.content_pack_bundle_sha256
             != SVG_LABEL_LAYOUT_PACK_BUNDLES[expected.content_pack_version]
             or expected.execution_preset_id != preset.preset_id
@@ -301,7 +301,7 @@ def validate_public_item_similarity_scope(
         policy = preset.retrieval_policy
         requirement = request.educational_retrieval
         if (
-            expected.content_pack_version != PUBLIC_SIMILARITY_PACK_VERSION
+            expected.content_pack_version not in PUBLIC_SIMILARITY_PACK_VERSIONS
             or not isinstance(context.anchor, PublicSolutionSourceReference)
             or context.anchor.source.source_class != "PAST_EXAM"
             or context.top_k > MAX_SIMILARITY_MATERIAL_CANDIDATES

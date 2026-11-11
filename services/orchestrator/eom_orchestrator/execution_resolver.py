@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
@@ -62,6 +63,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV29,
     ResolvedExecutionPlanV32,
     ResolvedExecutionPlanV34,
+    ResolvedExecutionPlanV35,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -390,7 +392,13 @@ def resolve_knowledge_backed_execution_plan(
         ) from exc
     validate_educational_retrieval_policy(preset, requirement)
     variation_successor = isinstance(requirement, EducationalRetrievalRequirementV2)
+    textbook_variation = isinstance(requirement, EducationalRetrievalRequirementV3)
     post_registration_successor = dependencies.workflow_definition_version == "1.16.0"
+    if textbook_variation and not post_registration_successor:
+        raise ControlPlaneError(
+            "CONTROL_VARIATION_PROTOCOL_MISMATCH",
+            "textbook-grounded variation requires workflow definition 1.16",
+        )
     natural_presentation_successor = dependencies.workflow_definition_version in {
         "1.15.0",
         "1.16.0",
@@ -506,7 +514,9 @@ def resolve_knowledge_backed_execution_plan(
     actual_resolved_at = resolved_at or datetime.now(UTC)
     document: dict[str, object] = {
         "schema_version": (
-            "resolved-execution-plan/19.0"
+            "resolved-execution-plan/35.0"
+            if textbook_variation
+            else "resolved-execution-plan/19.0"
             if post_registration_successor
             else (
                 "resolved-execution-plan/17.0"
@@ -553,7 +563,9 @@ def resolve_knowledge_backed_execution_plan(
         "evidence_context_artifact": evidence.context_artifact.model_dump(mode="json"),
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
         "resolver_version": (
-            POST_REGISTRATION_GROUNDED_RESOLVER_VERSION
+            "35.0.0"
+            if textbook_variation
+            else POST_REGISTRATION_GROUNDED_RESOLVER_VERSION
             if post_registration_successor
             else (
                 NATURAL_PRESENTATION_RESOLVER_VERSION
@@ -586,7 +598,10 @@ def resolve_knowledge_backed_execution_plan(
         | ResolvedExecutionPlanV19
     )
     try:
-        if post_registration_successor:
+        if textbook_variation:
+            validate_control_contract("resolved-execution-plan-v35", document)
+            model = ResolvedExecutionPlanV35.model_validate(document)
+        elif post_registration_successor:
             validate_control_contract("resolved-execution-plan-v19", document)
             model = ResolvedExecutionPlanV19.model_validate(document)
         elif natural_presentation_successor:

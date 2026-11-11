@@ -95,6 +95,21 @@ def test_item_preview_dom_uses_safe_text_and_same_origin_media() -> None:
     assert ".innerHTML" not in source
 
 
+def test_item_preview_explanations_follow_content_profile_without_mutating_dto() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is not available for the preview explanation regression")
+    completed = subprocess.run(
+        [node, str(ROOT / "tests/web_gui/item_preview_explanation_checks.mjs")],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "item_preview_explanations=PASS" in completed.stdout
+
+
 def test_item_preview_keeps_image_alt_accessible_without_visible_description() -> None:
     node = shutil.which("node")
     if node is None:

@@ -10,6 +10,7 @@ from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.knowledge import (
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
 )
 from eom_catalog_contracts.public_solution_delivery import (
     PublicSolutionSimilarityDelivery,
@@ -27,7 +28,7 @@ from eom_catalog_contracts.similarity_materials import MAX_SIMILARITY_MATERIAL_C
 from eom_identifiers import content_sha256
 from pydantic import ConfigDict, TypeAdapter, model_validator
 
-from eom_workflow.control_plane import ResolvedExecutionPlanV19
+from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV35
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.similarity_control import (
     _require_same_reference_source,
@@ -36,9 +37,14 @@ from eom_workflow.similarity_control import (
 )
 
 PUBLIC_SIMILARITY_PLAN_SCHEMAS = frozenset(
-    {"resolved-execution-plan/30.0", "resolved-execution-plan/31.0"}
+    {
+        "resolved-execution-plan/30.0",
+        "resolved-execution-plan/31.0",
+        "resolved-execution-plan/36.0",
+    }
 )
 PUBLIC_SIMILARITY_PACK_VERSION = "1.20.18"
+PUBLIC_SIMILARITY_PACK_VERSIONS = frozenset({PUBLIC_SIMILARITY_PACK_VERSION, "1.20.19"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,8 +108,21 @@ class ResolvedExecutionPlanV31(ResolvedExecutionPlanV19):
         return self
 
 
+class ResolvedExecutionPlanV36(ResolvedExecutionPlanV30):
+    """Exact variation with textbooks and the existing public similarity delivery."""
+
+    schema_version: Literal["resolved-execution-plan/36.0"] = "resolved-execution-plan/36.0"  # type: ignore[assignment]
+    resolver_version: Literal["36.0.0"] = "36.0.0"  # type: ignore[assignment]
+    retrieval_requirement: EducationalRetrievalRequirementV3
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        return _similarity_plan_document(value, "resolved-execution-plan-v36")
+
+
 SupportedPublicSimilarityExecutionPlan: TypeAlias = (  # noqa: UP040
-    ResolvedExecutionPlanV30 | ResolvedExecutionPlanV31
+    ResolvedExecutionPlanV30 | ResolvedExecutionPlanV31 | ResolvedExecutionPlanV36
 )
 
 
@@ -115,6 +134,8 @@ def parse_public_similarity_execution_plan(value: object) -> SupportedPublicSimi
                 return ResolvedExecutionPlanV30.model_validate(document)
             case "resolved-execution-plan/31.0":
                 return ResolvedExecutionPlanV31.model_validate(document)
+            case "resolved-execution-plan/36.0":
+                return ResolvedExecutionPlanV36.model_validate(document)
     raise ValueError("PUBLIC_SIMILARITY_PLAN_UNSUPPORTED")
 
 
@@ -165,11 +186,20 @@ def bind_public_similarity_execution_plan(
 ) -> SupportedPublicSimilarityExecutionPlan:
     """One fresh candidate only; the application owns uniqueness, replay and current grants."""
     original = raw_similarity_contract_value(unpersisted_base)
-    validate_control_contract("resolved-execution-plan-v19", original)
-    base = ResolvedExecutionPlanV19.model_validate(original)
+    if (
+        isinstance(original, dict)
+        and original.get("schema_version") == "resolved-execution-plan/35.0"
+    ):
+        validate_control_contract("resolved-execution-plan-v35", original)
+        base: ResolvedExecutionPlanV19 = ResolvedExecutionPlanV35.model_validate(original)
+    else:
+        validate_control_contract("resolved-execution-plan-v19", original)
+        base = ResolvedExecutionPlanV19.model_validate(original)
     context = parse_supported_public_solution_similarity_context(context)
     pin = parse_public_solution_similarity_delivery(delivery)
-    if isinstance(base.retrieval_requirement, EducationalRetrievalRequirementV2):
+    if isinstance(base.retrieval_requirement, EducationalRetrievalRequirementV3):
+        version = 36
+    elif isinstance(base.retrieval_requirement, EducationalRetrievalRequirementV2):
         version = 30
     elif type(base.retrieval_requirement) is EducationalRetrievalRequirement:
         version = 31

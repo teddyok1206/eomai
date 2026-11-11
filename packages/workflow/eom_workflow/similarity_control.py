@@ -28,7 +28,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 from pydantic import ConfigDict, TypeAdapter, model_validator
 
-from eom_workflow.control_plane import ResolvedExecutionPlanV19
+from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV35
 from eom_workflow.control_schemas import validate_control_contract
 
 if TYPE_CHECKING:
@@ -42,6 +42,8 @@ POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS = SIMILARITY_EXECUTION_PLAN_SCHEMAS | {
     "resolved-execution-plan/19.0",
     "resolved-execution-plan/30.0",
     "resolved-execution-plan/31.0",
+    "resolved-execution-plan/35.0",
+    "resolved-execution-plan/36.0",
 }
 
 
@@ -162,7 +164,11 @@ def parse_post_registration_grounded_plan(
 ):
     """One explicit family choice for existing consumers, without rewriting old plan values."""
     schema = document.get("schema_version")
-    if schema in {"resolved-execution-plan/30.0", "resolved-execution-plan/31.0"}:
+    if schema in {
+        "resolved-execution-plan/30.0",
+        "resolved-execution-plan/31.0",
+        "resolved-execution-plan/36.0",
+    }:
         # Keep successor control values out of legacy decoder/bootstrap imports.
         # This is explicit family dispatch, not a repair of old plan bytes.
         from eom_workflow.public_similarity_control import parse_public_similarity_execution_plan
@@ -178,6 +184,12 @@ def parse_post_registration_grounded_plan(
             raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_INVALID") from None
     if schema == "resolved-execution-plan/19.0":
         return ResolvedExecutionPlanV19.model_validate(document)
+    if schema == "resolved-execution-plan/35.0":
+        try:
+            validate_control_contract("resolved-execution-plan-v35", document)
+            return ResolvedExecutionPlanV35.model_validate(document)
+        except SchemaValidationError:
+            raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_INVALID") from None
     raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_UNSUPPORTED")
 
 

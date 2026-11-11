@@ -35,6 +35,10 @@ Item Preview는 정본 content/image pointer의 읽기 투영이다. 원본 문�
 HWP/HWPX를 변환한 별도 결과다. HWPX 제작은 Manager가 검증한 입력을 Builder가
 출판 package로 조립하는 delivery다. 미리보기 성공이 HWPX 내부 이미지 포함을 증명하지 않는다.
 
+CONTENT_TEAM_V2/V3 Preview는 전체 정답/오답 해설에 ㄱ·ㄴ·ㄷ 설명이 이미 있으므로 한 번만
+출력한다. DTO의 선지별 해설은 identity 검증을 위해 보존하되 다시 렌더하지 않는다.
+BLOCKS_V1의 전체 풀이와 선지별 풀이가 서로 독립인 구조는 그대로 유지한다.
+
 그림 누락은 선택한 revision/ordinal → 실제 PNG Artifact → Manager handoff → Builder의
 binary/relationship → authenticated download bytes 순으로 본다. PNG가 package 내부 member를
 가리키는지와 external filesystem 경로가 남지 않는지를 따로 검사한다. ZIP 정상과 실제 한글

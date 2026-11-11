@@ -18,6 +18,7 @@ from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV2,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     EquationBlock,
     ExternalItemLearningResult,
     IntegratedScienceCurriculumScope,
@@ -500,7 +501,10 @@ class WorkflowRequest(FrozenModel):
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: (
-        EducationalRetrievalRequirementV2 | EducationalRetrievalRequirement | None
+        EducationalRetrievalRequirementV3
+        | EducationalRetrievalRequirementV2
+        | EducationalRetrievalRequirement
+        | None
     ) = None
     production_occurrence: WorkflowProductionOccurrence | None = None
     expected_resolution: ExpectedWorkflowResolution | None = None
@@ -637,6 +641,13 @@ class WorkflowRequest(FrozenModel):
                     or self.registry_intent.base_revision_id is not None
                 ):
                     raise ValueError("past-exam variation must create one new logical Item")
+                if isinstance(self.educational_retrieval, EducationalRetrievalRequirementV3) and (
+                    scope is None
+                    or self.educational_retrieval.curriculum_root_key != scope.graph_root_stable_key
+                ):
+                    raise ValueError(
+                        "textbook-grounded variation requires the selected curriculum graph root"
+                    )
             elif (
                 scope is None
                 or self.educational_retrieval.curriculum_root_key != scope.graph_root_stable_key

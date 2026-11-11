@@ -37,15 +37,18 @@ from tests.integration.test_preset_model_validation_persistence import (
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.public_similarity_plan_fixtures import public_plan_case
 from tests.unit.test_similarity_plan_execution_binding import creation_arguments
+from tests.unit.textbook_variation_plan_fixtures import textbook_variation_base
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(params=(False, True))
+@pytest.fixture(params=("variation", "ordinary", "textbook_variation"))
 def stored_case(guarded_engine: Engine, tmp_path, monkeypatch, request):
     # Normal seed records live exclusively in the marked temporary DB. No real
     # model validation, source access or workflow execution is represented here.
-    value = public_plan_case(tmp_path, monkeypatch, ordinary=request.param, registered=True)
+    value = public_plan_case(
+        tmp_path, monkeypatch, ordinary=request.param == "ordinary", registered=True
+    )
     suffix = uuid4().hex
     with Session(guarded_engine) as session, session.begin():
         old_plan_id, _, _ = _complete_control_plane(
@@ -70,12 +73,15 @@ def stored_case(guarded_engine: Engine, tmp_path, monkeypatch, request):
                 general_knowledge_mode="DENIED",
             )
         value["base"] = ResolvedExecutionPlanV19.model_validate(seal(document, "plan_sha256"))
+        if request.param == "textbook_variation":
+            value["base"] = textbook_variation_base(value["base"])
+            document = value["base"].model_dump(mode="json")
         _, preset = creation_arguments(value)
         preset_body = preset.model_dump(mode="json")
         preset_body["compatible_workflow_protocols"] = ["workflow-role/1.24.0"]
         preset = ExecutionPresetRevisionV2.model_validate(seal(preset_body, "content_sha256"))
         document["preset_sha256"] = preset.content_sha256
-        value["base"] = ResolvedExecutionPlanV19.model_validate(seal(document, "plan_sha256"))
+        value["base"] = type(value["base"]).model_validate(seal(document, "plan_sha256"))
         # The policy is immutable nominal fixture input. Its publication/model
         # validation is outside these persistence tests, not a runtime bypass.
         session.add(
@@ -124,7 +130,7 @@ def stored_case(guarded_engine: Engine, tmp_path, monkeypatch, request):
             session.add(definition)
             session.flush()
         document["workflow_definition_sha256"] = definition.definition_hash
-        value["base"] = ResolvedExecutionPlanV19.model_validate(seal(document, "plan_sha256"))
+        value["base"] = type(value["base"]).model_validate(seal(document, "plan_sha256"))
         session.add(
             WorkflowInstanceRecord(
                 workflow_id=document["workflow_id"],

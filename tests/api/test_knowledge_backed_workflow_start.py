@@ -199,10 +199,21 @@ def test_graph_miss_happens_before_workflow_transaction_or_worker_claim_and_pins
         permissions=frozenset(PermissionKey),
         source=ActorSource.APPLICATION_API,
     )
+    request = _request(definition_version)
+    assert request.educational_retrieval is not None
+    request = WorkflowStartRequest.model_validate(
+        request.model_dump(mode="json")
+        | {
+            "educational_retrieval": request.educational_retrieval.model_dump(mode="json")
+            | {
+                "source_classes": sorted(
+                    {*request.educational_retrieval.source_classes, "TEXTBOOK"}
+                )
+            }
+        }
+    )
     with pytest.raises(CatalogApplicationClientError) as captured:
-        adapter.start_workflow(
-            _request(definition_version), actor, idempotency_key="api:" + "6" * 64
-        )
+        adapter.start_workflow(request, actor, idempotency_key="api:" + "6" * 64)
     assert captured.value.code == "KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE"
     assert catalog.command is not None
     assert catalog.command.solution_evidence_requirement == expected_solution_requirement

@@ -11,6 +11,7 @@ from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecuti
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.public_similarity_control import (
     PUBLIC_SIMILARITY_PACK_VERSION,
+    PUBLIC_SIMILARITY_PACK_VERSIONS,
     SupportedPublicSimilarityExecutionPlan,
 )
 from eom_workflow.similarity_control import (
@@ -25,7 +26,7 @@ from sqlalchemy.orm import Session
 SIMILARITY_REFERENCE_PACK_VERSION = "1.20.17"
 PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION = PUBLIC_SIMILARITY_PACK_VERSION
 SIMILARITY_REFERENCE_PACK_VERSIONS = frozenset(
-    {SIMILARITY_REFERENCE_PACK_VERSION, PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION}
+    {SIMILARITY_REFERENCE_PACK_VERSION, *PUBLIC_SIMILARITY_PACK_VERSIONS}
 )
 SimilarityReferenceMode = Literal["NOT_OFFERED", "PINNED_REFERENCE_CONTEXT"]
 _PLAN_PIN_KEYS = frozenset({"plan_id", "plan_sha256", "preset_id", "preset_revision_id"})
@@ -105,7 +106,7 @@ def read_similarity_prompt_context(
     if (
         (
             isinstance(plan, SupportedPublicSimilarityExecutionPlan)
-            and snapshot.get("version") != PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION
+            and snapshot.get("version") not in PUBLIC_SIMILARITY_PACK_VERSIONS
         )
         or (
             isinstance(plan, SupportedSimilarityExecutionPlan)

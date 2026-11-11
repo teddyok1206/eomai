@@ -22,7 +22,7 @@ from eom_operator_identity import ActorContext
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
-from eom_workflow.public_similarity_control import PUBLIC_SIMILARITY_PACK_VERSION
+from eom_workflow.public_similarity_control import PUBLIC_SIMILARITY_PACK_VERSIONS
 from eom_workflow_runner.item_similarity_preparation import (
     PreparedPublicItemSimilarity,
     SupportedPreparedItemSimilarity,
@@ -172,7 +172,7 @@ class HttpReferenceItemStartPreparation:
                 schema_version="system-rag-reference-query-prepare-request/1.1",
                 consumer_purpose="ITEM_AUTHORING",
             )
-        if expected_resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION:
+        if expected_resolution.content_pack_version in PUBLIC_SIMILARITY_PACK_VERSIONS:
             body.pop("source_item_revision_id")
             body.update(
                 schema_version="system-rag-reference-query-prepare-request/4.0",

@@ -23,7 +23,6 @@ from eom_web_gui.draft_integrity import (
 )
 
 DEMO_REQUEST = "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
-STANDARD_EXECUTION_PRESET_KEY = "standard-item"
 KNOWLEDGE_EXECUTION_PRESET_KEY = "knowledge-grounded-item"
 QUALITY_POLICY = {
     "fast": {"label": "빠름", "policy_key": "economy"},
@@ -66,6 +65,8 @@ def normalize_request(
         "quality_profile": QualityProfile.BALANCED,
         "source_intake_batch_id": None,
         "authoring_guidance": text,
+        # Preserve the incomplete draft/hash contract. Submission no longer uses
+        # this legacy flag and requires a selected unit plus a verified Graph.
         "knowledge_grounding": False,
         "curriculum_selected_unit_key": None,
         "past_exam_variation": None,
@@ -118,7 +119,11 @@ def quality_policy(profile: str) -> dict[str, str]:
 def workflow_start_payload(
     draft: RequestDraft, *, graph_corpus_key: str | None = None
 ) -> dict[str, object]:
-    """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
+    """Start only grounded work; the legacy draft flag is not execution authority."""
+    if draft.curriculum_selected_unit_key is None:
+        raise ValueError("Item authoring requires a selected curriculum unit")
+    if graph_corpus_key is None or re.fullmatch(r"[a-z][a-z0-9_-]{1,63}", graph_corpus_key) is None:
+        raise ValueError("Graph grounding requires the API-verified production corpus")
     variation = draft.past_exam_variation
     material_requirement = draft.material_requirement
     if isinstance(material_requirement, ContentTeamMaterialRequirementV1):
@@ -137,11 +142,7 @@ def workflow_start_payload(
             "required" if material_requirement.form in {"AUTO", "IMAGE", "MIXED"} else "skip"
         ),
         "pack_key": "generated-knowledge-item",
-        "execution_preset_key": (
-            KNOWLEDGE_EXECUTION_PRESET_KEY
-            if draft.knowledge_grounding
-            else STANDARD_EXECUTION_PRESET_KEY
-        ),
+        "execution_preset_key": KNOWLEDGE_EXECUTION_PRESET_KEY,
         "environment": "development",
         "source_intake_batch_ids": [],
         "registry_mode": "CREATE_ITEM",
@@ -161,47 +162,40 @@ def workflow_start_payload(
         },
         "stimulus_asset_key": None,
     }
-    if draft.knowledge_grounding:
-        assert draft.curriculum_selected_unit_key is not None
-        if (
-            graph_corpus_key is None
-            or re.fullmatch(r"[a-z][a-z0-9_-]{1,63}", graph_corpus_key) is None
-        ):
-            raise ValueError("Graph grounding requires the API-verified production corpus")
-        retrieval: dict[str, object] = {
-            "schema_version": (
-                "educational-retrieval-requirement/2.0"
-                if variation is not None
-                else "educational-retrieval-requirement/1.0"
-            ),
-            "corpus_key": graph_corpus_key,
-            "query_kind": "ITEM_PREPARATION",
-            "curriculum_root_key": None,
-            "topic_keys": [],
-            "required_item_elements": sorted(
-                {
-                    "choice",
-                    "paragraph",
-                    *(("image",) if material_requirement.form in {"IMAGE", "MIXED"} else ()),
-                    *(("table",) if material_requirement.form in {"TABLE", "MIXED"} else ()),
-                }
-            ),
-            "source_classes": (
-                ["PAST_EXAM"]
-                if variation is not None
-                else ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"]
-            ),
-        }
-        if variation is not None:
-            retrieval["past_exam_variation"] = {
-                "schema_version": "past-exam-variation-request/1.0",
-                "source_item_revision_id": variation.source_item_revision_id,
-                "variation_axes": list(variation.variation_axes),
-                "preserve_core_concept": True,
-                "preserve_cognitive_target": True,
-                "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+    retrieval: dict[str, object] = {
+        "schema_version": (
+            "educational-retrieval-requirement/3.0"
+            if variation is not None
+            else "educational-retrieval-requirement/1.0"
+        ),
+        "corpus_key": graph_corpus_key,
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": None,
+        "topic_keys": [],
+        "required_item_elements": sorted(
+            {
+                "choice",
+                "paragraph",
+                *(("image",) if material_requirement.form in {"IMAGE", "MIXED"} else ()),
+                *(("table",) if material_requirement.form in {"TABLE", "MIXED"} else ()),
             }
-        payload["educational_retrieval"] = retrieval
+        ),
+        "source_classes": (
+            ["PAST_EXAM", "TEXTBOOK"]
+            if variation is not None
+            else ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"]
+        ),
+    }
+    if variation is not None:
+        retrieval["past_exam_variation"] = {
+            "schema_version": "past-exam-variation-request/1.0",
+            "source_item_revision_id": variation.source_item_revision_id,
+            "variation_axes": list(variation.variation_axes),
+            "preserve_core_concept": True,
+            "preserve_cognitive_target": True,
+            "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+        }
+    payload["educational_retrieval"] = retrieval
     return payload
 
 

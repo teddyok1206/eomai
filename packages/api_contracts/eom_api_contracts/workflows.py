@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
     ContentTeamMaterialRequirementV2,
     EducationalRetrievalRequirementV2,
+    EducationalRetrievalRequirementV3,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
     validate_content_team_material_selection,
@@ -158,6 +159,12 @@ class EducationalRetrievalIntentRequestV2(EducationalRetrievalRequirementV2):
     """Public exact-source variation intent; Graph and policy revisions remain server-owned."""
 
 
+class EducationalRetrievalIntentRequestV3(EducationalRetrievalRequirementV3):
+    """Textbook-grounded variation; the API resolves the selected unit's Graph root."""
+
+    curriculum_root_key: None = None  # type: ignore[assignment]
+
+
 class WorkflowProductionOccurrenceV1(ApiModel):
     """One planned production occurrence; distinct runs must never share this identity."""
 
@@ -222,7 +229,10 @@ class WorkflowStartRequest(ApiModel):
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: (
-        EducationalRetrievalIntentRequestV2 | EducationalRetrievalIntentRequest | None
+        EducationalRetrievalIntentRequestV3
+        | EducationalRetrievalIntentRequestV2
+        | EducationalRetrievalIntentRequest
+        | None
     ) = None
     production_occurrence: WorkflowProductionOccurrenceV1 | None = None
     expected_resolution: WorkflowExpectedResolutionV1 | None = None
@@ -264,7 +274,15 @@ class WorkflowStartRequest(ApiModel):
                 ContentTeamItemBriefRequestV5,
             ),
         ):
-            if isinstance(self.educational_retrieval, EducationalRetrievalIntentRequestV2):
+            if isinstance(
+                self.educational_retrieval,
+                (EducationalRetrievalIntentRequestV2, EducationalRetrievalIntentRequestV3),
+            ):
+                if isinstance(self.educational_retrieval, EducationalRetrievalIntentRequestV3) and (
+                    self.definition_version != "1.16.0"
+                    or not isinstance(self.item_brief, ContentTeamItemBriefRequestV5)
+                ):
+                    raise ValueError("textbook variation requires workflow 1.16 and item brief V5")
                 if (
                     self.definition_version not in {"1.14.0", "1.15.0", "1.16.0"}
                     or self.item_brief.curriculum_selected_unit_key is None

@@ -2039,6 +2039,11 @@ class CatalogApplicationClient:
         request_schemas = catalog_application_schema_route(
             command.operation,
             content_schema_version=content_schema_version,
+            retrieval_requirement_schema_version=(
+                command.requirement.schema_version
+                if isinstance(command, CreateItemProductionEvidenceCommand)
+                else None
+            ),
         )
         validate_contract(request_schemas.request_schema, payload)
         self._validate_socket()
@@ -2078,6 +2083,11 @@ class CatalogApplicationClient:
                 command.operation,
                 content_schema_version=response_content_schema_version,
                 review_result_schema=review_result_schema,
+                retrieval_requirement_schema_version=(
+                    command.requirement.schema_version
+                    if isinstance(command, CreateItemProductionEvidenceCommand)
+                    else None
+                ),
             )
             validate_contract(response_schemas.response_schema, value)
             response = CatalogApplicationResponse.model_validate(value)

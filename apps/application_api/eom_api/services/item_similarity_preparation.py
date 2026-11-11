@@ -26,7 +26,7 @@ from eom_orchestrator.similarity_context_artifact import (
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
 from eom_workflow.public_similarity_control import (
-    PUBLIC_SIMILARITY_PACK_VERSION,
+    PUBLIC_SIMILARITY_PACK_VERSIONS,
     PreparedPublicSimilarityPlan,
 )
 from eom_workflow.similarity_control import PreparedSimilarityPlan
@@ -88,7 +88,7 @@ class ItemSimilarityStartPreparationService:
             )
         try:
             selection = CompletedSimilarityQuerySelection.model_validate(selection)
-            if expected_resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION:
+            if expected_resolution.content_pack_version in PUBLIC_SIMILARITY_PACK_VERSIONS:
                 request, resolution, evidence, preset = validate_item_similarity_start_inputs(
                     workflow_request=workflow_request,
                     expected_resolution=expected_resolution,
