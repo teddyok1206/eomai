@@ -4269,3 +4269,21 @@ timeout이면 재전송하지 않고 원 파일을 보존한다. schema/DB/queue
 반영하되 INDEX의 기존 purpose delegation·실행 PID·controller pin은 보존한다.
 ROUTED 전 실패도 동일하게 만료된 unbound allocation이므로 읽기 projection의
 FAILED 범위에 포함한다. CPU 경로·BOUND·완료 결과는 계속 제외한다.
+
+source 관련92 PASS, Ruff/format/mypy PASS. 좁은 QUERY/controller 설치 후보
+`377b196e40ff682f33fba2a565be6f97097d2fd4`의 최초 검사에는 main의 INDEX 전용
+진단 개선까지 요구하는1개가 실패했다. 기존 c915 root 진단 형식은 그대로이므로 해당
+case만 적용 제외하고 같은91개를 다시 검사해 PASS했다. 실패 로그는 보존했고 무관한
+INDEX 진단 코드를 추가해 통과시키지 않았다. 실제 root controller interpreter import도
+PASS이며 모델/서비스 시작0회다. 이 검사만으로 실제 GPU 검색 성공을 주장하지 않는다.
+
+Platform wheel SHA `6625350dcd40ae84b102aa2248b57dbdf2d046e782a19cbd38c8c937bd49130e`.
+선택·rollback 준비는 `/var/lib/eom-query-reload-recovery-20261111`에 저장했다.
+공용 bootstrap의 QUERY successor만 선택하고 INDEX는 기존 df57 controller로 delegate한다.
+INDEX owner/config·API/Web/슬롯·CPU/CUDA numerical/model/space pin은 변경하지 않는다.
+
+05:40 UTC QUERY/controller compatible activation PASS. INDEX PID3493954/
+Invocation62cd90e93dfa4b7992fd120681214e40 및 API/Web/슬롯 보존을 before/after 대조했다.
+실제 root bootstrap은 새 release, INDEX delegation은 df57인 구성을 typed config와
+보호된 bootstrap hash로 함께 검증했다. 원 두 검색은 numerical launch0으로 보존하며
+새 사용자 검색의 실제 결과는 여전히 미확인이다.
