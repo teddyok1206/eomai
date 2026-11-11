@@ -4249,3 +4249,23 @@ QUERY 한 모듈만 추가한 successor `5adadcf5a8f8e23f76ad551f1b9eca4dec6567f
 05:27 UTC 운영 활성화 PASS 및 API/Web/슬롯/INDEX PID·설정 보존을 확인했다.
 DB/schema/data mutation·새 numerical compute는 0회다. 실제 사용자 결과 목록 검증은
 아직 PENDING이며 테스트/준비 완료를 검색 성공으로 보고하지 않는다.
+
+### 05:28 UTC — 새 검색에서 확인된 root controller 준비 timeout
+
+사용자가 시작한 새 검색 `dbsearch_671db4c4f468644c9b5a44c0eeb0bd01`은 0.34초에
+접수됐고 원래 작업을 재실행하지 않았다. 그러나 numerical launch 전에 controller가
+`embedding_gpu_batch_unit_descriptor.prepare_embedding_gpu_batch_descriptor`의
+`daemon-reload` 10초 제한으로 종료됐다. PID1 로그의 실제 재설정은 05:28:47~57,
+**10,341ms**다. 같은 시간 QUERY provider 조회도 5,007ms에 timeout으로 거부됐다.
+따라서 이 사건에서는 API 상태 읽기 지연도 global reload의 동시 영향으로 확인한다.
+호스트는 약9,205 loaded names/6,781 failed units를 가지고 있었지만, 이 숫자만으로
+모두 불필요한 기록이라고 판단해 지우거나 기존 실패 증거를 없애지 않는다.
+
+기존 descriptor adapter의 side-effect 호출 한 번을 최대30초 기다리도록 조정한다.
+모델 실행180초/원 allocation deadline/권한·파일·unit identity 검증은 그대로다.
+timeout이면 재전송하지 않고 원 파일을 보존한다. schema/DB/queue/입력/벡터 변경 없음;
+같은 설정 쓰기와 유한 subprocess 대기 O(1)이며 새 framework 대신 담당 adapter의
+실측 시간 불일치만 수정한다. QUERY controller successor와 그 구성 pin을 함께
+반영하되 INDEX의 기존 purpose delegation·실행 PID·controller pin은 보존한다.
+ROUTED 전 실패도 동일하게 만료된 unbound allocation이므로 읽기 projection의
+FAILED 범위에 포함한다. CPU 경로·BOUND·완료 결과는 계속 제외한다.

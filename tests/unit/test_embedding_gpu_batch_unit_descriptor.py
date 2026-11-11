@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
@@ -136,7 +137,7 @@ def test_exclusive_file_and_reload_uncertainty_never_clobber_or_replay(local, re
         ("/usr/bin/systemctl", "--no-ask-password", "daemon-reload"),
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=30,
         env=descriptor._ENV,
     )
 
@@ -150,6 +151,19 @@ def test_an_existing_unrelated_drop_in_is_not_replaced(local):
     assert unrelated.read_bytes() == b"not owned by this operation"
     assert not path.exists()
     run.assert_not_called()
+
+
+def test_reload_timeout_preserves_descriptor_without_replaying_reload(local):
+    path, run = local
+    run.side_effect = subprocess.TimeoutExpired("systemctl", 30)
+    with pytest.raises(subprocess.TimeoutExpired):
+        descriptor.prepare_embedding_gpu_batch_descriptor("a" * 32)
+    original = path.stat()
+    assert path.read_bytes() == descriptor.embedding_gpu_batch_descriptor_bytes("a" * 32)
+    with pytest.raises(ValueError, match="ALREADY_PRESENT"):
+        descriptor.prepare_embedding_gpu_batch_descriptor("a" * 32)
+    assert path.stat().st_ino == original.st_ino
+    run.assert_called_once()
 
 
 def test_concurrent_creation_dispatches_only_one_reload_without_overwriting(local):

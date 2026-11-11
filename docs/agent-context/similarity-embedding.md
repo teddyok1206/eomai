@@ -171,6 +171,12 @@ QUERY driver 진단은 제한된 authority 오류 코드와 위치만 남기며 
 않는 규칙은 유지한다. BOUND/완료 결과는 이 준비 마감 판정에서 제외한다. 이 projection은
 과거 Job/Workflow를 변경하거나 물리 종료·새 실행 권한을 증명하지 않는다.
 
+GPU descriptor 설치의 `daemon-reload`는 해당 unit만이 아니라 PID1 전체 설정을 읽는다.
+`embedding_gpu_batch_unit_descriptor`는 실측10초 초과 reload를 허용하는30초 단일
+대기를 사용한다. timeout 후 reload/dispatch를 재시도하지 않으며 계산 제한과 원래
+allocation 마감은 그대로다. QUERY controller 교체 시 기존 INDEX purpose delegation과
+its controller pin을 보존한다.
+
 구형 벡터는 모든 참조 전환과 새 검색 검증 전에는 지우지 않는다. 기존 520개 기출 모집단,
 승인 Item 수, view별 binding 수, 재시작 후 traversal 수는 다른 분모다.
 

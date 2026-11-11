@@ -99,7 +99,8 @@ def test_current_source_revocation_precedes_workflow_lookup(original, monkeypatc
         ("CUDA", None, 101, "PENDING"),
         ("CUDA", object(), 99, "PENDING"),
         ("CPU", None, 99, "PENDING"),
-        (None, None, 99, "PENDING"),
+        (None, None, 99, "FAILED"),
+        (None, None, 101, "PENDING"),
     ),
 )
 def test_unbound_cuda_deadline_is_terminal_without_rewriting_history_or_dispatch(

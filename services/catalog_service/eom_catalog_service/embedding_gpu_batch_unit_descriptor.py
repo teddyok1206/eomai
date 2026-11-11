@@ -22,6 +22,9 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
 _UNIT_ROOT = Path("/run/systemd/system")
 _MEMBER = "10-allocation.conf"
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
+# PID1 reloads all loaded units, not only this descriptor. Measured 10.34s on
+# the production host; keep one bounded call, without retrying this side effect.
+_RELOAD_TIMEOUT_SECONDS = 30
 
 
 def embedding_gpu_batch_descriptor_path(attempt_hex: str) -> Path:
@@ -76,7 +79,7 @@ def prepare_embedding_gpu_batch_descriptor(attempt_hex: str) -> None:
         ("/usr/bin/systemctl", "--no-ask-password", "daemon-reload"),
         capture_output=True,
         check=False,
-        timeout=10,
+        timeout=_RELOAD_TIMEOUT_SECONDS,
         env=_ENV,
     )
     if result.returncode != 0 or len(result.stdout) > 16384 or len(result.stderr) > 16384:
