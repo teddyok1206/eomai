@@ -4357,3 +4357,43 @@ Test-only 파일에 직접 실행한 strict mypy는 기존 untyped fixture/impor
 06:06 사용자 재로그인이 실제 기록으로 확인돼 추가 비밀번호를 요구하지 않았다.
 기존3개 요청은 CPU numerical 미실행 실패 흔적을 보존하고, 새5개 요청만 명시적으로
 요청했다. 아직 검증 중인 실제 검색을 완료로 보고하거나 goal을 닫지 않는다.
+
+### 09:00 UTC 사용자 검색과 정기 보고 중지 간섭
+
+새 요청 `dbsearch_fe68d3ee165e612f4259dacbc410bf73`은 top_k5, CUDA로 준비돼
+`workflow_492f9146d1f04b73b6351b359e899ad3`와 numerical Job
+`job_af7f0d1c082c42748e0e78e595dedd68`을 정확히 한 번 실행했다.09:05:48에 원
+GPU workspace의 result.json/vectors.f32가 생성됐지만09:05:56에 종료 확인이 실패했다.
+출력 bytes 존재는 canonical commit이나 실제 결과 조회 성공이 아니다.
+
+이번 실패는 개발 중 수행한 정기 보고 timer의 disable 작업과 충돌한 것이다.
+09:01:39 `--no-reload disable --now`는 즉시 reload 지연을 피했지만 systemd의
+manager-global `unit_file_state_outdated`를 남겨 무관한 API/QUERY/GPU unit도
+`NeedDaemonReload=yes`였다. root 진단은 `inspect_fixed_unit`317행의 상태 거부였고
+GPU template과 exact allocation descriptor는 고정 bytes/hash와 동일했다.
+[systemd255의 해당 구현](https://github.com/systemd/systemd/blob/v255/src/core/unit.c#L3589)은
+global outdated flag를 개별 unit 파일 검사보다 먼저 반환한다. 단순히 GPU 계산이
+오래 걸렸거나 사용자 인증 실패라고 설명하지 않는다. 작업 순서 실수는 사용자에게 밝혔다.
+
+이번에는 strict runtime 검사를 완화하거나 기존 FAILED를 성공으로 바꾸지 않는다.
+정확한 두 GPU unit이 종료된 것을 확인하고 template/descriptor pins를 비교한 뒤
+daemon reload 한 번으로 상태를 정리한다. API/Web/QUERY/Catalog/creative/INDEX의
+PID와 Invocation은 전후 보존한다. 정기 보고 timer는 inactive/disabled로 유지하고,
+두 observer timer는 계속 유지한다. 이후 실행 중 timer는 stop만 하며 disable/reload는
+종료 후 수행한다. 기존 output/failed records와 index vectors를 삭제·변경하지 않는다.
+
+실제 reload는 PASS이고 위6서비스의 PID/Invocation이 모두 그대로였다. INDEX는 이번
+조치 이전06:37부터 failed/PID0였으며 이 작업에서 종료하거나 재시작하지 않았다.
+GPU worker의 남은 FD store1은 기존 `capture_embedding_gpu_batch_reconciliation` →
+`observe_embedding_gpu_batch_terminal` → `retire_embedding_gpu_batch`로 정리했다.
+최초 일반 shell에서의 관측은 요구된 CUDA loader cwd/mount 부재로 admission에서
+거부돼 부작용0이었다. 기존 CPU interpreter·empty cwd·selected loader cache bind를
+갖춘 단일 maintenance 실행으로 재검증해 retirement PASS/FD store0을 확인했다.
+이것은 원 GPU numerical `FAILED`를 기록한 정리이며 canonical publication이나
+Workflow 성공 변경이 아니다. root controller failed 기록도 그대로다.
+
+정리 영수증은 기존 lifetime root의 exact unit/invocation 아래 `retirement/result.json`,
+SHA-256 `5cabbc3cccdc986ffd32e45aa71a0e8364e25c0ea66c067fde5c7190735f4181`이다.
+추가 계산0/DB행 변경0, exact socket만 stop했고 전역 reset-failed는 하지 않았다.
+새 검색은 사용자에게 명시적으로 요청했으며 자동 재제출하지 않았다. 이번 core source
+변경은 없고 운영 순서/문맥 기록 검사13 PASS·diff check PASS다.

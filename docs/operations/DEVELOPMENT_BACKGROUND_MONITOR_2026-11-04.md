@@ -4,6 +4,19 @@
 이 요청에 한해 주기 보고를 수행하며, 평상시 개발 보고의 milestone 정책은 유지한다.
 제품 runtime이나 자동 복구 기능이 아닌 제거 가능한 개발 관측이다.
 
+2026-11-11 09:01 UTC 사용자 요청에 따라 기출 임베딩을 포함한 기존 정기 Slack
+요약 timer `eom-development-background-report.timer`를 중지·비활성화했다.
+`systemctl --no-reload disable --now` 후 `inactive/disabled`를 확인했다. 처음에는 진행 중
+검색에 전역 daemon reload 지연을 주지 않으려고 reload하지 않았으나, 이 순서도 안전하지
+않았다. systemd255의 `unit_file_state_outdated`가 모든 unit의 `NeedDaemonReload`를
+yes로 바꿔 진행 중 검색의 종료 검증이 거부됐다. 실제 GPU template/descriptor bytes는
+기존 pin과 같았다. **실행 중에는 timer stop만 하고 disable/reload는 그 실행 종료 후
+처리한다.** 이번 실패 이력과 출력은 보존하며 종료 후 reload로 manager 상태를 정리한다.
+이 경과는 `UNIFIED_ITEM_EMBEDDING_GPU_CHECKPOINT_2026-10-31.md`에도 기록한다. 읽기 전용
+`eom-creative-learning-observe.timer`와 `eom-unified-embedding-observe.timer`는
+active/waiting으로 보존하며, INDEX·QUERY·worker 실행을 중지하거나 재시작하지 않았다.
+이는 정기 보고 중단이지 임베딩 작업 중단이나 다른 개발 milestone 보고 금지가 아니다.
+
 기존 `eom-creative-learning-observe.timer`와 `eom-unified-embedding-observe.timer`의
 읽기 전용 관측을 매 10분으로 조정했다. 별도 개발 report timer는 20초 뒤 결과를
 요약한다. GPU observer의 기존 READ ONLY/15초 제한 metadata 조회에 활성 slot Job

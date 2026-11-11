@@ -66,6 +66,13 @@ API·Web·Catalog/Runner·INDEX/QUERY·수치 controller는 다른 설치 source
 무조건 같은 HEAD로 재시작하지 않는다. 동작 중인 수치 runtime pin·실행 계획·worker를
 바꾸지 않고, 변경된 owner만 기존 graceful handoff로 교체하는 방법을 먼저 검토한다.
 
+진행 중인 GPU/QUERY와 무관한 개발 timer라도 `disable --no-reload`는 안전한 무간섭
+작업으로 가정하지 않는다. systemd255의 manager-global unit-file outdated 상태가 모든
+unit의 `NeedDaemonReload`를 바꿔 exact-runtime 종료 검증을 거부시킬 수 있다. 보고만
+멈출 때는 우선 timer stop을 사용하고, enable/disable와 daemon reload는 관련 실행이
+끝난 시점에 수행한다. 실제 pin/권한 검증을 제거해 회피하지 않는다. 발생 근거는
+`docs/operations/UNIFIED_ITEM_EMBEDDING_GPU_CHECKPOINT_2026-10-31.md`의11월11일 기록이다.
+
 API 업데이트에서는 QUERY unit의 기존 `Requires=eom-api.service`와 provider의
 API commit/wheel/code-member hash pin을 함께 본다. API/Web만 교체하는 것으로
 독립 배포가 된다고 추정하지 않는다. public/private wrapper hash와 Catalog/chat/runtime
