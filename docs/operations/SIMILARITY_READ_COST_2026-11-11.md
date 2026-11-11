@@ -2,6 +2,18 @@
 
 설계: [조회 비용](../architecture/SIMILARITY_SEARCH_READ_COST.md).
 
+## 최종 판정
+
+2026-11-11 16:51 UTC, 구현·회귀 검증·호환 운영 배포 및 실제 사용자 경로 확인을 완료했다.
+사용자가 새 검색의 **결과5개 표시 → 문항 열기 → 같은 최근 기록 다시 불러오기**를 모두
+확인했다. 재조회는10.498초였고 원 ranking revision/hash·선택 목록·native launch1회가
+그대로다. 아래 단계별 PENDING/실패 기록은 당시 상태이며, 최종 증거는 문서 끝에 덧붙인다.
+
+같은 기존 기록의 재조회22.735→10.241초(약55% 단축)는 동등 요청 비교다. 새 검색은
+READY까지4분10초, 첫 결과 HTTP까지6분2.5초였으므로 최초 검색이 수초로 단축됐다고
+주장하지 않는다. 기존 데이터·실패 이력은 보존했으며 별도 신규 요청 사이 QUERY 벡터
+재사용은 도입하지 않았다.
+
 ## 보존할 기준선
 
 사용자가 결과 목록과 문항 열기를 확인한 기존 완료 검색을 비교 대상으로 유지한다.
@@ -117,9 +129,9 @@ source 검사와 같다. 새 GPU/모델/검색 실행은 없으며, GUI 전체 �
 | 기존 결과·순서·정본 보존 | 같은 search/selector/ranking revision·SHA 유지, 사용자 목록·열기 확인 | PASS |
 | 현재 권한·provenance 보존 | before/after SQL closure, warm cache의 철회·변조 거부, disposable 동시성 회귀 | PASS |
 | 완료 기록 재조회 개선·중복 계산 없음 | 실제 HTTP22.735→10.241초, native launch1회 그대로, 사용자 확인 | PASS |
-| 최초 검색 반복 해석 개선 | strict decoder 재사용 소스·설치본 측정 및 QUERY/Catalog 배포 | 구현·배포 PASS; 실제 전체 시간 PENDING |
+| 최초 검색 반복 해석 개선 | strict decoder 재사용 소스·설치본 측정 및 QUERY/Catalog 배포; 새 검색 단계별 시간과 전체 보고서1회 해석 확인 | PASS; 최초 검색은 여전히 분 단위 |
 | 동일 QUERY 재사용·GPU 연속 처리 검토 | 동일 요청 재사용 유지; 다른 요청 reuse는 새 증명 필요; finite batch 모델 load1회/encode N회 회귀 | 검토 완료; 별도 상주 서비스 추가 안 함 |
-| 배포 후 새 GUI 검색→목록→문항 열기→동일 요청 재조회 | 후속 조회 시각까지 새 search row 없음 | PENDING |
+| 배포 후 새 GUI 검색→목록→문항 열기→동일 요청 재조회 | 새 검색384의 사용자 확인 및 재조회 동일 ranking/hash·native launch1회 유지 | PASS |
 
 다음 행동은 이미 요청한 사용자 GUI 검색1건을 관측하는 것이다. 새 요청 없이 ready 상태나
 내부 benchmark만으로 완료 선언하지 않는다. 사용자 세션을 만들어내거나 과거 operator
@@ -185,3 +197,28 @@ CUDA이며 원 QUERY native launch는1회다. 이전 기준선과 selection SHA�
 
 사용자에게 새 결과5개 표시·문항 열기·같은 최근 기록 다시 불러오기를 요청했다.
 해당 수동 확인과 재조회 동일 hash/launch 검증 전까지 전체 목표 완료는 PENDING이다.
+
+## 최종 사용자 확인과 동일 요청 재조회
+
+사용자 확인: **“5개 보이고, 문항 열기·다시 불러오기 모두 돼”**.
+실제 HTTPS GUI에서 요청한 새 검색의 결과 열람부터 DB 문항 조회와 최근 기록 재열람까지
+확인한 것이며, health나 테스트 통과로 이를 대신하지 않았다.
+
+- 재조회 HTTP `req_a0033a97b611eed5917c24c2f1fc211f`는16:49:40.389722 UTC에
+  **10,497.721ms**로 완료됐다. Catalog 저장 결과 읽기는10,139ms이며 전후 SQL
+  dependency 확인5,199/4,766ms를 포함한다. 결과를 새로 구성한112.702초와 구분한다.
+- 16:51:16 UTC read-only 대조에서 같은 search384·selection SHA·Workflow COMPLETED와
+  ranking revision `rev_9fdbbf81f56f41f3b34e9bb9c707fb40`가 유지됐다.
+  content SHA `sha256:fc09d332512005202b4a618561589e2571f8718f60e3acd8f059e3f1c3166a39`,
+  manifest SHA `sha256:c7a7b759b84b749a3ae28884aab9ee7119f6553b63eb282c0d8be10d7e2d4e25`,
+  saved Job·Artifact 생성 시각·크기도 최초 결과와 동일하다.
+- 원 native Job `job_22b2fca74a4e45c68fbcfbd6d55baf22`의 launch는1회다.
+  재조회 때문에 GPU 재실행·새 ranking 저장·원 요청 변경이 발생하지 않았다.
+- 완료 시점의 설치는 Catalog568ed897 / QUERY11d826d2다. API·Web·controller·수치
+  runtime의 기존 pin을 보존했고, 마지막 증거 기록을 위해 runtime을 다시 배포하지 않았다.
+- 이전 인증 만료 검색f160의 FAILED 기록은 그대로다. 별도 INDEX 서비스의 기존 failed
+  상태를 이번 QUERY 성공으로 정상화됐다고 주장하지 않으며 재시작·수정하지 않았다.
+
+현재 범위의 완료 판정은 **PASS**다. 남은 지연은 최초 source/권한 검증·모델 초기화·
+최초 ranking 구성과 재조회 SQL 확인이다. 별도 신규 요청 사이 QUERY 벡터 재사용이나
+상주 GPU 서비스는 이번 필수 범위가 아니며, 측정 없이 새 계층을 추가하지 않는다.
