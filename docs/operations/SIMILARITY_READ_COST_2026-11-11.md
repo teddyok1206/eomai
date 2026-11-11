@@ -248,3 +248,14 @@ API·검색 identity·벡터·권한·DB schema·결과 순서는 바꾸지 않�
   계정 초기화·이전 계정의 늦은 응답에서 단일 시계와 timer 정리를 확인한다.
   기존 단독 view 검사는 보존했다. 운영 검색·GPU 실행은0회다.
 - 변경 테스트의 Ruff/format/mypy, JS syntax, diff 검사와 독립 코드 리뷰를 완료했다.
+- 16:58:10 UTC Web source `4fc1c11a1712d0d2f8ddc6b59bb1e0234ab4d15a`를 운영 반영했다.
+  wheel/RECORD·격리 설치본·실제 service identity 검증73파일 PASS. 이전 wheel 대비
+  변경은 위 두JS와 build-info/RECORD뿐이다. rollback·배포 기록은
+  `/var/lib/eom-web-similarity-elapsed-20261111`에 보존한다.
+- Web 재시작 직후 HTTPS 확인 첫 시도는502였고 기존 bounded 확인의 다음 시도에서
+  정상화됐다. 후속 HTTPS login200·Web smoke PASS. API/Catalog/QUERY/INDEX/creative의
+  PID는 모두 배포 전후 같으며 인증·DB·GPU 실행을 변경하지 않았다.
+- 운영 HTTPS가 제공한 두JS bytes가 수정 source와 일치하며, 그 실제 응답 bytes를
+  메모리에서 로드한 동일 timer 회귀도 PASS다. 이는 fake-clock/DOM의 결정적 검증이며
+  실제 사용자 브라우저 수동 확인으로 과장하지 않는다. 이미 열려 있는 화면에는 새로고침이
+  필요하고, 기존 최근 기록을 열면 되므로 검증을 위해 새 GPU 검색을 만들 필요는 없다.
