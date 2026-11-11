@@ -121,6 +121,12 @@ section/placement/position을 확인해 그 문항이 있는 페이지로 이동
 - `services/catalog_service/eom_catalog_service/creative_item_graph_learning.py`
 - `services/orchestrator/eom_orchestrator/office_picture_use_publication.py`
 
+유사도 결과의 단원도 동일한 원본 Q/R을 쓴다. `item_db_similarity_candidates`가
+`QueryAdapter.original_item_units`를 통해 Catalog `read_creative_registration_sources`의
+최대64개 exact Item/manifest batch를 읽는다. 단건 상세도 같은 source resolver를 사용한다.
+Graph 단원이나 최신 source로 대체하지 않으며, 원본이 없으면 빈 표시로 남긴다.
+완료 ranking/벡터/점수는 바꾸지 않는다.
+
 `apps/web_gui/eom_web_gui/static/item-db.js`가 조회 UI의 시작점이다. 조립은
 `curated_document_assembly_service.py`와 관련 typed manifest를 확인한다. 조립 순서 저장이
 원본-only 문항의 편집 가능한 HWPX 합본 완료를 뜻하지는 않는다.

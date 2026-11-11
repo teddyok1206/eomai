@@ -39,3 +39,17 @@ HTTP에는 source selection과 optional original prepare4만 허용한다. actor
 runtime/model/path/벡터는 받지 않는다. 같은 key로 다른 source/intent를 보내면 명시적 충돌이다.
 완료 결과는 score를 풀이 동일성·과학적 정확성의 확률로 표시하지 않는다. 원래 UI의 작은 진행
 표시와 `조회 → 유사도 → 조회/배치` 이동을 유지한다. 원래 legacy contracts/역사는 수정하지 않는다.
+
+## 결과 목록의 원본 소속 단원 (2026-11-11)
+
+유사도 결과의 `unit_label`은 DB 상세와 동일한 등록 당시 원본 Q/R(대단원/소단원)을
+표시한다. Graph 연결 단원은 검색 근거로 유지하되 원본 소속 단원의 대체값이 아니다.
+원본 정보가 없는 기출/AI/외부 문항은 빈 표시로 남긴다.
+
+기존 Catalog `read_creative_registration_source`를 bounded batch 조회로 확장하고
+단건도 같은 구현을 사용한다. API는 기존 CONTENT_INTAKE_READ/ITEM_READ 인가 후
+결과의 exact Item Revision/manifest hash로 원본 revision을 조회한다. source current로
+대체하지 않고 lifecycle/import/lineage 불일치는 기존 source 오류로 반환한다.
+최대64개의 indexed identity 조회 두 번과 O(k) map 결합이며 N+1/새 cache/DB migration/
+wire schema 변경은 없다. 조회 트랜잭션만 사용하고 순위·점수·완료 검색·재전송/계산
+소유권은 변경하지 않는다. UI에서 문항마다 별도 조회하는 대안은 N+1이므로 쓰지 않는다.

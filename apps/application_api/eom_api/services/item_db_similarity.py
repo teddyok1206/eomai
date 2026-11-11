@@ -37,14 +37,12 @@ def item_db_similarity_candidates(
         else ()
     )
     by_revision = {entry.item_revision_id: entry for entry in entries}
+    original_units = metadata.original_item_units(entries) if entries else {}
     return tuple(
         ItemDbSimilarityCandidate(
             entry=by_revision[candidate.source.item_revision_id],
             label=by_revision[candidate.source.item_revision_id].source_display_label,
-            unit_label=" · ".join(
-                unit.label
-                for unit in by_revision[candidate.source.item_revision_id].curriculum_units
-            ),
+            unit_label=" → ".join(original_units[candidate.source.item_revision_id])[:512],
             cosine_millionths=candidate.observation.cosine_millionths,
         )
         for candidate in result.candidates

@@ -168,7 +168,13 @@ def flow():
             return_value=tuple(
                 candidate_view(candidate.source) for candidate in value.context.candidates
             )
-        )
+        ),
+        original_item_units=Mock(
+            return_value={
+                candidate.source.item_revision_id: ("원본 대단원", "원본 소단원")
+                for candidate in value.context.candidates
+            }
+        ),
     )
     app = ItemDbSimilarityApplicationService(selector, queries, results, metadata)
     body = ItemDbSimilarityInput(selection=value.selection, pinned_query=value.query)
@@ -367,6 +373,57 @@ def test_unavailable_search_does_not_encode_or_synthesize_zero_vectors(flow):
     assert result.status == "UNAVAILABLE" and result.candidates == ()
     flow.results.read_public.assert_not_called()
     flow.metadata.selected_production_item_candidates.assert_not_called()
+
+
+def test_similarity_units_use_original_source_not_graph_without_reranking(flow):
+    result = flow.app.search(flow.context, flow.body, idempotency_key=flow.value.key)
+    assert all(
+        candidate.unit_label == "원본 대단원 → 원본 소단원" for candidate in result.candidates
+    )
+    assert tuple(candidate.cosine_millionths for candidate in result.candidates) == tuple(
+        candidate.observation.cosine_millionths for candidate in flow.value.context.candidates
+    )
+    flow.metadata.original_item_units.assert_called_once_with(
+        flow.metadata.selected_production_item_candidates.return_value
+    )
+    flow.metadata.original_item_units.return_value = {
+        candidate.source.item_revision_id: () for candidate in flow.value.context.candidates
+    }
+    repeated = flow.app.search(flow.context, flow.body, idempotency_key=flow.value.key)
+    assert all(candidate.unit_label == "" for candidate in repeated.candidates)
+    assert tuple(candidate.entry for candidate in repeated.candidates) == tuple(
+        candidate.entry for candidate in result.candidates
+    )
+
+
+def test_original_unit_adapter_calls_catalog_once_and_preserves_exact_manifest(flow, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from eom_catalog_service.external_item_read_service import ExternalItemReadError
+
+    entries = flow.metadata.selected_production_item_candidates.return_value
+    adapter = object.__new__(QueryAdapter)
+    adapter.sessions = MagicMock()
+    read = Mock(
+        return_value={
+            entry.item_revision_id: NS(major_unit="원본 대단원", minor_unit="  ")
+            for entry in entries
+        }
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.external_item_read_service.read_creative_registration_sources", read
+    )
+    assert adapter.original_item_units(entries) == {
+        entry.item_revision_id: ("원본 대단원",) for entry in entries
+    }
+    assert read.call_args.kwargs["item_manifests"] == {
+        entry.item_revision_id: entry.item_manifest_sha256 for entry in entries
+    }
+    read.assert_called_once()
+    read.side_effect = ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned source unavailable")
+    with pytest.raises(ApiError) as raised:
+        adapter.original_item_units(entries)
+    assert raised.value.error_code == "ITEM_DB_SOURCE_STALE"
 
 
 def test_navigation_is_one_indexed_batch_and_cannot_change_the_original_content_hash(flow):

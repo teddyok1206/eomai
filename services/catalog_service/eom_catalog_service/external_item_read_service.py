@@ -8,6 +8,7 @@ resolved separately through the existing authenticated media boundary.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -24,7 +25,7 @@ from eom_catalog_contracts.external_item_filter_options import (
     ExternalItemDbFilterOptions,
     ItemDbCategoricalFieldOptions,
 )
-from sqlalchemy import Select, and_, case, column, func, or_, select, true
+from sqlalchemy import Select, and_, case, column, func, or_, select, true, tuple_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
@@ -419,26 +420,49 @@ def read_creative_registration_source(
     source_namespace: str,
 ) -> ExternalItemListEntry | None:
     """Resolve original metadata through exact registration, never Graph alignment."""
-    row = session.execute(
+    return read_creative_registration_sources(
+        session,
+        item_manifests={item_revision_id: manifest_sha256},
+        source_namespace=source_namespace,
+    )[item_revision_id]
+
+
+def read_creative_registration_sources(
+    session: Session,
+    *,
+    item_manifests: Mapping[str, str],
+    source_namespace: str,
+) -> dict[str, ExternalItemListEntry | None]:
+    """Two bounded indexed reads for exact Items; absent origin is not a Graph unit."""
+    if not item_manifests:
+        return {}
+    if len(item_manifests) > 64:
+        raise ExternalItemReadError("EXTERNAL_ITEM_QUERY_INVALID", "too many Item revisions")
+    rows = session.execute(
         select(ItemRevisionRecord, ItemRecord.lifecycle_state)
         .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
-        .where(ItemRevisionRecord.item_revision_id == item_revision_id)
-    ).one_or_none()
-    if row is None:
+        .where(ItemRevisionRecord.item_revision_id.in_(item_manifests))
+    ).all()
+    if {item.item_revision_id for item, _ in rows} != set(item_manifests):
         raise ExternalItemReadError("ITEM_DB_SOURCE_NOT_FOUND", "Item revision not found")
-    item, lifecycle = row
-    if item.manifest_sha256 != manifest_sha256:
-        raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned Item manifest differs")
-    if lifecycle != "ACTIVE" or item.revision_state == "RETIRED":
-        raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Item is no longer available")
-    creative_key = (item.registration_key or "").startswith(CREATIVE_REGISTRATION_KEY_PREFIX)
-    if item.metadata_json.get("source_kind") != "CREATIVE":
-        if creative_key:
+    creative_ids = set()
+    for item, lifecycle in rows:
+        if item.manifest_sha256 != item_manifests[item.item_revision_id]:
+            raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned Item manifest differs")
+        if lifecycle != "ACTIVE" or item.revision_state == "RETIRED":
+            raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Item is no longer available")
+        creative_key = (item.registration_key or "").startswith(CREATIVE_REGISTRATION_KEY_PREFIX)
+        if item.metadata_json.get("source_kind") == "CREATIVE":
+            creative_ids.add(item.item_revision_id)
+        elif creative_key:
             raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Creative lineage differs")
-        return None
+    result: dict[str, ExternalItemListEntry | None] = dict.fromkeys(item_manifests)
+    if not creative_ids:
+        return result
     source, revision = ExternalItemSourceRecord, ExternalItemSourceRevisionRecord
-    value = session.execute(
-        select(*_list_columns())
+    values = session.execute(
+        select(ItemRevisionRecord.item_revision_id, *_list_columns())
+        .select_from(source)
         .join(revision, revision.source_id == source.source_id)
         .join(ItemRevisionRecord, creative_registration_source_condition())
         .join(ExternalItemImportRecord, ExternalItemImportRecord.import_id == revision.import_id)
@@ -447,16 +471,18 @@ def read_creative_registration_source(
             ContentIntakeSourceFileRecord.source_file_id == revision.selected_source_file_id,
         )
         .where(
-            ItemRevisionRecord.item_revision_id == item_revision_id,
-            ItemRevisionRecord.manifest_sha256 == manifest_sha256,
+            tuple_(ItemRevisionRecord.item_revision_id, ItemRevisionRecord.manifest_sha256).in_(
+                [(revision_id, item_manifests[revision_id]) for revision_id in sorted(creative_ids)]
+            ),
             ItemRevisionRecord.metadata_json["import_id"].as_string() == revision.import_id,
             source.source_namespace == source_namespace,
             ExternalItemImportRecord.state == "COMPLETED",
         )
-    ).one_or_none()
-    if value is None:
+    ).all()
+    if len(values) != len(creative_ids) or {value[0] for value in values} != creative_ids:
         raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned creative source unavailable")
-    return ExternalItemListEntry(*value)
+    result.update((value[0], ExternalItemListEntry(*value[1:])) for value in values)
+    return result
 
 
 def list_external_item_sources(

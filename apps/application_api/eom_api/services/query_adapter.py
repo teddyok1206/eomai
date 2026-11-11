@@ -1647,6 +1647,36 @@ class QueryAdapter:
             ),
         )
 
+    def original_item_units(
+        self, entries: tuple[ProductionItemCandidateViewContract, ...]
+    ) -> dict[str, tuple[str, ...]]:
+        """Use the same pinned Catalog source read as DB detail, in one batch."""
+        from eom_catalog_service.external_item_read_service import (
+            ExternalItemReadError,
+            read_creative_registration_sources,
+        )
+
+        try:
+            with self.sessions() as session:
+                sources = read_creative_registration_sources(
+                    session,
+                    item_manifests={
+                        entry.item_revision_id: entry.item_manifest_sha256 for entry in entries
+                    },
+                    source_namespace="notion-integrated-science",
+                )
+        except ExternalItemReadError as exc:
+            status = 404 if exc.code == "ITEM_DB_SOURCE_NOT_FOUND" else 409
+            raise ApiError(status, exc.code, "Original source unavailable", str(exc)) from exc
+        return {
+            revision_id: tuple(
+                value for value in (source.major_unit, source.minor_unit) if value and value.strip()
+            )
+            if source is not None
+            else ()
+            for revision_id, source in sources.items()
+        }
+
     @staticmethod
     def _current_assessment_snapshot_id(session: Session) -> str | None:
         corpus = session.scalar(
