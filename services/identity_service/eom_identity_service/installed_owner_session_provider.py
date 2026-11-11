@@ -60,6 +60,9 @@ _UNIT_PROPERTIES = frozenset(
     }
 )
 _ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TZ": "UTC"}
+# Retry only the read-only systemd observation. Keep its total budget below
+# the ten-second capture exchange; never replay authentication or application work.
+_UNIT_OBSERVATION_TIMEOUTS = (2, 3)
 
 
 def _failure() -> OwnerSessionTransportError:
@@ -163,20 +166,27 @@ class InstalledIdentityProviderObservation:
 
 
 def _unit() -> dict[str, str]:
-    response = subprocess.run(
-        (
-            "/usr/bin/systemctl",
-            "--no-pager",
-            "show",
-            "eom-api.service",
-            *("--property=" + name for name in sorted(_UNIT_PROPERTIES)),
-        ),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=False,
-        timeout=2,
-        env=_ENV,
-    )
+    for timeout in _UNIT_OBSERVATION_TIMEOUTS:
+        try:
+            response = subprocess.run(
+                (
+                    "/usr/bin/systemctl",
+                    "--no-pager",
+                    "show",
+                    "eom-api.service",
+                    *("--property=" + name for name in sorted(_UNIT_PROPERTIES)),
+                ),
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=timeout,
+                env=_ENV,
+            )
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    else:
+        raise _failure()
     if response.returncode or response.stderr or len(response.stdout) > 8192:
         raise _failure()
     result: dict[str, str] = {}

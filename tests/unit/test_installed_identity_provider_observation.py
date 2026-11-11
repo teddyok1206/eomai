@@ -6,12 +6,14 @@ Never root, installed provider, authentication, DB or model acceptance evidence.
 from __future__ import annotations
 
 import os
+import subprocess
 from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -20,6 +22,8 @@ from eom_identity_service.owner_session_transport import (
     FixedIdentityProviderPin,
     OwnerSessionTransportError,
 )
+
+_ORIGINAL_UNIT_READER = module._unit
 
 
 @pytest.fixture
@@ -132,6 +136,81 @@ def assert_current(value):
         wheel_sha256=value.pin.wheel_sha256,
         configuration_sha256=value.pin.configuration_sha256,
     )
+
+
+def test_provider_unit_timeout_retries_only_observation_and_does_not_cache(monkeypatch):
+    output = "\n".join(name + "=synthetic" for name in sorted(module._UNIT_PROPERTIES)).encode()
+    response = SimpleNamespace(returncode=0, stdout=output, stderr=b"")
+    run = Mock(side_effect=[subprocess.TimeoutExpired("systemctl", 2), response, response])
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert set(module._unit()) == module._UNIT_PROPERTIES
+    assert [call.kwargs["timeout"] for call in run.call_args_list] == [2, 3]
+    assert run.call_args_list[0].args == run.call_args_list[1].args
+    assert run.call_args.args[0][:4] == (
+        "/usr/bin/systemctl",
+        "--no-pager",
+        "show",
+        "eom-api.service",
+    )
+    assert run.call_args.kwargs["env"] == {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TZ": "UTC"}
+    assert set(module._unit()) == module._UNIT_PROPERTIES
+    assert run.call_count == 3 and run.call_args.kwargs["timeout"] == 2
+
+
+def test_persistent_provider_unit_timeout_is_bounded_and_redacted(monkeypatch):
+    run = Mock(side_effect=subprocess.TimeoutExpired("systemctl", 2, output=b"private detail"))
+    monkeypatch.setattr(module.subprocess, "run", run)
+    with pytest.raises(OwnerSessionTransportError, match=r"^OWNER_SESSION_PROVIDER_UNAVAILABLE$"):
+        module._unit()
+    assert [call.kwargs["timeout"] for call in run.call_args_list] == [2, 3]
+
+
+@pytest.mark.parametrize("fault", ("exit", "stderr", "partial", "duplicate", "os_error"))
+def test_provider_observation_retry_never_accepts_invalid_reply(monkeypatch, fault):
+    output = "\n".join(name + "=synthetic" for name in sorted(module._UNIT_PROPERTIES)).encode()
+    response = SimpleNamespace(returncode=0, stdout=output, stderr=b"")
+    if fault == "exit":
+        response.returncode = 1
+    elif fault == "stderr":
+        response.stderr = b"denied"
+    elif fault == "partial":
+        response.stdout = b"MainPID=123"
+    elif fault == "duplicate":
+        response.stdout += b"\nUser=duplicate"
+    run = Mock(
+        side_effect=[
+            subprocess.TimeoutExpired("systemctl", 2),
+            OSError("denied") if fault == "os_error" else response,
+        ]
+    )
+    monkeypatch.setattr(module.subprocess, "run", run)
+    with pytest.raises((OwnerSessionTransportError, OSError)):
+        module._unit()
+    assert run.call_count == 2
+
+
+@pytest.mark.parametrize("changed", (False, True))
+def test_provider_identity_is_still_checked_after_observation_retry(
+    observation, monkeypatch, changed
+):
+    value, properties, *_ = observation
+    # Keep the fixture's FD/ownership seams and exercise the real subprocess reader.
+    if changed:
+        properties["InvocationID"] = "d" * 32
+    response = SimpleNamespace(
+        returncode=0,
+        stderr=b"",
+        stdout="\n".join(f"{key}={item}" for key, item in properties.items()).encode(),
+    )
+    run = Mock(side_effect=[subprocess.TimeoutExpired("systemctl", 2), response, response])
+    monkeypatch.setattr(module.subprocess, "run", run)
+    monkeypatch.setattr(module, "_unit", _ORIGINAL_UNIT_READER)
+    if changed:
+        with pytest.raises(OwnerSessionTransportError):
+            assert_current(value)
+    else:
+        assert_current(value)
+    assert run.call_count == (2 if changed else 3)
 
 
 def test_fresh_auth_policy_uses_only_current_pinned_configuration(observation):

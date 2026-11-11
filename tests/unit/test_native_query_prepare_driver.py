@@ -158,6 +158,26 @@ def test_diagnostic_failure_cannot_disclose_original_error_or_change_outcome(
     hook.assert_not_called()
 
 
+def test_driver_reports_closed_authority_codes_without_private_error_text(caplog):
+    outer = ValueError("private outer message")
+    outer.code = "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE"
+    inner = ValueError("private inner message")
+    inner.code = "AUTHENTICATED_SESSION_CONTEXT_INVALID"
+    outer.__context__ = inner
+    drive._record_driver_failure("ROUTED", outer)
+    assert (
+        "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE,AUTHENTICATED_SESSION_CONTEXT_INVALID"
+        in caplog.text
+    )
+    assert "private" not in caplog.text
+    caplog.clear()
+    outer.code = "private arbitrary value"
+    inner.code = "OWNER_SESSION_NOT_SAFE\nprivate"
+    drive._record_driver_failure("ROUTED", outer)
+    assert "codes=UNCLASSIFIED" in caplog.text
+    assert "private" not in caplog.text
+
+
 @pytest.mark.parametrize("error_type", (KeyboardInterrupt, SystemExit))
 def test_interrupted_child_is_unknown_without_an_excepthook_disclosure(
     application, monkeypatch, error_type

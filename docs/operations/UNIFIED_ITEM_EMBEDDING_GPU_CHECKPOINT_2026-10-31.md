@@ -4172,3 +4172,45 @@ Graph/policy 검증, legacy 1/2 및 개별 shard 한도는 유지한다. DB·wir
 배포 확인은 실제 검색 성공 판정이 아니다. 사용자에게 **같은 요청의 결과 확인만**
 요청했다. 새 검색·계산 중복 제출·실패 이력 변경·구형 벡터 삭제는 하지 않았다.
 현재 최종 GUI 결과 목록·문항 열기·저장 결과 재조회 검증은 이어서 진행한다.
+
+### 04:59 UTC — provider 관측 지연 후속 오류
+
+사용자 문의 `webreq_1162f025906f89c61fd13f7a`의 오류는
+`REFERENCE_QUERY_PREPARE_UNAVAILABLE`다. 해당 시간대에는 처음의 index 크기 오류가
+아닌 `ADMIT_PROVIDER / OWNER_SESSION_PROVIDER_UNAVAILABLE`가 2,003ms에 발생했다.
+이 단계의 유일한 2초 외부 대기는 Identity의 고정 `systemctl show eom-api.service`
+읽기다. API PID/Invocation은 동일하고, 검색 service namespace 및 실제 lower UID로
+같은 읽기를 재확인한 세 번은 7/5/5ms에 같은 identity를 반환했다. 비밀번호 변경이나
+인증 실패 반복은 하지 않았다. 같은 요청은 여전히 PENDING이며 새 검색을 만들지 않았다.
+
+기존 Identity observer에서 이 읽기의 timeout만 2초 후 3초 한 번 재시도한다.
+persistent timeout·잘못된 출력·현재 파일/프로세스 변경은 계속 거부한다. 호출마다
+다시 읽으며 인증/검색 application을 재전송하지 않는다. capture의 10초 마감과
+fresh-auth 설정은 늘리지 않으며 그 마감을 넘으면 기존대로 거부한다.
+DB/schema/서비스 권한 변경은 없다. 별도 공통 프레임워크보다 담당 observer 안의
+유한 read retry가 이 장애에 가장 작은 수정이다.
+
+뒤쪽 driver에서도 권한 오류가 발견돼 원인 코드가 소거되지 않도록 제한된 authority
+code만 진단에 추가했다. exception 본문/traceback/인증값/문항은 기록하지 않는다.
+이 후속 오류를 아직 해결됐다고 판정하지 않으며 같은 사용자 요청에서 재확인해야 한다.
+source의 observer/transport/capture 검사 135 PASS, observer/driver 검사 61 PASS;
+Ruff/format/mypy PASS. 실제 운영 및 검색 종료 증거는 후속 기록에서 구분한다.
+
+QUERY successor `6371cae6d312505d1eef84fac9b67df8755eb7fe`의 설치본 owner 검사도
+140 PASS다. 최초 설치 검사에 포함한 HTTP 통합 harness 3개는 최신 API를 구형 QUERY
+library path와 같은 Python 프로세스에 import하여 `content_delivery` 미존재로 실패했다.
+실제 배포는 별도 프로세스이므로 이 세 개는 API 환경의 앞선 135 PASS로 확인하고,
+QUERY 환경에서는 owner/Unix transport 검사만 실행했다. 실패 로그는 보존하며
+이 import 오류를 인증/GPU 런타임 오류로 분류하거나 무관한 모듈을 QUERY에 넣지 않았다.
+
+05:09 UTC compatible QUERY 교체 완료. 보호된 배포·rollback 기록은
+`/var/lib/eom-query-provider-recovery-20261111`이며 Platform wheel SHA는
+`dfd5dc752421c25d6bfa436ff196395f86f136398ecc818a1ffc0a068d9f9c91`이다.
+API/Web/슬롯/INDEX의 PID·InvocationID 및 수치 runtime/config pin은 보존했다.
+
+05:10 사용자가 같은 요청의 결과 확인을 눌렀고 준비 호출이 5.5초에 응답했다.
+기존 search에 CUDA / `workflow_d97b5d1f99254a5dba5b0e5119884907`가 연결됐다.
+이 Workflow는 앞선 driver에서 05:00:13에 만들어졌지만 API child에는 아직 연결되지
+않았던 원래 멱등 작업이다. 새 Workflow를 만들거나 원래 기록을 고치지 않고 정상
+재조회가 이 작업을 찾아 연결했다. 당시 상태는 REQUESTED/PENDING이며, 준비 복구를
+수치 실행·결과 목록 완료로 확대하지 않는다.

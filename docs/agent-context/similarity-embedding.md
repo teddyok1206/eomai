@@ -160,6 +160,12 @@ QUERY의 실패 단계와 같은 요청의 실제 상태를 먼저 본다. API R
 GUI 결과 목록 성공으로 대체하지 않는다. `결과 확인`의 부작용, CSRF/session 갱신,
 stale pin, 결과 materialization을 구분한다. 새로운 key로 우회하기 전에 원래 요청을 읽는다.
 
+`ADMIT_PROVIDER / OWNER_SESSION_PROVIDER_UNAVAILABLE`는 사용자 비밀번호 오류와 다르다.
+Identity의 installed provider observer가 실제 API process/file identity를 검사한다.
+systemd 읽기 timeout만 2/3초로 한 번 재시도하며, 잘못된 응답·교체된 프로세스·파일은
+그대로 거부한다. 로그인·session capture·검색 submit을 재시도하거나 권한을 캐시하지 않는다.
+QUERY driver 진단은 제한된 authority 오류 코드와 위치만 남기며 원문/인증값은 남기지 않는다.
+
 구형 벡터는 모든 참조 전환과 새 검색 검증 전에는 지우지 않는다. 기존 520개 기출 모집단,
 승인 Item 수, view별 binding 수, 재시작 후 traversal 수는 다른 분모다.
 

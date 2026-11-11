@@ -47,14 +47,27 @@ def _record_driver_failure(mode: Literal["ROUTED", "WORKFLOW"], error: BaseExcep
     name = type(error).__name__
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
         name = "Exception"
+    codes: list[str] = []
+    cause: BaseException | None = error
+    for _ in range(4):
+        if cause is None:
+            break
+        code = getattr(cause, "code", None)
+        if isinstance(code, str) and re.fullmatch(
+            r"(?:EMBEDDING_REGISTRY|OPERATOR_AUTHORIZATION_FENCE|AUTHENTICATED_SESSION|OWNER_SESSION)_[A-Z_]{1,64}",
+            code,
+        ):
+            codes.append(code)
+        cause = cause.__cause__ or cause.__context__
     # A broken diagnostic sink must not expose the original private error
     # through threading.excepthook or leave the actual handle falsely busy.
     with suppress(Exception):
         _LOGGER.warning(
-            "REFERENCE_QUERY_DRIVER_STOPPED mode=%s error_type=%s sites=%s",
+            "REFERENCE_QUERY_DRIVER_STOPPED mode=%s error_type=%s sites=%s codes=%s",
             mode,
             name,
             ",".join(sites),
+            ",".join(codes) or "UNCLASSIFIED",
         )
 
 
