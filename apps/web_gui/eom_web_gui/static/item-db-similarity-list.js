@@ -29,9 +29,14 @@ export function createItemDbSimilarityList({document, searches, previewSelection
   let polling = null;
   let observationFailures = 0;
   let elapsedTimer = null;
+  let readingResults = false;
   let previewGeneration = 0;
   let displayKey = null;
   const view = createItemDbSimilarity({document, activate, openSelection,
+    onProgress(processing) {
+      readingResults = processing;
+      progress();
+    },
     async search() {
       const record = current, position = ordinal, capturedOwner = owner, capturedEpoch = epoch;
       if (!record?.children[position]?.selection) throw new Error("선택한 기준 문항의 계산이 아직 끝나지 않았습니다.");
@@ -74,11 +79,17 @@ export function createItemDbSimilarityList({document, searches, previewSelection
   }
 
   function progress() {
-    const running = busy || current?.status === "PENDING" || current?.status === "PREPARING";
+    const running = busy || readingResults || current?.status === "PENDING" || current?.status === "PREPARING";
     $("#item-db-similarity-progress").hidden = !running;
     $("#item-db-similarity-tab-progress").hidden = !running;
-    if (!running) return;
-    $("#item-db-similarity-progress-label").textContent = busy ? "검색 상태 확인 중"
+    if (!running) {
+      if (elapsedTimer !== null) clearInterval(elapsedTimer);
+      elapsedTimer = null;
+      return;
+    }
+    if (elapsedTimer === null) elapsedTimer = setInterval(progress, 1000);
+    $("#item-db-similarity-progress-label").textContent = readingResults ? "결과 불러오는 중"
+      : busy ? "검색 상태 확인 중"
       : current?.status === "PREPARING" ? "검색 준비 중"
         : current?.device ? "유사도 계산 중" : "작업 순서를 기다리고 있습니다";
     // This is elapsed wall time, not an invented GPU percentage or completion estimate.
@@ -221,7 +232,6 @@ export function createItemDbSimilarityList({document, searches, previewSelection
     }
     const request = generation, capturedEpoch = epoch, searchId = current.search_id;
     busy = true; controls();
-    if (elapsedTimer === null) elapsedTimer = setInterval(progress, 1000);
     try {
       const value = validRecord(await searches.check(searchId), searchId);
       if (request !== generation || capturedEpoch !== epoch) return;

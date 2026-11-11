@@ -131,6 +131,11 @@ staged member hash를 함께 고정해 같은 successor 경계에서만 복구�
 응답 때문에 원래 pin을 잃고 새 계산을 제출하지 않도록 한다. 결과 문항은 정본 revision으로
 DB 조회와 조립 선택에 돌아가야 한다.
 
+목록의 진행 표시와 경과시간 timer는 `item-db-similarity-list.js`가 단독 소유한다.
+하위 결과 view는 `onProgress`로 조회 중 상태만 알리며 공유 DOM이나 별도 timer를 갱신하지
+않는다. 기준은 서버 검색의 `created_at`이고, 결과 조회·기준 문항 전환에서 시간을0으로
+되돌리지 않는다. timer callback을 실제 호출하는 회귀로 두 시계의 덮어쓰기를 검사한다.
+
 검색 결과의 exact Item 해석은 API `item_candidate_navigation.py`가 담당한다.
 `QueryAdapter.selected_production_item_candidates()`는 공개 진입점을 유지하며 기존
 후보 조회를 한 번만 호출한다. canonical artifact member와 worker staging alias는

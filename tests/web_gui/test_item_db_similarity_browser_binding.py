@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-def test_similarity_start_and_observe_include_csrf_and_single_json_encoding():
+def test_similarity_start_and_observe_include_csrf_and_single_json_encoding() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the production browser transport check")
@@ -65,7 +65,7 @@ vm.runInContext(transport+'\nthis.searches='+binding+';',context);
     assert result.returncode == 0, result.stderr
 
 
-def test_preparing_progress_and_failed_observation_preserve_original_query_pin():
+def test_preparing_progress_and_failed_observation_preserve_original_query_pin() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the production presentation check")
@@ -85,7 +85,7 @@ def test_preparing_progress_and_failed_observation_preserve_original_query_pin()
     assert "similarity_preparing_original_pin_and_timeout_replay=PASS" in result.stdout
 
 
-def test_relogin_preserves_same_request_without_credentials_or_automatic_execution():
+def test_relogin_preserves_same_request_without_credentials_or_automatic_execution() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the production presentation check")
@@ -109,7 +109,7 @@ def test_relogin_preserves_same_request_without_credentials_or_automatic_executi
     assert "itemDb.setOwner(null)" in logout
 
 
-def test_list_history_preview_selection_and_completed_confirmation_have_no_recompute():
+def test_list_history_preview_selection_and_completed_confirmation_have_no_recompute() -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the production presentation check")
@@ -127,3 +127,23 @@ def test_list_history_preview_selection_and_completed_confirmation_have_no_recom
     )
     assert result.returncode == 0, result.stderr
     assert "item_db_list_history_result_reads=PASS" in result.stdout
+
+
+def test_list_and_result_reads_share_one_original_search_elapsed_clock() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the production elapsed timer check")
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            node,
+            "--experimental-default-type=module",
+            str(root / "tests/web_gui/item_db_similarity_elapsed_checks.mjs"),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "item_db_similarity_single_elapsed_owner=PASS" in result.stdout

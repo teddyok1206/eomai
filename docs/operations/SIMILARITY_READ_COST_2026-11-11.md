@@ -222,3 +222,29 @@ CUDA이며 원 QUERY native launch는1회다. 이전 기준선과 selection SHA�
 현재 범위의 완료 판정은 **PASS**다. 남은 지연은 최초 source/권한 검증·모델 초기화·
 최초 ranking 구성과 재조회 SQL 확인이다. 별도 신규 요청 사이 QUERY 벡터 재사용이나
 상주 GPU 서비스는 이번 필수 범위가 아니며, 측정 없이 새 계층을 추가하지 않는다.
+
+## 후속: 경과시간 표시 충돌
+
+위 검색 완료 확인 이후 사용자가 `요청 후5분25초` 등의 시간이 오가는 현상을 보고했다.
+운영 HTTPS가 제공하는 두 JS의 SHA가 source와 같음을 확인하고, 실제 presentation module에
+합성 시계·지연 결과 응답을 연결해 재현했다. 목록 controller는 서버 `created_at`부터,
+내부 결과 view는 결과 읽기를 시작한 `startedAt`부터 같은 DOM을 갱신했다. 두1초 timer를
+실행하면 같은 시각에 `요청 후5분26초`와 `요청 후1초`가 차례로 표시됐다. 실제 검색이나
+GPU를 추가 실행하지 않고 재현한 프론트엔드 소유권 충돌이다.
+
+수정은 기존 두 presentation module에 한정한다. 목록 controller가 진행 표시·timer를
+단독 소유하고, 하위 view는 `onProgress`로 조회 중 상태만 알린다. 단독 view의 기존 진행
+표시는 유지한다. 결과 조회 중에도 원 검색 시각을 쓰며 종료·초기화 때 timer를 제거한다.
+API·검색 identity·벡터·권한·DB schema·결과 순서는 바꾸지 않는다. 운영 반영은 Web만
+대상이며 GPU/QUERY/INDEX와 API·Catalog의 설치 pin을 보존한다.
+
+검증·운영 반영 결과는 아래에 기록한다. 이 후속은 앞선 속도 개선 목표를 다시 여는 것이
+아니라 사용자에게 확인된 별도 표시 오류 수정이다.
+
+- 기존 Web suite483 PASS / 기존 opt-in browser13 SKIP. 추가한 타이머 회귀와 인접
+  binding/context 검사는18 PASS. 같은 회귀를 이전 source63895a9b에 메모리로 연결하면
+  READY→지연 결과 단계에서 timer2개로 실패하고, 수정본은1개로 통과한다.
+- 새 회귀는 PENDING→READY/지연 결과·최근 기록 열기·기준 변경·완료 후 중복 요청 없음·
+  계정 초기화·이전 계정의 늦은 응답에서 단일 시계와 timer 정리를 확인한다.
+  기존 단독 view 검사는 보존했다. 운영 검색·GPU 실행은0회다.
+- 변경 테스트의 Ruff/format/mypy, JS syntax, diff 검사와 독립 코드 리뷰를 완료했다.

@@ -48,7 +48,7 @@ function sourceIdentity(selection) {
     : `${selection.kind}:${selection.pointer.source_id}:${selection.pointer.source_revision_id}`;
 }
 
-export function createItemDbSimilarity({document, search, openSelection, activate, continuationStorage}) {
+export function createItemDbSimilarity({document, search, openSelection, activate, continuationStorage, onProgress}) {
   const $ = (selector) => document.querySelector(selector);
   let operation = null;
   let sequence = 0;
@@ -116,6 +116,11 @@ export function createItemDbSimilarity({document, search, openSelection, activat
 
   function progress() {
     const processing = busy || operation?.result?.status === "PENDING";
+    // An enclosing list owns the shared progress DOM and the original request clock.
+    if (onProgress) {
+      onProgress(Boolean(processing));
+      return;
+    }
     $("#item-db-similarity-progress").hidden = !processing;
     $("#item-db-similarity-tab-progress").hidden = !processing;
     if (processing) {
