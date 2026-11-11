@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Literal
@@ -131,6 +132,21 @@ def _contexts(
     )
 
 
+def _unbound_cuda_allocation_expired(history: EmbeddingBatchPlanHistory | None) -> bool:
+    """A consumed finite preparation cannot become executable through another read.
+
+    This is a read outcome, not physical retirement or permission to dispatch.
+    BOUND work may already be publishing a valid result after compute ended.
+    """
+    return (
+        history is not None
+        and history.route is not None
+        and history.route.decision.selected.backend.device == "CUDA"
+        and history.bound is None
+        and time.monotonic_ns() >= history.allocation.control_request.expires_monotonic_ns
+    )
+
+
 def observe_routed_reference_queries(
     session: RoutedReferenceQuerySession,
     prepared: PreparedRoutedReferenceQuerySelection,
@@ -228,8 +244,10 @@ def observe_routed_reference_queries(
                     )
                 )
         state: Literal["PENDING", "READY", "FAILED"] = "PENDING"
-        if (current is not None and current.failure is not None) or any(
-            child.state == "FAILED" for child in observed
+        if (
+            (current is not None and current.failure is not None)
+            or _unbound_cuda_allocation_expired(current)
+            or any(child.state == "FAILED" for child in observed)
         ):
             state = "FAILED"
         elif all(child.state == "COMPLETED" for child in observed):

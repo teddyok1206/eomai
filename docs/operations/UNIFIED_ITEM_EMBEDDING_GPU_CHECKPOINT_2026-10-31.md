@@ -4214,3 +4214,30 @@ API/Web/슬롯/INDEX의 PID·InvocationID 및 수치 runtime/config pin은 보�
 않았던 원래 멱등 작업이다. 새 Workflow를 만들거나 원래 기록을 고치지 않고 정상
 재조회가 이 작업을 찾아 연결했다. 당시 상태는 REQUESTED/PENDING이며, 준비 복구를
 수치 실행·결과 목록 완료로 확대하지 않는다.
+
+### 후속 수정 설계 — 만료된 미실행 CUDA 준비의 무한 PENDING
+
+같은 원 요청은 ROUTED까지만 기록됐고 BOUND·native query launch가 없다. 기존 driver는
+이미 생성된 CUDA allocation을 재실행하지 않으므로, 준비 도중 중단되면 조회가 무한
+PENDING으로 남는다. 원 allocation의 유한 마감도 이미 지났다. 05:15의 별도 진단에는
+`AUTHENTICATED_SESSION_FORBIDDEN`가 확인돼 로그인 세션과 실행용 인증 수명이 다름을
+분리해서 다룬다. 인증 우회나 실패→성공 변경으로 복구하지 않는다.
+
+수정 책임은 기존 `observe_routed_reference_queries`의 읽기 projection이다. 정본은
+같은 request/hash의 allocation·route·BOUND 이력이며 새 식별자/queue/schema는 없다.
+indexed parent/child 조회와 현재 사용자·source 검증을 유지하고, CUDA 선택 + BOUND 없음 +
+원 monotonic deadline 경과인 경우에만 기존 FAILED reply를 반환한다. O(1) 판정이며
+DB 이력을 쓰거나 GPU를 시작/중지하지 않는다. 현재 read transaction 안에서 BOUND를
+확인한다. BOUND 또는 완료 결과가 있으면 deadline만으로 실패시키지 않는다. 새 boot에서
+monotonic 값이 낮아졌다는 이유로 재실행을 허용하지 않으며, 이 판정은 물리 종료 proof나
+maintenance를 대체하지 않는다.
+
+단순히 PENDING인 작업을 새 key로 다시 실행하거나 기존 allocation 마감을 연장하는
+대안은 중복 실행과 과거 pin 변경 위험이 있어 사용하지 않는다. 실패가 명시된 원 요청은
+보존하고, 유효한 사용자 인증으로 명시적으로 시작한 새 검색만 별도 실행할 수 있다.
+이 변경은 검색 성공이 아니라 종료되지 않는 조회 버그의 수정이다.
+
+소스 회귀 검사 31 PASS, Ruff/format/mypy PASS. 미생성 child·기존 REQUESTED child·
+마감 전/정각/경과·CPU·BOUND·완료 결과 재조회와 무 dispatch/무 이력 수정 경계를
+검증했다. 기존 allocation의 numerical unit은 inactive/MainPID0/storedFD0이며
+controller는 failed/MainPID0/storedFD0이다. 완료된 벡터를 다시 계산하지 않았다.

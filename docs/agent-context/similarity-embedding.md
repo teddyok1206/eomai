@@ -166,6 +166,11 @@ systemd 읽기 timeout만 2/3초로 한 번 재시도하며, 잘못된 응답·�
 그대로 거부한다. 로그인·session capture·검색 submit을 재시도하거나 권한을 캐시하지 않는다.
 QUERY driver 진단은 제한된 authority 오류 코드와 위치만 남기며 원문/인증값은 남기지 않는다.
 
+`reference_query_routed_execution`은 원 CUDA allocation이 BOUND 전에 마감되면
+기존 FAILED 읽기 결과를 반환한다. PENDING 재조회가 원 GPU channel을 다시 시작하지
+않는 규칙은 유지한다. BOUND/완료 결과는 이 준비 마감 판정에서 제외한다. 이 projection은
+과거 Job/Workflow를 변경하거나 물리 종료·새 실행 권한을 증명하지 않는다.
+
 구형 벡터는 모든 참조 전환과 새 검색 검증 전에는 지우지 않는다. 기존 520개 기출 모집단,
 승인 Item 수, view별 binding 수, 재시작 후 traversal 수는 다른 분모다.
 

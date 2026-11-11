@@ -91,6 +91,125 @@ def test_current_source_revocation_precedes_workflow_lookup(original, monkeypatc
     store.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("device", "bound", "deadline", "expected"),
+    (
+        ("CUDA", None, 99, "FAILED"),
+        ("CUDA", None, 100, "FAILED"),
+        ("CUDA", None, 101, "PENDING"),
+        ("CUDA", object(), 99, "PENDING"),
+        ("CPU", None, 99, "PENDING"),
+        (None, None, 99, "PENDING"),
+    ),
+)
+def test_unbound_cuda_deadline_is_terminal_without_rewriting_history_or_dispatch(
+    original, monkeypatch, device, bound, deadline, expected
+):
+    history = SimpleNamespace(
+        allocation=SimpleNamespace(control_request=SimpleNamespace(expires_monotonic_ns=deadline)),
+        route=None
+        if device is None
+        else SimpleNamespace(
+            decision=SimpleNamespace(
+                selected=SimpleNamespace(backend=SimpleNamespace(device=device))
+            )
+        ),
+        bound=bound,
+        failure=None,
+    )
+    store = Mock()
+    store.read.return_value = history
+    monkeypatch.setattr(module, "EmbeddingBatchPlanStore", lambda *_a: store)
+    monkeypatch.setattr(module, "_contexts", lambda *_a: ())
+    monkeypatch.setattr(module.time, "monotonic_ns", lambda: 100)
+    scalars = Session.scalars
+
+    def empty_workflows(session, statement, *args, **kwargs):
+        if statement.column_descriptions[0].get("entity") is WorkflowInstanceRecord:
+            return iter(())
+        return scalars(session, statement, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "scalars", empty_workflows)
+    dispatch = Mock(side_effect=AssertionError("read must not allocate"))
+    monkeypatch.setattr(CatalogEmbeddingBatchExecution, "open", dispatch)
+    first = module.observe_routed_reference_queries(original.session, original.prepared)
+    assert first.state == expected
+    assert all(child.state == "PENDING" and child.workflow_id is None for child in first.children)
+    assert module.observe_routed_reference_queries(original.session, original.prepared) == first
+    assert history.failure is None and history.bound is bound
+    assert [call[0] for call in store.method_calls] == ["read", "read"]
+    dispatch.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("bound", "state", "expected"),
+    ((None, "REQUESTED", "FAILED"), (object(), "COMPLETED", "READY")),
+)
+def test_expiry_preserves_exact_child_and_already_completed_result(
+    original, monkeypatch, bound, state, expected
+):
+    history = SimpleNamespace(
+        allocation=SimpleNamespace(control_request=SimpleNamespace(expires_monotonic_ns=99)),
+        route=SimpleNamespace(
+            decision=SimpleNamespace(
+                selected=SimpleNamespace(backend=SimpleNamespace(device="CUDA"))
+            )
+        ),
+        bound=bound,
+        failure=None,
+    )
+    store = Mock()
+    store.read.return_value = history
+    monkeypatch.setattr(module, "EmbeddingBatchPlanStore", lambda *_a: store)
+    monkeypatch.setattr(module.time, "monotonic_ns", lambda: 100)
+    contexts = (object(), object())
+    monkeypatch.setattr(module, "_contexts", lambda *_a: contexts)
+    parent = original.prepared.preparation.parent
+    rows = tuple(
+        SimpleNamespace(
+            idempotency_key=module.embedding_batch_query_key(parent, ordinal),
+            workflow_id="workflow_" + str(ordinal + 1) * 32,
+            state=state,
+            created_actor_type="human",
+            created_actor_id=parent.scope.actor_id,
+            initial_request=SimpleNamespace(context_request=context),
+        )
+        for ordinal, context in enumerate(contexts)
+    )
+    scalars = Session.scalars
+
+    def query(session, statement, *args, **kwargs):
+        entity = statement.column_descriptions[0].get("entity")
+        if entity is WorkflowInstanceRecord:
+            return iter(rows)
+        if entity is module.WorkflowCommandRecord:
+            return iter(())
+        return scalars(session, statement, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "scalars", query)
+    monkeypatch.setattr(module, "parse_supported_reference_query_workflow_request", lambda raw: raw)
+    authorized = Mock()
+    monkeypatch.setattr(original.session.selection.cuda, "resolve_submission", authorized)
+    selections = {row.workflow_id: Mock() for row in rows}
+    monkeypatch.setattr(
+        module,
+        "read_completed_reference_query_selection",
+        lambda _s, _o, _c, workflow_id: SimpleNamespace(selection=selections[workflow_id]),
+    )
+    result = module.observe_routed_reference_queries(original.session, original.prepared)
+    assert result.state == expected
+    assert tuple(child.workflow_id for child in result.children) == tuple(
+        row.workflow_id for row in rows
+    )
+    assert tuple(row.state for row in rows) == (state, state)
+    if state == "COMPLETED":
+        assert tuple(child.selection for child in result.children) == tuple(selections.values())
+    else:
+        assert authorized.call_count == len(rows)
+        assert all(child.state == "PENDING" for child in result.children)
+    assert [call[0] for call in store.method_calls] == ["read"]
+
+
 @pytest.mark.parametrize("state", ("READY", "FAILED"))
 def test_terminal_observation_does_not_open_or_replay_an_execution(original, monkeypatch, state):
     observation = module.RoutedReferenceQueryObservation(
