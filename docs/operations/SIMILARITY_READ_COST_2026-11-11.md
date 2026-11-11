@@ -124,3 +124,26 @@ source 검사와 같다. 새 GPU/모델/검색 실행은 없으며, GUI 전체 �
 다음 행동은 이미 요청한 사용자 GUI 검색1건을 관측하는 것이다. 새 요청 없이 ready 상태나
 내부 benchmark만으로 완료 선언하지 않는다. 사용자 세션을 만들어내거나 과거 operator
 기록으로 새 실행 권한을 대신하지 않으며, 새 요청이 없다는 이유로 개선 범위를 확장하지 않는다.
+
+## 재개 후 실제 새 검색 — 인증 만료로 미완료
+
+16:33:32 UTC에 새 GUI 요청 `dbsearch_f160e9b17e0095914bc29f37000975f1`을 확인했다.
+기준1개·top_k5이며 이전 기준선의 top_k3과 구분한다. CUDA allocation
+`c06540d281c74cf29b6ad5d98200bd39`과 Workflow
+`workflow_57166fdf65144a0f95b2b999375e4b16`에 연결되었고 native launch는1회다.
+입력 준비는16:35:08에 끝났지만 완료 결과는 생성되지 않았다.
+
+확인된 원인은 `fresh_auth_seconds=2700`이다. 사용자의 최초 인증
+15:50:24.422160 +2700초 =16:35:24.422160이며, 첫 권한 오류는16:35:24.427163으로
+만료5ms 뒤다. 액세스 토큰은16:33:27에 갱신돼17:03까지 유효했지만 이 갱신은
+`authenticated_at`을 연장하지 않는다. 이후 driver의 `AUTHENTICATED_SESSION_FORBIDDEN`
+→ controller EOF 순서도 일치했다. 검색 row는 FAILED이며 원 실패와 native 실행을 보존한다.
+이 결과를 성공이나 새 검색 속도 검증 PASS로 해석하지 않는다.
+
+실제 호출 경로도 확인했다. 원본/정책/index 검증과 native 입력 구성 및 실행 후 재검증은
+QUERY11d826d2가 맡는다. 보존된 controller377b196e는 물리 프로세스·소켓·GRANT를 관리하며
+원본 index를 구형 decoder로 직접 읽는 것이 아니다. numericalc915와 Catalog568ed 경계는
+그대로다. 따라서 controller를 추가 교체하거나 권한 검사를 약화하지 않는다.
+
+다음 정상 검증은 사용자가 다시 로그인한 직후의 새 검색1건이다. 기존 실패의 자동 재실행,
+비밀번호 변경, session 가장, policy 완화, timeout 증가는 수행하지 않았다.
