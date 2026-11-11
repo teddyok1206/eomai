@@ -28,6 +28,9 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_reference_query_execution_contracts import case
+from tests.unit.test_registered_public_reference_query_execution import (
+    registered_public_workflow_case,
+)
 
 
 def prepared(
@@ -129,6 +132,67 @@ def staged(
     result = prepared(consumer_purpose=getattr(request, "param", "PAST_EXAM_VARIATION"))
     handoff.stage_native_query(result)
     return result
+
+
+@pytest.mark.parametrize("version", (4, 5))
+def test_public_workflow_roundtrips_through_actual_cpu_handoff_parser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: int
+) -> None:
+    base = registered_public_workflow_case(registered_anchor=False)
+    policy = parse_reference_query_execution_policy(
+        seal(
+            base.policy.model_dump(mode="json")
+            | {"resource_profile": prepared().policy.resource_profile.model_dump(mode="json")},
+            "policy_sha256",
+        )
+    )
+    context = base.request.context_request.model_dump(mode="json")
+    context["schema_version"] = f"system-rag-similarity-request/{version}.0"
+    request = parse_supported_reference_query_workflow_request(
+        seal(
+            base.request.model_dump(mode="json")
+            | {
+                "schema_version": f"reference-query-workflow-request/{version}.0",
+                "context_request": seal(context, "request_sha256"),
+                "resource_profile": policy.resource_profile.model_dump(mode="json"),
+                "native_execution_policy": base.request.native_execution_policy.model_dump(
+                    mode="json"
+                )
+                | {"sha256": sha256_bytes(canonical_json_bytes(policy.model_dump(mode="json")))},
+                "native_execution_policy_sha256": policy.policy_sha256,
+            },
+            "request_sha256",
+        )
+    )
+    native = type(base.native_input).model_validate(
+        seal(
+            base.native_input.model_dump(mode="json")
+            | {"context_request_sha256": request.context_request.request_sha256},
+            "request_sha256",
+        )
+    )
+    association = parse_reference_query_launch_association(
+        seal(
+            base.launch.model_dump(mode="json")
+            | {
+                "workflow_request_sha256": request.request_sha256,
+                "context_request_sha256": request.context_request.request_sha256,
+                "query_request_sha256": native.request_sha256,
+                "resource_profile_sha256": policy.resource_profile.resource_profile_sha256,
+            },
+            "association_sha256",
+        )
+    )
+    value = handoff.PreparedNativeQuery(
+        native.job_id.removeprefix("job_"), request, policy, base.bundle, association, native
+    )
+    owner_root = tmp_path / "owner"
+    owner_root.mkdir(mode=0o700)
+    identity = CpuHandoffIdentity(os.geteuid(), os.getegid())
+    monkeypatch.setattr(handoff, "OWNER_ROOT", owner_root)
+    monkeypatch.setattr(handoff, "fixed_owner_identity", lambda: identity)
+    handoff.stage_native_query(value)
+    assert handoff._read_prepared(value.execution_id, identity) == value
 
 
 def synthetic_output(value: handoff.PreparedNativeQuery, monkeypatch: pytest.MonkeyPatch) -> bytes:

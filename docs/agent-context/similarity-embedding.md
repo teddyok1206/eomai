@@ -139,6 +139,9 @@ hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint
 5/10/20초에 제한 재확인한다. 새 검색 제출·인증 우회가 아니며 계정/요청 변경 또는
 다른 오류에는 자동 재확인하지 않는다. parent batch의 SUCCEEDED는 CPU fallback에서
 binding 준비 완료일 수 있다. 결과 완료는 child Workflow/selection으로 확인한다.
+CPU fallback의 root 준비 entrypoint는 QUERY owner와 별도 env로 선택된다. 배포 때
+`embedding-native-query-owner.env`가 실제 선택한 설치 parser로 현재 Workflow5 입력을
+검증해야 한다. owner READY나 numerical QUERY2 parser PASS만으로 이 경계를 대신하지 않는다.
 
 ## 먼저 열 파일
 

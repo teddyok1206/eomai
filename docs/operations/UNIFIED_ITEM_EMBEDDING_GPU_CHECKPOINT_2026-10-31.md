@@ -4307,3 +4307,53 @@ RUNNING/ALLOCATED이고 CPU handoff는 05:49에 exit1, numerical CPU unit은 미
 처음 이를 검색 계산 완료로 사용자에게 설명한 것은 잘못이며 바로잡았다. 원 요청과
 실패 unit을 보존하고 handoff 오류 및 실행 인증 만료를 따로 추적한다. 실제 결과 목록,
 문항 열기, 재조회 검증은 아직 완료되지 않았다.
+
+### CPU fallback handoff의 설치 버전 불일치
+
+실제 CPU handoff entrypoint는 `fb0ab555` 설치본이었다. 해당 parser는 Workflow1~4만
+알고 있고, 현재 요청은 `reference-query-workflow-request/5.0`이다. 원본 staging을
+읽기만 하는 검사에서 구 준비 프로그램은 `REFERENCE_QUERY_CONTRACT_INVALID`,
+현재 QUERY377b 준비 프로그램은 동일 입력으로 PASS했다. 실제 CPU numerical interpreter도
+동일 `embedding-reference-query-input/2.0`을 PASS했다. 모델 실행은 0회다.
+
+책임은 CPU 계산 모델이 아니라 QUERY root handoff의 compatible release 선택이다.
+`embedding-native-query-owner.env`의 entrypoint만 이미 설치된377b로 바꾸고,
+reference/mixed/public owner의 env hash와 private reference hash, QUERY/Catalog unit의
+config hash를 함께 갱신한다. schema/DB/queue/model/input 변경은 없다. canonical source는
+immutable 설치 wheel과 원 요청/입력 hash이고, 설정은 기존 typed parser로 읽고 비교한다.
+경로는 설치 위치일 뿐 새 작업 identity가 아니다. 3개 고정 설정 lookup과 작은 hash 갱신은
+O(1)이며 새 cache/table은 없다. 현재 QUERY command lease와 실제 실행이 끝난 뒤 기존
+graceful stop/start 및 rollback 절차를 재사용한다. 원 실패 unit을 재시작하지 않는다.
+
+작은 UI 재확인만 추가하는 대안은 입력 형식 거부를 해결하지 못한다. 구 parser에 새 버전
+문자열만 허용하거나 실패 기록을 성공으로 고치는 대신, 실제 지원하는 동일 설치본을
+선택한다. 구 bootstrap과 새 bootstrap의 차이는 GPU_BATCH용 INDEX delegation뿐이며
+QUERY 진입 분기는 동일하다. INDEX와 GPU controller/env, CPU numerical runtime은 보존한다.
+
+설치본 관련55 PASS. Web 한 파일 변경은 `1a617d80`으로 05:58 UTC 배포했고 wheel/RECORD/
+service identity 및 HTTPS 준비를 확인했다. 재시작 직후 일시502 한 번 뒤 health재조회가
+성공했으며 API/QUERY/Catalog/INDEX/creative PID는 그대로다. Web rollback 기록은
+`/var/lib/eom-web-query-poll-20261111`이다. 실제 검색 결과 완료는 아직 주장하지 않는다.
+
+06:05 UTC CPU handoff compatible activation PASS. 준비 script의 최초 보수적 검사는
+bootstrap 전체 bytes가 같아야 한다고 요구해 변경 전에 중단됐다. 실제 diff는 GPU_BATCH의
+INDEX delegation 추가5줄뿐이고 QUERY branch는 같음을 확인하여 정확한 bootstrap hash와
+해당 diff를 고정하고 재검증했다. 이 실패는 로그로 보존했고 설치 재시도는 없었다.
+실제 root CPU interpreter에서 **활성 env가 선택한** bootstrap/parser로 원 입력을 다시
+읽어 Workflow5 PASS, numerical leaf parser로 QUERY2 PASS를 확인했다. 변경은 QUERY
+전용 handoff env와 연동 config hashes뿐이다. INDEX3493954·API3902801·creative3904631,
+Web1351949 및 기존GPU/모델 pins를 보존했다. rollback:
+`/var/lib/eom-query-cpu-handoff-align-20261111`.
+
+Workflow4/5를 실제 stage→read parser로 왕복하는 synthetic 회귀2개를 추가했다.
+관련 설치본 최종57 PASS. 한글/기출 문항 내용은 fixture나 로그에 복사하지 않았다.
+사용자 추가 HTTP502는 proxy 기록상05:58:54 Web 재시작 때 같은 check 요청의 connection
+refused다. 그 이후 HTTPS login200과06:06 기존 검색 목록/개별 기록 GET응답을 확인했다.
+이 HTTP 정상과 parser PASS 역시 최종 검색 결과 성공을 대체하지 않는다.
+
+Test-only 파일에 직접 실행한 strict mypy는 기존 untyped fixture/import 계열까지 따라가
+33파일594진단으로 실패했다. Python runtime 코드 변경은 없고 이 결과를 PASS로 숨기지
+않는다. 관련 runtime/설치 typed parse와57개 회귀, 테스트 Ruff/format은 PASS다.
+06:06 사용자 재로그인이 실제 기록으로 확인돼 추가 비밀번호를 요구하지 않았다.
+기존3개 요청은 CPU numerical 미실행 실패 흔적을 보존하고, 새5개 요청만 명시적으로
+요청했다. 아직 검증 중인 실제 검색을 완료로 보고하거나 goal을 닫지 않는다.
