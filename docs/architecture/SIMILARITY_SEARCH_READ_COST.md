@@ -77,7 +77,7 @@ compose/commit하고, 이미 저장한 immutable 결과의 재조회는 서로�
 
 1. 책임/정본: 기존 Catalog `embedding_registry_catalog_adapter`의 index decoder만
    확장한다. 정본은 원래 Artifact bytes이며 registry·source·권한의 소유자는 그대로다.
-2. identity/pointer: 작은 cache key는 schema와 **완전히 같은 bytes**다. 경로·latest·사용자·
+2. identity/pointer: 해석 cache key는 schema와 **완전히 같은 bytes**다. 경로·latest·사용자·
    승인 여부를 key/결과로 쓰지 않으며 기존 logical/revision/Artifact/hash 검사를 바꾸지 않는다.
 3. resolution: `_read_index_member`의 매 root 파일 읽기·SHA·producer·schema/media·file set과
    각 caller의 실제 권한/registry/pin 검사는 그대로다. 그 뒤 순수 decoder만 재사용한다.

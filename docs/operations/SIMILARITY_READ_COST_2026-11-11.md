@@ -75,5 +75,30 @@ exact schema+bytes의 bounded process-local LRU2 후보는 첫 해석2.896초,
   재사용하는 ledger는 현재 없다. 그 기능은 새 요청과 원 producer의 증명 계약이 필요하며,
   최초 cold 검색의 병목 해결에 필요하지 않아 이번 최적화에 억지로 추가하지 않는다.
 
-후속 배포·실제 새 검색 결과는 아직 미확인이다. 숫자 모델/runtime·기존 vector·점수·순서를
-바꾸지 않는 Catalog/QUERY 호환 릴리스로 검증하며, 완료 기록 재조회 PASS와 구별한다.
+## 후속 운영 적용
+
+2026-11-11 16:12 UTC, 위 순수 decoder 최적화를 다음 호환 릴리스로 반영했다.
+
+| 구성요소 | 설치 source / 변경 |
+|---|---|
+| Catalog | `568ed89760fc30a1f96d32c6592b5a5233a00ed9`, 기존8be39 대비 decoder 한 모듈만 변경 |
+| QUERY owner | `11d826d29587c48a2416fb26825c5748cb737d22`, 기존377b196e에서 decoder만 최소 백포트 |
+| API / Web | 기존680fff7296 / 1a617d80 유지, 재시작 없음 |
+| GPU controller / numerical | 기존377b196e / c915281e 유지 |
+| INDEX / creative / workers | 기존 설치·설정·PID 보존, 이번 배포의 재시작 대상 아님 |
+
+QUERY에 최신 main 전체를 설치하지 않았다. QUERY 백포트의 wheel은 adapter와 RECORD만
+변경되고 API contracts 내용은 동일하다. 별도 검증156 PASS, Ruff·mypy·RECORD PASS다.
+QUERY owner pin·세 설정 및 private primary hash·두 서비스의 설정 pin만 맞췄으며
+controller/source 정책·API provider·수치 runtime·GPU 환경 파일은 보존했다.
+Catalog의 같은-root QUERY capture 개선은 Catalog에 적용되어 있으나, 최소 백포트 QUERY
+owner에 그 이전 단계의 다른 최적화까지 들어갔다고 주장하지 않는다.
+
+설치 증거는 `/var/lib/eom-similarity-decode-catalog-stage-20261111`, paired activation과
+rollback 원본은 `/var/lib/eom-similarity-decode-pair-release-20261111`에 보관한다.
+배포 전 유효 QUERY claim·GPU 실행·Catalog 연결이 없음을 확인했다. API ready와 HTTPS
+Studio login200은 확인했지만 이것을 새 검색 성공으로 대신하지 않는다.
+
+**아직 남은 것:** 새 GUI 검색의 준비→GPU→첫 결과 목록→문항 열기→같은 요청 재조회
+측정. 새 검색은 아직 관측되지 않았다. 이미 확인한 저장 결과 재조회55% 단축과 구분하며
+전체 목표는 계속 ACTIVE다. 기존 임베딩·원 결과·실패 이력은 모두 보존했다.
