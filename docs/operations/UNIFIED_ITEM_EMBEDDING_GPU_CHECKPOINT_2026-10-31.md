@@ -4241,3 +4241,11 @@ maintenance를 대체하지 않는다.
 마감 전/정각/경과·CPU·BOUND·완료 결과 재조회와 무 dispatch/무 이력 수정 경계를
 검증했다. 기존 allocation의 numerical unit은 inactive/MainPID0/storedFD0이며
 controller는 failed/MainPID0/storedFD0이다. 완료된 벡터를 다시 계산하지 않았다.
+
+QUERY 한 모듈만 추가한 successor `5adadcf5a8f8e23f76ad551f1b9eca4dec6567fa`의
+설치본에서도 같은 31개 검사가 PASS했다. platform wheel SHA는
+`b9198ffbbcaed97a165ab8707a8831a24b4b3388d04886228560e65dacaaaa1d`이며
+배포·rollback은 `/var/lib/eom-query-expiry-recovery-20261111`에 보존했다.
+05:27 UTC 운영 활성화 PASS 및 API/Web/슬롯/INDEX PID·설정 보존을 확인했다.
+DB/schema/data mutation·새 numerical compute는 0회다. 실제 사용자 결과 목록 검증은
+아직 PENDING이며 테스트/준비 완료를 검색 성공으로 보고하지 않는다.
