@@ -54,6 +54,13 @@ Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/r
 재사용하지만, 각 payload 검증·source 권한·현재 provenance·벡터 finite/L2 검사는 유지한다.
 입력 text/모델/space/수치 batch size는 바꾸지 않는다. 실제 운영 선택은 release 기록으로 확인한다.
 
+`embedding_registry_catalog_adapter`의 전체 index manifest 해석은 schema와 정확한 bytes를
+key로 하는 process-local LRU2를 사용한다. 원본 입력16MiB 이하만 보관하고 더 큰 정상
+manifest는 기존 strict decoder로 처리한다. 현재 root의 Artifact/file/hash/provenance
+검사는 cache hit에서도 유지한다. 권한·Session·source admission은 저장하지 않으며 실패한
+해석도 보관하지 않는다. 깊은 불변 모델을 보장하는 테스트와 실제 parse 비용 측정은
+`test_embedding_index_manifest_decode_cache.py` 및 위 조회 비용 설계를 참고한다.
+
 공개 index3/4/5의 전체 manifest는 `raw_public_solution_contract_value`의16,384 경계를
 쓴다. membership 재검증·version dispatch·receipt의 전체 index를 legacy1,024 reader로
 먼저 감싸면 정상 저장된 큰 head도 다음 discovery에서 거부된다. legacy1/2·개별 shard와

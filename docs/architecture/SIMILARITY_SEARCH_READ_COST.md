@@ -66,3 +66,41 @@ recipe에서 재사용하지 않는다. QUERY는 clean root에서만, 기존 IND
 원 QUERY advisory lock을 얻고 `find`를 다시 실행한다. 두 최초 요청이 경합해도 한 번만
 compose/commit하고, 이미 저장한 immutable 결과의 재조회는 서로를 기다리지 않는다.
 양쪽 경로 모두 기존 before/after source/권한 검증을 수행한다.
+
+## 3차 변경: 동일 index 파일의 순수 해석 결과 재사용
+
+실제 고정 index5 파일7,859,685bytes의 official pinned read는0.081초였지만,
+같은 파일의 schema/Pydantic/자기hash 검증은2.966/2.955/2.937초였다. QUERY 준비와
+관측은 새 DB root마다 같은 manifest를 다시 해석한다. 권한 확인을 없애지 않고 이
+순수 계산만 줄인다. 단일 검색의429회 source 관측 기록은 다른 관측이 섞일 수 있고
+해당 수를 모두 manifest parse 횟수나 독립 GPU 실행 횟수로 해석하지 않는다.
+
+1. 책임/정본: 기존 Catalog `embedding_registry_catalog_adapter`의 index decoder만
+   확장한다. 정본은 원래 Artifact bytes이며 registry·source·권한의 소유자는 그대로다.
+2. identity/pointer: 작은 cache key는 schema와 **완전히 같은 bytes**다. 경로·latest·사용자·
+   승인 여부를 key/결과로 쓰지 않으며 기존 logical/revision/Artifact/hash 검사를 바꾸지 않는다.
+3. resolution: `_read_index_member`의 매 root 파일 읽기·SHA·producer·schema/media·file set과
+   각 caller의 실제 권한/registry/pin 검사는 그대로다. 그 뒤 순수 decoder만 재사용한다.
+4. 구조/복잡도: 표준 bounded LRU2개, entry raw 최대16MiB로 제한한다. raw key 최대32MiB와
+   그에 선형인 frozen model만 남는다. 첫 해석O(B+bindings), hit는새 bytes hash/equalityO(B),
+   retained raw/model 공간O(제한한 B). 큰 파일은 기존 strict decoder로 처리하며 거부하지 않는다.
+5. 불변성: index1–5의 도달 가능한 모든 계약 모델은 frozen이고 collection은 tuple이다.
+   사전/Session/ORM/authority/열린 파일을 cache에 넣지 않는다. 결과는 정본 조회 권한이 아니다.
+6. 동시성: `functools.lru_cache`의 thread-safe metadata를 사용한다. 동시에 첫 miss가 난 경우
+   같은 순수 해석이 중복될 수 있으나 새 Job·GPU·publication을 만들지 않는다.
+7. 실패/무효화: 실패는 저장하지 않는다. schema/bytes 변경은 miss, eviction은 재해석이다.
+   설치 code가 바뀔 때 owner 프로세스 교체로 cache도 사라진다. cross-root 권한 cache나 TTL은 없다.
+8. 의존방향/범위: 기존 Catalog adapter 안의 private 함수다. Worker·API·DB schema·모델·
+   numerical space·released JSON Schema 변경은 없다. INDEX/진행 중 실행은 배포 대상이 아니다.
+9. 대안: 매 root strict parse는 확인된3초 비용을 반복한다. 거대한 상주 모델 서비스나 QUERY
+   벡터 재사용 계약보다 작고, 이미 읽어 검증한 같은 bytes의 해석 재사용으로 충분하다.
+10. 검증: same bytes/schema decode1회, 변경·invalid·oversize·eviction, 중첩 불변성, 매 root의
+    파일/provenance 확인, 실제 파일의 cold/warm 시간과 메모리, 최초 검색 전후를 확인한다.
+11. 배포: QUERY owner와 Catalog의 기존 호환 릴리스에서만 활성화한다. 수치 runtime/INDEX
+    pin을 바꾸지 않으며 실제 첫 결과 확인 전에는 전체 목표 완료로 표시하지 않는다.
+
+별도 새 검색 사이 QUERY 벡터 재사용은 현재 없고, 같은 요청 replay는 원 결과를 사용한다.
+다문항 한 요청은 이미 한 backend lifetime을 공유한다(최대32개). 따라서 이 단계에서
+새 GPU 상주 서비스나 QUERY reservation을 만들지 않는다. 별도 요청의 벡터 재사용을
+추가하려면 현재 context와 원 numerical producer를 연결하는 additive reuse receipt가
+필요하며, 이전 native 실행을 새 실행인 것처럼 기록해서는 안 된다.

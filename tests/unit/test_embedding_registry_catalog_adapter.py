@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -94,6 +94,13 @@ from tests.unit.inference_transfer_embedding_fixtures import (
 )
 from tests.unit.test_inference_transfer_snapshot_catalog_adapter import owner_input
 from tests.unit.test_pinned_artifact_read_context import MetadataSession, member_stream_counts
+
+
+@pytest.fixture(autouse=True)
+def isolated_index_decode_cache() -> Iterator[None]:
+    owner_module._decode_cached_index_manifest.cache_clear()
+    yield
+    owner_module._decode_cached_index_manifest.cache_clear()
 
 
 class OwnerSession(MetadataSession):
@@ -338,7 +345,7 @@ def owner(
 @pytest.mark.parametrize(
     "owner", ("CONTENT_ONLY", "CONCRETE_FACETS", "METADATA_ONLY"), indirect=True
 )
-def test_actual_index_decoder_reuses_each_view_model_in_one_reader_not_another(
+def test_actual_index_decoder_reuses_each_view_model_across_fresh_readers(
     owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     verifier, session, command, index, *_rest = owner
@@ -350,9 +357,9 @@ def test_actual_index_decoder_reuses_each_view_model_in_one_reader_not_another(
     assert parse.call_count == 1
     fresh = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
     other = verifier._read_index(fresh, command.index_manifest)
-    assert other == models[0] and other is not models[0]
+    assert other is models[0]
     assert verifier._read_index(fresh, command.index_manifest) is other
-    assert parse.call_count == 2
+    assert parse.call_count == 1
 
 
 @pytest.mark.parametrize(
@@ -437,16 +444,27 @@ def test_synthetic_index_interpretation_counts_repeated_parse_not_authority_or_l
     parse = Mock(wraps=owner_module.parse_supported_embedding_index)
     monkeypatch.setattr(owner_module, "parse_supported_embedding_index", parse)
     measured = []
-    for retained in (False, True):
+    for retained, process_retained in ((False, False), (True, False), (False, True)):
+        owner_module._decode_cached_index_manifest.cache_clear()
         reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
         if not retained:
             reader.MAX_DECODED_MEMBERS = 0
         parse.reset_mock()
         start = perf_counter()
-        values = tuple(verifier._read_index(reader, command.index_manifest) for _ in range(10))
+        values = []
+        for _ in range(10):
+            if not process_retained:
+                # Isolate the old root-local benefit from the new pure decoder
+                # cache; a warm process must not masquerade as an uncached run.
+                owner_module._decode_cached_index_manifest.cache_clear()
+            else:
+                session.root.is_active = False
+                session.root = SimpleNamespace(is_active=True)
+                reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+            values.append(verifier._read_index(reader, command.index_manifest))
         elapsed = perf_counter() - start
         assert all(value == index for value in values)
-        assert parse.call_count == (1 if retained else 10)
+        assert parse.call_count == (1 if retained or process_retained else 10)
         measured.append((parse.call_count, elapsed))
     request.node.user_properties.extend(
         (
@@ -454,6 +472,8 @@ def test_synthetic_index_interpretation_counts_repeated_parse_not_authority_or_l
             ("synthetic_retained_parse_calls", measured[1][0]),
             ("synthetic_uncached_seconds", measured[0][1]),
             ("synthetic_retained_seconds", measured[1][1]),
+            ("synthetic_cross_root_parse_calls", measured[2][0]),
+            ("synthetic_cross_root_seconds", measured[2][1]),
         )
     )
 

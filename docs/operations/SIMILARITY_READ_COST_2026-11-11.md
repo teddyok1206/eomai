@@ -51,3 +51,29 @@ READY까지 8분14초였으며, 이 전체 시간을 GPU 순수 추론으로 해
 삭제하거나 TTL 권한 cache로 바꾸지 않는다. 새 첫 결과의 비용과 QUERY 준비·수치 실행을
 분리해 확인하고, 동일 QUERY encoding 재사용과 GPU 연속 처리의 기존 지원 범위를 조사한다.
 실제 병목과 부합하는 최소 변경만 추진하며 전체 목표는 아직 완료가 아니다.
+
+## 후속: 새 검색의 반복 manifest 해석
+
+같은 운영 index manifest(5.0, 7,859,685bytes)를 공식 pinned reader로 읽은 후 순수
+해석을 비교했다. 실제 파일 읽기는0.081초, 기존 strict decode3회는2.966/2.955/2.937초였다.
+exact schema+bytes의 bounded process-local LRU2 후보는 첫 해석2.896초,
+별도 복사한 같은 bytes의 다음 두 해석0.00148/0.00135초였다. 계산된 모델의 Python
+객체 크기 추정치는30,046,212bytes이며 원본 bytes와 별개다. 최대16MiB 입력2개만
+보관하고 초과 입력은 기존 strict 경로를 사용한다. 권한·파일·현재 provenance 검사는
+여전히 수행한다. 이는 read-only decoder 측정이지 새 GUI 요청 전체의 개선 증거가 아니다.
+
+- 집중 회귀173 PASS: 새 root의 물리 읽기/provenance 유지, 승인 취소·producer 변경·
+  삭제·변조·hash mismatch 거부, schema/bytes 변경, 실패 미보관, size/LRU 경계,
+  전체 지원 index의 깊은 불변성 검증.
+- Ruff PASS. 기본 mypy가 따라간 기존 다른 두 모듈의 union-type 오류5개는 이번 변경
+  파일의 오류가 아니며 범위 밖으로 기록한다. 변경 모듈의 focused type check를 별도 수행한다.
+- 변경 모듈 `mypy --follow-imports=silent` PASS. 같은 disposable PostgreSQL에서
+  completed ranking·read-set·candidate admission88 PASS(74.36초). 운영 DB에는 테스트하지 않았다.
+- 기존 여러 문항 QUERY는 한 finite batch 안에서 모델을 한 번 열고 각 child를 처리한다.
+  해당 batch/selection/encoding 회귀46 PASS. 별도 상주 GPU daemon은 추가하지 않는다.
+- 동일 요청 재조회는 기존 vector/ranking을 재사용한다. 다른 새 요청까지 QUERY vector를
+  재사용하는 ledger는 현재 없다. 그 기능은 새 요청과 원 producer의 증명 계약이 필요하며,
+  최초 cold 검색의 병목 해결에 필요하지 않아 이번 최적화에 억지로 추가하지 않는다.
+
+후속 배포·실제 새 검색 결과는 아직 미확인이다. 숫자 모델/runtime·기존 vector·점수·순서를
+바꾸지 않는 Catalog/QUERY 호환 릴리스로 검증하며, 완료 기록 재조회 PASS와 구별한다.

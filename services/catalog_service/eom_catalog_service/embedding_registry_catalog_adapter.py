@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
+from functools import lru_cache
 from typing import Any, Literal, overload
 
 from eom_catalog_contracts.embedding_index_families import (
@@ -337,7 +338,10 @@ _REGISTRATION_TYPES = (
 )
 
 
-def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddingIndex:
+MAX_CACHED_INDEX_MANIFEST_BYTES = 16 * 1024**2
+
+
+def _decode_index_manifest_uncached(schema_ref: str, payload: bytes) -> SupportedEmbeddingIndex:
     if schema_ref not in (
         INDEX_SCHEMA_REF,
         MIXED_EMBEDDING_INDEX_SCHEMA_REF,
@@ -350,6 +354,20 @@ def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddin
     if schema_ref != "eom://schemas/knowledge/" + index.schema_version:
         raise ValueError("index pointer and document schema differ")
     return index
+
+
+@lru_cache(maxsize=2)
+def _decode_cached_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddingIndex:
+    # Only a pure interpretation of exact bytes is retained. The caller still
+    # resolves the current Artifact, file hash, provenance and operator on every
+    # read. No Session, source admission, mutable model or path is cached here.
+    return _decode_index_manifest_uncached(schema_ref, payload)
+
+
+def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddingIndex:
+    if type(payload) is bytes and len(payload) <= MAX_CACHED_INDEX_MANIFEST_BYTES:
+        return _decode_cached_index_manifest(schema_ref, payload)
+    return _decode_index_manifest_uncached(schema_ref, payload)
 
 
 def _decode_shard_manifest(schema_ref: str, payload: bytes) -> EmbeddingVectorShardManifest:
@@ -796,8 +814,8 @@ class CatalogEmbeddingRegistryVerifier:
     def _read_index(
         self, reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
     ) -> SupportedEmbeddingIndex:
-        # Resolution and file-set checks remain current; only the immutable
-        # interpretation is reused inside this reader's root transaction.
+        # Resolution and file-set checks remain current on every root. The
+        # bounded pure decoder may reuse only the exact immutable interpretation.
         raw = self._read_index_member(reader, pointer)
         return reader.read_model_member(
             pointer, expected_bytes=len(raw), decoder=_decode_index_manifest
