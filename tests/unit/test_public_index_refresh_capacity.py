@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_contract_values import (
 from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_index
 from eom_catalog_contracts.inference_transfer_experiment import population_sha256
 from eom_catalog_contracts.public_solution_embedding_index import MAX_PUBLIC_SOLUTION_SOURCES
+from eom_catalog_service.embedding_device_index_pair import validate_resolved_embedding_index
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_index_refresh_plan import (
     mixed_index_membership_refresh_reason,
@@ -123,6 +124,17 @@ def test_public_head_over_legacy_capacity_reuses_exact_members_without_refresh(
         is None
     )
     assert _pointer(index) == pointer
+
+
+@pytest.mark.parametrize("version", [3, 4, 5])
+def test_query_device_index_validation_keeps_public_manifest_capacity(version: int) -> None:
+    index = _index(version, 1025)
+    pointer = _pointer(index)
+    checked_pointer, checked_index = validate_resolved_embedding_index(
+        pointer, index, index.space.runtime.device
+    )
+    assert checked_pointer == pointer
+    assert checked_index == index
 
 
 @pytest.mark.parametrize("version", [3, 4, 5])

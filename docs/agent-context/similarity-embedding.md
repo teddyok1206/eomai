@@ -54,6 +54,11 @@ Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/r
 `docs/operations/INDEX_PUBLICATION_PERFORMANCE_2026-11-09.md`의2026-11-10 후속 기록과
 `tests/unit/test_public_index_refresh_capacity.py`를 확인한다.
 
+QUERY의 `embedding_device_index_pair.validate_resolved_embedding_index`도 전체 manifest를
+같은 version dispatcher에 직접 넘긴다. 먼저 legacy raw reader로 감싸면 정상적으로
+등록한 1,024개 초과 public head가 장치 선택 전에 거부된다. 개별 pointer 검증과
+CPU/CUDA space·Graph·policy·공통 source 증명은 유지하며 legacy 한도를 늘리지 않는다.
+
 GPU controller가 `FILE_UNPROTECTED`로 끝나면 owner의 EOF는 선행 오류가 아닐 수 있다.
 고정 proc member는 dumpability 전환으로 storage UID0/worker가 바뀔 수 있으며 actual
 프로세스 자격과 구분한다. `read_live_native_process_member`는 identity 오류와 실제

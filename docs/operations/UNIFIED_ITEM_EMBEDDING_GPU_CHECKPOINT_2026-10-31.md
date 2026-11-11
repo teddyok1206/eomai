@@ -4137,3 +4137,38 @@ NAS에 보관하고 Catalog 재조회 hash/bytes 일치를 확인했다.
 현재 goal은 **정리·전체 무결성 완료 / 실제 사용자 GUI 검색·문항 열기·동일 요청 재조회
 확인 대기**다. 사용자에게 기존 화면에서 기출 한 문항·상위5개 검색을 한 번 요청했으며,
 그 새 요청의 실행·사용 space·저장 ranking·재조회 시 계산 횟수를 추적해야 완료다.
+
+## 2026-11-11 — 실제 검색의 public index 용량 오류 수정
+
+사용자가 04:30 UTC 실행한 `dbsearch_01280c38f79a2c44bdb0c8270446fc84`는
+PENDING/Workflow 미생성에서 멈췄다. QUERY 로그의 `EmbeddingDeviceIndexPairError`와
+1,025개 binding 재현 검사로 원인을 확인했다. `validate_resolved_embedding_index`가
+지원 version dispatcher에 넘기기 전에 legacy 1,024-value reader를 적용해, 정상 게시된
+큰 public head를 거부했다. 벡터 누락·GPU 계산 실패가 아니며 모델 실행도 시작 전이었다.
+
+수정은 기존 Catalog 장치 선택의 version dispatcher에 manifest를 직접 전달하는 것이다.
+public 3/4/5의 기존 16,384 한도를 사용하며 pointer/hash/schema/CPU-CUDA space와
+Graph/policy 검증, legacy 1/2 및 개별 shard 한도는 유지한다. DB·wire schema·queue·
+수치 runtime·projection·벡터 변경은 없다. 선형 manifest 검증 경계만 바로잡는다.
+단순히 모든 raw reader의 한도를 높이는 방법은 구형 계약까지 넓혀 채택하지 않았다.
+
+- 수정 전 실제 1,025개 public fixture에서 같은 오류를 재현했다.
+- main source의 INDEX/QUERY 관련 검사 73 PASS, Ruff/format/mypy PASS.
+- 기존 QUERY 설치 source `c915281e`에는 public v3 model/dispatcher 수정도 없어서
+  이 두 파일의 기존 main 수정과 새 device-pair 수정을 묶은 좁은 successor를 만들었다.
+  중간 후보 `539c1c3f`의 설치 검사는 v3 누락을 발견했고 **운영 활성화하지 않았다**.
+  함께 실행한 INDEX refresh 전용 검사도 그 구형 QUERY 설치에는 적용돼 있지 않았다.
+  이를 통과시키려고 INDEX 실행 코드를 QUERY에 추가하지 않았다.
+- 최종 QUERY successor `e80a46e96a2be0b900ae1ad6d484606a72e0267a`의 설치본은
+  public3/4/5 각 1,025개 및 pointer/hash/device/proof 부정 검사 **40 PASS**다.
+  wheel 내용 차이는 세 production module과 RECORD뿐이다.
+- Platform wheel SHA:
+  `a04f3e8e36ef4b202fcbb070b7e52c31953a895e7505564d17d40e032f0b914d`.
+- 배포·rollback 기록: `/var/lib/eom-query-capacity-release-v2-20261111`.
+  04:42 UTC QUERY 준비 완료를 확인했다. Catalog 코드는 `acb834ac` 그대로이며
+  public QUERY config hash만 동기화했다. API/Web/슬롯/INDEX/수치 실행환경은 보존했다.
+  특히 INDEX PID3493954 / InvocationID `62cd90e93dfa4b7992fd120681214e40`는 동일하다.
+
+배포 확인은 실제 검색 성공 판정이 아니다. 사용자에게 **같은 요청의 결과 확인만**
+요청했다. 새 검색·계산 중복 제출·실패 이력 변경·구형 벡터 삭제는 하지 않았다.
+현재 최종 GUI 결과 목록·문항 열기·저장 결과 재조회 검증은 이어서 진행한다.

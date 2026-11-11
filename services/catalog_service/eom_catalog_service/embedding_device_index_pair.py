@@ -97,7 +97,9 @@ def validate_resolved_embedding_index(
 ) -> tuple[ArtifactMemberPointer, SupportedEmbeddingIndex]:
     """Reparse one pinned member/index pair; no store read or authority is inferred."""
     try:
-        checked = parse_supported_embedding_index(raw_similarity_contract_value(index))
+        # The family dispatcher owns each manifest's bound. Applying the legacy
+        # 1,024-value reader first rejects valid public indexes above that size.
+        checked = parse_supported_embedding_index(index)
         member = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     except (ValueError, TypeError, AttributeError, SchemaError):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_INVALID") from None
