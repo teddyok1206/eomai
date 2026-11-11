@@ -41,6 +41,14 @@ rollback된 capture를 outer root로 가져오지 않는다. 사람/QUERY 관측
 그대로다. INDEX의 별도 frame 검사 진입점이 같은 SQL closure 구현을 사용한다.
 설계와 측정 범위는 `docs/architecture/PUBLIC_SOLUTION_INDEX_CAPTURE_REUSE.md`를 참고한다.
 
+공개 QUERY도 `public_solution_index_read_set.capture_public_solution_query_population`에서
+같은 root의 전체 보고서 해석을 재사용한다. 실제 사용자/scope/recipe와 fresh SQL closure는
+매번 확인하고, 새 root·다른 thread·nested QUERY에서는 재사용하지 않는다. membership은
+`local_indexing_source_paging.read_candidate_source_pages`가 제한된 작은 ID 목록을 한 번
+읽어 기존 bounded page로 나눈다. 원본 자료와 보고서의 페이지별 검증 한도는 그대로다.
+전후 전체 membership·dependency SHA는 기존 방식과 같아야 한다. 설계/측정 경계는
+`docs/architecture/SIMILARITY_SEARCH_READ_COST.md`에 기록한다.
+
 후속 비용 개선은 `docs/architecture/INDEX_PUBLICATION_READ_COST.md`에 기록한다.
 Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/result 해석을
 재사용하지만, 각 payload 검증·source 권한·현재 provenance·벡터 finite/L2 검사는 유지한다.

@@ -48,9 +48,7 @@ from eom_catalog_service.knowledge_retrieval_service import (
     ReadOnlyKnowledgeCandidatePool,
 )
 from eom_catalog_service.local_indexing_source_paging import (
-    CandidateSourcePage,
-    candidate_source_page_statement,
-    validate_candidate_source_page,
+    read_candidate_source_pages,
 )
 from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceAuthorization,
@@ -63,6 +61,7 @@ from eom_catalog_service.public_solution_capture_ports import (
 )
 from eom_catalog_service.public_solution_index_read_set import (
     capture_public_solution_index_population,
+    capture_public_solution_query_population,
 )
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_embedding_projection import (
@@ -93,12 +92,12 @@ class CatalogPublicSolutionSourceCapture:
         artifact_reader: PinnedArtifactReadContext,
         maximum_population_sources: int,
     ) -> CapturedPublicSolutionSources:
-        """Keyset metadata pages, one root transaction, exact final population proof.
+        """Bounded metadata pages, one root transaction, exact final population proof.
 
         The old per-page 1,024 bound is not widened. Each page uses the same
         canonical admission path and a bounded byte-reader lifetime. Shared locks
         retain admitted source/provenance rows until the caller finishes; final
-        paging rejects membership changes instead of publishing partial coverage.
+        membership reads reject changes instead of publishing partial coverage.
         """
         if (
             type(maximum_population_sources) is not int
@@ -109,21 +108,33 @@ class CatalogPublicSolutionSourceCapture:
         scope = self.sources.authorize_scope_in_session(
             session, command, identity_fence=identity_fence, artifact_reader=artifact_reader
         )
-        return self._capture_population_in_session(
+
+        def reauthorize() -> ReadOnlyCandidatePoolScope:
+            return self.sources.authorize_scope_in_session(
+                session, command, identity_fence=identity_fence, artifact_reader=artifact_reader
+            )
+
+        return capture_public_solution_query_population(
             session,
             scope,
-            artifact_reader=artifact_reader,
-            maximum_population_sources=maximum_population_sources,
-            capture_page=lambda keys, reader: self.capture_in_session(
+            recipe,
+            reader=artifact_reader,
+            maximum_sources=maximum_population_sources,
+            capture=lambda: self._capture_population_in_session(
                 session,
-                replace(command, source_revision_ids=keys),
-                recipe,
-                identity_fence=identity_fence,
-                artifact_reader=reader,
+                scope,
+                artifact_reader=artifact_reader,
+                maximum_population_sources=maximum_population_sources,
+                capture_page=lambda keys, reader: self.capture_in_session(
+                    session,
+                    replace(command, source_revision_ids=keys),
+                    recipe,
+                    identity_fence=identity_fence,
+                    artifact_reader=reader,
+                ),
+                reauthorize=reauthorize,
             ),
-            reauthorize=lambda: self.sources.authorize_scope_in_session(
-                session, command, identity_fence=identity_fence, artifact_reader=artifact_reader
-            ),
+            reauthorize=reauthorize,
         )
 
     def capture_indexing_in_session(
@@ -209,34 +220,18 @@ class CatalogPublicSolutionSourceCapture:
         """One traversal for the two real caller kinds; callbacks confer no authority."""
 
         # Keep each provenance reader below its fixed metadata budget as the
-        # corpus grows. This only bounds keyset pages, never the admitted set.
+        # corpus grows. Only the small identity list is read across all pages.
         page_scope = replace(
             scope,
             maximum_candidates=min(scope.maximum_candidates, MAX_PUBLIC_SOLUTION_PAGE_SOURCES),
         )
 
-        def read_page(after: str | None) -> CandidateSourcePage:
-            return validate_candidate_source_page(
-                tuple(
-                    tuple(row)
-                    for row in session.execute(
-                        candidate_source_page_statement(page_scope, after_source_revision_id=after)
-                    )
-                ),
-                maximum=page_scope.maximum_candidates,
-                after_source_revision_id=after,
-            )
-
-        pages: list[tuple[str | None, CandidateSourcePage]] = []
+        pages = read_candidate_source_pages(
+            session, page_scope, maximum_sources=maximum_population_sources
+        )
         captured: list[CapturedPublicSolutionSources] = []
-        total_sources = total_bytes = 0
-        after: str | None = None
-        while True:
-            page = read_page(after)
-            total_sources += len(page.members)
-            if total_sources > maximum_population_sources:
-                raise ValueError("PUBLIC_SOLUTION_POPULATION_BOUND_EXCEEDED")
-            pages.append((after, page))
+        total_bytes = 0
+        for page in pages:
             if page.members:
                 selected = tuple(source for source, _run in page.members)
                 page_reader = PinnedArtifactReadContext(
@@ -260,10 +255,12 @@ class CatalogPublicSolutionSourceCapture:
                 if total_bytes > MAX_PUBLIC_SOLUTION_CAPTURE_BYTES:
                     raise ValueError("PUBLIC_SOLUTION_CAPTURE_BUDGET_EXCEEDED")
                 captured.append(value)
-            if page.complete:
-                break
-            after = page.next_after_source_revision_id
-        if any(read_page(cursor) != page for cursor, page in pages):
+        if (
+            read_candidate_source_pages(
+                session, page_scope, maximum_sources=maximum_population_sources
+            )
+            != pages
+        ):
             raise ValueError("PUBLIC_SOLUTION_POPULATION_CHANGED")
         if reauthorize() != scope:
             raise ValueError("PUBLIC_SOLUTION_AUTHORITY_CHANGED")

@@ -10,10 +10,16 @@ from uuid import uuid4
 import pytest
 from eom_catalog_contracts.completed_public_ranking import CompletedPublicSimilarityRanking
 from eom_catalog_service import completed_public_ranking_read as module
+from eom_catalog_service import public_solution_population_dependencies as dependencies
 from eom_catalog_service.completed_public_ranking_dependencies import (
     observe_completed_public_ranking_dependencies,
 )
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_catalog_service.local_indexing_source_paging import (
+    candidate_source_page_statement,
+    read_candidate_source_pages,
+    validate_candidate_source_page,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import content_sha256
 from eom_orchestrator.completed_public_ranking_artifact import CompletedPublicRankingArtifactStore
@@ -226,3 +232,72 @@ def test_fresh_sql_dependency_fingerprint_detects_an_unreturned_source_change(
     elapsed = perf_counter() - started
     record_property("saved_ranking_545_source_three_metadata_observations_seconds", elapsed)
     assert elapsed < 20  # Synthetic SQL ceiling, not a live latency claim.
+
+
+def test_bounded_membership_scan_preserves_legacy_dependency_fingerprint(
+    population_observation_database, monkeypatch, record_property
+):
+    session = population_observation_database
+    scope = occurrence_scope(maximum=1024)
+    count = {"legacy": 0, "bounded": 0}
+
+    def legacy_pages(session, scope, *, maximum_sources):
+        pages = []
+        after = None
+        while True:
+            count["legacy"] += 1
+            page = validate_candidate_source_page(
+                tuple(
+                    tuple(row)
+                    for row in session.execute(
+                        candidate_source_page_statement(scope, after_source_revision_id=after)
+                    )
+                ),
+                maximum=scope.maximum_candidates,
+                after_source_revision_id=after,
+            )
+            pages.append(page)
+            if page.complete:
+                break
+            after = page.next_after_source_revision_id
+        assert sum(len(page.members) for page in pages) <= maximum_sources
+        return tuple(pages)
+
+    def bounded_pages(*args, **kwargs):
+        count["bounded"] += 1
+        return read_candidate_source_pages(*args, **kwargs)
+
+    monkeypatch.setattr(dependencies, "read_candidate_source_pages", legacy_pages)
+    started = perf_counter()
+    before = dependencies.observe_public_solution_population_dependencies(session, scope, 16384)
+    record_property("legacy_membership_seconds", perf_counter() - started)
+    monkeypatch.setattr(dependencies, "read_candidate_source_pages", bounded_pages)
+    started = perf_counter()
+    after = dependencies.observe_public_solution_population_dependencies(session, scope, 16384)
+    record_property("bounded_membership_seconds", perf_counter() - started)
+    assert before == after
+    assert count == {"legacy": 6, "bounded": 2}  # 545 sources, 3 pages, before/after.
+
+
+def test_membership_changed_during_observation_is_not_accepted(
+    population_observation_database, monkeypatch
+):
+    session = population_observation_database
+    scope = occurrence_scope(maximum=1024)
+    calls = 0
+
+    def change_before_second_read(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            session.execute(
+                text(
+                    "UPDATE pg_temp.items SET lifecycle_state='RETIRED' "
+                    "WHERE item_id='item_'||lpad('545',32,'0')"
+                )
+            )
+        return read_candidate_source_pages(*args, **kwargs)
+
+    monkeypatch.setattr(dependencies, "read_candidate_source_pages", change_before_second_read)
+    with pytest.raises(ValueError, match="POPULATION_CHANGED"):
+        dependencies.observe_public_solution_population_dependencies(session, scope, 16384)

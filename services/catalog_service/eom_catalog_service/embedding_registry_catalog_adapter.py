@@ -1324,9 +1324,9 @@ class CatalogEmbeddingRegistryVerifier:
     ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
         """One full materialization for capture and DOCUMENT in this exact read root.
 
-        The returned values are not authority. The public composer retains its
-        independent full final source capture; each index check still fences
-        current scope/provenance through the existing bounded window.
+        The returned values are not authority. Final source resolution reuses
+        immutable interpretation only within this root, with a fresh complete SQL
+        dependency observation and current scope/provenance checks.
         """
         self._require_similarity_root(session)
         if (

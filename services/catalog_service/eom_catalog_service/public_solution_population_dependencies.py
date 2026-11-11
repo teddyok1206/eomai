@@ -24,9 +24,7 @@ from eom_catalog_service.inference_transfer_read_timing import (
 )
 from eom_catalog_service.knowledge_retrieval_service import ReadOnlyCandidatePoolScope
 from eom_catalog_service.local_indexing_source_paging import (
-    CandidateSourcePage,
-    candidate_source_page_statement,
-    validate_candidate_source_page,
+    read_candidate_source_pages,
 )
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 from eom_catalog_service.models import ItemComponentRecord
@@ -106,28 +104,8 @@ class PublicSolutionDependencyObserver:
             ResolvedExecutionPlanRecord.__table__,
         )
         page_scope = replace(scope, maximum_candidates=min(256, scope.maximum_candidates))
-        pages: list[tuple[str | None, CandidateSourcePage]] = []
-        after: str | None = None
-        total = 0
-
-        def read_page(cursor: str | None) -> CandidateSourcePage:
-            return validate_candidate_source_page(
-                tuple(
-                    tuple(row)
-                    for row in session.execute(
-                        candidate_source_page_statement(page_scope, after_source_revision_id=cursor)
-                    )
-                ),
-                maximum=page_scope.maximum_candidates,
-                after_source_revision_id=cursor,
-            )
-
-        while True:
-            page = read_page(after)
-            total += len(page.members)
-            if total > maximum_sources:
-                raise ValueError("COMPLETED_PUBLIC_RANKING_POPULATION_CHANGED")
-            pages.append((after, page))
+        pages = read_candidate_source_pages(session, page_scope, maximum_sources=maximum_sources)
+        for page in pages:
             selected = tuple(value[0] for value in page.members)
             current_scope = replace(page_scope, source_revision_ids=selected)
             if selected:
@@ -209,13 +187,13 @@ class PublicSolutionDependencyObserver:
                     max(1, len(workflows) * 32),
                     ("plan_id",),
                 )
-            if page.complete:
-                break
-            after = page.next_after_source_revision_id
-        if any(read_page(cursor) != page for cursor, page in pages):
+        if (
+            read_candidate_source_pages(session, page_scope, maximum_sources=maximum_sources)
+            != pages
+        ):
             raise ValueError("COMPLETED_PUBLIC_RANKING_POPULATION_CHANGED")
 
-        return tuple(page.members for _cursor, page in pages)
+        return tuple(page.members for page in pages)
 
 
 @observe_read_stage(InferenceTransferReadStage.PUBLIC_POPULATION_REVALIDATION)

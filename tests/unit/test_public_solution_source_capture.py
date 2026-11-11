@@ -264,3 +264,33 @@ def test_index_population_composes_existing_capture_and_current_service_authorit
     authority.authorize_scope.return_value = Mock(spec=type(policy))
     with pytest.raises(ValueError, match="AUTHORITY_CHANGED"):
         kwargs["reauthorize"]()
+
+
+def test_query_population_composes_same_root_reuse_with_actual_scope_and_recipe(monkeypatch):
+    owner = object.__new__(CatalogPublicSolutionSourceCapture)
+    owner.sources = Mock()
+    session, reader, fence = Mock(), Mock(), Mock()
+    command = NS(source_revision_ids=())
+    scope = owner.sources.authorize_scope_in_session.return_value
+    strict, read_set = Mock(), Mock()
+    monkeypatch.setattr(owner, "_capture_population_in_session", strict)
+    monkeypatch.setattr(capture_module, "capture_public_solution_query_population", read_set)
+    recipe = public_recipe()
+    assert (
+        owner.capture_population_in_session(
+            session,
+            command,
+            recipe,
+            identity_fence=fence,
+            artifact_reader=reader,
+            maximum_population_sources=16384,
+        )
+        is read_set.return_value
+    )
+    args, kwargs = read_set.call_args
+    assert args == (session, scope, recipe)
+    assert kwargs["reader"] is reader and kwargs["maximum_sources"] == 16384
+    assert kwargs["capture"]() is strict.return_value
+    assert kwargs["reauthorize"]() is scope
+    assert owner.sources.authorize_scope_in_session.call_count == 2
+    assert owner.sources.authorize_scope_in_session.call_args.kwargs["identity_fence"] is fence

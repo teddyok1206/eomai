@@ -1,6 +1,7 @@
 """Real disposable SQL closure; synthetic materialization, no model/NAS/production."""
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 from uuid import uuid4
@@ -12,6 +13,7 @@ from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadCon
 from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 from eom_catalog_service.public_solution_index_read_set import (
     capture_public_solution_index_population,
+    capture_public_solution_query_population,
 )
 from eom_catalog_service.public_solution_population_dependencies import (
     observe_public_solution_index_dependencies,
@@ -127,6 +129,42 @@ def test_change_during_first_strict_capture_does_not_publish_a_read_set(captured
     case.build.side_effect = build
     with pytest.raises(ValueError, match="POPULATION_CHANGED"):
         case.run()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "UPDATE pg_temp.items SET lifecycle_state='RETIRED' "
+        "WHERE item_id='item_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.knowledge_analysis_runs SET canonical_request="
+        "canonical_request||jsonb_build_object('changed',true) "
+        "WHERE analysis_run_id='analysisrun_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.artifact_revisions SET approved=false "
+        "WHERE revision_id='rev_'||lpad('545',32,'0')",
+    ),
+)
+def test_query_root_reuse_preserves_real_sql_revocation_checks(captured, mutation):
+    case = captured
+    value = replace(case.value, scope=case.scope)
+    build = Mock(return_value=value)
+
+    def read():
+        return capture_public_solution_query_population(
+            case.session,
+            case.scope,
+            case.intent.recipe,
+            reader=case.reader,
+            maximum_sources=16384,
+            capture=build,
+            reauthorize=lambda: case.scope,
+        )
+
+    assert read() is read() is value
+    assert build.call_count == 1
+    case.session.execute(text(mutation))
+    with pytest.raises(ValueError, match="POPULATION_CHANGED"):
+        read()
+    assert build.call_count == 1
 
 
 def test_real_registration_savepoint_commit_and_rollback_are_not_cache_rejections(captured):

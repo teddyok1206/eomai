@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_service import local_indexing_source_paging as paging
 from eom_catalog_service import public_solution_source_capture as module
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
@@ -46,14 +47,18 @@ def case(monkeypatch, count=1100):
     )
     statements = []
 
-    def statement(_scope, *, after_source_revision_id):
+    def statement(_scope):
         assert _scope is not scope and _scope.maximum_candidates == 256
         assert scope.maximum_candidates == 1024
-        statements.append(after_source_revision_id)
-        return after_source_revision_id
 
-    def execute(after):
-        return tuple(value for value in all_members if after is None or value[0] > after)[:257]
+        def limited(maximum):
+            statements.append(maximum)
+            return maximum
+
+        return NS(limit=limited)
+
+    def execute(maximum):
+        return all_members[:maximum]
 
     selections = []
 
@@ -77,7 +82,12 @@ def case(monkeypatch, count=1100):
         )
 
     session.execute.side_effect = execute
-    monkeypatch.setattr(module, "candidate_source_page_statement", statement)
+    monkeypatch.setattr(paging, "candidate_source_page_statement", statement)
+    # Root reuse has its own focused tests; this fixture exercises the actual
+    # bounded membership reader and page capture orchestration.
+    monkeypatch.setattr(
+        module, "capture_public_solution_query_population", lambda *_a, capture, **_kw: capture()
+    )
     monkeypatch.setattr(module, "PinnedArtifactReadContext", Mock())
     monkeypatch.setattr(owner, "capture_in_session", capture)
     return NS(**locals())
@@ -103,10 +113,7 @@ def test_population_larger_than_1024_uses_bounded_pages_and_rechecks_exact_membe
     assert tuple(map(len, value.selections)) == (256,) * (count // 256) + (count % 256,)
     assert result.source_revision_ids == tuple(key for key, _ in value.all_members)
     assert result.corpus.missing_solution_reports == count and not result.corpus.truncated
-    assert (
-        value.statements
-        == ([None] + [value.all_members[i][0] for i in range(255, count - 1, 256)]) * 2
-    )
+    assert value.statements == [16385, 16385]
     assert value.owner.sources.authorize_scope_in_session.call_count == 2
     value.reader.revalidate_provenance.assert_called_once()
 
@@ -133,7 +140,7 @@ def test_page_edge_or_final_membership_change_is_rejected(monkeypatch):
         nonlocal calls
         calls += 1
         rows = execute(after)
-        return rows[:-1] if calls >= 3 else rows
+        return rows[:-1] if calls >= 2 else rows
 
     value.session.execute.side_effect = changed
     with pytest.raises(ValueError, match="POPULATION_CHANGED"):

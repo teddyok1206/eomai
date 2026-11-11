@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_catalog_service.local_indexing_source_paging import (
     candidate_source_page_statement,
+    read_candidate_source_pages,
     validate_candidate_source_page,
 )
 from sqlalchemy.dialects import postgresql
@@ -111,3 +114,67 @@ def test_cursor_and_page_bounds_fail_closed() -> None:
         validate_candidate_source_page((), maximum=8, after_source_revision_id="latest")
     with pytest.raises(ValueError, match="bound"):
         validate_candidate_source_page(((_source(1), _run(1)),) * 10, maximum=8)
+
+
+@pytest.mark.parametrize("count", (0, 1, 255, 256, 257, 512, 1556, 16384))
+def test_population_reads_ids_once_but_keeps_identical_bounded_pages(count):
+    scope = replace(
+        intent(LocalIndexingAccessPolicy.model_validate(policy_document())), maximum_candidates=256
+    )
+    rows = tuple((_source(number), _run(number)) for number in range(1, count + 1))
+    execute = Mock(return_value=rows)
+    pages = read_candidate_source_pages(
+        SimpleNamespace(execute=execute), scope, maximum_sources=16384
+    )
+    expected = []
+    after = None
+    while True:
+        remaining = tuple(row for row in rows if after is None or row[0] > after)
+        page = validate_candidate_source_page(
+            remaining[:257], maximum=256, after_source_revision_id=after
+        )
+        expected.append(page)
+        if page.complete:
+            break
+        after = page.next_after_source_revision_id
+    assert pages == tuple(expected)
+    assert tuple(row for page in pages for row in page.members) == rows
+    execute.assert_called_once()
+    sql = str(
+        execute.call_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "LIMIT 16385" in sql
+    assert "eligible_pointer_analyses AS MATERIALIZED" in sql
+
+
+@pytest.mark.parametrize("maximum", (0, -1, True, 16385))
+def test_population_invalid_bound_never_reads(maximum):
+    scope = intent(LocalIndexingAccessPolicy.model_validate(policy_document()))
+    execute = Mock()
+    with pytest.raises(ValueError, match="BOUND_INVALID"):
+        read_candidate_source_pages(
+            SimpleNamespace(execute=execute), scope, maximum_sources=maximum
+        )
+    execute.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ("overflow", "duplicate_edge", "unordered", "invalid_run"))
+def test_population_rejects_bad_membership_without_partial_pages(fault):
+    scope = replace(
+        intent(LocalIndexingAccessPolicy.model_validate(policy_document())), maximum_candidates=256
+    )
+    rows = [(_source(number), _run(number)) for number in range(1, 513)]
+    if fault == "overflow":
+        rows.append((_source(513), _run(513)))
+    elif fault == "duplicate_edge":
+        rows[256] = rows[255]
+    elif fault == "unordered":
+        rows[1], rows[2] = rows[2], rows[1]
+    else:
+        rows[-1] = (rows[-1][0], "not-an-analysis")
+    with pytest.raises(ValueError):
+        read_candidate_source_pages(
+            SimpleNamespace(execute=Mock(return_value=rows)), scope, maximum_sources=512
+        )

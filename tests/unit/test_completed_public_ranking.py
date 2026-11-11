@@ -165,7 +165,7 @@ def test_second_read_returns_saved_ranking_without_document_decode_vector_or_ran
     assert read(value) == value.context
     assert value.store.commits == 1 and value.composed.call_count == 1
     assert value.selected.call_count == 4 and value.observed.call_count == 5
-    assert value.lock.call_count == 2
+    assert value.lock.call_count == 1  # Completed cache hits do not serialize readers.
     assert value.store.document == snapshot
 
 
@@ -221,3 +221,22 @@ def test_snapshot_binds_full_result_not_display_number(reading):
     assert body["snapshot_sha256"] == content_sha256(
         {key: val for key, val in body.items() if key != "snapshot_sha256"}
     )
+
+
+def test_waiting_first_reader_rechecks_publication_under_the_lock(reading):
+    value = reading
+    read(value)
+    value.lock.reset_mock()
+    find = value.store.find
+    calls = 0
+
+    def another_reader_published(key):
+        nonlocal calls
+        calls += 1
+        return None if calls == 1 else find(key)
+
+    value.store.find = another_reader_published
+    value.composed.side_effect = AssertionError("the other reader already published")
+    assert read(value) == value.context
+    value.lock.assert_called_once()
+    assert calls == 2 and value.store.commits == 1

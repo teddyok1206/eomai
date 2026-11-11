@@ -15,12 +15,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_models import EmbeddingIndexRevisionRecord
+from eom_catalog_service.inference_transfer_read_timing import (
+    InferenceTransferReadStage,
+    observe_read_stage,
+)
 from eom_catalog_service.knowledge_retrieval_service import ReadOnlyCandidatePoolScope
 from eom_catalog_service.public_solution_population_dependencies import (
     PublicSolutionDependencyObserver,
 )
 
 
+@observe_read_stage(InferenceTransferReadStage.SAVED_RANKING_DEPENDENCIES)
 def observe_completed_public_ranking_dependencies(
     session: Session,
     scope: ReadOnlyCandidatePoolScope,

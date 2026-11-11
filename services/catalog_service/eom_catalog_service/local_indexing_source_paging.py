@@ -10,7 +10,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from eom_catalog_contracts.public_solution_embedding_index import MAX_PUBLIC_SOLUTION_SOURCES
 from sqlalchemy import Select
+from sqlalchemy.orm import Session
 
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
 from eom_catalog_service.knowledge_retrieval_service import (
@@ -103,3 +105,38 @@ def validate_candidate_source_page(
         next_after_source_revision_id=(selected[-1][0] if len(rows) > maximum else None),
         complete=len(rows) <= maximum,
     )
+
+
+def read_candidate_source_pages(
+    session: Session,
+    intent: LocalIndexingSourceReadIntent | ReadOnlyCandidatePoolScope,
+    *,
+    maximum_sources: int,
+) -> tuple[CandidateSourcePage, ...]:
+    """Read bounded IDs once, without re-evaluating the whole Graph per page.
+
+    Only source/run identities are materialized. Existing per-page provenance
+    budgets and official eligibility stay unchanged; callers must still perform
+    a fresh final membership read and authorize the actual operator/service.
+    """
+    if type(maximum_sources) is not int or not 1 <= maximum_sources <= MAX_PUBLIC_SOLUTION_SOURCES:
+        raise ValueError("PUBLIC_SOLUTION_POPULATION_BOUND_INVALID")
+    rows = tuple(
+        tuple(row)
+        for row in session.execute(
+            candidate_source_page_statement(intent).limit(maximum_sources + 1)
+        )
+    )
+    if len(rows) > maximum_sources:
+        raise ValueError("PUBLIC_SOLUTION_POPULATION_BOUND_EXCEEDED")
+    pages: list[CandidateSourcePage] = []
+    after = None
+    for start in range(0, max(1, len(rows)), intent.maximum_candidates):
+        page = validate_candidate_source_page(
+            rows[start : start + intent.maximum_candidates + 1],
+            maximum=intent.maximum_candidates,
+            after_source_revision_id=after,
+        )
+        pages.append(page)
+        after = page.next_after_source_revision_id
+    return tuple(pages)

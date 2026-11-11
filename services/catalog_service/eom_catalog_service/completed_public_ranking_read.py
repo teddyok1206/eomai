@@ -43,6 +43,10 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
 )
+from eom_catalog_service.inference_transfer_read_timing import (
+    InferenceTransferReadStage,
+    observe_read_stage,
+)
 from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.knowledge_retrieval_service import ReadOnlyCandidatePoolScope
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -94,6 +98,7 @@ def _lock_result(session: Session, workflow_id: str) -> None:
     session.execute(select(func.pg_advisory_xact_lock(key)))
 
 
+@observe_read_stage(InferenceTransferReadStage.SAVED_RANKING_READ)
 def read_saved_public_ranking_in_session(
     session: Session,
     owner: ReferenceQuerySourceOwner,
@@ -110,11 +115,7 @@ def read_saved_public_ranking_in_session(
             session, owner, caller, selection
         )
     owner = select_completed_reference_query_read_owner(owner, original)
-    _lock_result(session, selection.workflow_id)
     scope = _scope(session, owner, caller, original)
-    before = observe_completed_public_ranking_dependencies(
-        session, scope, original, selection.workflow_id
-    )
     key = "completed-public-ranking:" + content_sha256(
         dict(
             operator_id=caller.operator_id,
@@ -122,6 +123,14 @@ def read_saved_public_ranking_in_session(
         )
     ).removeprefix("sha256:")
     pointer = store.find(key)
+    if pointer is None:
+        # Only publication needs serialization. An immutable saved ranking may
+        # be read concurrently, with the same current authority/dependency fences.
+        _lock_result(session, selection.workflow_id)
+        pointer = store.find(key)
+    before = observe_completed_public_ranking_dependencies(
+        session, scope, original, selection.workflow_id
+    )
     reader = PinnedArtifactReadContext.for_session(session, owner.settings)
 
     def read_snapshot(member: ArtifactMemberPointer) -> CompletedPublicSimilarityRanking:
