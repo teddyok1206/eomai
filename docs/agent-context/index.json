@@ -26,6 +26,8 @@
         "services/workflow_runner/eom_workflow_runner/engine.py",
         "packages/workflow/eom_workflow/review_rework.py",
         "packages/workflow/eom_workflow/review_correction.py",
+        "packages/workflow/eom_workflow/public_similarity_control.py",
+        "packages/workflow/eom_workflow/similarity_control.py",
         "services/catalog_service/eom_catalog_service/workflow_catalog.py",
         "apps/application_api/eom_api/services/item_approval_service.py",
         "apps/application_api/eom_api/services/hwpx_item_revision_resolver.py",
@@ -33,7 +35,7 @@
         "config/control-plane",
         "content/packs"
       ],
-      "test_paths": ["tests/unit/test_workflow_state_machine.py", "tests/unit/test_authoring_reference_boundary.py"],
+      "test_paths": ["tests/unit/test_workflow_state_machine.py", "tests/unit/test_authoring_reference_boundary.py", "tests/unit/test_mandatory_textbook_authoring_pack.py"],
       "reference_paths": ["docs/architecture/CONTENT_TEAM_AUTHORING_PROMPT_V5_DESIGN.md", "docs/architecture/HWPX_APPLICATION_API_V0.md"]
     },
     {
@@ -230,6 +232,9 @@
       "source_paths": [
         "pyproject.toml",
         "scripts/api/deploy_release.sh",
+        "scripts/api/release_operator_runtime.py",
+        "services/catalog_service/eom_catalog_service/creative_learning_runner.py",
+        "infra/systemd/eom-creative-learning.service.in",
         "scripts/api/testdb_prepare.sh",
         "scripts/api/testdb_run.sh",
         "scripts/api/testdb_cleanup.sh",
@@ -240,8 +245,8 @@
         "services/orchestrator/eom_orchestrator/host_package_maintenance.py",
         "services/workflow_runner/eom_workflow_runner/local_indexing_unstarted_cancellation.py"
       ],
-      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_background_resource_recovery.py", "tests/integration/test_graph_publication_interruption.py"],
-      "reference_paths": ["docs/operations/API_INTEGRATION_TEST_DATABASE.md", "docs/operations/RELEASE_OPERATOR_RUNTIME.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/LOCAL_FILE_CLEANUP_2026-11-04.md", "docs/operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md"]
+      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_background_resource_recovery.py", "tests/integration/test_graph_publication_interruption.py", "tests/unit/test_release_context_inventory.py", "tests/unit/test_creative_learning_runner.py", "tests/integration/test_feature_preset_retirement.py"],
+      "reference_paths": ["docs/operations/API_INTEGRATION_TEST_DATABASE.md", "docs/operations/RELEASE_OPERATOR_RUNTIME.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/LOCAL_FILE_CLEANUP_2026-11-04.md", "docs/operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md", "docs/architecture/MAINTENANCE_CONSOLIDATION_2026-11-12.md", "docs/operations/MAINTENANCE_CONSOLIDATION_VERIFICATION_2026-11-12.md"]
     },
     {
       "id": "working-decisions",

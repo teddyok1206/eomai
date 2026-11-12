@@ -1,6 +1,7 @@
 """Sequential canaries prove read closure before advancing the next source."""
 
 from contextlib import nullcontext
+from copy import deepcopy
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
@@ -11,10 +12,97 @@ from eom_catalog_contracts.knowledge import ApprovedItemKnowledgeSourceV2
 from eom_catalog_service import creative_cohort_execution as execution
 from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
 from eom_catalog_service.models import ItemRevisionRecord
+from eom_identifiers import content_sha256
+from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
 from tests.unit.test_creative_learning_cohort import cohort_value
 from tests.unit.test_creative_registered_report import proposal
+from tests.unit.test_execution_control_contracts import _preset
+
+
+def _scope_pin_case(*, historical, logical_state="ACTIVE"):
+    records, pins = {}, []
+    for digit, purpose in (("1", "extract"), ("2", "analyse")):
+        document = deepcopy(_preset())
+        document.update(
+            preset_id="execpreset_" + digit * 32, preset_revision_id="execpresetrev_" + digit * 32
+        )
+        document["content_sha256"] = content_sha256(
+            {key: value for key, value in document.items() if key != "content_sha256"}
+        )
+        row = NS(
+            **{
+                key: document[key]
+                for key in (
+                    "preset_id",
+                    "preset_revision_id",
+                    "state",
+                    "revision_number",
+                    "content_sha256",
+                )
+            },
+            canonical_document=document,
+        )
+        logical = NS(state=logical_state, preset_key=purpose)
+        records[ExecutionPresetRevisionRecord, row.preset_revision_id] = row
+        records[ExecutionPresetRecord, row.preset_id] = logical
+        pins.append(
+            NS(
+                preset_id=row.preset_id,
+                preset_revision_id=row.preset_revision_id,
+                sha256=row.content_sha256,
+            )
+        )
+    scope = NS(
+        cohort_id="previous" if historical else "current",
+        extraction_preset=pins[0],
+        analysis_preset=pins[1],
+        extraction_preset_key="extract",
+        analysis_preset_key="analyse",
+        capacity_policy_revision_id=document["capacity_policy_revision_id"],
+    )
+    service = object.__new__(execution.CreativeCohortExecutionService)
+    service.scope = NS(cohort_id="current")
+    session = NS(get=lambda model, identity: records.get((model, identity)))
+    return service, session, scope, records
+
+
+@pytest.mark.parametrize(
+    "historical,state", [(False, "ACTIVE"), (True, "ACTIVE"), (True, "RETIRED")]
+)
+def test_scope_pin_integrity_survives_historical_logical_retirement(historical, state):
+    service, session, scope, _ = _scope_pin_case(historical=historical, logical_state=state)
+    service._require_scope_pins(session, scope)
+
+
+@pytest.mark.parametrize(
+    "historical,state", [(False, "RETIRED"), (False, "UNKNOWN"), (True, "UNKNOWN")]
+)
+def test_history_read_does_not_authorize_retired_current_scope(historical, state):
+    service, session, scope, _ = _scope_pin_case(historical=historical, logical_state=state)
+    with pytest.raises(ValueError, match="CREATIVE_COHORT_PRESET_PIN_MISMATCH"):
+        service._require_scope_pins(session, scope)
+
+
+@pytest.mark.parametrize(
+    "field", ["hash", "capacity", "key", "missing_revision", "missing_logical"]
+)
+def test_historical_preset_retirement_does_not_skip_pin_validation(field):
+    service, session, scope, records = _scope_pin_case(historical=True, logical_state="RETIRED")
+    pin = scope.analysis_preset
+    if field == "hash":
+        pin.sha256 = "sha256:" + "0" * 64
+    elif field == "capacity":
+        scope.capacity_policy_revision_id = "capacityrev_" + "0" * 32
+    elif field == "key":
+        scope.analysis_preset_key = "unrelated"
+    elif field == "missing_revision":
+        del records[ExecutionPresetRevisionRecord, pin.preset_revision_id]
+    else:
+        del records[ExecutionPresetRecord, pin.preset_id]
+    with pytest.raises(ValueError, match="CREATIVE_COHORT_PRESET_PIN_MISMATCH"):
+        service._require_scope_pins(session, scope)
 
 
 def execution_case(monkeypatch, *, state="COMPLETED", missing_notes=False):

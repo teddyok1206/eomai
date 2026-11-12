@@ -4,10 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime
 from threading import Barrier
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from eom_api.services.control_plane_adapter import ControlPlaneAdapter
+from eom_catalog_service.creative_cohort_execution import CreativeCohortExecutionService
 from eom_identifiers import content_sha256
 from eom_orchestrator import preset_retirement as retirement
 from eom_orchestrator.control_models import (
@@ -82,6 +84,41 @@ def test_retire_preserves_history_and_deletes_only_unused_draft(guarded_engine, 
             )
         )
         assert len(rows) == 1
+
+
+def test_retirement_keeps_frozen_cohort_history_readable_but_not_new_admission(
+    guarded_engine, seed, scope
+):
+    with Session(guarded_engine) as session, session.begin():
+        row = session.get(ExecutionPresetRevisionRecord, seed["base"])
+        before = deepcopy(row.canonical_document)
+        pin = SimpleNamespace(
+            preset_id=row.preset_id,
+            preset_revision_id=row.preset_revision_id,
+            sha256=row.content_sha256,
+        )
+        history = SimpleNamespace(
+            cohort_id="previous",
+            extraction_preset=pin,
+            analysis_preset=pin,
+            extraction_preset_key=seed["key"],
+            analysis_preset_key=seed["key"],
+            capacity_policy_revision_id=before["capacity_policy_revision_id"],
+        )
+        retirement.retire_obsolete_presets(session, **scope)
+    # Fresh sessions model startup after retirement, rather than an ORM identity-map hit.
+    for _ in range(2):
+        with Session(guarded_engine) as session:
+            restarted = object.__new__(CreativeCohortExecutionService)
+            restarted.scope = SimpleNamespace(cohort_id="current")
+            restarted._require_scope_pins(session, history)
+            assert (
+                session.get(ExecutionPresetRevisionRecord, seed["base"]).canonical_document
+                == before
+            )
+            restarted.scope = history
+            with pytest.raises(ValueError, match="CREATIVE_COHORT_PRESET_PIN_MISMATCH"):
+                restarted._require_scope_pins(session, history)
 
 
 @pytest.mark.parametrize("error", ["hash", "reference", "busy", "current", "scope"])

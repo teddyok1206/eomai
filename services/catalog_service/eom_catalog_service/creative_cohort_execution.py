@@ -233,8 +233,14 @@ class CreativeCohortExecutionService:
             )
         return pending_first_targets(self.targets, published)
 
-    @staticmethod
-    def _require_scope_pins(session: Session, scope: CreativeLearningExecutionScope) -> None:
+    def _require_scope_pins(self, session: Session, scope: CreativeLearningExecutionScope) -> None:
+        # Previous scopes identify immutable work, not settings for new admission.
+        # Retiring their logical presets must not prevent reading completed sources.
+        # The current scope still requires ACTIVE; actual start/retry owners enforce
+        # current authorization separately and no revision is substituted here.
+        allowed_states = (
+            {"ACTIVE"} if scope.cohort_id == self.scope.cohort_id else {"ACTIVE", "RETIRED"}
+        )
         for pin, purpose in (
             (scope.extraction_preset, scope.extraction_preset_key),
             (scope.analysis_preset, scope.analysis_preset_key),
@@ -249,7 +255,7 @@ class CreativeCohortExecutionService:
                 or preset.content_sha256 != pin.sha256
                 or preset.capacity_policy_revision_id != scope.capacity_policy_revision_id
                 or logical is None
-                or logical.state != "ACTIVE"
+                or logical.state not in allowed_states
                 or logical.preset_key != purpose
             ):
                 raise ValueError("CREATIVE_COHORT_PRESET_PIN_MISMATCH")

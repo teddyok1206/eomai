@@ -31,6 +31,7 @@ from pydantic import ConfigDict, TypeAdapter, model_validator
 from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV35
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.similarity_control import (
+    SIMILARITY_REFERENCE_PACK_VERSION,
     _require_same_reference_source,
     _similarity_plan_document,
     _validate_reference_roles,
@@ -45,6 +46,11 @@ PUBLIC_SIMILARITY_PLAN_SCHEMAS = frozenset(
 )
 PUBLIC_SIMILARITY_PACK_VERSION = "1.20.18"
 PUBLIC_SIMILARITY_PACK_VERSIONS = frozenset({PUBLIC_SIMILARITY_PACK_VERSION, "1.20.19"})
+# Exact admitted families shared by Catalog binding and Runner preparation. This
+# is not a future-version range and does not authorize an unverified Pack hash.
+SIMILARITY_REFERENCE_PACK_VERSIONS = PUBLIC_SIMILARITY_PACK_VERSIONS | {
+    SIMILARITY_REFERENCE_PACK_VERSION
+}
 
 
 @dataclass(frozen=True, slots=True)

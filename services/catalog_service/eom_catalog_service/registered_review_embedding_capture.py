@@ -35,7 +35,12 @@ from eom_catalog_contracts.registered_review_profile import RegisteredReviewSour
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import compute_control_document_hash
-from eom_workflow import ResolvedExecutionPlan, ResolvedExecutionPlanV18, ResolvedExecutionPlanV20
+from eom_workflow import (
+    ResolvedExecutionPlan,
+    ResolvedExecutionPlanV18,
+    ResolvedExecutionPlanV20,
+    WorkflowRequest,
+)
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import (
     load_persisted_workflow_request,
@@ -215,6 +220,8 @@ def _grounded_candidates(
             _fail()
         assert definition is not None and record is not None
         request = load_persisted_workflow_request(workflow.initial_request)
+        if not isinstance(request, WorkflowRequest):
+            _fail()
         if workflow.request_hash != workflow_business_fingerprint(definition, request):
             _fail()
         body = record.canonical_document

@@ -18,7 +18,7 @@ from eom_orchestrator.public_similarity_materialization import (
     PublicSimilarityMaterializationContext,
 )
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
-from eom_workflow.models import WorkerRequest
+from eom_workflow.models import WorkerRequest, WorkflowRequest
 from eom_workflow.public_similarity_control import (
     PUBLIC_SIMILARITY_PACK_VERSIONS,
     PUBLIC_SIMILARITY_PLAN_SCHEMAS,
@@ -30,6 +30,7 @@ from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowR
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow.similarity_control import (
     SIMILARITY_EXECUTION_PLAN_SCHEMAS,
+    SIMILARITY_REFERENCE_PACK_VERSION,
     SupportedSimilarityExecutionPlan,
     parse_supported_similarity_execution_plan,
     validate_similarity_plan_request,
@@ -133,6 +134,8 @@ def _bind_role(
         )
         plan = parse_role_similarity_plan(record.canonical_document)
         stored_request = load_persisted_workflow_request(actual.initial_request)
+        if not isinstance(stored_request, WorkflowRequest):
+            raise ValueError("SIMILARITY_ROLE_REQUEST_MISMATCH")
         definition = session.get(WorkflowDefinitionRecord, actual.definition_id)
         if (
             raw_pin.get("plan_id") != plan.plan_id
@@ -155,7 +158,7 @@ def _bind_role(
                 for version in (
                     PUBLIC_SIMILARITY_PACK_VERSIONS
                     if isinstance(plan, SupportedPublicSimilarityExecutionPlan)
-                    else {"1.20.17"}
+                    else {SIMILARITY_REFERENCE_PACK_VERSION}
                 )
             }
             or stored_request.content_pack is None

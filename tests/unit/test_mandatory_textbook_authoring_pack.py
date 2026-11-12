@@ -35,6 +35,7 @@ from eom_workflow.models import (
     RoleWorkerInput,
     WorkerRequest,
 )
+from eom_workflow.public_similarity_control import SIMILARITY_REFERENCE_PACK_VERSIONS
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy.orm import Session
 
@@ -57,7 +58,7 @@ TARGET = ROOT / "content/packs/generated-knowledge-item/1.20.19"
 TEXTBOOK_ID = "evidenceitem_" + "4" * 32
 
 
-@pytest.mark.parametrize("version", ("1.20.17", "1.20.18", "1.20.19"))
+@pytest.mark.parametrize("version", sorted(SIMILARITY_REFERENCE_PACK_VERSIONS))
 @pytest.mark.parametrize(
     "form,panels",
     (
@@ -99,16 +100,19 @@ def test_v5_brief_does_not_admit_old_or_unreviewed_pack(version: str) -> None:
         )
 
 
+@pytest.mark.parametrize("version", sorted(SIMILARITY_REFERENCE_PACK_VERSIONS))
 def test_mandatory_textbook_pack_binds_through_real_compatibility_and_image_guards(
     monkeypatch: pytest.MonkeyPatch,
+    version: str,
 ) -> None:
+    source = ROOT / "content/packs/generated-knowledge-item" / version
     request = WorkflowRequest.model_validate_json(
-        (TARGET / "fixtures/smoke-request.json").read_text()
+        (source / "fixtures/smoke-request.json").read_text()
     )
-    pack = compile_pack(TARGET)
+    pack = compile_pack(source)
     session = _PackBindingSession()
     session.activation.content_pack_release_id = session.release.content_pack_release_id
-    session.release.version = "1.20.19"
+    session.release.version = version
     session.release.compatibility_json = pack.manifest.compatibility.model_dump(mode="json")
     profiles = [
         SimpleNamespace(
@@ -141,7 +145,7 @@ def test_mandatory_textbook_pack_binds_through_real_compatibility_and_image_guar
         definition_version="1.16.0",
         session=cast(Session, session),
     )
-    assert context["content_pack"]["version"] == "1.20.19"
+    assert context["content_pack"]["version"] == version
     assert context["local_image_provider"] == binding.model_dump(mode="json")
     workflow = WorkflowInstanceRecord()
     workflow.runtime_context = context

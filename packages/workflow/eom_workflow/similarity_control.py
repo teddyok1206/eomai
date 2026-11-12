@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
 
 MAX_SIMILARITY_EXECUTION_PLAN_BYTES = 1024 * 1024
+SIMILARITY_REFERENCE_PACK_VERSION = "1.20.17"
 SIMILARITY_EXECUTION_PLAN_SCHEMAS = frozenset(
     {"resolved-execution-plan/23.0", "resolved-execution-plan/24.0"}
 )

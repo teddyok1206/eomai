@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from eom_catalog_contracts.assessment_item import ImageBlock
 from eom_catalog_contracts.external_item_learning_authorization import (
@@ -63,7 +64,17 @@ class ResolvedCreativeLearningProposal:
 
 
 def _decode_creative_request(_schema: str, raw: bytes) -> WorkflowRequest:
-    return load_persisted_workflow_request(json.loads(raw))
+    return _load_creative_request(json.loads(raw))
+
+
+def _load_creative_request(document: dict[str, Any]) -> WorkflowRequest:
+    request = load_persisted_workflow_request(document)
+    if (
+        not isinstance(request, WorkflowRequest)
+        or request.request_name != "EXTERNAL_ITEM_LEARNING_REQUEST"
+    ):
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_INPUT_MISMATCH")
+    return request
 
 
 def _decode_creative_role(
@@ -140,8 +151,8 @@ def resolve_completed_creative_learning_proposal(
             decoder=_decode_creative_request,
         )
     else:
-        initial = load_persisted_workflow_request(workflow.initial_request)
-        current_request = load_persisted_workflow_request(workflow.request_payload)
+        initial = _load_creative_request(workflow.initial_request)
+        current_request = _load_creative_request(workflow.request_payload)
     try:
         profile = creative_learning_profile_for_preset(
             workflow.definition_version, initial.execution_preset_key or ""

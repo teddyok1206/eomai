@@ -10,12 +10,13 @@ from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV20
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.public_similarity_control import (
-    PUBLIC_SIMILARITY_PACK_VERSION,
     PUBLIC_SIMILARITY_PACK_VERSIONS,
+    SIMILARITY_REFERENCE_PACK_VERSIONS,
     SupportedPublicSimilarityExecutionPlan,
 )
 from eom_workflow.similarity_control import (
     MAX_SIMILARITY_EXECUTION_PLAN_BYTES,
+    SIMILARITY_REFERENCE_PACK_VERSION,
     SupportedSimilarityExecutionPlan,
     parse_post_registration_grounded_plan,
 )
@@ -23,11 +24,6 @@ from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRe
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
-SIMILARITY_REFERENCE_PACK_VERSION = "1.20.17"
-PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION = PUBLIC_SIMILARITY_PACK_VERSION
-SIMILARITY_REFERENCE_PACK_VERSIONS = frozenset(
-    {SIMILARITY_REFERENCE_PACK_VERSION, *PUBLIC_SIMILARITY_PACK_VERSIONS}
-)
 SimilarityReferenceMode = Literal["NOT_OFFERED", "PINNED_REFERENCE_CONTEXT"]
 _PLAN_PIN_KEYS = frozenset({"plan_id", "plan_sha256", "preset_id", "preset_revision_id"})
 

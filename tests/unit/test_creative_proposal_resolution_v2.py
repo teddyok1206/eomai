@@ -12,11 +12,21 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_workflow.control_plane import parse_creative_learning_execution_plan
+from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 
 from tests.unit.test_creative_registration_v2 import v2_registered
 from tests.unit.test_external_item_learning_execution_plan import _plan
+from tests.unit.test_material_learning_contracts import work
+
+
+def test_creative_decoder_rejects_material_learning_request_before_caching():
+    request = MaterialLearningWorkflowRequest(work_input=work())
+    with pytest.raises(CreativeLearningProposalError, match="CREATIVE_LEARNING_INPUT_MISMATCH"):
+        resolution._decode_creative_request(
+            "catalog-creative-workflow-request/1.0", request.model_dump_json().encode()
+        )
 
 
 def _case(monkeypatch):

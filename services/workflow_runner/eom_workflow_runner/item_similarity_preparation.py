@@ -57,9 +57,13 @@ from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, WorkflowRequest
 from eom_workflow.public_similarity_control import (
     PUBLIC_SIMILARITY_PACK_VERSIONS,
+    SIMILARITY_REFERENCE_PACK_VERSIONS,
     PreparedPublicSimilarityPlan,
 )
-from eom_workflow.similarity_control import PreparedSimilarityPlan
+from eom_workflow.similarity_control import (
+    SIMILARITY_REFERENCE_PACK_VERSION,
+    PreparedSimilarityPlan,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 from sqlalchemy.exc import SQLAlchemyError
@@ -172,7 +176,7 @@ def validate_item_similarity_start_controls(
             or expected.workflow_definition_key != "generic-item-development"
             or expected.workflow_definition_version != "1.16.0"
             or expected.content_pack_key != "generated-knowledge-item"
-            or expected.content_pack_version not in {"1.20.17", *PUBLIC_SIMILARITY_PACK_VERSIONS}
+            or expected.content_pack_version not in SIMILARITY_REFERENCE_PACK_VERSIONS
             or expected.content_pack_bundle_sha256
             != SVG_LABEL_LAYOUT_PACK_BUNDLES[expected.content_pack_version]
             or expected.execution_preset_id != preset.preset_id
@@ -246,7 +250,7 @@ def validate_item_similarity_scope(
         preset=preset,
     )
     try:
-        if expected_resolution.content_pack_version != "1.20.17":
+        if expected_resolution.content_pack_version != SIMILARITY_REFERENCE_PACK_VERSION:
             raise ValueError("legacy similarity controls differ")
         context_request = parse_similarity_context_request(context_request)
         requirement = workflow_request.educational_retrieval

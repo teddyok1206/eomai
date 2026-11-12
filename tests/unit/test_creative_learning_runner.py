@@ -1,6 +1,7 @@
 """Derived status output is bounded, atomic and never an admission authority."""
 
 import json
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -87,6 +88,28 @@ def test_owner_template_pins_installed_code_and_cannot_read_worker_auth():
     assert "IPAddressDeny=any" in unit and "RestartPreventExitStatus=78" in unit
     assert "EOM_DATABASE_URL" not in unit and "auth.json" not in unit
     assert "TimeoutStopSec=1800" in unit
+    assert "Type=notify" in unit and "NotifyAccess=main" in unit
+    assert "TimeoutStartSec=300" in unit
+
+
+def test_owner_ready_uses_real_local_datagram_without_work_or_status_payload(tmp_path, monkeypatch):
+    address = str(tmp_path / "notify")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as receiver:
+        receiver.bind(address)
+        receiver.settimeout(1)
+        monkeypatch.setenv("NOTIFY_SOCKET", address)
+        runner.notify_owner_ready()
+        assert receiver.recv(128) == b"READY=1"
+
+
+def test_direct_cli_needs_no_systemd_and_missing_notification_socket_fails_closed(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("NOTIFY_SOCKET", raising=False)
+    runner.notify_owner_ready()
+    monkeypatch.setenv("NOTIFY_SOCKET", str(tmp_path / "missing"))
+    with pytest.raises(ValueError, match="CREATIVE_COHORT_STARTUP_NOTIFY_FAILED"):
+        runner.notify_owner_ready()
 
 
 def test_stop_status_is_written_only_after_publication_drain():
@@ -97,7 +120,7 @@ def test_stop_status_is_written_only_after_publication_drain():
     assert source.index("service.close()") < source.index('"state": "STOPPED"')
 
 
-@pytest.mark.parametrize("failure", [None, "advance", "close"])
+@pytest.mark.parametrize("failure", [None, "pins", "advance", "close"])
 def test_runner_keeps_fence_until_close_and_never_overwrites_failure(
     tmp_path, monkeypatch, failure
 ):
@@ -124,7 +147,17 @@ def test_runner_keeps_fence_until_close_and_never_overwrites_failure(
     monkeypatch.setattr(runner, "CatalogArtifactService", Mock())
     monkeypatch.setattr(runner, "ControlFileSetPublisher", Mock())
     monkeypatch.setattr(runner, "read_creative_execution_scope", lambda *args: (scope, None))
-    monkeypatch.setattr(runner, "CreativeCohortExecutionService", Mock(return_value=owner))
+    monkeypatch.setattr(
+        runner,
+        "CreativeCohortExecutionService",
+        Mock(
+            return_value=owner,
+            side_effect=ValueError("CREATIVE_COHORT_PRESET_PIN_MISMATCH")
+            if failure == "pins"
+            else None,
+        ),
+    )
+    monkeypatch.setattr(runner, "notify_owner_ready", lambda: events.append("READY"))
     monkeypatch.setattr(runner, "require_background_write_capacity", lambda _: None)
     monkeypatch.setattr(
         runner.signal, "signal", lambda number, handler: signals.update({number: handler})
@@ -141,6 +174,7 @@ def test_runner_keeps_fence_until_close_and_never_overwrites_failure(
     monkeypatch.setattr(runner.os, "close", release_fence)
 
     def advance():
+        assert events.count("READY") == 1
         signals[runner.signal.SIGTERM](None, None)
         if failure == "advance":
             raise ValueError("CREATIVE_COHORT_SOURCE_MISMATCH")
@@ -173,6 +207,7 @@ def test_runner_keeps_fence_until_close_and_never_overwrites_failure(
         runner.main()
         assert events[-4:] == ["DRAINING", "CLOSE", "STOPPED", "FENCE_RELEASED"]
     assert events[-1] == "FENCE_RELEASED"
+    assert events.count("READY") == (0 if failure == "pins" else 1)
     engine.dispose.assert_called_once()
 
 

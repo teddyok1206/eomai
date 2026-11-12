@@ -95,6 +95,18 @@ close가 끝나기 전까지 cohort fence와 `DRAINING` 상태를 유지한다. 
 먼저 SIGINT drain을 요청하고 실제 작업 종료를 확인한다. 시간 초과·실패는 원래 scope의
 멱등 복구 경계를 따르며 성공으로 바꾸지 않는다.
 
+creative 시작 검사는 현재 execution scope의 ACTIVE preset과 이전 scope의 보존된 RELEASED
+revision을 구분한다. 과거 logical preset은 RETIRED여도 exact identity/hash/capacity/key를
+검증해 읽을 수 있지만, 현재 scope 또는 신규 admission의 ACTIVE 요구는 완화하지 않는다.
+새 owner template은 `Type=notify`이며 scope/fence/pin 초기화 뒤에만 `READY=1`을 보낸다.
+이 readiness는 모델 완료 증거가 아니다. 새 template은 notification을 구현한 wheel과
+함께 인계해야 하며 옛 runtime에 unit만 먼저 적용하지 않는다.
+
+release operator의 context/schema hash/migration/receipt 형식은 기존 adapter의
+`_CONTEXT_FORMATS` 한 표에서 고정한다. schema bytes와 실제 callback 권한은 그대로이며
+새 버전을 inferred latest나 문자열 범위로 허용하지 않는다. 운영 helper hash 승인과
+소스 정리는 별개다. 역사적 설치 기록·staging wrapper를 정리 대상으로 오인하지 않는다.
+
 INDEX readiness의 `LOCAL_EMBEDDING_READINESS_FAILED reason=...`은 제한된 원인 코드만
 남긴다. timeout·파일 변경·control 불일치를 구분하되 원문 stderr나 환경값을 출력하지
 않는다. 사용자 오류 코드와 실패 판정은 유지하며 이 진단 자체가 자동 retry 권한은 아니다.

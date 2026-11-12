@@ -3,7 +3,10 @@ Description=EOM admitted creative Item sequential learning owner
 After=network.target postgresql.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+# Startup must resolve the admitted scope and validate pins before systemctl succeeds.
+TimeoutStartSec=300
 User=root
 Group=root
 WorkingDirectory=/

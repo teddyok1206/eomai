@@ -6,6 +6,7 @@ import json
 import os
 import re
 import signal
+import socket
 import stat
 from contextlib import suppress
 from dataclasses import asdict
@@ -106,6 +107,28 @@ def progress_poll_delay_seconds(state: str) -> int:
     return 300 if state == "BLOCKED_SOURCES" else 10
 
 
+def notify_owner_ready() -> None:
+    """systemd readiness follows exact scope validation, not process creation.
+
+    Direct CLI invocation has no notification socket. Only the fixed READY message
+    is emitted; this is not evidence of completed Graph publication or worker work.
+    """
+    address = os.environ.get("NOTIFY_SOCKET")
+    if not address:
+        return
+    if address.startswith("@"):
+        address = "\0" + address[1:]
+    elif not address.startswith("/"):
+        raise ValueError("CREATIVE_COHORT_STARTUP_NOTIFY_FAILED")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as notifier:
+            notifier.settimeout(2)
+            notifier.connect(address)
+            notifier.sendall(b"READY=1")
+    except OSError:
+        raise ValueError("CREATIVE_COHORT_STARTUP_NOTIFY_FAILED") from None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="eom-creative-learning")
     parser.add_argument(
@@ -177,6 +200,7 @@ def main() -> None:
             if scope.max_in_flight_sources > 1
             else owner
         )
+        notify_owner_ready()
         previous: tuple[object, ...] | None = None
         while not stopped.is_set():
             try:

@@ -126,6 +126,150 @@ ERROR_CODES = frozenset(
 )
 
 
+@dataclass(frozen=True)
+class _ReleaseContextFormat:
+    schema_name: str
+    schema_sha256: str
+    migration_revision: str
+
+
+# One finite table owns context/receipt/schema/head compatibility. Historical
+# entries remain exact; neither unknown versions nor arbitrary heads are admitted.
+_CONTEXT_FORMATS = MappingProxyType(
+    {
+        "release-operator-context/1.0": _ReleaseContextFormat(
+            "release_operator_context.schema.json", _SCHEMA_SHA256, MIGRATION_REVISION
+        ),
+        "release-operator-context/1.1": _ReleaseContextFormat(
+            "release_operator_context_v1_1.schema.json",
+            _SCHEMA_V1_1_SHA256,
+            MIGRATION_REVISION_0052,
+        ),
+        "release-operator-context/1.2": _ReleaseContextFormat(
+            "release_operator_context_v1_2.schema.json",
+            _SCHEMA_V1_2_SHA256,
+            MIGRATION_REVISION_0053,
+        ),
+        "release-operator-context/1.3": _ReleaseContextFormat(
+            "release_operator_context_v1_3.schema.json",
+            _SCHEMA_V1_3_SHA256,
+            MIGRATION_REVISION_0054,
+        ),
+        "release-operator-context/1.4": _ReleaseContextFormat(
+            "release_operator_context_v1_4.schema.json",
+            _SCHEMA_V1_4_SHA256,
+            MIGRATION_REVISION_0055,
+        ),
+        "release-operator-context/1.5": _ReleaseContextFormat(
+            "release_operator_context_v1_5.schema.json",
+            _SCHEMA_V1_5_SHA256,
+            MIGRATION_REVISION_0056,
+        ),
+        "release-operator-context/1.6": _ReleaseContextFormat(
+            "release_operator_context_v1_6.schema.json",
+            _SCHEMA_V1_6_SHA256,
+            MIGRATION_REVISION_0057,
+        ),
+        "release-operator-context/1.7": _ReleaseContextFormat(
+            "release_operator_context_v1_7.schema.json",
+            _SCHEMA_V1_7_SHA256,
+            MIGRATION_REVISION_0058,
+        ),
+        "release-operator-context/1.8": _ReleaseContextFormat(
+            "release_operator_context_v1_8.schema.json",
+            _SCHEMA_V1_8_SHA256,
+            MIGRATION_REVISION_0059,
+        ),
+        "release-operator-context/1.9": _ReleaseContextFormat(
+            "release_operator_context_v1_9.schema.json",
+            _SCHEMA_V1_9_SHA256,
+            MIGRATION_REVISION_0060,
+        ),
+        "release-operator-context/1.10": _ReleaseContextFormat(
+            "release_operator_context_v1_10.schema.json",
+            _SCHEMA_V1_10_SHA256,
+            MIGRATION_REVISION_0061,
+        ),
+        "release-operator-context/1.11": _ReleaseContextFormat(
+            "release_operator_context_v1_11.schema.json",
+            _SCHEMA_V1_11_SHA256,
+            MIGRATION_REVISION_0062,
+        ),
+        "release-operator-context/1.12": _ReleaseContextFormat(
+            "release_operator_context_v1_12.schema.json",
+            _SCHEMA_V1_12_SHA256,
+            MIGRATION_REVISION_0063,
+        ),
+        "release-operator-context/1.13": _ReleaseContextFormat(
+            "release_operator_context_v1_13.schema.json",
+            _SCHEMA_V1_13_SHA256,
+            MIGRATION_REVISION_0064,
+        ),
+        "release-operator-context/1.14": _ReleaseContextFormat(
+            "release_operator_context_v1_14.schema.json",
+            _SCHEMA_V1_14_SHA256,
+            MIGRATION_REVISION_0066,
+        ),
+        "release-operator-context/1.15": _ReleaseContextFormat(
+            "release_operator_context_v1_15.schema.json",
+            _SCHEMA_V1_15_SHA256,
+            MIGRATION_REVISION_0068,
+        ),
+        "release-operator-context/1.16": _ReleaseContextFormat(
+            "release_operator_context_v1_16.schema.json",
+            _SCHEMA_V1_16_SHA256,
+            MIGRATION_REVISION_0069,
+        ),
+        "release-operator-context/1.17": _ReleaseContextFormat(
+            "release_operator_context_v1_17.schema.json",
+            _SCHEMA_V1_17_SHA256,
+            MIGRATION_REVISION_0070,
+        ),
+        "release-operator-context/1.18": _ReleaseContextFormat(
+            "release_operator_context_v1_18.schema.json",
+            _SCHEMA_V1_18_SHA256,
+            MIGRATION_REVISION_0071,
+        ),
+        "release-operator-context/1.19": _ReleaseContextFormat(
+            "release_operator_context_v1_19.schema.json",
+            _SCHEMA_V1_19_SHA256,
+            MIGRATION_REVISION_0072,
+        ),
+        "release-operator-context/1.20": _ReleaseContextFormat(
+            "release_operator_context_v1_20.schema.json",
+            _SCHEMA_V1_20_SHA256,
+            MIGRATION_REVISION_0073,
+        ),
+        "release-operator-context/1.21": _ReleaseContextFormat(
+            "release_operator_context_v1_21.schema.json",
+            _SCHEMA_V1_21_SHA256,
+            MIGRATION_REVISION_0074,
+        ),
+        "release-operator-context/1.22": _ReleaseContextFormat(
+            "release_operator_context_v1_22.schema.json",
+            _SCHEMA_V1_22_SHA256,
+            MIGRATION_REVISION_0076,
+        ),
+        "release-operator-context/1.23": _ReleaseContextFormat(
+            "release_operator_context_v1_23.schema.json",
+            _SCHEMA_V1_23_SHA256,
+            MIGRATION_REVISION_0077,
+        ),
+        "release-operator-context/1.24": _ReleaseContextFormat(
+            "release_operator_context_v1_24.schema.json",
+            _SCHEMA_V1_24_SHA256,
+            MIGRATION_REVISION_0079,
+        ),
+    }
+)
+_ADMISSION_CONTEXTS = MappingProxyType(
+    {
+        version.replace("release-operator-context/", "release-operator-admission/", 1): version
+        for version in _CONTEXT_FORMATS
+    }
+)
+
+
 class OperatorRuntimeError(ValueError):
     """Stable redacted operator error; never carry source/credential output."""
 
@@ -364,130 +508,13 @@ def _json(raw: bytes) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID")
     version = value.get("schema_version")
-    if version in ("release-operator-context/1.0", "release-operator-admission/1.0"):
-        schema_name, expected_schema_sha = "release_operator_context.schema.json", _SCHEMA_SHA256
-    elif version in ("release-operator-context/1.1", "release-operator-admission/1.1"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_1.schema.json",
-            _SCHEMA_V1_1_SHA256,
-        )
-    elif version in ("release-operator-context/1.2", "release-operator-admission/1.2"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_2.schema.json",
-            _SCHEMA_V1_2_SHA256,
-        )
-    elif version in ("release-operator-context/1.3", "release-operator-admission/1.3"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_3.schema.json",
-            _SCHEMA_V1_3_SHA256,
-        )
-    elif version in ("release-operator-context/1.4", "release-operator-admission/1.4"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_4.schema.json",
-            _SCHEMA_V1_4_SHA256,
-        )
-    elif version in ("release-operator-context/1.5", "release-operator-admission/1.5"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_5.schema.json",
-            _SCHEMA_V1_5_SHA256,
-        )
-    elif version in ("release-operator-context/1.6", "release-operator-admission/1.6"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_6.schema.json",
-            _SCHEMA_V1_6_SHA256,
-        )
-    elif version in ("release-operator-context/1.7", "release-operator-admission/1.7"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_7.schema.json",
-            _SCHEMA_V1_7_SHA256,
-        )
-    elif version in ("release-operator-context/1.8", "release-operator-admission/1.8"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_8.schema.json",
-            _SCHEMA_V1_8_SHA256,
-        )
-    elif version in ("release-operator-context/1.9", "release-operator-admission/1.9"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_9.schema.json",
-            _SCHEMA_V1_9_SHA256,
-        )
-    elif version in ("release-operator-context/1.10", "release-operator-admission/1.10"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_10.schema.json",
-            _SCHEMA_V1_10_SHA256,
-        )
-    elif version in ("release-operator-context/1.11", "release-operator-admission/1.11"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_11.schema.json",
-            _SCHEMA_V1_11_SHA256,
-        )
-    elif version in ("release-operator-context/1.12", "release-operator-admission/1.12"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_12.schema.json",
-            _SCHEMA_V1_12_SHA256,
-        )
-    elif version in ("release-operator-context/1.13", "release-operator-admission/1.13"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_13.schema.json",
-            _SCHEMA_V1_13_SHA256,
-        )
-    elif version in ("release-operator-context/1.14", "release-operator-admission/1.14"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_14.schema.json",
-            _SCHEMA_V1_14_SHA256,
-        )
-    elif version in ("release-operator-context/1.15", "release-operator-admission/1.15"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_15.schema.json",
-            _SCHEMA_V1_15_SHA256,
-        )
-    elif version in ("release-operator-context/1.16", "release-operator-admission/1.16"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_16.schema.json",
-            _SCHEMA_V1_16_SHA256,
-        )
-    elif version in ("release-operator-context/1.17", "release-operator-admission/1.17"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_17.schema.json",
-            _SCHEMA_V1_17_SHA256,
-        )
-    elif version in ("release-operator-context/1.18", "release-operator-admission/1.18"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_18.schema.json",
-            _SCHEMA_V1_18_SHA256,
-        )
-    elif version in ("release-operator-context/1.19", "release-operator-admission/1.19"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_19.schema.json",
-            _SCHEMA_V1_19_SHA256,
-        )
-    elif version in ("release-operator-context/1.20", "release-operator-admission/1.20"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_20.schema.json",
-            _SCHEMA_V1_20_SHA256,
-        )
-    elif version in ("release-operator-context/1.21", "release-operator-admission/1.21"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_21.schema.json",
-            _SCHEMA_V1_21_SHA256,
-        )
-    elif version in ("release-operator-context/1.22", "release-operator-admission/1.22"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_22.schema.json",
-            _SCHEMA_V1_22_SHA256,
-        )
-    elif version in ("release-operator-context/1.23", "release-operator-admission/1.23"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_23.schema.json",
-            _SCHEMA_V1_23_SHA256,
-        )
-    elif version in ("release-operator-context/1.24", "release-operator-admission/1.24"):
-        schema_name, expected_schema_sha = (
-            "release_operator_context_v1_24.schema.json",
-            _SCHEMA_V1_24_SHA256,
-        )
-    else:
+    rule = _CONTEXT_FORMATS.get(version) if isinstance(version, str) else None
+    if rule is None:
+        context_version = _ADMISSION_CONTEXTS.get(version) if isinstance(version, str) else None
+        rule = _CONTEXT_FORMATS.get(context_version) if context_version else None
+    if rule is None:
         raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID")
+    schema_name, expected_schema_sha = rule.schema_name, rule.schema_sha256
     schema_bytes = read_protected(Path(__file__).with_name(schema_name), maximum=16 * 1024)
     if _sha(schema_bytes) != expected_schema_sha:
         raise OperatorRuntimeError("RELEASE_OPERATOR_SCHEMA_CHANGED")
@@ -509,37 +536,7 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
     if _sha(raw) != expected_sha256:
         raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_CHANGED")
     value = _json(raw)
-    if (
-        value["schema_version"]
-        not in (
-            "release-operator-context/1.0",
-            "release-operator-context/1.1",
-            "release-operator-context/1.2",
-            "release-operator-context/1.3",
-            "release-operator-context/1.4",
-            "release-operator-context/1.5",
-            "release-operator-context/1.6",
-            "release-operator-context/1.7",
-            "release-operator-context/1.8",
-            "release-operator-context/1.9",
-            "release-operator-context/1.10",
-            "release-operator-context/1.11",
-            "release-operator-context/1.12",
-            "release-operator-context/1.13",
-            "release-operator-context/1.14",
-            "release-operator-context/1.15",
-            "release-operator-context/1.16",
-            "release-operator-context/1.17",
-            "release-operator-context/1.18",
-            "release-operator-context/1.19",
-            "release-operator-context/1.20",
-            "release-operator-context/1.21",
-            "release-operator-context/1.22",
-            "release-operator-context/1.23",
-            "release-operator-context/1.24",
-        )
-        or value["source_commit"] != expected_commit
-    ):
+    if value["schema_version"] not in _CONTEXT_FORMATS or value["source_commit"] != expected_commit:
         raise OperatorRuntimeError("RELEASE_OPERATOR_SOURCE_MISMATCH")
     prefix = Path(value["runtime_prefix"])
     if str(prefix) != value["runtime_prefix"] or ".." in prefix.parts:
@@ -568,132 +565,10 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
 
 
 def _context_migration_revision(context: OperatorContext) -> str:
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.0",
-        MIGRATION_REVISION,
-    ):
-        return MIGRATION_REVISION
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.1",
-        MIGRATION_REVISION_0052,
-    ):
-        return MIGRATION_REVISION_0052
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.2",
-        MIGRATION_REVISION_0053,
-    ):
-        return MIGRATION_REVISION_0053
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.3",
-        MIGRATION_REVISION_0054,
-    ):
-        return MIGRATION_REVISION_0054
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.4",
-        MIGRATION_REVISION_0055,
-    ):
-        return MIGRATION_REVISION_0055
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.5",
-        MIGRATION_REVISION_0056,
-    ):
-        return MIGRATION_REVISION_0056
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.6",
-        MIGRATION_REVISION_0057,
-    ):
-        return MIGRATION_REVISION_0057
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.7",
-        MIGRATION_REVISION_0058,
-    ):
-        return MIGRATION_REVISION_0058
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.8",
-        MIGRATION_REVISION_0059,
-    ):
-        return MIGRATION_REVISION_0059
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.9",
-        MIGRATION_REVISION_0060,
-    ):
-        return MIGRATION_REVISION_0060
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.10",
-        MIGRATION_REVISION_0061,
-    ):
-        return MIGRATION_REVISION_0061
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.11",
-        MIGRATION_REVISION_0062,
-    ):
-        return MIGRATION_REVISION_0062
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.12",
-        MIGRATION_REVISION_0063,
-    ):
-        return MIGRATION_REVISION_0063
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.13",
-        MIGRATION_REVISION_0064,
-    ):
-        return MIGRATION_REVISION_0064
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.14",
-        MIGRATION_REVISION_0066,
-    ):
-        return MIGRATION_REVISION_0066
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.15",
-        MIGRATION_REVISION_0068,
-    ):
-        return MIGRATION_REVISION_0068
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.16",
-        MIGRATION_REVISION_0069,
-    ):
-        return MIGRATION_REVISION_0069
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.17",
-        MIGRATION_REVISION_0070,
-    ):
-        return MIGRATION_REVISION_0070
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.18",
-        MIGRATION_REVISION_0071,
-    ):
-        return MIGRATION_REVISION_0071
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.19",
-        MIGRATION_REVISION_0072,
-    ):
-        return MIGRATION_REVISION_0072
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.20",
-        MIGRATION_REVISION_0073,
-    ):
-        return MIGRATION_REVISION_0073
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.21",
-        MIGRATION_REVISION_0074,
-    ):
-        return MIGRATION_REVISION_0074
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.22",
-        MIGRATION_REVISION_0076,
-    ):
-        return MIGRATION_REVISION_0076
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.23",
-        MIGRATION_REVISION_0077,
-    ):
-        return MIGRATION_REVISION_0077
-    if (context.schema_version, context.migration_revision) == (
-        "release-operator-context/1.24",
-        MIGRATION_REVISION_0079,
-    ):
-        return MIGRATION_REVISION_0079
-    raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_INVALID")
+    rule = _CONTEXT_FORMATS.get(context.schema_version)
+    if rule is None or context.migration_revision != rule.migration_revision:
+        raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_INVALID")
+    return rule.migration_revision
 
 
 def _admission_document(
@@ -701,7 +576,9 @@ def _admission_document(
 ) -> dict[str, Any]:
     revision = _context_migration_revision(context)
     document = {
-        "schema_version": "release-operator-admission/1.0",
+        "schema_version": context.schema_version.replace(
+            "release-operator-context/", "release-operator-admission/", 1
+        ),
         "context_sha256": context_sha256,
         "runtime_prefix": str(context.runtime_prefix),
         "runtime_tree_sha256": context.runtime_tree_sha256,
@@ -709,78 +586,8 @@ def _admission_document(
         "context_identity": list(identity(path.lstat())),
         "interpreter_identity": list(identity(_interpreter(context).lstat())),
     }
-    if revision == MIGRATION_REVISION_0052:
-        document["schema_version"] = "release-operator-admission/1.1"
-        document["migration_revision"] = MIGRATION_REVISION_0052
-    elif revision == MIGRATION_REVISION_0053:
-        document["schema_version"] = "release-operator-admission/1.2"
-        document["migration_revision"] = MIGRATION_REVISION_0053
-    elif revision == MIGRATION_REVISION_0054:
-        document["schema_version"] = "release-operator-admission/1.3"
-        document["migration_revision"] = MIGRATION_REVISION_0054
-    elif revision == MIGRATION_REVISION_0055:
-        document["schema_version"] = "release-operator-admission/1.4"
-        document["migration_revision"] = MIGRATION_REVISION_0055
-    elif revision == MIGRATION_REVISION_0056:
-        document["schema_version"] = "release-operator-admission/1.5"
-        document["migration_revision"] = MIGRATION_REVISION_0056
-    elif revision == MIGRATION_REVISION_0057:
-        document["schema_version"] = "release-operator-admission/1.6"
-        document["migration_revision"] = MIGRATION_REVISION_0057
-    elif revision == MIGRATION_REVISION_0058:
-        document["schema_version"] = "release-operator-admission/1.7"
-        document["migration_revision"] = MIGRATION_REVISION_0058
-    elif revision == MIGRATION_REVISION_0059:
-        document["schema_version"] = "release-operator-admission/1.8"
-        document["migration_revision"] = MIGRATION_REVISION_0059
-    elif revision == MIGRATION_REVISION_0060:
-        document["schema_version"] = "release-operator-admission/1.9"
-        document["migration_revision"] = MIGRATION_REVISION_0060
-    elif revision == MIGRATION_REVISION_0061:
-        document["schema_version"] = "release-operator-admission/1.10"
-        document["migration_revision"] = MIGRATION_REVISION_0061
-    elif revision == MIGRATION_REVISION_0062:
-        document["schema_version"] = "release-operator-admission/1.11"
-        document["migration_revision"] = MIGRATION_REVISION_0062
-    elif revision == MIGRATION_REVISION_0063:
-        document["schema_version"] = "release-operator-admission/1.12"
-        document["migration_revision"] = MIGRATION_REVISION_0063
-    elif revision == MIGRATION_REVISION_0064:
-        document["schema_version"] = "release-operator-admission/1.13"
-        document["migration_revision"] = MIGRATION_REVISION_0064
-    elif revision == MIGRATION_REVISION_0066:
-        document["schema_version"] = "release-operator-admission/1.14"
-        document["migration_revision"] = MIGRATION_REVISION_0066
-    elif revision == MIGRATION_REVISION_0068:
-        document["schema_version"] = "release-operator-admission/1.15"
-        document["migration_revision"] = MIGRATION_REVISION_0068
-    elif revision == MIGRATION_REVISION_0069:
-        document["schema_version"] = "release-operator-admission/1.16"
-        document["migration_revision"] = MIGRATION_REVISION_0069
-    elif revision == MIGRATION_REVISION_0070:
-        document["schema_version"] = "release-operator-admission/1.17"
-        document["migration_revision"] = MIGRATION_REVISION_0070
-    elif revision == MIGRATION_REVISION_0071:
-        document["schema_version"] = "release-operator-admission/1.18"
-        document["migration_revision"] = MIGRATION_REVISION_0071
-    elif revision == MIGRATION_REVISION_0072:
-        document["schema_version"] = "release-operator-admission/1.19"
-        document["migration_revision"] = MIGRATION_REVISION_0072
-    elif revision == MIGRATION_REVISION_0073:
-        document["schema_version"] = "release-operator-admission/1.20"
-        document["migration_revision"] = MIGRATION_REVISION_0073
-    elif revision == MIGRATION_REVISION_0074:
-        document["schema_version"] = "release-operator-admission/1.21"
-        document["migration_revision"] = MIGRATION_REVISION_0074
-    elif revision == MIGRATION_REVISION_0076:
-        document["schema_version"] = "release-operator-admission/1.22"
-        document["migration_revision"] = MIGRATION_REVISION_0076
-    elif revision == MIGRATION_REVISION_0077:
-        document["schema_version"] = "release-operator-admission/1.23"
-        document["migration_revision"] = MIGRATION_REVISION_0077
-    elif revision == MIGRATION_REVISION_0079:
-        document["schema_version"] = "release-operator-admission/1.24"
-        document["migration_revision"] = MIGRATION_REVISION_0079
+    if context.schema_version != "release-operator-context/1.0":
+        document["migration_revision"] = revision
     return document
 
 

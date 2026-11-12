@@ -109,6 +109,7 @@ from eom_workflow.models import (
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
+from eom_workflow.public_similarity_control import SIMILARITY_REFERENCE_PACK_VERSIONS
 from eom_workflow.schemas import (
     ROLE_ALLOWED_RESULT_SCHEMAS,
     load_review_correction_directive_schema,
@@ -182,7 +183,6 @@ from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_prompt_context import (
-    SIMILARITY_REFERENCE_PACK_VERSIONS,
     read_similarity_prompt_context,
     requires_similarity_prompt_context,
 )

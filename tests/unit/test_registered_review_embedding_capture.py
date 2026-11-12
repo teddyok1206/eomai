@@ -23,6 +23,7 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.models import ArtifactRecord
 from eom_workflow import WorkflowRequest, compile_definition
+from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import workflow_business_fingerprint
 from sqlalchemy.dialects import postgresql
@@ -31,9 +32,26 @@ from tests.unit.inference_transfer_embedding_fixtures import view_recipe
 from tests.unit.inference_transfer_snapshot_fixtures import snapshot_v3_record
 from tests.unit.test_execution_materializer import _knowledge_fixture
 from tests.unit.test_graph_review_v11_protocol import _upgrade_fixture_plan_to_v12
+from tests.unit.test_material_learning_contracts import work
 from tests.unit.test_registered_item_review_solution_resolver import _Artifacts, _fixture, _Session
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_registered_review_rejects_other_request_family_with_stable_error(tmp_path, monkeypatch):
+    value = _capture_fixture(tmp_path, monkeypatch)
+    workflow = next(
+        row
+        for (model, _), row in value["session"].records.items()
+        if model is WorkflowInstanceRecord
+    )
+    document = MaterialLearningWorkflowRequest(work_input=work()).model_dump(mode="json")
+    workflow.initial_request = document
+    workflow.request_payload = document
+    with pytest.raises(
+        EmbeddingRegistryError, match="EMBEDDING_REGISTRY_REGISTERED_REVIEW_SOURCE_INVALID"
+    ):
+        _capture(value)
 
 
 def _capture_fixture(

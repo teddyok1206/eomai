@@ -18,8 +18,9 @@ context는 새 출제 근거로 재사용하지 않는다. 교과서 원문을 �
 소스 구현은 운영 활성화의 증거가 아니다.
 
 Catalog의 V5 요청·그림 binding·reference-composition 호환 집합은
-`similarity_prompt_context.SIMILARITY_REFERENCE_PACK_VERSIONS`의 명시적 successor를
-함께 사용한다. 단일 과거 Pack 상수만 복사하면 최신 활성 Pack의 정상 요청까지
+`eom_workflow.public_similarity_control.SIMILARITY_REFERENCE_PACK_VERSIONS`의 명시적
+successor를 Runner의 출제 준비와 함께 사용한다. Catalog prompt 모듈에 별도 목록을
+만들거나 단일 과거 Pack 상수만 복사하면 최신 활성 Pack의 정상 요청까지
 거부할 수 있다. 새 Pack 검사는 prompt/hash뿐 아니라 실제 `bind_request`의
 brief·profile·그림 guard를 우회하지 않고 통과시키는 회귀를 포함한다.
 

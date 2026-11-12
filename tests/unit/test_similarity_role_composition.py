@@ -22,6 +22,7 @@ from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
+from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
 from eom_workflow.models import WorkerRequest, WorkflowRequest
 from eom_workflow_runner import engine as engine_module
 from eom_workflow_runner import similarity_role_preparation as preparation_module
@@ -40,6 +41,7 @@ from sqlalchemy import create_engine
 from scripts.workflow.generate_similarity_reference_pack_v12017 import TARGET
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_execution_materializer import GROUP_ID, _workspace
+from tests.unit.test_material_learning_contracts import work
 from tests.unit.test_similarity_execution_materializer import workspace_case
 from tests.unit.test_similarity_reference_pack import prompt_case
 from tests.unit.test_workflow_composition import _platform_settings, _workflow_settings
@@ -173,6 +175,7 @@ def test_provider_binds_exact_current_creator_and_query_without_running_or_readi
         "creator",
         "actor_type",
         "initial_request",
+        "request_family",
         "changed_request",
         "query_request",
         "wrong_role",
@@ -214,6 +217,10 @@ def test_bad_role_binding_fails_before_source_or_worker_work(tmp_path, monkeypat
         value.workflow.initial_request["image_mode"] = (
             "skip" if original == "required" else "required"
         )
+    elif fault == "request_family":
+        value.workflow.initial_request = MaterialLearningWorkflowRequest(
+            work_input=work()
+        ).model_dump(mode="json")
     elif fault == "changed_request":
         value.workflow.request_payload["execution_preset_key"] = "unexpected-preset"
     elif fault == "query_request":
