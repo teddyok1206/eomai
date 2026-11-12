@@ -1,6 +1,8 @@
 # 공용 슬롯·프리셋별 모델 설정 릴리스
 
-2026-11-12 UTC. 소스 구현/격리 검증 기록이며 운영 반영 증거가 아니다.
+2026-11-12 UTC. 소스 검증부터 운영 발행까지 시점별 기록을 보존한다.
+최신 상태(09:21 UTC): **`e03af582` 호환 운영 배포 및 20개 프리셋 공용 슬롯 정책 활성화 완료**.
+실제 관리자 브라우저/새 채팅 canary와 모델 변경 후 실행 확인은 별도 확인 대상이다.
 설계: [공용 슬롯과 모델 설정](../architecture/SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md).
 
 ## 사용자 동작
@@ -212,3 +214,32 @@ rollback됐다. 운영 조회에서 `knowledge-grounded-item`의 10월10일 미�
   `staging/shared-settings-model-preflight-ready-20261112.json`.
 - 아직 공용 capacity 활성화 PASS는 아니다. 모델 준비 완료 후
   `EOM → 2번 model-settings-release`에서 실제 관리자 발행 인증을 기다리는 단계다.
+
+## 운영 정책 활성화 완료 — 2026-11-12 09:21 UTC
+
+위 인증 대기·미활성 상태는 각 시점의 기록이다. 실제 guiadmin 인증 후 설치된 official
+shared-slots use case가 성공했고, 별도 읽기 검증으로 current pointers를 다시 확인했다.
+
+- 20/20 논리 프리셋의 current는 새 `worker-capacity-policy/1.7`에 연결됐다.
+  capacity revision: `capacityrev_f145d972c88c4c74a1c698af873e3bcc`.
+- 7개 실행 pool 모두 슬롯01–05를 후보로 갖는다. 모델/추론 깊이·인증·사용량과
+  점유 조건을 통과하는 빈 슬롯을 고르며 host4, 슬롯당1, GPU1 제한은 그대로다.
+  ChatGPT 전용06은 일반 pool에 포함되지 않는다.
+- 각 exact predecessor와 successor를 canonical executable policy hash로 대조했다.
+  capacity 외의 모델·후보 순서·프롬프트/Bundle·retrieval·timeout은 동일하다.
+  10월10일의 무관한 미발행 초안도 DRAFT 상태로 보존됐다.
+- 과거 plan/cohort pin과 실패 이력은 수정하지 않았다. 신규 실행부터 current 공용
+  프리셋을 선택하며 이미 고정된 과거 실행을 암묵적으로 전환하지 않는다.
+- 공용 설정 발행 자체의 모델 호출은0회다. 앞 절의 compatibility 실제 진단2회와 구분한다.
+- HTTPS asset5개와 운영 wheel 일치, 익명 관리자 읽기401, API/Web/채팅 owner·worker/
+  QUERY/runner/자료 학습 서비스 active를 다시 확인했다. INDEX의 기존 failed 상태는
+  그대로이며 이 릴리스의 성공 범위에 포함하지 않는다.
+- 보호된 최종 발행 증거:
+  `/var/lib/eom-shared-settings-release-r3-20261112/controls-activated.json`.
+  기존 `activated.json`의 당시 controls=PENDING은 덮어쓰지 않았다.
+  ignored 읽기 증거는 `staging/shared-settings-activated-smoke-20261112.json` 및
+  `staging/shared-settings-activation-evidence-20261112.log`다.
+
+GUI 원칙 검토·합성 Chromium 검사·배포 assets 확인은 완료다. 실제 사용자의 관리자 화면
+확인과 새 채팅 COMPLETED, 모델 변경 후 신규 turn/일반 작업 pin canary는 아직 기록되지
+않았으며, 위 자동 검증을 이 수동/실행 확인의 대체 증거로 쓰지 않는다.
