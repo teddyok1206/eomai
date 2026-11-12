@@ -169,3 +169,21 @@ rollback됐다. 운영 조회에서 `knowledge-grounded-item`의 10월10일 미�
 모델 사전 조회에서는 binding이 READY여도 최근 native catalog가 만료된 경우를 확인했다.
 새 인증을 요청하기 전에 기존 상태·사용량 OBSERVE로 갱신하며, 만료 기록을 유효하다고
 꾸미거나 모델을 자동 대체하지 않는다. 이 후속 source도 운영 적용/정책 발행과 구분한다.
+
+### 후속 운영 반영
+
+- commit/설치 source `e03af582f129c0bd5ad2b300cd600c8edca1d685`.
+  API/platform/Web와 관련 owner를 같은 호환 절차로 반영했다. migration79는 그대로다.
+- HTTPS 정적 파일5개와 배포 wheel 일치, 익명 관리자 endpoint401,
+  API/Web/채팅 owner·worker/QUERY/runner/자료 학습 서비스 active 확인.
+  ChatGPT06 예약·기본 모델·인증은 유지했다.
+- 새 테스트용 disposable DB는 공식 cleanup으로 제거했다. 실패한 최초 invocation과
+  실제 초안 충돌 기록은 보존한다. 운영 DB/Artifact를 테스트 정리 대상으로 쓰지 않았다.
+- 정책 current는 아직 기존20개이며 shared capacity는0개다. 실제 로그인은 통과했으나
+  초안 충돌 뒤 실행 세션이 종료됐다. 이번 수정본은 설치됐지만 정책 발행 완료는 아니다.
+- 현재 binding은 READY지만 native 모델 목록의 OBSERVE가 오래되어 모델 선택용
+  후보가 비어 있다. 1번과6번의 공식 상태·사용량 새로고침을 요청했다. 갱신 확인 후
+  실제 관리자 인증으로 동일20개 baseline의 전환을 이어간다. 새 모델 호출은 아직0회다.
+- 보호된 배포 기록: `/var/lib/eom-shared-settings-release-r3-20261112`.
+  최신 읽기 검증: ignored `staging/shared-settings-live-smoke-r3-20261112.json`.
+  INDEX는 이전과 같은 failed 상태/InvocationID를 보존했으며 이번 작업 범위 밖이다.
