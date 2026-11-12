@@ -81,3 +81,7 @@ For Preview, CONTENT_TEAM_V2/V3 already include the complete correct/wrong state
 in the main explanation. Render that representation once, retaining the statement DTO for identity
 validation. BLOCKS_V1 may have independent overview and statement explanations and keeps both.
 Canonical content and HWPX serialization are not altered.
+
+Deployment and read-only installed/HTTPS verification are recorded separately in
+[the 2026-11-12 operating checkpoint](../operations/MANDATORY_TEXTBOOK_AUTHORING_RELEASE_2026-11-12.md).
+That checkpoint does not claim a new generated-item or human-quality acceptance.
