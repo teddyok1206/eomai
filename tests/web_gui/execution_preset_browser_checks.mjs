@@ -162,6 +162,49 @@ try {
   assert.equal(await model(0).inputValue(), "model-b");
   assert.equal((await calls()).some(call => call.method === "POST"), false);
 
+  // Switching to a model without the configured depth must not silently choose the
+  // first effort and collide with the other review candidate (the live failure).
+  await reset();
+  const enhancedModel = page.locator('[data-preset-model][data-role-index="1"][data-candidate-index="1"]');
+  const enhancedEffort = page.locator('[data-preset-effort][data-role-index="1"][data-candidate-index="1"]');
+  const originalPolicy = await page.evaluate(() => structuredClone(window.presetFixture.preset.revisions[0].role_policies));
+  await enhancedModel.locator("..").getByRole("button", {name:"model-a",exact:true}).click();
+  assert.equal(await enhancedEffort.inputValue(), "", "unsupported depth needs an explicit selection");
+  assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
+  await page.locator("#preset-model-refresh").click();
+  await page.waitForFunction(() => !document.querySelector("#preset-model-refresh").disabled);
+  assert.equal(await enhancedEffort.inputValue(), "", "refresh cannot invent an effort");
+  await enhancedEffort.locator("..").getByRole("button", {name:"보통",exact:true}).click();
+  assert.equal(await page.locator('[data-preset-candidate-warning]:not([hidden])').count(), 2);
+  assert.match(await page.locator('[data-preset-candidate-warning]:not([hidden])').first().innerText(), /기본 검토.*강화 검토.*다르게/);
+  assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
+  assert.equal((await calls()).some(call => call.method === "POST"), false);
+  await enhancedEffort.locator("..").getByRole("button", {name:"높음",exact:true}).click();
+  assert.equal(await page.locator('[data-preset-candidate-warning]:not([hidden])').count(), 0);
+  assert.equal(await page.locator("#preset-review-open").isDisabled(), false);
+  // The same model+effort on a different role is valid; candidate order is retained.
+  await page.locator("#preset-review-open").click();
+  assert.equal(await page.locator("#preset-review-panel").isHidden(), false);
+  assert.doesNotMatch(await page.locator("#preset-draft-message").innerText(), /PRESET_MODEL_CANDIDATES_DUPLICATED/);
+  assert.deepEqual(await page.evaluate(() => window.presetFixture.preset.revisions[0].role_policies), originalPolicy);
+  await enhancedEffort.locator("..").getByRole("button", {name:"보통",exact:true}).click();
+  assert.equal(await page.locator("#preset-review-panel").isHidden(), true);
+  assert.equal(await page.locator("#preset-draft-submit").isDisabled(), true);
+  await page.locator("#preset-model-refresh").click();
+  await page.waitForFunction(() => !document.querySelector("#preset-model-refresh").disabled);
+  assert.equal(await enhancedEffort.inputValue(), "medium");
+  assert.equal(await page.locator('[data-preset-candidate-warning]:not([hidden])').count(), 2);
+  await enhancedEffort.locator("..").getByRole("button", {name:"높음",exact:true}).click();
+  await page.locator("#preset-review-open").click();
+  await page.locator("#preset-review-confirm").check();
+  await page.locator("#preset-draft-submit").click();
+  await page.waitForFunction(() => !document.querySelector("#preset-release-panel").hidden);
+  const correctedDraft = (await calls()).find(call => call.path === "/admin/execution-presets" && call.method === "POST").body;
+  assert.deepEqual(correctedDraft.role_policies[1].model_candidates, [
+    {model:"model-a",reasoning_effort:"medium"}, {model:"model-a",reasoning_effort:"high"},
+  ]);
+  assert.deepEqual(correctedDraft.role_policies[0], originalPolicy[0]);
+
   await reset();
   const modelCount = await page.evaluate(() => window.presetFixture.preset.revisions[0].role_policies.reduce((n, policy) => n + policy.model_candidates.length, 0));
   assert.equal(await page.locator("[data-preset-model]").count(), modelCount);
@@ -324,6 +367,8 @@ try {
   await page.waitForFunction(() => document.querySelector("#preset-role-editors").textContent.includes("현재 설정 사용 불가"));
   assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
   await chooseModel(2,"model-b");
+  assert.equal(await effort(2).inputValue(), "");
+  await effort(2).locator("..").getByRole("button", {name:"높음",exact:true}).click();
   assert.equal(await page.locator("#preset-review-open").isDisabled(), false);
   assert.equal((await calls()).some(call => call.method === "POST"), false);
 

@@ -532,6 +532,8 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .guided-policy-grid input[readonly] { background: var(--eom-surface-muted); color: var(--eom-text-muted); }
 .policy-role-list { display: grid; gap: 11px; }
 .policy-role-card { padding: 14px; border: 1px solid var(--eom-border); border-radius: 10px; background: var(--eom-porcelain); }
+.policy-role-card.has-candidate-conflict { border-color: var(--eom-warning); }
+.policy-candidate-warning { margin: 10px 0 0; color: var(--eom-warning); font-size: var(--eom-type-label); }
 .policy-role-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .policy-role-card h3 { margin: 0; font-size: 15px; }
 .policy-role-card header span { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }

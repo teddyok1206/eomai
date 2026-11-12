@@ -54,6 +54,34 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       .some((policy) => !options.get(policy.role)?.length));
   }
 
+  function syncCandidateWarnings() {
+    // Candidates are ordered within one role; the same pair across roles is valid.
+    const byPair = new Map();
+    for (const field of document.querySelectorAll("[data-preset-model]")) {
+      const card = field.closest(".policy-role-card");
+      const effort = card.querySelector("[data-preset-effort]");
+      const warning = card.querySelector("[data-preset-candidate-warning]");
+      warning.hidden = true;
+      warning.textContent = "";
+      card.classList.remove("has-candidate-conflict");
+      if (!field.value || !effort.value) continue;
+      const key = JSON.stringify([field.dataset.roleIndex, field.value, effort.value]);
+      if (!byPair.has(key)) byPair.set(key, []);
+      byPair.get(key).push({card, warning, label: card.querySelector("h3").textContent});
+    }
+    let conflict = false;
+    for (const entries of byPair.values()) {
+      if (entries.length < 2) continue;
+      conflict = true;
+      const labels = entries.map(entry => entry.label).join(" · ");
+      for (const {card, warning} of entries) {
+        card.classList.add("has-candidate-conflict");
+        warning.textContent = `${labels}의 설정이 같습니다. 모델 또는 생각하는 깊이를 다르게 선택해 주세요.`;
+        warning.hidden = false;
+      }
+    }
+    return conflict;
+  }
 
   function sync() {
     const busy = action !== null;
@@ -74,7 +102,8 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       modelChoiceButtons(field, isModel ? "모델" : "생각하는 깊이", isModel
         ? discoveredModelChoices(catalog) : discoveredEffortChoices(catalog, model, EFFORT_LABELS));
     }
-    $("#preset-review-open").disabled = busy || !base || !options || modelOptionsNeedRefresh()
+    const conflictingCandidates = syncCandidateWarnings();
+    $("#preset-review-open").disabled = busy || !base || !options || modelOptionsNeedRefresh() || conflictingCandidates
       || candidateFields.some((field) => !field.value);
     $("#preset-draft-submit").disabled = busy || !reviewed || !$("#preset-review-confirm").checked;
     $("#preset-validation-submit").disabled = busy || !target || Boolean(target.validation_id);
@@ -147,8 +176,11 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     const efforts = Object.keys(EFFORT_LABELS).filter(effort => allowed.has(effort));
     if (!efforts.length) appendOption(effortSelect, "", candidates.length
       ? "모델을 먼저 선택하세요" : "목록 확인 필요");
+    else if (!efforts.includes(selectedEffort)) {
+      // Do not turn a model change or catalog refresh into an implicit policy edit.
+      appendOption(effortSelect, "", "생각하는 깊이를 선택하세요", true);
+    }
     for (const effort of efforts) appendOption(effortSelect, effort, EFFORT_LABELS[effort], effort === selectedEffort);
-    if (!efforts.includes(selectedEffort) && efforts.length) effortSelect.value = efforts[0];
   }
 
   function renderRoles(selections = new Map()) {
@@ -158,10 +190,12 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       const candidates = options.get(policy.role) || [];
       const models = [...new Set(candidates.map((candidate) => candidate.model))].sort();
       for (const [candidateIndex, configured] of policy.model_candidates.entries()) {
-        const candidate = selections.get(`${roleIndex}:${candidateIndex}`) || configured;
+        const selection = selections.get(`${roleIndex}:${candidateIndex}`);
+        const candidate = selection || configured;
         const card = document.createElement("section");
         card.className = "policy-role-card";
         const heading = document.createElement("h3");
+        heading.id = `preset-candidate-heading-${roleIndex}-${candidateIndex}`;
         heading.textContent = policy.role === "support" && feature
           ? feature.stages.find(stage => stage.preset.preset_id === base.preset_id)?.label || "작업 모델"
           : presetCandidateLabel(policy.role, candidateIndex);
@@ -175,9 +209,10 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
         modelSelect.dataset.candidateIndex = String(candidateIndex);
         const exactCurrent = candidates.some((item) => item.model === candidate.model
           && item.reasoning_effort === candidate.reasoning_effort);
-        if (!exactCurrent) appendOption(modelSelect, "", candidates.length
+        const selectedModel = exactCurrent || selection?.reasoning_effort === "" && models.includes(candidate.model);
+        if (!selectedModel) appendOption(modelSelect, "", candidates.length
           ? "현재 설정 사용 불가 · 모델을 선택하세요" : "모델 목록 확인 필요", true);
-        for (const model of models) appendOption(modelSelect, model, model, exactCurrent && model === candidate.model);
+        for (const model of models) appendOption(modelSelect, model, model, selectedModel && model === candidate.model);
         const effortLabel = document.createElement("label");
         effortLabel.textContent = "생각하는 깊이";
         const effortSelect = document.createElement("select");
@@ -192,7 +227,16 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
         modelLabel.append(modelSelect);
         effortLabel.append(effortSelect);
         fields.append(modelLabel, effortLabel);
-        card.append(heading, fields);
+        const warning = document.createElement("p");
+        warning.id = `preset-candidate-warning-${roleIndex}-${candidateIndex}`;
+        warning.dataset.presetCandidateWarning = "true";
+        warning.className = "policy-candidate-warning";
+        warning.setAttribute("role", "status");
+        warning.hidden = true;
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-labelledby", heading.id);
+        card.setAttribute("aria-describedby", warning.id);
+        card.append(heading, fields, warning);
         root.append(card);
       }
     }
@@ -310,6 +354,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
 
   function reviewEdits() {
     if (action || !base || !options || modelOptionsNeedRefresh() || !isAdmin()) return;
+    if (syncCandidateWarnings()) return;
     try {
       clearValidation();
       reviewed = reviewedPresetDraft(base.draft, collectEdits());
