@@ -39,3 +39,33 @@ Pack bytes/hash, 팀장 프롬프트, schema, DB, 모델 설정, 과거 실행 p
 - 설치는 기존 compatible-release owner와 wheel 검증을 재사용한다. Web 수정 없음,
   migration 없음. 진행 중 작업이 없을 때 관련 공유 runtime을 인계하며 INDEX·수치
   runtime·기존 자료 학습 pin은 보존한다. 운영 적용 결과는 아래에 추가한다.
+
+## 운영 반영 결과
+
+- API/공유 platform source `05ddda5b663ef741e1434cc3bba68f886c4aebe2` 설치 완료.
+  이전 `748f6acf` wheel과 비교해 실제 코드 차이는 Catalog의 위 호환 집합뿐이다.
+  API는 build-info/RECORD만 다르고 API contracts wheel member는 동일하다.
+- 기존 Web `858680cf` 설치본은 유지했다. API·Catalog·runner·채팅·QUERY·HWPX와
+  HTTPS 로그인 준비를 확인했다. migration `20261112_0079` 변경 없음.
+- 2026-11-12 15:49:53 UTC 실제 운영 DB의 활성 Pack을 읽는 같은 `bind_request` probe는
+  FAIL에서 PASS로 바뀌었다. Pack 1.20.19의 4개 profile, image binding 6.0,
+  `ASSESSMENT_REFERENCE_COMPOSITION_V3` 모두 확인했다.
+- 사용자 모델 설정 revision 33은 그대로다. 기존 요청의 FAILED 감사 기록도 그대로다.
+  배포 모델 호출·새 문항 생성·DB 데이터 수정은 0이다. 사용자에게 새 요청 1회 검증을
+  요청했으며 실제 문항 생성 성공은 아직 확인하지 않았다.
+- 배포 증거: `/var/lib/eom-authoring-pack-release-20261112/`.
+  원본 실패·재현·배포 전후 probe는 별도 staging 기록에 보존했다.
+
+### 별도 발견: 기존 창작 일괄 등록 서비스
+
+배포 전 worker/실행/HWPX/chat queue는 모두 0이었다. 기존 creative producer를
+SIGINT로 정상 drain한 뒤 재시작했지만, startup 후
+`CREATIVE_COHORT_PRESET_PIN_MISMATCH`로 실패했다. 배포 스크립트의 즉시 active 검사는
+이후의 startup 실패를 잡지 못하므로 `AUTHORING_PACK_COMPATIBILITY_RELEASE=PASS`를
+모든 background service의 지속 정상 증거로 사용하지 않는다.
+
+creative는 변경되지 않은 별도 `b9007cbd` prefix를 사용하며 해당 코드·cohort·설정은
+이번에 바꾸지 않았다. 오래된 cohort의 설정 참조를 검사하는 `_require_scope_pins`와
+capacity pin 검사가 후속 진단 대상이다. 원인 세부 분류·재개는 아직 미완료이며
+기존 실패를 성공 처리하거나 최신 프리셋으로 바꿔치기하지 않았다.
+INDEX는 배포 전부터 failed였고 상태·수치 runtime pin을 그대로 보존했다.
