@@ -92,6 +92,7 @@ from eom_web_gui.contracts import (
     ExternalItemDbDetail,
     ExternalItemDbEntry,
     ExternalItemDbFilterSubmission,
+    FeatureModelSettingsView,
     GraphItemDbEntry,
     HwpxBuildRequest,
     HwpxBuildView,
@@ -1112,6 +1113,10 @@ class ApplicationGateway(Protocol):
     ) -> CodexDeviceChallengeView: ...
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def feature_model_settings(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def execution_preset(self, session: WebSession, preset_id: str) -> dict[str, Any]: ...
 
     async def chat_model_settings(self, session: WebSession) -> ChatModelSettingsView: ...
 
@@ -3746,6 +3751,21 @@ class HttpApplicationGateway:
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
+    async def feature_model_settings(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        response = await self._authorized(session, "GET", "/api/v1/feature-model-settings")
+        try:
+            features = tuple(
+                FeatureModelSettingsView.model_validate(item) for item in self._list_data(response)
+            )
+            if len(features) != 7 or len({v.feature_key for v in features}) != 7:
+                raise ValueError("expected seven unique feature settings")
+            preset_ids = [s.preset.preset_id for f in features for s in f.stages]
+            if len(set(preset_ids)) != len(preset_ids):
+                raise ValueError("preset belongs to multiple features")
+            return tuple(v.model_dump(mode="json") for v in features)
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/execution-presets")
         try:
@@ -3755,6 +3775,17 @@ class HttpApplicationGateway:
                 ExecutionPresetStatusView.model_validate(item).model_dump(mode="json")
                 for item in self._list_data(response)
             )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def execution_preset(self, session: WebSession, preset_id: str) -> dict[str, Any]:
+        _require_id(preset_id, "execpreset_")
+        response = await self._authorized(session, "GET", f"/api/v1/execution-presets/{preset_id}")
+        try:
+            result = ExecutionPresetStatusView.model_validate(self._data(response))
+            if result.preset_id != preset_id:
+                raise ValueError("preset response identity differs")
+            return result.model_dump(mode="json")
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 

@@ -200,6 +200,8 @@
         "packages/workflow/eom_workflow/shared_model_execution_plans.py",
         "services/orchestrator/eom_orchestrator/shared_slot_controls.py",
         "services/orchestrator/eom_orchestrator/preset_model_selection.py",
+        "packages/workflow/eom_workflow/feature_model_settings.py",
+        "services/orchestrator/eom_orchestrator/preset_retirement.py",
         "services/orchestrator/eom_orchestrator/general_chat_model_selection.py",
         "services/orchestrator/eom_orchestrator/review_textbook_evidence_validation.py",
         "apps/web_gui/eom_web_gui/static/chat-markdown.js",

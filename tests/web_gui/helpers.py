@@ -1920,6 +1920,20 @@ class FakeGateway:
             },
         )
 
+    async def feature_model_settings(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        del session
+        from tests.web_gui.test_feature_model_settings import feature_fixtures
+
+        return feature_fixtures()
+
+    async def execution_preset(self, session: WebSession, preset_id: str) -> dict[str, Any]:
+        from tests.web_gui.test_execution_preset_admin import _wire_preset
+
+        del session
+        value = _wire_preset()
+        assert value["preset_id"] == preset_id
+        return value
+
     async def create_execution_preset_draft(
         self, session: WebSession, payload: dict[str, Any], idempotency_key: str
     ) -> dict[str, Any]:

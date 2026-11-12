@@ -1,0 +1,681 @@
+{
+  "$defs": {
+    "BundleRevisionPointerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {
+          "pattern": "^(?:instrbundle|refbundle)_[0-9a-f]{32}$",
+          "title": "Bundle Id",
+          "type": "string"
+        },
+        "bundle_revision_id": {
+          "pattern": "^(?:instrrev|refrev)_[0-9a-f]{32}$",
+          "title": "Bundle Revision Id",
+          "type": "string"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/ControlArtifactPointerInput"
+        },
+        "manifest_sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "title": "BundleRevisionPointerInput",
+      "type": "object"
+    },
+    "ControlArtifactPointerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "title": "Logical Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "title": "ControlArtifactPointerInput",
+      "type": "object"
+    },
+    "EvidenceBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_documents": {
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Max Documents",
+          "type": "integer"
+        },
+        "max_item_revisions": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Max Item Revisions",
+          "type": "integer"
+        },
+        "max_graph_nodes": {
+          "maximum": 256,
+          "minimum": 1,
+          "title": "Max Graph Nodes",
+          "type": "integer"
+        },
+        "max_claims": {
+          "maximum": 128,
+          "minimum": 1,
+          "title": "Max Claims",
+          "type": "integer"
+        },
+        "max_context_tokens": {
+          "maximum": 32000,
+          "minimum": 1000,
+          "title": "Max Context Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_documents",
+        "max_item_revisions",
+        "max_graph_nodes",
+        "max_claims",
+        "max_context_tokens"
+      ],
+      "title": "EvidenceBudget",
+      "type": "object"
+    },
+    "ExecutionPresetEvaluationView": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Evaluation Id",
+          "type": "string"
+        },
+        "evaluated_preset_revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Evaluated Preset Revision Id",
+          "type": "string"
+        },
+        "evaluated_policy_sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Evaluated Policy Sha256",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "summary_code": {
+          "title": "Summary Code",
+          "type": "string"
+        },
+        "cases_total": {
+          "minimum": 1,
+          "title": "Cases Total",
+          "type": "integer"
+        },
+        "cases_passed": {
+          "minimum": 0,
+          "title": "Cases Passed",
+          "type": "integer"
+        },
+        "quality_score_permille": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Score Permille"
+        },
+        "report_artifact_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Report Artifact Id",
+          "type": "string"
+        },
+        "report_artifact_revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Report Artifact Revision Id",
+          "type": "string"
+        },
+        "report_content_sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Report Content Sha256",
+          "type": "string"
+        },
+        "completed_at": {
+          "format": "date-time",
+          "title": "Completed At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluation_id",
+        "evaluated_preset_revision_id",
+        "evaluated_policy_sha256",
+        "scope",
+        "outcome",
+        "summary_code",
+        "cases_total",
+        "cases_passed",
+        "report_artifact_id",
+        "report_artifact_revision_id",
+        "report_content_sha256",
+        "completed_at"
+      ],
+      "title": "ExecutionPresetEvaluationView",
+      "type": "object"
+    },
+    "ExecutionPresetRevisionView": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "preset_revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Preset Revision Id",
+          "type": "string"
+        },
+        "preset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Preset Id",
+          "type": "string"
+        },
+        "revision_number": {
+          "minimum": 1,
+          "title": "Revision Number",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "capacity_policy_revision_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Capacity Policy Revision Id",
+          "type": "string"
+        },
+        "general_knowledge_policy": {
+          "title": "General Knowledge Policy",
+          "type": "string"
+        },
+        "compatible_workflow_protocols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Compatible Workflow Protocols",
+          "type": "array"
+        },
+        "content_sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "role_policies": {
+          "items": {
+            "$ref": "#/$defs/PresetRolePolicyInput"
+          },
+          "title": "Role Policies",
+          "type": "array"
+        },
+        "retrieval_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresetRetrievalPolicyInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evaluations": {
+          "items": {
+            "$ref": "#/$defs/ExecutionPresetEvaluationView"
+          },
+          "title": "Evaluations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "preset_revision_id",
+        "preset_id",
+        "revision_number",
+        "state",
+        "display_name",
+        "description",
+        "capacity_policy_revision_id",
+        "general_knowledge_policy",
+        "compatible_workflow_protocols",
+        "content_sha256",
+        "created_at",
+        "role_policies",
+        "evaluations"
+      ],
+      "title": "ExecutionPresetRevisionView",
+      "type": "object"
+    },
+    "ExecutionPresetView": {
+      "additionalProperties": false,
+      "properties": {
+        "preset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Preset Id",
+          "type": "string"
+        },
+        "preset_key": {
+          "title": "Preset Key",
+          "type": "string"
+        },
+        "current_revision_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Current Revision Id"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "revisions": {
+          "items": {
+            "$ref": "#/$defs/ExecutionPresetRevisionView"
+          },
+          "title": "Revisions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "preset_id",
+        "preset_key",
+        "current_revision_id",
+        "state",
+        "created_at",
+        "updated_at",
+        "revisions"
+      ],
+      "title": "ExecutionPresetView",
+      "type": "object"
+    },
+    "FeatureModelStageView": {
+      "additionalProperties": false,
+      "properties": {
+        "stage_key": {
+          "pattern": "^[a-z][a-z0-9-]{1,63}$",
+          "title": "Stage Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/ExecutionPresetView"
+        }
+      },
+      "required": [
+        "stage_key",
+        "label",
+        "preset"
+      ],
+      "title": "FeatureModelStageView",
+      "type": "object"
+    },
+    "KnowledgeSourceClass": {
+      "enum": [
+        "CURRICULUM",
+        "TEXTBOOK",
+        "APPROVED_ITEM",
+        "PAST_EXAM",
+        "INTERNAL_GUIDE"
+      ],
+      "title": "KnowledgeSourceClass",
+      "type": "string"
+    },
+    "ModelCandidateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Reasoning Effort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "reasoning_effort"
+      ],
+      "title": "ModelCandidateInput",
+      "type": "object"
+    },
+    "PresetRetrievalPolicyInput": {
+      "additionalProperties": false,
+      "properties": {
+        "access_policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Access Policy Revision Id",
+          "type": "string"
+        },
+        "access_policy_sha256": {
+          "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+          "title": "Access Policy Sha256",
+          "type": "string"
+        },
+        "allowed_corpus_keys": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Allowed Corpus Keys",
+          "type": "array"
+        },
+        "allowed_query_kinds": {
+          "items": {
+            "enum": [
+              "CURRICULUM_COMPONENTS",
+              "APPROVED_ITEM_STRUCTURE",
+              "ITEM_PREPARATION"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Allowed Query Kinds",
+          "type": "array"
+        },
+        "allowed_source_classes": {
+          "items": {
+            "$ref": "#/$defs/KnowledgeSourceClass"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Allowed Source Classes",
+          "type": "array"
+        },
+        "maximum_budget": {
+          "$ref": "#/$defs/EvidenceBudget"
+        }
+      },
+      "required": [
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "allowed_corpus_keys",
+        "allowed_query_kinds",
+        "allowed_source_classes",
+        "maximum_budget"
+      ],
+      "title": "PresetRetrievalPolicyInput",
+      "type": "object"
+    },
+    "PresetRolePolicyInput": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "authoring",
+            "image",
+            "review",
+            "item_management",
+            "support"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "model_candidates": {
+          "items": {
+            "$ref": "#/$defs/ModelCandidateInput"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Model Candidates",
+          "type": "array"
+        },
+        "instruction_bundle": {
+          "$ref": "#/$defs/BundleRevisionPointerInput"
+        },
+        "reference_bundle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BundleRevisionPointerInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worker_pool_key": {
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+          "title": "Worker Pool Key",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "maximum": 7200,
+          "minimum": 30,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "sandbox": {
+          "const": "read-only",
+          "default": "read-only",
+          "title": "Sandbox",
+          "type": "string"
+        },
+        "network": {
+          "const": "disabled",
+          "default": "disabled",
+          "title": "Network",
+          "type": "string"
+        },
+        "evidence_access": {
+          "anyOf": [
+            {
+              "enum": [
+                "NONE",
+                "EVIDENCE_CONTEXT"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Access"
+        }
+      },
+      "required": [
+        "role",
+        "model_candidates",
+        "instruction_bundle",
+        "reference_bundle",
+        "worker_pool_key",
+        "timeout_seconds"
+      ],
+      "title": "PresetRolePolicyInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "kind": {
+            "const": "WORKFLOW"
+          },
+          "stages": {
+            "minItems": 1
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "feature_key": {
+            "const": "chat"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "const": "CHAT"
+          },
+          "stages": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "feature_key": {
+      "enum": [
+        "item-authoring",
+        "material-review",
+        "material-learning",
+        "item-registration",
+        "similarity-comparison",
+        "customer-support",
+        "chat"
+      ],
+      "title": "Feature Key",
+      "type": "string"
+    },
+    "label": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "WORKFLOW",
+        "CHAT"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "stages": {
+      "items": {
+        "$ref": "#/$defs/FeatureModelStageView"
+      },
+      "maxItems": 8,
+      "title": "Stages",
+      "type": "array"
+    }
+  },
+  "required": [
+    "feature_key",
+    "label",
+    "kind",
+    "stages"
+  ],
+  "title": "FeatureModelSettingsView",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/feature-model-settings-view-v1.schema.json"
+}

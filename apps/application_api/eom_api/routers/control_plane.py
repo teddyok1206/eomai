@@ -17,6 +17,7 @@ from eom_api_contracts.control_plane import (
     ExecutionPresetDraftRequest,
     ExecutionPresetView,
 )
+from eom_api_contracts.feature_model_settings import FeatureModelSettingsView
 from eom_api_contracts.preset_model_selection import (
     PresetModelEvaluationRequest,
     PresetModelOptionsView,
@@ -393,6 +394,20 @@ def reveal_codex_auth_challenge(
         api_session_id=authentication.session_id,
     )
     return one(request, value)
+
+
+@router.get(
+    "/feature-model-settings",
+    operation_id="feature_model_settings_list",
+    response_model=ListResponse[FeatureModelSettingsView],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_READ, fresh=True, admin_only=True)
+        )
+    ],
+)
+def list_feature_model_settings(request: Request) -> ListResponse[FeatureModelSettingsView]:
+    return many(request, request.app.state.services.control_plane.feature_model_settings(), limit=7)
 
 
 @router.get(

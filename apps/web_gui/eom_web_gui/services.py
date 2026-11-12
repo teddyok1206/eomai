@@ -722,6 +722,14 @@ class WebServices:
         _require_admin(session)
         return await self.gateway.execution_presets(session)
 
+    async def feature_model_settings(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        _require_admin(session)
+        return await self.gateway.feature_model_settings(session)
+
+    async def execution_preset(self, session: WebSession, preset_id: str) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.execution_preset(session, preset_id)
+
     async def create_execution_preset_draft(
         self, session: WebSession, value: ExecutionPresetDraftSubmission
     ) -> dict[str, Any]:

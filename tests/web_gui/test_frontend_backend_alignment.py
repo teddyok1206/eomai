@@ -299,17 +299,12 @@ def test_every_frontend_api_call_has_a_method_matching_bff_route() -> None:
             (STATIC_ROOT / "execution-preset-controller.js").read_text(encoding="utf-8")
         )
     )
-    frontend.add(("POST", "/admin/execution-presets/{}/deprecations"))
     frontend.add(("POST", "/session"))
 
     missing = frontend - _bff_routes()
 
     assert not missing
-    assert (
-        "const path = `/admin/execution-presets/${encodeURIComponent(identifier)}/deprecations`;"
-        in source
-    )
-    assert sum(line.strip().startswith("await api(path,") for line in source.splitlines()) == 1
+    assert not any(line.strip().startswith("await api(path,") for line in source.splitlines())
     assert 'method: "POST"' in LOGIN_JS.read_text(encoding="utf-8")
 
 

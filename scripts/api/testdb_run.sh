@@ -138,7 +138,8 @@ if [[ "${action}" == "shared-slot-tests" ]]; then
 fi
 if [[ "${action}" == "preset-model-tests" ]]; then
   export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_preset_model_validation_persistence.py
+  "${PYTHON}" -m pytest -q tests/integration/test_preset_model_validation_persistence.py \
+    tests/integration/test_feature_preset_retirement.py
   exit 0
 fi
 if [[ "${action}" == "catalog-artifact-tests" ]]; then

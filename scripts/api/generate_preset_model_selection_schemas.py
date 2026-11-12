@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
+from eom_api_contracts.feature_model_settings import FeatureModelSettingsView
 from eom_api_contracts.preset_model_selection import (
     PresetModelEvaluationRequest,
     PresetModelOptionsView,
@@ -19,6 +20,7 @@ TARGETS = (
     ROOT / "packages/api_contracts/eom_api_contracts/schemas",
 )
 MODELS = {
+    "feature-model-settings-view-v1.schema.json": FeatureModelSettingsView,
     "preset-model-evaluation-request-v1.schema.json": PresetModelEvaluationRequest,
     "preset-model-options-view-v1.schema.json": PresetModelOptionsView,
     "preset-model-validation-view-v1.schema.json": PresetModelValidationView,

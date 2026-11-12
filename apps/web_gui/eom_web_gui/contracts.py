@@ -2629,6 +2629,54 @@ class ExecutionPresetStatusView(WebModel):
         return self
 
 
+class FeatureModelStageView(WebModel):
+    stage_key: str = Field(pattern=r"^[a-z][a-z0-9-]{1,63}$")
+    label: str = Field(min_length=1, max_length=80)
+    preset: ExecutionPresetStatusView
+
+
+class FeatureModelSettingsView(WebModel):
+    feature_key: Literal[
+        "item-authoring",
+        "material-review",
+        "material-learning",
+        "item-registration",
+        "similarity-comparison",
+        "customer-support",
+        "chat",
+    ]
+    label: str = Field(min_length=1, max_length=80)
+    kind: Literal["WORKFLOW", "CHAT"]
+    stages: tuple[FeatureModelStageView, ...] = Field(max_length=8)
+
+    @model_validator(mode="after")
+    def current_stage_pointers(self) -> FeatureModelSettingsView:
+        chat = self.feature_key == "chat"
+        if (self.kind == "CHAT") != chat or bool(self.stages) == chat:
+            raise ValueError("feature kind and stages differ")
+        if len({v.stage_key for v in self.stages}) != len(self.stages) or len(
+            {v.preset.preset_id for v in self.stages}
+        ) != len(self.stages):
+            raise ValueError("feature stages must be unique")
+        for stage in self.stages:
+            preset = stage.preset
+            if preset.state != "ACTIVE":
+                raise ValueError("feature exposes only current active presets")
+            current = next(
+                (v for v in preset.revisions if v.preset_revision_id == preset.current_revision_id),
+                None,
+            )
+            if current is None or current.state != "RELEASED":
+                raise ValueError("feature requires a released current revision")
+            if any(
+                v.preset_revision_id != current.preset_revision_id
+                and (v.state != "DRAFT" or v.revision_number <= current.revision_number)
+                for v in preset.revisions
+            ):
+                raise ValueError("feature cannot expose historical revisions")
+        return self
+
+
 class ExecutionPresetLifecycleCommand(WebModel):
     resource_version: int = Field(ge=1)
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")

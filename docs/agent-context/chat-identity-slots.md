@@ -79,6 +79,14 @@ CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 uni
 실행 설정 화면은 current released revision과 편집 중인 새 draft만 다룬다. 과거 revision을
 숨기는 UI 정책은 evaluation/실행 plan의 immutable 참조 삭제를 뜻하지 않는다.
 
+`feature_model_settings.py`의 고정 대응표가 관리자에게7개 기능과 해당 작업 단계를
+제공한다. 단계는 실제 preset current를 참조하며 새 설정 저장소를 만들지 않는다.
+API `feature-model-settings`와 Web의 같은 projection을 쓴다. 새 draft의 재개는 유지하고
+과거 버전 전체 목록은 읽지 않는다. 퇴역/정리는 `preset_retirement.py`의 정확한
+ID/hash·참조·실행 중 검사와 기존 DB-owner maintenance 트랜잭션을 사용한다.
+운영 API/worker에는 삭제 권한을 주지 않는다. 상세는
+`docs/architecture/FEATURE_MODEL_SETTINGS_CONSOLIDATION.md`를 본다.
+
 ## 공용 슬롯·모델 설정 후속 소스
 
 `SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md`가 새 설계다. 활성 여부는 별도 설치/

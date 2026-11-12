@@ -21,13 +21,12 @@ def test_admin_settings_refresh_does_not_restore_stale_preset_state(case: str) -
     end = source.index("\nfunction scheduleAnalysisBatchRefresh", start)
     script = f"""
 import assert from 'node:assert/strict';
-const state = {{adminSettingsRequestSequence:0,navigationVersion:0,executionPresets:[]}};
+const state = {{adminSettingsRequestSequence:0,navigationVersion:0}};
 let admin = true;
 const hasAdminRole = () => admin;
 const $ = () => ({{}});
-const rendered = [], received = [], messages = [], requests = [];
-const renderExecutionPresets = values => rendered.push(values);
-const presetEditor = {{setPresets: values => received.push(values)}};
+const received = [], messages = [], requests = [];
+const presetEditor = {{setFeatures: values => received.push(values)}};
 const chatModelEditor = {{refresh: async () => undefined}};
 const showMessage = (_node, message) => messages.push(message);
 const loadOperatorAccounts = async () => undefined;
@@ -42,8 +41,6 @@ if (scenario === 'out_of_order' || scenario === 'error') {{
   if (scenario === 'error') requests[0].reject(new Error('STALE_FAILURE'));
   else requests[0].resolve(['older']);
   await older;
-  assert.deepEqual(state.executionPresets, ['newer']);
-  assert.deepEqual(rendered, [['newer']]);
   assert.deepEqual(received, [['newer']]);
   assert.equal(messages.length, 1);
 }} else {{
@@ -52,8 +49,6 @@ if (scenario === 'out_of_order' || scenario === 'error') {{
   else admin = false;
   requests[0].resolve(['obsolete']);
   await older;
-  assert.deepEqual(state.executionPresets, []);
-  assert.deepEqual(rendered, []);
   assert.deepEqual(received, []);
   assert.deepEqual(messages, []);
 }}
@@ -295,83 +290,17 @@ assert.equal(JSON.stringify(preset), before);
     assert completed.returncode == 0, completed.stderr
 
 
-def test_preset_cards_hide_history_without_mutating_pinned_revisions(tmp_path: Path) -> None:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node is required for the preset presentation regression")
-    module = tmp_path / "execution-preset-editor.mjs"
-    module.write_bytes(
-        (ROOT / "apps/web_gui/eom_web_gui/static/execution-preset-editor.js").read_bytes()
-    )
-    source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
-    start = source.index("function renderExecutionPresets(presets) {")
-    end = source.index("\nasync function deprecatePreset", start)
-    script = f"""
-import assert from 'node:assert/strict';
-import {{guidedPresetBases}} from {json.dumps(module.as_uri())};
-let input = ''; for await (const chunk of process.stdin) input += chunk;
-const preset = JSON.parse(input), current = preset.revisions[0];
-const revision = (number, state, seed) => ({{...structuredClone(current),
- preset_revision_id:'execpresetrev_' + seed.repeat(32), revision_number:number,
- display_name:'OLD_OR_DRAFT_' + number, state}});
-preset.revisions = [revision(1,'DRAFT','8'), revision(2,'RELEASED','9'),
- revision(7,'DRAFT','a'), current, revision(5,'DRAFT','b')];
-const support = structuredClone(preset);
-support.preset_id = 'execpreset_' + 'c'.repeat(32);
-support.revisions.find(value => value.preset_revision_id === support.current_revision_id)
- .role_policies = [{{...current.role_policies[0],role:'support'}}];
-const retired = {{...preset, state:'RETIRED'}};
-const missingCurrent = {{...preset, current_revision_id:'execpresetrev_'+'e'.repeat(32)}};
-const noCurrent = {{...preset, current_revision_id:null}};
-const values = [preset, support, retired, missingCurrent, noCurrent];
-const before = JSON.stringify(values);
-const node = () => ({{children:[],append(...items){{this.children.push(...items);}},
- replaceChildren(...items){{this.children=[...items];}}}});
-const root = node();
-const document = {{createElement:node}};
-const $ = () => root;
-const controlCard = (title,state) => {{const card=node(),details=node();
- Object.assign(card,{{title,state,details}});return {{card,details}};}};
-const addControlDetail = (details,label,value) => details.append({{label,value}});
-const technicalDisclosure = (label,value) => ({{label,value}});
-const actionButton = (label,action) => ({{label,action}});
-const presetRoleLabel = value => value;
-const inspected = [], deprecated = [];
-const presetEditor = {{inspectDraft:(...args)=>inspected.push(args)}};
-const deprecatePreset = (...args) => deprecated.push(args);
-{source[start:end]}
-renderExecutionPresets(values);
-assert.equal(root.children.length, 2);
-for (const card of root.children) {{
- assert.equal(card.title, current.display_name);
- assert.equal(card.details.children.some(value=>value.label==='고정 버전 수'), false);
- assert.equal(card.children[0].value['현재 고정 버전 ID'], preset.current_revision_id);
-}}
-const actions = root.children[0].children.at(-1).children;
-assert.deepEqual(actions.map(value=>value.label), ['초안 확인·적용','사용 중단']);
-actions[0].action();
-assert.equal(inspected[0][1].revision_number, 7);
-actions[1].action();
-assert.deepEqual(deprecated, [[preset.preset_id,current.revision_number]]);
-assert.deepEqual(root.children[1].children.at(-1).children.map(value=>value.label),
-  ['초안 확인·적용','사용 중단']);
-assert.equal(JSON.stringify(values), before);
-// Consumed drafts behind the current release are not pending settings.
-renderExecutionPresets([{{...preset,revisions:preset.revisions.filter(value=>value.revision_number<=4)}}]);
-assert.deepEqual(root.children[0].children.at(-1).children.map(value=>value.label), ['사용 중단']);
-renderExecutionPresets([retired,missingCurrent,noCurrent]);
-assert.equal(root.children.length, 1);
-assert.equal(root.children[0].textContent, '사용 중인 실행 설정이 없습니다.');
-"""
-    completed = subprocess.run(
-        [node, "--input-type=module", "--eval", script],
-        check=False,
-        input=json.dumps(_grounded_preset()),
-        text=True,
-        capture_output=True,
-        timeout=10,
-    )
-    assert completed.returncode == 0, completed.stderr
+def test_feature_settings_replace_legacy_cards_and_use_real_model_editor() -> None:
+    static = ROOT / "apps/web_gui/eom_web_gui/static"
+    source = (static / "app.js").read_text(encoding="utf-8")
+    html = (static / "index.html").read_text(encoding="utf-8")
+    assert "renderExecutionPresets" not in source
+    assert "deprecatePreset" not in source
+    assert 'id="execution-preset-list"' not in html
+    assert 'id="feature-model-select"' in html
+    assert 'id="preset-draft-resume"' in html
+    assert 'api("/admin/feature-model-settings")' in source
+    assert "presetEditor.setFeatures(features)" in source
 
 
 @pytest.mark.parametrize(

@@ -25,6 +25,7 @@ from eom_api_contracts.control_plane import (
     ExecutionPresetView,
     PresetRolePolicyInput,
 )
+from eom_api_contracts.feature_model_settings import FeatureModelSettingsView, FeatureModelStageView
 from eom_operator_identity import ActorContext
 from eom_orchestrator.auth_enrollment import (
     ACTIVE_STATES,
@@ -71,7 +72,9 @@ from eom_workflow import (
     CodexControlCommandResultV4,
     validate_control_contract,
 )
-from sqlalchemy import Engine, func, select
+from eom_workflow.feature_model_settings import FEATURE_PRESET_KEYS, MODEL_SETTINGS_FEATURES
+from sqlalchemy import Engine, and_, func, or_, select
+from sqlalchemy.orm import aliased
 
 from eom_api.errors import ApiError
 
@@ -461,11 +464,46 @@ class ControlPlaneAdapter:
         except ControlPlaneError as exc:
             self._map_error(exc)
 
-    def list_presets(self) -> tuple[ExecutionPresetView, ...]:
+    def feature_model_settings(self) -> tuple[FeatureModelSettingsView, ...]:
+        presets = {
+            v.preset_key: v
+            for v in self.list_presets(preset_keys=FEATURE_PRESET_KEYS, current_only=True)
+        }
+        if set(presets) != FEATURE_PRESET_KEYS:
+            self._not_found("CONTROL_FEATURE_PRESET_MISSING")
+        return tuple(
+            FeatureModelSettingsView.model_validate(
+                dict(
+                    feature_key=feature.key,
+                    label=feature.label,
+                    kind="CHAT" if feature.key == "chat" else "WORKFLOW",
+                    stages=tuple(
+                        FeatureModelStageView(
+                            stage_key=stage.key, label=stage.label, preset=presets[stage.preset_key]
+                        )
+                        for stage in feature.stages
+                    ),
+                )
+            )
+            for feature in MODEL_SETTINGS_FEATURES
+        )
+
+    def list_presets(
+        self,
+        *,
+        preset_keys: frozenset[str] | None = None,
+        current_only: bool = False,
+        preset_id: str | None = None,
+    ) -> tuple[ExecutionPresetView, ...]:
         with self.sessions() as session:
+            query = select(ExecutionPresetRecord)
+            if preset_keys is not None:
+                query = query.where(ExecutionPresetRecord.preset_key.in_(preset_keys))
+            if preset_id is not None:
+                query = query.where(ExecutionPresetRecord.preset_id == preset_id)
             logicals = tuple(
                 session.scalars(
-                    select(ExecutionPresetRecord).order_by(
+                    query.order_by(
                         ExecutionPresetRecord.preset_key, ExecutionPresetRecord.preset_id
                     )
                 )
@@ -473,10 +511,33 @@ class ControlPlaneAdapter:
             preset_ids = [row.preset_id for row in logicals]
             revisions_by_preset: dict[str, list[ExecutionPresetRevisionRecord]] = defaultdict(list)
             if preset_ids:
+                revision_query = select(ExecutionPresetRevisionRecord).where(
+                    ExecutionPresetRevisionRecord.preset_id.in_(preset_ids)
+                )
+                if current_only:
+                    current = aliased(ExecutionPresetRevisionRecord)
+                    revision_query = revision_query.join(
+                        current, current.preset_id == ExecutionPresetRevisionRecord.preset_id
+                    ).where(
+                        current.preset_revision_id.in_(
+                            tuple(
+                                row.current_revision_id
+                                for row in logicals
+                                if row.current_revision_id
+                            )
+                        ),
+                        or_(
+                            ExecutionPresetRevisionRecord.preset_revision_id
+                            == current.preset_revision_id,
+                            and_(
+                                ExecutionPresetRevisionRecord.state == "DRAFT",
+                                ExecutionPresetRevisionRecord.revision_number
+                                > current.revision_number,
+                            ),
+                        ),
+                    )
                 for revision in session.scalars(
-                    select(ExecutionPresetRevisionRecord)
-                    .where(ExecutionPresetRevisionRecord.preset_id.in_(preset_ids))
-                    .order_by(
+                    revision_query.order_by(
                         ExecutionPresetRevisionRecord.preset_id,
                         ExecutionPresetRevisionRecord.revision_number,
                     )
@@ -526,7 +587,7 @@ class ControlPlaneAdapter:
             )
 
     def preset(self, preset_id: str) -> ExecutionPresetView:
-        matches = [value for value in self.list_presets() if value.preset_id == preset_id]
+        matches = self.list_presets(preset_id=preset_id)
         if len(matches) != 1:
             self._not_found("EXECUTION_PRESET_NOT_FOUND")
         return matches[0]

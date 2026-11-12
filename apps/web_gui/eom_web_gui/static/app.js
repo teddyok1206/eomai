@@ -8,7 +8,6 @@ import {
 } from "./curriculum-selector.js";
 import {createExecutionPresetEditor} from "./execution-preset-controller.js";
 import {createChatModelSettingsEditor} from "./chat-model-settings.js";
-import {guidedPresetBases} from "./execution-preset-editor.js";
 import {
   hwpxTargetFromAdminRevision,
   hwpxTargetFromBuild,
@@ -75,7 +74,6 @@ const state = {
   codexAuthPollTimer: null,
   codexAccountPollTimer: null,
   codexAccountRequestSequence: 0,
-  executionPresets: [],
   adminSettingsRequestSequence: 0,
   knowledgeAnalysisBatches: [],
   knowledgeQualityReport: null,
@@ -2742,17 +2740,15 @@ async function loadAdminSettings() {
   const requestSequence = ++state.adminSettingsRequestSequence;
   const navigationVersion = state.navigationVersion;
   try {
-    const [presets] = await Promise.all([
-      api("/admin/execution-presets"),
+    const [features] = await Promise.all([
+      api("/admin/feature-model-settings"),
       loadOperatorAccounts(),
       chatModelEditor.refresh(),
     ]);
     if (requestSequence !== state.adminSettingsRequestSequence
       || navigationVersion !== state.navigationVersion || !hasAdminRole()) return;
-    state.executionPresets = presets;
-    renderExecutionPresets(presets);
-    presetEditor.setPresets(presets);
-    showMessage($("#execution-preset-message"), `${presets.length}개 실행 설정 · 고정 버전`, "success");
+    presetEditor.setFeatures(features);
+    showMessage($("#execution-preset-message"), "");
   } catch (failure) {
     if (requestSequence !== state.adminSettingsRequestSequence
       || navigationVersion !== state.navigationVersion || !hasAdminRole()) return;
@@ -3087,16 +3083,6 @@ function actionButton(label, action, quiet = false) {
   button.textContent = label;
   button.addEventListener("click", action);
   return button;
-}
-
-function presetRoleLabel(role) {
-  return {
-    authoring: "문항 작성",
-    image: "자료 그림",
-    review: "품질 검토",
-    item_management: "문항 등록",
-    support: "지식 분석",
-  }[role] || role;
 }
 
 function workerSlotLabel(value) {
@@ -3491,59 +3477,6 @@ async function pollControlCommand(commandId) {
     await new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
   showMessage($("#codex-account-message"), "계정 작업이 계속 처리 중입니다. 새로고침으로 확인하세요.");
-}
-
-function renderExecutionPresets(presets) {
-  const root = $("#execution-preset-list");
-  root.replaceChildren();
-  // Historical revisions remain available to pinned runs, but are not working settings.
-  const currentPresets = presets.flatMap((preset) => {
-    const current = preset.revisions?.find((revision) => revision.preset_revision_id === preset.current_revision_id);
-    return preset.state === "ACTIVE" && current?.state === "RELEASED" ? [{preset, current}] : [];
-  });
-  if (!currentPresets.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty-state";
-    empty.textContent = "사용 중인 실행 설정이 없습니다.";
-    root.append(empty);
-    return;
-  }
-  const editablePresetIds = new Set(guidedPresetBases(presets).map((preset) => preset.preset_id));
-  for (const {preset, current} of currentPresets) {
-    const {card, details} = controlCard(current.display_name, preset.state, "execution_preset");
-    addControlDetail(details, "모델·추론 설정", current.role_policies.map((policy) => `${presetRoleLabel(policy.role)}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", "));
-    addControlDetail(details, "검증 결과", current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
-    card.append(technicalDisclosure("설정 기술 정보", {
-      "실행 설정 ID": preset.preset_id,
-      "현재 고정 버전 ID": preset.current_revision_id,
-      "정책 내용 검증값": current.content_sha256,
-    }));
-    const actions = document.createElement("div");
-    actions.className = "form-actions";
-    // An un-applied successor is active editing work, unlike the draft behind a release.
-    const pendingDraft = editablePresetIds.has(preset.preset_id) ? preset.revisions.reduce((latest, revision) =>
-      revision.state === "DRAFT" && revision.revision_number > (latest?.revision_number ?? current.revision_number)
-        ? revision : latest, null) : null;
-    if (pendingDraft) actions.append(actionButton("초안 확인·적용", () => presetEditor.inspectDraft(preset, pendingDraft)));
-    actions.append(actionButton("사용 중단", () => deprecatePreset(preset.preset_id, current.revision_number), true));
-    card.append(actions);
-    root.append(card);
-  }
-}
-
-async function deprecatePreset(identifier, resourceVersion) {
-  const path = `/admin/execution-presets/${encodeURIComponent(identifier)}/deprecations`;
-  try {
-    await api(path, {
-      method: "POST",
-      mutation: true,
-      body: {resource_version: resourceVersion, idempotency_key: `studio:preset:deprecate:${identifier}:${crypto.randomUUID()}`},
-    });
-    showMessage($("#execution-preset-message"), "실행 설정 사용을 중단했습니다.", "success");
-    await loadAdminSettings();
-  } catch (failure) {
-    showMessage($("#execution-preset-message"), `사용 중단 실패: ${failure.message}`, "error");
-  }
 }
 
 async function loadRecentHwpxBuilds() {

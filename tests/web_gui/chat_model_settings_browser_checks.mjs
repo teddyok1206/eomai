@@ -30,6 +30,9 @@ const controller=createChatModelSettingsEditor({document,api,isAdmin:()=>fixture
 controller.install(); fixture.controller=controller;fixture.state=state;
 document.querySelectorAll('.view').forEach(n=>n.classList.toggle('active',n.dataset.view==='admin-settings'));
 document.querySelector('#advanced-preset-policy').open=true;
+// Feature selection is covered by execution_preset_browser_checks; this fixture
+// isolates the ChatGPT editor after the user has selected that feature.
+document.querySelector('#chat-model-settings').hidden=false;
 await controller.refresh();fixture.ready=true;
 `;
 const browser = await chromium.launch({headless:true, timeout:10000});

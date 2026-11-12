@@ -45,6 +45,10 @@ const fixture = window.presetFixture = {calls:[],created:0,released:0,validation
 const results = new Map();
 async function api(path, request = {}) {
  fixture.calls.push({path,...structuredClone(request)});
+ if (path === '/admin/execution-presets/' + preset.preset_id && !request.method) {
+  if (fixture.failReadback) {fixture.failReadback=false;throw new Error('READBACK_TIMEOUT');}
+  return structuredClone(preset);
+ }
  const kind = path.endsWith('/model-options')?'OPTIONS':path.endsWith('/evaluations')?'EVALUATE':
   path.endsWith('/releases')?'RELEASE':path.includes('/execution-preset-validations/')?'STATUS':'DRAFT';
  if (fixture.holdNext === kind) {fixture.holdNext=null;fixture.held=true;
@@ -92,9 +96,15 @@ async function api(path, request = {}) {
  throw new Error('UNEXPECTED_FIXTURE_OPERATION');
 }
 const controller = createExecutionPresetEditor({document,api,isAdmin:()=>true,
- refresh:async()=>controller.setPresets([preset,alternatePreset]),showMessage:(node,text)=>{node.textContent=text;},
+ refresh:async()=>controller.setFeatures(features()),showMessage:(node,text)=>{node.textContent=text;},
  addDetail:(node,label,value)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;node.append(dt,dd);}});
-controller.install();controller.setPresets([preset,alternatePreset]);
+function features() {return [
+ {feature_key:'item-authoring',label:'문항 제작',kind:'WORKFLOW',stages:[
+  {stage_key:'authoring',label:'출제·검토',preset},
+  {stage_key:'alternate',label:'다른 단계',preset:alternatePreset}]},
+ {feature_key:'chat',label:'ChatGPT',kind:'CHAT',stages:[]}
+];}
+controller.install();controller.setFeatures(features());
 document.querySelectorAll('.view').forEach(node=>node.classList.toggle('active',node.dataset.view==='admin-settings'));
 document.querySelector('#advanced-preset-policy').open=true;
 fixture.controller=controller;fixture.preset=preset;fixture.ready=true;
@@ -120,6 +130,7 @@ try {
   const reset = async () => {
     await page.goto("https://preset-editor.invalid/studio", {timeout: 10000});
     await page.waitForFunction(() => window.presetFixture?.ready === true);
+    await page.locator("#feature-model-select").selectOption("item-authoring");
     await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
     await page.waitForFunction(() => !document.querySelector("#preset-review-open").disabled);
   };
@@ -178,6 +189,24 @@ try {
   const replay = (await calls()).filter(call => call.path === "/admin/execution-presets");
   assert.equal(replay[0].body.idempotency_key, replay[1].body.idempotency_key);
   assert.equal(await page.evaluate(() => window.presetFixture.created), 1);
+
+  // Readback failure after creation retains the same idempotency intent.
+  await reset();await review();
+  await page.evaluate(() => {window.presetFixture.failReadback=true;});
+  await page.locator("#preset-draft-submit").click();
+  await page.waitForFunction(() => document.querySelector("#preset-draft-message").textContent.includes("READBACK_TIMEOUT"));
+  await page.locator("#preset-draft-submit").click();
+  await page.waitForFunction(() => !document.querySelector("#preset-release-panel").hidden);
+  assert.equal(await page.evaluate(() => window.presetFixture.created), 1);
+
+  // A saved draft remains reachable after returning to a feature; chat hides workflow controls.
+  await page.locator("#feature-model-select").selectOption("chat");
+  assert.equal(await page.locator("#chat-model-settings").isVisible(), true);
+  assert.equal(await page.locator("#preset-workflow-settings").isVisible(), false);
+  await page.locator("#feature-model-select").selectOption("item-authoring");
+  await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
+  await page.locator("#preset-draft-resume").click();
+  assert.equal(await page.locator("#preset-release-panel").isVisible(), true);
 
   // Closing the panel cancels late status presentation and cannot enable release.
   await page.evaluate(() => {window.presetFixture.holdNext="STATUS";});

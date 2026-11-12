@@ -1909,6 +1909,12 @@ def create_app(
     ) -> dict[str, Any]:
         return await actual.change_chat_model_settings(session, value)
 
+    @app.get(f"{API_PREFIX}/admin/feature-model-settings")
+    async def feature_model_settings(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return await actual.feature_model_settings(session)
+
     @app.get(f"{API_PREFIX}/admin/execution-presets")
     async def execution_presets(
         session: Annotated[WebSession, Depends(require_session)],
@@ -1921,6 +1927,13 @@ def create_app(
         session: Annotated[WebSession, Depends(require_csrf)],
     ) -> dict[str, Any]:
         return await actual.create_execution_preset_draft(session, value)
+
+    @app.get(f"{API_PREFIX}/admin/execution-presets/{{preset_id}}")
+    async def execution_preset(
+        preset_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return await actual.execution_preset(session, preset_id)
 
     @app.get(f"{API_PREFIX}/admin/execution-presets/{{preset_id}}/model-options")
     async def execution_preset_model_options(

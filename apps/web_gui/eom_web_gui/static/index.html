@@ -421,12 +421,13 @@
           <section class="view admin-only" data-view="admin-settings" aria-labelledby="admin-settings-title">
             <div class="page-heading"><h1 id="admin-settings-title">관리자 설정</h1><button id="admin-settings-refresh" class="button secondary" type="button">설정 새로고침</button></div>
             <section class="panel account-admin-panel"><div class="panel-heading"><h2>사용자 계정</h2><span id="operator-count" class="status-badge tone-neutral"><span class="status-icon">■</span> 확인 전</span></div><div class="account-admin-layout"><form id="operator-create-form" class="form-grid account-create-form"><label>로그인 ID<input id="operator-create-username" required minlength="3" maxlength="64" pattern="[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*" autocomplete="off" spellcheck="false"></label><label>표시 이름<input id="operator-create-display-name" required maxlength="128" autocomplete="off"></label><label>임시 비밀번호<input id="operator-create-password" type="password" required maxlength="128" autocomplete="new-password"></label><fieldset class="wide"><legend>초기 역할</legend><div class="role-choice-grid"><label class="check"><input type="checkbox" name="operator-create-role" value="VIEWER" checked> 조회</label><label class="check"><input type="checkbox" name="operator-create-role" value="AUTHOR"> 출제</label><label class="check"><input type="checkbox" name="operator-create-role" value="REVIEWER"> 검토</label><label class="check"><input type="checkbox" name="operator-create-role" value="EDITOR"> 편집</label><label class="check"><input type="checkbox" name="operator-create-role" value="ADMIN"> 관리자</label></div></fieldset><div class="form-actions wide"><button class="button primary" type="submit" data-required-permission="operator:create">계정 만들기</button></div></form><div><div id="operator-list" class="control-list operator-list"><p class="empty-state">계정 목록을 불러오세요.</p></div><p id="operator-message" class="form-message" aria-live="polite"></p></div></div></section>
-            <section class="panel"><div class="panel-heading"><h2>실행 설정</h2><span class="status-badge tone-primary"><span class="status-icon">◆</span> 고정 정책</span></div><div id="execution-preset-list" class="control-list"><p class="empty-state">실행 설정을 불러오세요.</p></div><p id="execution-preset-message" class="form-message" aria-live="polite"></p></section>
             <details id="advanced-preset-policy" class="panel admin-preset-panel advanced-policy">
               <summary><strong>모델·생각하는 깊이</strong><span class="status-badge tone-neutral">관리자 설정</span></summary>
               <div class="panel-body">
                 <p class="policy-notice">설정을 확인한 뒤 새 작업에 적용합니다. 진행 중인 작업은 바뀌지 않습니다.</p>
-                <section class="policy-role-card" aria-labelledby="chat-model-title">
+                <label>기능<select id="feature-model-select"><option value="">기능을 선택하세요</option></select></label>
+                <p id="execution-preset-message" class="form-message" aria-live="polite"></p>
+                <section id="chat-model-settings" class="policy-role-card" aria-labelledby="chat-model-title" hidden>
                   <div class="panel-heading"><h3 id="chat-model-title">ChatGPT</h3><button id="chat-model-refresh" type="button" class="button secondary small">목록 새로고침</button></div>
                   <p id="chat-model-current" class="state-description">설정 확인 전</p>
                   <form id="chat-model-form" class="policy-role-fields">
@@ -436,11 +437,13 @@
                   </form>
                   <p id="chat-model-message" class="form-message" aria-live="polite"></p>
                 </section>
+                <div id="preset-workflow-settings" hidden>
                 <form id="preset-guided-form" class="guided-policy-form">
                   <div class="guided-policy-grid">
-                    <label>변경할 프리셋<select id="preset-base-select"><option value="">사용 중인 프리셋 선택</option></select></label>
+                    <label id="preset-stage-field">작업 단계<select id="preset-base-select"><option value="">단계를 선택하세요</option></select></label>
                   </div>
-                  <div id="preset-role-editors" class="policy-role-list"><p class="empty-state">기준 실행 설정을 선택하면 역할별 설정이 표시됩니다.</p></div>
+                  <div id="preset-role-editors" class="policy-role-list"><p class="empty-state">기능을 선택하면 모델 설정이 표시됩니다.</p></div>
+                  <button id="preset-draft-resume" class="button secondary" type="button" hidden>저장한 변경사항 이어서 확인</button>
                   <details class="technical-details"><summary>변경하지 않는 설정 정보</summary><div class="guided-policy-grid">
                     <label>표시 이름<input id="preset-display-name" maxlength="128" disabled></label>
                     <label>일반 지식 정책<select id="preset-general-knowledge" disabled><option value="DENY">사용 안 함</option><option value="ALLOW_WITH_PROVENANCE">출처 기록 조건으로 허용</option></select></label>
@@ -467,6 +470,7 @@
                   <div class="form-actions"><button id="preset-release-cancel" class="button quiet" type="button">닫기</button><button id="preset-release-submit" class="button primary" type="button" disabled>새 작업에 적용</button></div>
                 </section>
                 <p id="preset-draft-message" class="form-message" aria-live="polite"></p>
+                </div>
               </div>
             </details>
           </section>

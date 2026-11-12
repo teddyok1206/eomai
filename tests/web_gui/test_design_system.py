@@ -192,7 +192,7 @@ def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths()
     assert 'class="panel operational-log-panel"' in HTML
     assert 'technicalDisclosure("고정 버전 정보"' in JAVASCRIPT
     assert 'technicalDisclosure("원본 기술 정보"' in JAVASCRIPT
-    assert 'technicalDisclosure("설정 기술 정보"' in JAVASCRIPT
+    assert "<summary>변경하지 않는 설정 정보</summary>" in HTML
     assert "const statementLabels = new Map();" in JAVASCRIPT
     assert "label.textContent = statementLabels.get(value.statement_id)" in JAVASCRIPT
     assert "option.textContent = value.batch_name;" in JAVASCRIPT
@@ -216,7 +216,7 @@ def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert 'id="preset-release-confirm"' in HTML
     assert 'id="preset-draft-json"' not in HTML
     assert 'JSON.parse($("#preset-draft-json")' not in JAVASCRIPT
-    assert 'actionButton("초안 확인·적용"' in JAVASCRIPT
+    assert 'id="preset-draft-resume"' in HTML
     assert "createExecutionPresetEditor" in JAVASCRIPT
     controller = (STATIC / "execution-preset-controller.js").read_text(encoding="utf-8")
     assert "presetValidationSucceeded(validation, target)" in controller
@@ -235,7 +235,8 @@ def test_execution_settings_have_a_separate_admin_view() -> None:
     assert 'id="admin-settings-refresh"' in settings_view
     assert 'id="execution-preset-list"' not in control_view
     assert 'id="advanced-preset-policy"' not in control_view
-    assert 'id="execution-preset-list"' in settings_view
+    assert 'id="feature-model-select"' in settings_view
+    assert 'id="execution-preset-list"' not in settings_view
     assert 'id="advanced-preset-policy"' in settings_view
     assert 'if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();' in JAVASCRIPT
 

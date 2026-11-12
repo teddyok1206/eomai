@@ -17,6 +17,8 @@ const POLL_LIMIT = 30;
 export function createExecutionPresetEditor({document, api, isAdmin, refresh, showMessage, addDetail}) {
   const $ = (selector) => document.querySelector(selector);
   let presets = [];
+  let features = [];
+  let feature = null;
   let bases = [];
   let base = null;
   let options = null;
@@ -52,6 +54,8 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
 
   function sync() {
     const busy = action !== null;
+    $("#feature-model-select").disabled = busy || !features.length;
+    $("#preset-draft-resume").disabled = busy;
     $("#preset-base-select").disabled = busy || !bases.length;
     for (const field of document.querySelectorAll("#preset-guided-form input:not([readonly]), #preset-guided-form textarea")) {
       field.disabled = true;
@@ -110,9 +114,10 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     $("#preset-description").value = "";
     $("#preset-capacity-revision").value = "-";
     $("#preset-protocols").value = "-";
+    $("#preset-draft-resume").hidden = true;
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "실행 설정을 선택하세요.";
+    empty.textContent = "기능과 작업 단계를 선택하세요.";
     $("#preset-role-editors").replaceChildren(empty);
     sync();
   }
@@ -145,7 +150,9 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
         const card = document.createElement("section");
         card.className = "policy-role-card";
         const heading = document.createElement("h3");
-        heading.textContent = presetCandidateLabel(policy.role, candidateIndex);
+        heading.textContent = policy.role === "support" && feature
+          ? feature.stages.find(stage => stage.preset.preset_id === base.preset_id)?.label || "작업 모델"
+          : presetCandidateLabel(policy.role, candidateIndex);
         const fields = document.createElement("div");
         fields.className = "policy-role-fields";
         const modelLabel = document.createElement("label");
@@ -186,6 +193,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     base = bases.find((item) => item.preset_revision_id === selected) || null;
     if (!base) return;
     const capturedBase = base;
+    $("#preset-draft-resume").hidden = !pendingDraft();
     const sequence = ++readVersion;
     $("#preset-base-revision").value = base.preset_revision_id;
     $("#preset-display-name").value = base.draft.display_name;
@@ -204,7 +212,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       renderRoles();
       message(modelOptionsNeedRefresh()
         ? "코덱스 계정에서 ‘상태 확인’을 한 뒤 실행 설정을 다시 선택하세요. 로그인 상태가 바뀌면 모델 목록도 다시 확인해 주세요."
-        : "이 프리셋의 역할별 모델과 생각하는 깊이를 선택하세요. 다른 프리셋이나 진행 중인 작업은 바뀌지 않습니다.");
+        : "");
     } catch (failure) {
       if (sequence !== readVersion || base !== capturedBase) return;
       options = null;
@@ -235,6 +243,14 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
         }),
       })),
     };
+  }
+
+  function pendingDraft() {
+    if (!base) return null;
+    const logical = presets.find(value => value.preset_id === base.preset_id);
+    return logical?.revisions.reduce((latest, revision) =>
+      revision.state === "DRAFT" && revision.revision_number > (latest?.revision_number ?? base.revision_number)
+        ? revision : latest, null) || null;
   }
 
   function reviewEdits() {
@@ -299,17 +315,15 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       const response = await api("/admin/execution-presets", {method: "POST", mutation: true, body: intent.body});
       if (version !== editorVersion || base !== capturedBase) return;
       if (!DRAFT_ID.test(response.resource_id)) throw new Error("APPLICATION_API_RESPONSE_INVALID");
-      draftIntent = null;
-      clearDraftReview();
-      message("설정 초안을 저장했습니다.", "success");
-      await refresh();
+      const logical = await api(`/admin/execution-presets/${encodeURIComponent(capturedBase.preset_id)}`);
       if (version !== editorVersion || base !== capturedBase) return;
-      const logical = presets.find((item) => item.preset_id === capturedBase.preset_id);
       const revision = logical?.revisions.find((item) => item.preset_revision_id === response.resource_id);
-      if (revision) {
+      if (logical.preset_id === capturedBase.preset_id && logical.current_revision_id === capturedBase.preset_revision_id && revision) {
+        draftIntent = null;
+        clearDraftReview();
         action = null;
         inspectDraft(logical, revision);
-      }
+      } else throw new Error("PRESET_MODEL_OPTIONS_STALE");
     } catch (failure) {
       if (version === editorVersion) message(`설정 초안 저장 실패: ${failure.message}`, "error");
     } finally {
@@ -404,6 +418,12 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       releaseIntent = null;
       clearValidation();
       await refresh();
+      action = null;
+      const current = bases.find(item => item.preset_id === captured.preset_id);
+      if (current && isAdmin()) {
+        $("#preset-base-select").value = current.preset_revision_id;
+        await chooseBase();
+      }
       message("새 작업에 적용했습니다. 이미 진행 중인 작업은 기존 설정을 유지합니다.", "success");
     } catch (failure) {
       if (target === captured) message(`설정 적용 실패: ${failure.message}`, "error");
@@ -419,8 +439,11 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     const selector = $("#preset-base-select");
     const selected = base?.preset_revision_id || "";
     selector.replaceChildren();
-    appendOption(selector, "", bases.length ? "사용 중인 실행 설정 선택" : "편집 가능한 실행 설정 없음");
-    for (const item of bases) appendOption(selector, item.preset_revision_id, item.draft.display_name, item.preset_revision_id === selected);
+    appendOption(selector, "", bases.length ? "작업 단계를 선택하세요" : "사용 가능한 설정 없음");
+    for (const item of bases) {
+      const label = feature?.stages.find(stage => stage.preset.preset_id === item.preset_id)?.label || item.draft.display_name;
+      appendOption(selector, item.preset_revision_id, label, item.preset_revision_id === selected);
+    }
     if (base && !bases.some((item) => item.preset_revision_id === base.preset_revision_id)
       || target && !bases.some((item) => item.preset_id === target.preset_id && item.preset_revision_id === target.base_revision_id)) {
       reset();
@@ -429,7 +452,42 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     sync();
   }
 
+  async function chooseFeature() {
+    if (action || !isAdmin()) return;
+    reset();
+    feature = features.find(value => value.feature_key === $("#feature-model-select").value) || null;
+    $("#chat-model-settings").hidden = feature?.kind !== "CHAT";
+    $("#preset-workflow-settings").hidden = feature?.kind !== "WORKFLOW";
+    setPresets(feature?.stages.map(stage => stage.preset) || []);
+    $("#preset-stage-field").hidden = bases.length === 1;
+    message("");
+    if (bases.length === 1) {
+      $("#preset-base-select").value = bases[0].preset_revision_id;
+      await chooseBase();
+    }
+  }
+
+  function setFeatures(values) {
+    const selected = feature?.feature_key || $("#feature-model-select").value;
+    features = values;
+    const selector = $("#feature-model-select");
+    selector.replaceChildren();
+    appendOption(selector, "", "기능을 선택하세요");
+    for (const value of features) appendOption(selector, value.feature_key, value.label, value.feature_key === selected);
+    feature = features.find(value => value.feature_key === selected) || null;
+    setPresets(feature?.stages.map(stage => stage.preset) || []);
+    $("#chat-model-settings").hidden = feature?.kind !== "CHAT";
+    $("#preset-workflow-settings").hidden = feature?.kind !== "WORKFLOW";
+    $("#preset-stage-field").hidden = bases.length === 1;
+    if (!feature) reset();
+  }
+
   function install() {
+    $("#feature-model-select").addEventListener("change", chooseFeature);
+    $("#preset-draft-resume").addEventListener("click", () => {
+      const draft = pendingDraft();
+      if (draft) inspectDraft(presets.find(value => value.preset_id === base.preset_id), draft);
+    });
     $("#preset-base-select").addEventListener("change", chooseBase);
     for (const event of ["input", "change"]) $("#preset-guided-form").addEventListener(event, (input) => {
       if (input.target.id === "preset-base-select") return;
@@ -452,5 +510,5 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     reset();
   }
 
-  return {install, setPresets, inspectDraft, stopPolling, reset};
+  return {install, setFeatures, setPresets, inspectDraft, stopPolling, reset};
 }

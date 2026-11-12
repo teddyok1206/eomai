@@ -478,7 +478,13 @@ def test_model_evaluation_request_rejects_client_supplied_acceptance(
 
 
 @pytest.mark.parametrize(
-    "method,path", [("GET", OPTIONS_PATH), ("GET", STATUS_PATH), ("POST", EVALUATIONS_PATH)]
+    "method,path",
+    [
+        ("GET", OPTIONS_PATH),
+        ("GET", STATUS_PATH),
+        ("POST", EVALUATIONS_PATH),
+        ("GET", "/api/v1/feature-model-settings"),
+    ],
 )
 @pytest.mark.parametrize("denial", ["admin", "fresh", "permission"])
 def test_model_selection_routes_require_admin_recent_authentication_and_permission(
