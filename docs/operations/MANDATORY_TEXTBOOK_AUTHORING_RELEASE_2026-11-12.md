@@ -61,3 +61,56 @@ native QUERY가 모두 비었음을 확인했다. 설치 후 Pack19를 활성화
 기존 Item·Artifact·실패 이력·Graph·임베딩을 삭제하거나 고쳐 복구하지 않는다.
 
 설계: [콘텐츠팀 원문과 출제 연동 지침](../architecture/CONTENT_TEAM_AUTHORING_PROMPT_V5_DESIGN.md).
+
+## 후속 장애 수정 및 공통 HWPX 재검토 — 2026-11-12 02:48 UTC
+
+사용자가 제시한 `hwpxbuild_b5c9fe156ad74c6c8192663901785c3f`와 교육과정 목록
+`APPLICATION_API_UNAVAILABLE`를 별도로 조사했다. HWPX 실패는 위 배포 이전의 실행이다.
+
+### 원인과 수정 범위
+
+- HWPX: 정본에 구분된 탐구·발문을 다시 자유문장 파서에 넣으면서, 파서가 모르는
+  마지막 질문이 탐구 결과 안에 남아 출력기가 거부했다. 전체/부분 인식 문구·줄바꿈·
+  본문 안의 `①`도 같은 재파싱 경계를 깨뜨리는 것을 재현했다.
+- 공통 `QuestionData` 투영으로 이미 검증된 필드를 직접 전달하도록 변경했다.
+  문구별 발문 복구 함수는 제거했다. 단일·whole-exam·curated는 같은 경로를 사용한다.
+- 템플릿의 중복 번호와 직접 선택형의 빈 보기 틀을 정확한 native 구조 검증 후 제거한다.
+  curated에 따로 있던 번호 보정을 공통 경계로 모았다. 실제 내용이 있으면 삭제하지 않는다.
+- 탐구 내부표가 정상 생성돼도 Manager가 미연결 표로 거부하고 Markdown 구분자를
+  일반 글로 찾던 후속 오류도 재현·수정했다. 표의 값·차원·정렬·순서와 주변 줄글 순서를
+  독립 검증한다. 기존 visual ordinal/receipt schema와 정본 inquiry hash 의미는 유지한다.
+- 탐구 내부표의 좌/우/중앙 정렬도 기존 Builder 정렬 처리에서 동일하게 적용한다.
+- 교육과정: 초기 schema registry를 동시 조회가 각각 생성하는 cold-start 경합을 재현했다.
+  첫 병렬 조회는 약5.69초, 운영의 초기 GET도5.924초로 Web의5초 제한을 넘었다.
+  기존 불변 리소스 검증을 API lifespan에서 한 번 완료한 뒤 readiness를 열도록 했다.
+  제시된 정확한 `webreq_0237269a0ed8e543fbfdb0c8`를 Web journal과 직접 연결한 증거는
+  없으며, 재현된 공통 초기화 문제를 수정한 것이다. 권한·timeout·hash 검증은 완화하지 않았다.
+
+### 검증·실제 설치
+
+- 구현 commit `a0c523c0` 및 공통 보강 `c0dafbe381e7d836a951c01d432250264fc72668`.
+- HWPX 공통·수식·Markdown·handoff·단일·시험지·혼합 합본·독립 검증192 PASS.
+  직접 선택형 추가 경계검사는 해당 신규 suite22 PASS로 별도 확인했다(중복 합산 금지).
+- API startup/교육과정/OpenAPI17 PASS. 해당 파일의 기존 production-candidate 테스트1건은
+  새 필수 `usage_filter`를 fixture가 넘기지 않는 선행 불일치로 분리했다.
+  무관한 파일의 기존 광역 mypy 오류도 통과로 숨기지 않았다. 변경 owner의 focused mypy,
+  Ruff/format PASS; 문맥/의존 경계24 PASS. DB 상태기계/DDL 변경은 없다.
+- 최종 API/platform/contracts/Catalog/runner와 HWPX Builder는 `c0dafbe3` 설치.
+  Web은 이전 `d1328814` 유지. QUERY owner/controller/numerical, Pack1.20.19, INDEX·자료
+  학습 설정과 보존 대상 identity는 그대로다. API installed RECORD2,871개 검증 PASS.
+- API READY, HTTPS login200(0.234초), 대상 서비스 재개 및 QUERY listener 확인 PASS.
+  건강검사를 실제 로그인 계정의 교육과정 화면 확인으로 확대 해석하지 않는다.
+- 원 실패 문항의 정확한 입력을 새 진단 workspace에 복사하여 실제 고정 systemd 격리
+  HWPX 실행기(eom-hwpx, NAS/repository 접근 불가)로 생성하고, 설치된 별도 Manager로
+  검증했다. 둘 다 PASS. 3×5 native 표·발문1회·중복 번호 없음·빈 보기 없음 확인.
+  출력 SHA는 `sha256:20c1e5fe32b37e96797926f6572646dc3707865380aee20fce2546dde89575ee`,
+  acceptance SHA는 `sha256:b6de973304b7c69ed0f3c4ef14bb74e93d790cc6c01af057305405b262e5de18`.
+- 이 진단은 새 application build/Artifact 등록이나 사용자 다운로드 성공이 아니다.
+  사용자에게 같은 문항의 명시적 재제작을 요청했다. 기존 세 실패 build는 FAILED 그대로이며
+  입력·실패 result bytes도 변경되지 않았다. 신규 모델 실행·문항 내용/팀장 프롬프트 수정 없음.
+
+최종 protected release evidence는 `/var/lib/eom-hwpx-shared-release-20261112`,
+Builder 설치 기록은 `/var/lib/eom-hwpx/deployments/c0dafbe381e7d836a951c01d432250264fc72668.json`.
+앞서 준비했던 `/var/lib/eom-curriculum-startup-release-20261112`는 API 미활성 후보이며
+최종 설치 증거와 구분한다. 이전 호환 wheel/config와 실패 산출물은 삭제하지 않았다.
+공통 설계는 [handoff 경계 보강](../architecture/CONTENT_TEAM_HWP_QUESTION_EDITOR_HANDOFF_V1.md)을 본다.
