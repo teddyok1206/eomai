@@ -423,6 +423,36 @@ def _extract_visuals(value: str) -> tuple[str, tuple[ContentTeamTable | ContentT
     return _clean("\n".join(kept)), tuple(visuals)
 
 
+def parse_content_team_text_blocks(value: str) -> tuple[str | ContentTeamTable, ...]:
+    """Project inquiry prose and native tables without changing the authored field.
+
+    Use the same bounded table grammar as general visuals. The returned ordered
+    values are a local verification projection, not new visual ordinals or a
+    replacement for the immutable inquiry text.
+    """
+
+    lines = value.splitlines()
+    blocks: list[str | ContentTeamTable] = []
+    prose: list[str] = []
+    index = 0
+    while index < len(lines):
+        table = _table_at(lines, index, "")
+        if table is None:
+            prose.append(lines[index])
+            index += 1
+            continue
+        text = _clean("\n".join(prose))
+        if text:
+            blocks.append(text)
+        prose.clear()
+        block, index = table
+        blocks.append(block)
+    text = _clean("\n".join(prose))
+    if text:
+        blocks.append(text)
+    return tuple(blocks)
+
+
 def _extract_labeled_blocks(
     value: str,
 ) -> tuple[str, tuple[ContentTeamLabeledBlock, ...]]:

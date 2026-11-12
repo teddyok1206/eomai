@@ -28,10 +28,12 @@ from eom_hwpx_contracts import (
     ContentTeamRenderRequest,
     ContentTeamRenderRequestV2,
     ContentTeamRenderRequestV3,
+    ContentTeamTable,
     classify_content_team_equation,
     normalize_content_team_labeled_block_content,
     parse_content_team_markdown,
     parse_content_team_markdown_v2,
+    parse_content_team_text_blocks,
     project_content_team_equation_script,
     serialize_content_team_markdown,
     validate_content_team_image_bindings,
@@ -50,6 +52,8 @@ from eom_hwpx_builder.content_team_images import (
     CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT,
     inject_content_team_images,
 )
+from eom_hwpx_builder.content_team_layout import project_content_team_template_layout
+from eom_hwpx_builder.content_team_question_projection import project_content_team_question
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.handoff import (
     finalize_failure_result,
@@ -402,49 +406,6 @@ def _project_general_stem_for_handoff(stem: str) -> str:
             "content-team stem is empty after HWPX handoff projection",
         )
     return projected
-
-
-def _bind_typed_bottom_stem_for_handoff(
-    question: Any,
-    draft: ContentTeamEditorialDraftContract,
-    *,
-    score_display: str,
-) -> bool:
-    """Bind the typed bottom stem when the immutable parser's phrase heuristic misses it.
-
-    The reviewed handoff parser recognizes only a small Korean phrase vocabulary. Item Content owns
-    an already validated ``bottom_stem`` field, so the adapter may split only the exact canonical
-    suffix produced from that field. It must never guess a boundary or rewrite the approved text.
-    """
-
-    expected = f"{draft.bottom_stem} [{score_display}점]"
-    if question.bottom_stem == expected:
-        return False
-    suffix = f"\n\n{expected}"
-    # Inquiry parsing moves the remaining main text into the final result section.
-    # The typed draft selects that owner; do not search unrelated question fields.
-    field = "inquiry_result" if draft.inquiry is not None else "stem"
-    containing_text = getattr(question, field, None)
-    if (
-        question.bottom_stem
-        or not isinstance(containing_text, str)
-        or (draft.inquiry is not None and not question.is_inquiry_experiment)
-        or not containing_text.endswith(suffix)
-        or containing_text.count(expected) != 1
-    ):
-        raise HwpxError(
-            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
-            "typed bottom stem differs from the handoff parser boundary",
-        )
-    remaining_stem = containing_text[: -len(suffix)]
-    if not remaining_stem.strip():
-        raise HwpxError(
-            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
-            "typed bottom stem consumed the complete handoff stem",
-        )
-    setattr(question, field, remaining_stem)
-    question.bottom_stem = expected
-    return True
 
 
 def _hide_unused_visual_sample(output: Path) -> bool:
@@ -847,12 +808,15 @@ def _set_table_column_alignments(
     output: Path,
     draft: ContentTeamEditorialDraftContract,
     table_ids: tuple[str, ...],
+    *,
+    inquiry_box_table_id: str | None = None,
 ) -> None:
     """Materialize the typed column alignment instead of inheriting the prototype default.
 
     The external Handoff renderer owns table creation but historically left every generated cell
-    centered. We patch only the exact table IDs returned by that renderer, clone its reviewed cell
-    paragraph property, and keep the output inside the same bounded package boundary.
+    centered. Bind general tables by the renderer's exact IDs and inquiry tables
+    within its exact box in canonical order, then share the same paragraph-property
+    projection. General visual ordinals and the immutable inquiry text do not change.
     """
 
     tables = tuple(visual for visual in draft.visuals if visual.kind == "TABLE")
@@ -861,7 +825,18 @@ def _set_table_column_alignments(
             HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
             "content-team rendered table identities differ from the typed draft",
         )
-    if not tables:
+    inquiry_tables = (
+        tuple(
+            block
+            for value in (draft.inquiry.goal, draft.inquiry.procedure, draft.inquiry.result)
+            if value is not None
+            for block in parse_content_team_text_blocks(value)
+            if isinstance(block, ContentTeamTable)
+        )
+        if draft.inquiry is not None
+        else ()
+    )
+    if not tables and not inquiry_tables:
         return
     package = read_package(output)
     by_name = package.by_name()
@@ -879,6 +854,38 @@ def _set_table_column_alignments(
         for element in section.root.iter()
         if local_name(element.tag) == "tbl" and element.get("id") is not None
     }
+    if inquiry_tables:
+        boxes = tuple(
+            element
+            for element in section.root.iter()
+            if local_name(element.tag) == "tbl" and element.get("id") == inquiry_box_table_id
+        )
+        if inquiry_box_table_id is None or len(boxes) != 1:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team inquiry table container identity is missing or ambiguous",
+            )
+        rendered_inquiry_tables = tuple(
+            element
+            for element in boxes[0].iter()
+            if element is not boxes[0] and local_name(element.tag) == "tbl"
+        )
+        inquiry_ids = tuple(str(element.get("id", "")) for element in rendered_inquiry_tables)
+        if (
+            len(inquiry_ids) != len(inquiry_tables)
+            or len(set(inquiry_ids)) != len(inquiry_ids)
+            or any(not identifier for identifier in inquiry_ids)
+            or any(
+                table_by_id.get(identifier) is not element
+                for identifier, element in zip(inquiry_ids, rendered_inquiry_tables, strict=True)
+            )
+        ):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team inquiry table identities differ from the typed draft",
+            )
+        tables += inquiry_tables
+        table_ids += inquiry_ids
     para_by_id = {
         str(element.get("id")): element
         for element in header.root.iter()
@@ -1252,7 +1259,6 @@ def render_content_team_document(
         handoff_value["visuals"] = []
         handoff_value["visual_layout"] = "NONE"
     handoff_draft = type(draft).model_validate(handoff_value)
-    handoff_markdown = serialize_content_team_markdown(handoff_draft)
     rendered_item_number = (
         handoff_draft.item_number if item_number_override is None else item_number_override
     )
@@ -1274,31 +1280,10 @@ def render_content_team_document(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
             "exam presentation values are outside the reviewed policy",
         )
-    if rendered_item_number != handoff_draft.item_number:
-        source_prefix = f"{handoff_draft.item_number}. "
-        if not handoff_markdown.startswith(source_prefix.encode()):
-            raise HwpxError(
-                HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
-                "canonical item number marker is ambiguous",
-            )
-        handoff_markdown = (
-            f"{rendered_item_number}. ".encode() + handoff_markdown[len(source_prefix.encode()) :]
-        )
-    if rendered_score_display != handoff_draft.score_display:
-        source_score = (
-            f"{handoff_draft.bottom_stem} [{handoff_draft.score_display}점]\n\n"
-        ).encode()
-        target_score = f"{handoff_draft.bottom_stem} [{rendered_score_display}점]\n\n".encode()
-        if handoff_markdown.count(source_score) != 1:
-            raise HwpxError(
-                HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
-                "canonical score marker is ambiguous",
-            )
-        handoff_markdown = handoff_markdown.replace(source_score, target_score, 1)
     source_root = runtime / "src"
     sys.path.insert(0, str(source_root))
     try:
-        parser_module = importlib.import_module("hwp_question_editor.services.question_parser")
+        question_module = importlib.import_module("hwp_question_editor.models.question_data")
         equation_module = importlib.import_module("hwp_question_editor.services.equation_preflight")
         equation_engine_module = importlib.import_module(
             "hwp_question_editor.services.equation_engine"
@@ -1319,14 +1304,10 @@ def render_content_team_document(
         ):
             for source in handoff_draft.equation_sources:
                 equation_engine_module.identify_equation(source)
-            question = parser_module.QuestionParser().parse(
-                handoff_markdown.decode("utf-8"),
-                question_name=f"item-{rendered_item_number}",
-                is_inquiry_experiment=handoff_draft.inquiry is not None,
-            )
-            bottom_stem_projection_applied = _bind_typed_bottom_stem_for_handoff(
-                question,
+            question, handoff_markdown = project_content_team_question(
                 handoff_draft,
+                question_type=question_module.QuestionData,
+                item_number=rendered_item_number,
                 score_display=rendered_score_display,
             )
             equation_report = equation_module.EquationPreflight().assert_supported(question)
@@ -1358,6 +1339,11 @@ def render_content_team_document(
             output,
             draft,
             tuple(report.table_id for report in engine.last_table_render_reports.values()),
+            inquiry_box_table_id=(
+                None
+                if engine.last_inquiry_experiment_report is None
+                else engine.last_inquiry_experiment_report.table_id
+            ),
         )
         projected_image_slot_count = 0
         if labeled_image_layout is not None:
@@ -1380,6 +1366,15 @@ def render_content_team_document(
             draft,
             tuple(engine.last_labeled_block_reports),
         )
+        section = parse_xml(read_package(output).by_name()[SECTION_MEMBER].data, SECTION_MEMBER)
+        project_content_team_template_layout(
+            section.root,
+            item_number=rendered_item_number,
+            has_statements=bool(draft.statements),
+        )
+        _rewrite_section_member(
+            output, serialize_xml(section), ".content-team-template-layout.hwpx"
+        )
         report: dict[str, Any] = {
             "status": "PASS",
             "equation_count": equation_count,
@@ -1392,7 +1387,8 @@ def render_content_team_document(
             "visual_layout": draft.visual_layout,
             "handoff_projection_applied": handoff_markdown != markdown,
             "handoff_projection_sha256": sha256_bytes(handoff_markdown),
-            "bottom_stem_projection_applied": bottom_stem_projection_applied,
+            "bottom_stem_projection_applied": False,
+            "typed_question_projection_applied": True,
             "unused_visual_sample_hidden": unused_visual_sample_hidden,
             "labeled_image_projection_applied": labeled_image_layout is not None,
             "projected_image_slot_count": projected_image_slot_count,

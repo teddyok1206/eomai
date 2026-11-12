@@ -1,9 +1,8 @@
 """Reflow generated editorial segments in the new curated profile only.
 
-The reviewed legacy renderer and original source documents are unchanged. Its
-fixed template's literal number prefix and cached cell geometry are not valid
-for a newly numbered mixed assembly. Preserve content and picture geometry;
-adjust only generated table/cell dimensions and discard derived line caches.
+Original source documents are unchanged. Numbering is already projected by the
+shared editorial renderer. Preserve content and picture geometry; adjust only
+generated table/cell dimensions and discard derived line caches.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from pathlib import Path
 from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.archive import read_package
+from eom_hwpx_builder.content_team_layout import assert_content_team_numbering
 from eom_hwpx_builder.curated_package_merge import write_native_package
 from eom_hwpx_builder.curated_resources import fail
 from eom_hwpx_builder.xmlsafe import parse_xml, serialize_xml
@@ -82,22 +82,7 @@ def reflow_curated_editorial_document(output: Path, *, item_number: int) -> None
     entries = package.by_name()
     section = parse_xml(entries["Contents/section0.xml"].data, "Contents/section0.xml")
     header = parse_xml(entries["Contents/header.xml"].data, "Contents/header.xml")
-    prefixes = []
-    for paragraph in section.root.iter(HP + "p"):
-        runs = paragraph.findall(HP + "run")
-        if len(runs) < 2:
-            continue
-        left, right = runs[0].find(HP + "t"), runs[1].find(HP + "t")
-        if (
-            left is not None
-            and right is not None
-            and left.text == "1. "
-            and (right.text or "").startswith(f"{item_number}. ")
-        ):
-            prefixes.append((paragraph, runs[0]))
-    if len(prefixes) != 1:
-        fail("curated editorial stem does not have one reviewed template number prefix")
-    prefixes[0][0].remove(prefixes[0][1])
+    assert_content_team_numbering(section.root, item_number=item_number)
     for cache in tuple(section.root.iter(HP + "linesegarray")):
         cache.getparent().remove(cache)
     before = _content(section.root)

@@ -35,6 +35,7 @@ from eom_hwpx_contracts import (
     ContentTeamImageSource,
     ContentTeamOutputAcceptanceV1,
     ContentTeamTable,
+    parse_content_team_text_blocks,
     project_content_team_equation_script,
     uncropped_image_bounds,
     validate_content_team_image_bindings,
@@ -522,16 +523,7 @@ def _semantic_source_projection(
 
 def _semantic_text_values(draft: ContentTeamEditorialDraftContract) -> tuple[str, ...]:
     values: list[str] = [draft.stem, draft.bottom_stem]
-    if draft.inquiry is not None:
-        values.extend(
-            value
-            for value in (
-                draft.inquiry.goal,
-                draft.inquiry.procedure,
-                draft.inquiry.result,
-            )
-            if value is not None
-        )
+    # Inquiry prose/table interleaving has its own ordered verification below.
     values.extend(block.content for block in draft.labeled_blocks)
     values.extend(statement.text for statement in draft.statements)
     values.extend(choice.text for choice in draft.choices)
@@ -544,6 +536,47 @@ def _semantic_text_values(draft: ContentTeamEditorialDraftContract) -> tuple[str
         )
     )
     return tuple(value for value in values if value)
+
+
+def _verify_inquiry_sequence(
+    section: ElementTree.Element,
+    compact_text: str,
+    blocks: tuple[str | ContentTeamTable, ...],
+    tables: tuple[ElementTree.Element, ...],
+) -> None:
+    """Anchor prose to the actual, independently matched native table positions."""
+
+    if not blocks:
+        return
+    table_set = set(tables)
+    offsets: dict[ElementTree.Element, int] = {}
+    offset = 0
+    for element in section.iter():
+        if element in table_set:
+            offsets[element] = offset
+        if _local_name(element.tag).casefold() == "t":
+            offset += len(_compact_visible_text("".join(element.itertext())))
+    cursor = 0
+    native_tables = iter(tables)
+    for block in blocks:
+        if isinstance(block, str):
+            for fragment in _source_text_fragments(block):
+                found = compact_text.find(fragment, cursor)
+                if found < 0:
+                    _fail("content-team HWPX inquiry prose order differs from the approved Item")
+                cursor = found + len(fragment)
+            continue
+        table = next(native_tables)
+        start = offsets[table]
+        if start < cursor:
+            _fail("content-team HWPX inquiry table position differs from the approved Item")
+        # Matched content tables are leaf/disjoint tables: this walks their cells
+        # once in total, not all nested layout ancestors for every fragment.
+        cursor = start + sum(
+            len(_compact_visible_text("".join(element.itertext())))
+            for element in table.iter()
+            if _local_name(element.tag).casefold() == "t"
+        )
 
 
 def _source_cell_tokens(value: str) -> tuple[tuple[str, str], ...]:
@@ -894,6 +927,19 @@ def _accept_item(
 ) -> ContentTeamAcceptedItemV1:
     draft = expectation.draft
     try:
+        inquiry_blocks = (
+            tuple(
+                block
+                for value in (draft.inquiry.goal, draft.inquiry.procedure, draft.inquiry.result)
+                if value is not None
+                for block in parse_content_team_text_blocks(value)
+            )
+            if draft.inquiry is not None
+            else ()
+        )
+    except ValueError:
+        _fail("content-team inquiry contains an invalid native table")
+    try:
         validate_content_team_image_bindings(draft, expectation.images)
     except ValueError:
         _fail("content-team output expectation image bindings are invalid")
@@ -934,6 +980,27 @@ def _accept_item(
                 table_sha256=content_sha256(expected.hash_value()),
             )
         )
+    # Inquiry tables belong to the inquiry semantic projection, not the separate
+    # general visual collection. Bind every ordered table before rejecting extras;
+    # keep the released acceptance receipt's visual ordinal meaning unchanged.
+    matched_inquiry_tables: list[ElementTree.Element] = []
+    for block in inquiry_blocks:
+        if not isinstance(block, ContentTeamTable):
+            continue
+        expected = _source_table_projection(block)
+        match_index = next(
+            (
+                index
+                for index in range(search_start, len(observed_tables))
+                if observed_tables[index][1] == expected
+            ),
+            None,
+        )
+        if match_index is None:
+            _fail("content-team HWPX inquiry native table differs from the approved Item")
+        matched_table_indexes.add(match_index)
+        matched_inquiry_tables.append(observed_tables[match_index][0])
+        search_start = match_index + 1
     if any(
         index not in matched_table_indexes and not table.is_layout_only()
         for index, (_element, table) in enumerate(observed_tables)
@@ -1062,6 +1129,9 @@ def _accept_item(
     if "그림 삽입" in section_text:
         _fail("content-team HWPX still contains an image placeholder")
     compact_section_text = _compact_visible_text(section_text)
+    _verify_inquiry_sequence(
+        section, compact_section_text, inquiry_blocks, tuple(matched_inquiry_tables)
+    )
     if any(
         fragment not in compact_section_text
         for value in _semantic_text_values(draft)

@@ -39,6 +39,14 @@ CONTENT_TEAM_V2/V3 Preview는 전체 정답/오답 해설에 ㄱ·ㄴ·ㄷ 설�
 출력한다. DTO의 선지별 해설은 identity 검증을 위해 보존하되 다시 렌더하지 않는다.
 BLOCKS_V1의 전체 풀이와 선지별 풀이가 서로 독립인 구조는 그대로 유지한다.
 
+content-team 출력은 정본의 구분된 발문·탐구·보기·선지·해설을 handoff의 `QuestionData`로
+투영한다. 데스크톱 파서의 한국어 문구/① 검색으로 이미 검증된 필드 경계를 다시 추측하지
+않는다. `content_team_layout.py`가 단일·시험지·조립에 공통인 중복 번호/빈 보기 틀 제거를
+소유하며 curated는 별도로 번호를 고치지 않는다. Manager `content_team_output_acceptance`
+는 탐구의 줄글과 native 표를 구분해 실제 셀·순서·정렬을 검증한다. 일반 visual ordinal과
+탐구 내부표를 혼동하거나 Markdown의 `|`가 출력 텍스트에 없다는 이유로 거부하지 않는다.
+상세 근거는 `CONTENT_TEAM_HWP_QUESTION_EDITOR_HANDOFF_V1.md`의 2026-11-12 절을 본다.
+
 그림 누락은 선택한 revision/ordinal → 실제 PNG Artifact → Manager handoff → Builder의
 binary/relationship → authenticated download bytes 순으로 본다. PNG가 package 내부 member를
 가리키는지와 external filesystem 경로가 남지 않는지를 따로 검사한다. ZIP 정상과 실제 한글

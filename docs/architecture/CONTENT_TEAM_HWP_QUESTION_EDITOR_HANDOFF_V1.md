@@ -237,3 +237,41 @@ service snapshots that exact revision together with each input Item/Artifact rev
 unit, validates its typed result, and commits the HWPX/report/request/result file set to NAS. The
 Application API exposes this closed pair as renderer `content-team`, document profile
 `content-team-hwp-question-editor-v1`, and source schema `eom.assessment.item-content/2.0`.
+
+## 2026-11-12: typed input owns the shared rendering boundary
+
+The sections above describe the initial frozen integration. Its archive and source prompts remain
+immutable. Subsequent canonical V2/V3 input already separates the stem, inquiry, statements,
+choices, answer and explanations. Re-parsing that structure with the desktop parser's Korean
+phrase/choice-marker heuristics is not authoritative: a valid inquiry failed at its bottom stem;
+prefix phrases, multiline bottom stems and a circled numeral in prose exposed the same boundary.
+
+The Builder projects the validated typed draft into the handoff's public `QuestionData` value.
+The existing canonical serializer still proves the JSON/Markdown round trip; no new parser or
+worker protocol is introduced. Presentation numbering and score overrides belong only to this
+projection. The fixed equation preflight, template engine and package checks remain in force.
+Single-item, whole-exam and curated delivery call the same projection and rendering function.
+
+The shared native-layout adapter removes only the exact template's redundant number run and,
+for a draft with no statements, its demonstrably empty statement frame. It must reject unexpected
+content rather than delete it. Curated delivery no longer owns a second number-repair rule.
+
+Manager acceptance independently projects inquiry prose and Markdown tables using the existing
+pure contract table grammar. It compares each native table's ordered cells, dimensions and
+alignments, then validates the prose. Treating pipe syntax as visible text or ignoring an inquiry
+table is incorrect. These tables stay part of the immutable inquiry semantic hash, not newly
+invented general-visual ordinals in the released acceptance receipt.
+
+The source Item/Artifact revision, content hash and original handoff are unchanged. Only new
+delivery bytes are produced; prior failed builds remain failed. No DB schema, queue, claim,
+transaction or retry contract changes. The dominant operations are bounded ordered iteration
+and keyed field lookup: linear in input text/native XML, with small immutable projections.
+Builder owns HWPX/XML behavior; Manager owns independent acceptance; neither imports the other's
+implementation. The simpler alternative of adding more phrase exceptions was rejected because
+it reconstructs information already present in the canonical fields and misses other valid forms.
+
+Regression coverage includes direct/combination questions, full/partial/unrecognized bottom
+phrases, multiline presentation, native inquiry tables and table tampering, numbering overrides,
+empty/nonempty statement frames, standalone output and the existing exam/curated consumers.
+Source verification, installed-runtime rendering and actual application publication are reported
+separately in the operational checkpoint; this design note does not activate a release.

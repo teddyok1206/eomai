@@ -18,6 +18,7 @@ from eom_hwpx_contracts.content_team_markdown import (
     normalize_content_team_stem,
     parse_content_team_markdown,
     parse_content_team_markdown_v2,
+    parse_content_team_text_blocks,
     serialize_content_team_markdown,
     statement_texts,
 )
@@ -187,6 +188,7 @@ __all__ = [
     "normalize_content_team_stem",
     "parse_content_team_markdown",
     "parse_content_team_markdown_v2",
+    "parse_content_team_text_blocks",
     "parse_contract_json",
     "project_content_team_equation_script",
     "serialize_content_team_markdown",

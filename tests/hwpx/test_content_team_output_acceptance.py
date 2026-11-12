@@ -83,6 +83,14 @@ def _render_table_only(
     assert draft.visual_layout == "TABLE_ONLY"
     assert tuple(visual.kind for visual in draft.visuals) == ("TABLE",)
     assert draft.visuals[0].label == ""
+    return _render_editorial_item(tmp_path, source)
+
+
+def _render_editorial_item(
+    tmp_path: Path,
+    source: str,
+) -> tuple[Path, str, ContentTeamOutputExpectation]:
+    draft = parse_content_team_markdown_v2(source.encode("utf-8"))
     markdown = serialize_content_team_markdown(draft)
     item_value = {
         "schema_version": "3.0",

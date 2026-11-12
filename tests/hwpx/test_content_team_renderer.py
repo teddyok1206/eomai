@@ -5,17 +5,14 @@ import json
 import stat
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.content_team_renderer import (
-    _bind_typed_bottom_stem_for_handoff,
     _project_general_stem_for_handoff,
     render_content_team_workspace,
 )
-from eom_hwpx_builder.errors import HwpxError
 from eom_hwpx_builder.xmlsafe import local_name, parse_xml
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
@@ -163,83 +160,6 @@ def test_general_stem_projection_is_linear_deterministic_and_boundary_local() ->
     assert _project_general_stem_for_handoff("first\r\n\r\n second\nthird") == (
         "first second third"
     )
-
-
-def test_typed_bottom_stem_binding_repairs_only_the_exact_canonical_suffix() -> None:
-    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
-    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
-    question = SimpleNamespace(stem=f"앞부분\n\n{expected}", bottom_stem="")
-
-    assert (
-        _bind_typed_bottom_stem_for_handoff(
-            question,
-            draft,
-            score_display=draft.score_display,
-        )
-        is True
-    )
-    assert question.stem == "앞부분"
-    assert question.bottom_stem == expected
-
-
-def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
-    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
-    question = SimpleNamespace(stem="서로 다른 뒤 문단", bottom_stem="")
-
-    with pytest.raises(HwpxError, match="typed bottom stem differs"):
-        _bind_typed_bottom_stem_for_handoff(
-            question,
-            draft,
-            score_display=draft.score_display,
-        )
-
-
-def test_typed_inquiry_bottom_stem_is_removed_only_from_the_result_section() -> None:
-    draft = parse_content_team_markdown_v2(INQUIRY_ITEM.encode("utf-8"))
-    assert draft.inquiry is not None
-    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
-    question = SimpleNamespace(
-        stem=draft.stem,
-        bottom_stem="",
-        is_inquiry_experiment=True,
-        inquiry_goal=draft.inquiry.goal,
-        inquiry_procedure=draft.inquiry.procedure,
-        inquiry_result=f"{draft.inquiry.result}\n\n{expected}",
-    )
-    before = draft.model_dump(mode="json")
-    assert _bind_typed_bottom_stem_for_handoff(question, draft, score_display=draft.score_display)
-    assert question.bottom_stem == expected
-    assert question.inquiry_result == draft.inquiry.result
-    assert question.inquiry_procedure == draft.inquiry.procedure
-    assert question.inquiry_goal == draft.inquiry.goal
-    assert question.stem == draft.stem
-    assert draft.model_dump(mode="json") == before
-    assert not _bind_typed_bottom_stem_for_handoff(
-        question, draft, score_display=draft.score_display
-    )
-
-
-@pytest.mark.parametrize("invalid", ["wrong-field", "duplicate", "different-score", "empty-body"])
-def test_typed_inquiry_bottom_stem_rejects_unproven_result_suffix(invalid: str) -> None:
-    draft = parse_content_team_markdown_v2(INQUIRY_ITEM.encode("utf-8"))
-    assert draft.inquiry is not None
-    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
-    results = {
-        "wrong-field": draft.inquiry.result,
-        "duplicate": f"{expected}\n\n{draft.inquiry.result}\n\n{expected}",
-        "different-score": f"{draft.inquiry.result}\n\n{draft.bottom_stem} [9점]",
-        "empty-body": f"\n\n{expected}",
-    }
-    question = SimpleNamespace(
-        stem=f"{draft.stem}\n\n{expected}",
-        bottom_stem="",
-        is_inquiry_experiment=True,
-        inquiry_result=results[invalid],
-    )
-    before = vars(question).copy()
-    with pytest.raises(HwpxError, match="typed bottom stem"):
-        _bind_typed_bottom_stem_for_handoff(question, draft, score_display=draft.score_display)
-    assert vars(question) == before
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
