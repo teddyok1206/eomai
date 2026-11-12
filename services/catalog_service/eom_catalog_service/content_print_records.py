@@ -179,6 +179,17 @@ class ContentPrintService:
     def __init__(self, engine: Engine) -> None:
         self.sessions = build_session_factory(engine)
 
+    def record_in_transaction(
+        self, session: Session, command: ContentRecordPrintCommand, actor: ActorContext
+    ) -> ContentPrintMutationResult:
+        """Reuse print rules when another application use case owns atomic commit/replay."""
+        parsed = parse_content_print_command(command.model_dump(mode="json"))
+        if isinstance(parsed, VoidContentPrint):
+            raise ContentPlanningError("CONTENT_PRINT_REQUEST_INVALID")
+        authorized = _authorize_print(session, actor, parsed)
+        load_content_edition(session, parsed.edition_id, for_update=True)
+        return self._record(session, parsed, authorized)
+
     def execute(
         self, command: ContentPrintCommand, *, actor: ActorContext, idempotency_key: str
     ) -> ContentPrintMutationResult:

@@ -9,6 +9,7 @@ from eom_catalog_contracts.content_planning import (
     ContentSection,
     ContentSectionStructure,
 )
+from eom_catalog_contracts.content_planning_commands import CreatePlannedContent
 from eom_catalog_contracts.content_planning_edits import SaveContentSections, SaveContentStructure
 from eom_catalog_contracts.curated_document_slots import (
     CuratedDocumentAssemblyManifestV2,
@@ -42,6 +43,39 @@ from eom_catalog_service.curated_document_slot_store import (
 )
 from eom_catalog_service.legacy_usage_models import AssessmentFormRevisionRecord
 from eom_catalog_service.models import DeliverableRecord
+
+
+def create_planned_content(
+    session: Session,
+    command: CreatePlannedContent,
+    actor: ActorContext,
+    *,
+    content_key: str | None = None,
+    initial_slots: dict[str, tuple[CuratedSlot, ...]] | None = None,
+) -> tuple[ContentEditionRecord, ContentEditionCompositionV1]:
+    """Create a product and its complete first edition in the caller's transaction."""
+    product_id = new_content_id("deliverable")
+    product = DeliverableRecord(
+        deliverable_id=product_id,
+        deliverable_key=content_key or "content-planning:" + product_id,
+        deliverable_type=command.content_type,
+        title=command.content_title,
+        edition="CONTENT_PLANNING",
+        lifecycle_state="IN_PRODUCTION",
+        created_by=actor.actor_id,
+    )
+    session.add(product)
+    session.flush()
+    return create_edition_snapshot(
+        session,
+        product=product,
+        edition_label=command.edition_label,
+        academic_year=command.academic_year,
+        structures=command.sections,
+        actor=actor,
+        command_kind=command.command_kind,
+        copied_slots=initial_slots,
+    )
 
 
 def create_edition_snapshot(

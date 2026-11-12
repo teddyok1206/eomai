@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
 const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js", "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "content-planning-destination.js", "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
-names.push("curated-output-library.js");
+names.push("curated-output-library.js", "content-planning-import.js");
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createContentPlanning} from './content-planning.js';
@@ -20,6 +20,16 @@ function publish(value) {
 async function api(path, options = {}) {
   f.calls.push({path, body: structuredClone(options.body), key: options.headers?.['Idempotency-Key']});
   const b = options.body || {};
+  if (path.startsWith('/content-planning/imports')) {
+    if (!path.endsWith('/commit')) return structuredClone(f.importPreview);
+    const value = structuredClone(f.composition), source = value.sections.find(s => s.kind === 'FORM');
+    value.deliverable_id = id('deliverable', 88); value.edition_id = id('edition', 88);
+    value.content_title = '엑셀 업로드 교재'; value.edition_label = '2028 초판'; value.academic_year = 2028;
+    value.sections = [{...source, section_id: id('section', 88), parent_id: null, ordinal: 1, label: '1회차', form: {...source.form, placement_count: 1}}];
+    f.rows.set(id('section', 88), [{placement_id: id('placement', 88), position: 1, points_milli: 2000, display_number: '1', note: '입력 메모', copied_from: null, target: f.target}]);
+    const saved = publish(value);
+    return {schema_version: 'content-workbook-import-result/1.0', disposition: 'IMPORTED', replayed: false, composition: saved.composition, current_revision_id: saved.current_revision_id, print_record_id: null};
+  }
   if (path.startsWith('/item-db/assemblies?')) return {values: f.libraryEntry ? [f.libraryEntry] : [], next_cursor: null};
   if (f.libraryEntry && path === '/item-db/assemblies/' + f.libraryEntry.assembly_id) {
     if (f.libraryReadMismatch) return {...f.libraryEntry, manifest_sha256: 'sha256:' + 'f'.repeat(64), placements: f.libraryPlacements};
@@ -230,7 +240,7 @@ try {
   assert.equal(await page.evaluate(() => fixture.buildSubmissions), 1, 'history lookup resubmitted build');
   await page.locator('#excel-print-panel summary').click();
   await page.waitForFunction(() => document.querySelector('#excel-print-output').options.length === 2);
-  const checkboxLayout = async () => page.locator('.excel-checks > label').evaluateAll(labels => labels.map(label => ({
+  const checkboxLayout = async () => page.locator('#excel-print-sections > label, #excel-delivery-sections > label').evaluateAll(labels => labels.map(label => ({
     display: getComputedStyle(label).display,
     height: label.getBoundingClientRect().height,
     inputWidth: label.querySelector('input').getBoundingClientRect().width,
@@ -514,6 +524,23 @@ try {
   await page.waitForFunction(() => document.querySelector('#excel-draft-state').textContent === '저장됨');
   const librarySaved = await page.evaluate(() => fixture.rows.get(fixture.composition.sections[1].section_id).map(row => row.target));
   assert.deepEqual(librarySaved, incoming.map(value => value.pointer), 'history import changed source order or revision');
+  // The workbook importer opens its exact saved edition through the existing
+  // planning owner, including DB-backed slot reads; it creates no HWPX output.
+  await page.evaluate(() => {
+    fixture.importPreview = {schema_version: 'content-workbook-preview/1.0', proposal: {artifact_id: 'artifact_' + '1'.repeat(32), artifact_revision_id: 'rev_' + '1'.repeat(32), member_path: 'proposal.json', schema_ref: 'eom://schemas/content-planning/workbook-proposal/1.0', media_type: 'application/json', sha256: 'sha256:' + 'a'.repeat(64)}, original_filename: '편성.xlsx', workbook_sha256: 'sha256:' + 'a'.repeat(64), metadata: {content_title: '엑셀 업로드 교재', content_type: 'TEXTBOOK', edition_label: '2028 초판', academic_year: 2028, print_status: 'NOT_PRINTED', printed_on: null}, total_rows: 1, matched_rows: 1, unresolved_rows: 0, duplicate_uses: 0, can_commit: true, offset: 0, rows: [{row: {row_number: 2, group_label: '', section_label: '1회차', display_number: '1', external_number: '10321', points_milli: 2000, note: '입력 메모'}, resolution: {row_number: 2, status: 'MATCHED', title: '합성 문항', target: fixture.target}}], next_offset: null};
+  });
+  await page.locator('#excel-import-panel summary').click();
+  await page.locator('#excel-import-file').setInputFiles({name: '편성.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('PKsynthetic-xlsx')});
+  await page.locator('#excel-import-read').click();
+  await page.waitForFunction(() => !document.querySelector('#excel-import-preview').hidden);
+  await page.locator('#excel-import-confirm').check();
+  await page.locator('#excel-import-save').click();
+  await page.waitForFunction(() => document.querySelector('#excel-content-title').textContent === '엑셀 업로드 교재 · 2028 초판' && document.querySelector('#excel-rows').children.length === 1);
+  assert.equal(await page.getByRole('textbox', {name: '1번 메모', exact: true}).inputValue(), '입력 메모');
+  assert.equal(await page.locator('#excel-draft-state').textContent(), '저장됨');
+  assert.equal(await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/imports/commit')).length), 1);
+  const importedPointer = await page.evaluate(() => ({edition: fixture.composition.edition_id, revision: fixture.composition.deliverable_revision_id}));
+  assert(await page.evaluate(({edition, revision}) => fixture.calls.some(c => c.body?.query_kind === 'READ_SECTION' && c.body.edition_id === edition && c.body.revision_id === revision), importedPointer));
   assert.deepEqual(errors, []);
   console.log("CONTENT_PLANNING_BROWSER=PASS desktop/mobile/create/1200/replay/exact-usage-location/copy-insert-replace/archive-restore/owner-race/db-first-insert-replace-cancel-read-failure-stale/output-library-import live_writes=0");
 } finally {await browser.close(); server.close();}

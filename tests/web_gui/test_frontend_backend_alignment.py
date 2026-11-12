@@ -174,6 +174,18 @@ def test_content_planning_closed_bff_routes_match_registered_operations():
     assert calls <= _bff_routes()
 
 
+def test_content_workbook_routes_match_bff_and_template_download():
+    calls = _frontend_api_calls((STATIC_ROOT / "content-planning-import.js").read_text())
+    assert calls == {
+        ("PUT", "/content-planning/imports"),
+        ("POST", "/content-planning/imports/query"),
+        ("POST", "/content-planning/imports/commit"),
+    }
+    assert calls <= _bff_routes()
+    assert ("GET", "/content-planning/imports/template") in _bff_routes()
+    assert '/studio/api/v1/content-planning/imports/template"' in INDEX_HTML.read_text()
+
+
 def _static_path_choices(node: ast.expr) -> set[str] | None:
     """Audit both literal branch targets; computed alternatives remain unknown."""
     if isinstance(node, ast.IfExp):

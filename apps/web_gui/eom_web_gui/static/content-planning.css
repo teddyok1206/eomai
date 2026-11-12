@@ -44,4 +44,15 @@
 .excel-inspect { margin-top: 20px; border-top: 1px solid var(--eom-divider); padding-top: 16px; }
 .excel-record { padding-block: 14px; border-bottom: 1px solid var(--eom-divider); }
 .excel-record p { margin: 4px 0; }
+.excel-import-panel { padding: 16px 20px; margin-bottom: 20px; }
+.excel-import-panel > summary { font-weight: 600; cursor: pointer; }
+.excel-import-panel[open] > summary { margin-bottom: 20px; }
+.excel-import-table { width: 100%; min-width: 800px; border-collapse: collapse; }
+.excel-import-table th, .excel-import-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--eom-divider); vertical-align: top; overflow-wrap: anywhere; }
+.excel-import-table th { white-space: nowrap; font-weight: 500; background: var(--eom-surface-muted); }
+.excel-import-table td:nth-child(5) { min-width: 220px; }
+.excel-import-linked, .excel-import-issue { display: block; margin-top: 6px; }
+.excel-import-linked { color: var(--eom-text-muted); }
+.excel-import-issue { color: var(--eom-warning); }
+.excel-import-panel input[type="file"] { min-height: 44px; max-width: 100%; }
 @media (max-width: 1100px) { .excel-workspace { grid-template-columns: 1fr; } .excel-list { max-height: 250px; } }

@@ -36,6 +36,14 @@ from eom_web_gui.content_planning_contracts import (
     PrintResult,
     WriteResult,
 )
+from eom_web_gui.content_workbook_contracts import (
+    WORKBOOK_MAX_BYTES,
+    WORKBOOK_MEDIA_TYPE,
+    WorkbookCommit,
+    WorkbookImportResult,
+    WorkbookPreview,
+    WorkbookQuery,
+)
 from eom_web_gui.contracts import (
     AiItemDbEntry,
     AssessmentLearningBatchStatus,
@@ -454,6 +462,26 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def content_workbook_template(self, session: WebSession) -> bytes: ...
+
+    async def content_workbook_upload(
+        self,
+        session: WebSession,
+        *,
+        original_filename: str,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> WorkbookPreview: ...
+
+    async def content_workbook_query(
+        self, session: WebSession, value: WorkbookQuery
+    ) -> WorkbookPreview: ...
+
+    async def content_workbook_commit(
+        self, session: WebSession, value: WorkbookCommit, idempotency_key: str
+    ) -> WorkbookImportResult: ...
+
     async def content_planning_lifecycle(
         self, session: WebSession, value: LifecycleAction, idempotency_key: str | None = None
     ) -> LifecycleResult: ...
@@ -1197,6 +1225,86 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def content_workbook_template(self, session: WebSession) -> bytes:
+        response = await self._authorized(
+            session, "GET", "/api/v1/content-planning/imports/template"
+        )
+        if (
+            response.headers.get("content-type", "").split(";", 1)[0] != WORKBOOK_MEDIA_TYPE
+            or not 8 <= len(response.content) <= WORKBOOK_MAX_BYTES
+            or not response.content.startswith(b"PK")
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return response.content
+
+    async def content_workbook_upload(
+        self,
+        session: WebSession,
+        *,
+        original_filename: str,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> WorkbookPreview:
+        response = await self._authorized(
+            session,
+            "PUT",
+            "/api/v1/content-planning/imports",
+            params={"original_filename": original_filename},
+            content=content,
+            headers={
+                "Content-Type": WORKBOOK_MEDIA_TYPE,
+                "Content-Length": str(content_length),
+                "Idempotency-Key": idempotency_key,
+            },
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            result = WorkbookPreview.model_validate(self._data(response))
+            if result.original_filename != original_filename or result.offset != 0:
+                raise ValueError("different workbook preview")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def content_workbook_query(
+        self, session: WebSession, value: WorkbookQuery
+    ) -> WorkbookPreview:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/imports/query",
+            json=value.model_dump(mode="json"),
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            result = WorkbookPreview.model_validate(self._data(response))
+            if (
+                result.proposal != value.proposal
+                or result.offset != value.offset
+                or len(result.rows) > value.limit
+            ):
+                raise ValueError("different pinned workbook page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def content_workbook_commit(
+        self, session: WebSession, value: WorkbookCommit, idempotency_key: str
+    ) -> WorkbookImportResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/imports/commit",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            return WorkbookImportResult.model_validate(self._data(response))
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def content_planning_lifecycle(
         self, session: WebSession, value: LifecycleAction, idempotency_key: str | None = None
     ) -> LifecycleResult:

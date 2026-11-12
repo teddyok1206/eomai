@@ -34,6 +34,48 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "content-workbook-document-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-document-v1.schema.json",
+            "resources/content-planning/content-workbook-document-v1.schema.json",
+            "1.0",
+            "sha256:710f4a14885282c0bd6ce683e65819e2b119a8a24c6c953354d313664d9e9c2a",
+        ),
+        "content-workbook-proposal-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-proposal-v1.schema.json",
+            "resources/content-planning/content-workbook-proposal-v1.schema.json",
+            "1.0",
+            "sha256:203efbaec3c70d527014310addae963efec5c1fe75dc338e5040312be280d95c",
+        ),
+        "content-workbook-preview-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-preview-v1.schema.json",
+            "resources/content-planning/content-workbook-preview-v1.schema.json",
+            "1.0",
+            "sha256:adad458a2284a2da4ca2d8c348e988b98cccb8db25b48979525c0a43f29bd89e",
+        ),
+        "content-workbook-import-result-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-import-result-v1.schema.json",
+            "resources/content-planning/content-workbook-import-result-v1.schema.json",
+            "1.0",
+            "sha256:ab43c3c1423fd4e2fb18555dafb13ba9d008cf799e9f22c8529a31f54c55dec3",
+        ),
+        "content-workbook-error-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-error-v1.schema.json",
+            "resources/content-planning/content-workbook-error-v1.schema.json",
+            "1.0",
+            "sha256:bb6d74e107c3443aa221c89b08afbbbf43e8aa9cee8bafab7581811149df05f0",
+        ),
+        "content-workbook-request-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-request-v1.schema.json",
+            "resources/content-planning/content-workbook-request-v1.schema.json",
+            "1.0",
+            "sha256:731c5b1e16477fc59fb1b0cc98d0b122f1d7b5c9c314a0e778a568a66e4f9305",
+        ),
+        "content-workbook-reply-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-workbook-reply-v1.schema.json",
+            "resources/content-planning/content-workbook-reply-v1.schema.json",
+            "1.0",
+            "sha256:99e92e002bb19886ab7307a87c1ce375332b6ba3ae0903948e1d0d718ecf5068",
+        ),
         "content-prior-usage-v1": CatalogSchemaResource(
             "schemas/content-planning/content-prior-usage-v1.schema.json",
             "resources/content-planning/content-prior-usage-v1.schema.json",

@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js",
+const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js", "content-planning-import.js",
   "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "content-planning-destination.js", "studio-route.js",
   "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
 names.push("curated-output-library.js");

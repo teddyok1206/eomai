@@ -8,6 +8,7 @@ import secrets
 import time
 from datetime import UTC, datetime
 
+from eom_catalog_contracts.content_workbook_import import CONTENT_WORKBOOK_MAX_BYTES
 from fastapi import Request
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
@@ -33,6 +34,9 @@ DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES = frozenset(
         "application/vnd.hancom.hwp",
         "application/vnd.hancom.hwpx",
     }
+)
+CONTENT_WORKBOOK_UPLOAD_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
 
@@ -97,7 +101,10 @@ class RequestBoundaryMiddleware:
         is_material_upload = (
             method == "PUT" and scope.get("path") == "/api/v1/material-learning/sources"
         )
-        is_binary_upload = is_pdf_review_upload or is_material_upload
+        is_workbook_upload = (
+            method == "PUT" and scope.get("path") == "/api/v1/content-planning/imports"
+        )
+        is_binary_upload = is_pdf_review_upload or is_material_upload or is_workbook_upload
         content_length = headers.get("content-length")
         has_body = bool(
             (content_length and content_length.isdigit() and int(content_length) > 0)
@@ -111,10 +118,15 @@ class RequestBoundaryMiddleware:
             ):
                 await self._send_problem(scope, receive, secured_send, 400, "API_REQUEST_INVALID")
                 return
-            if headers.get("content-type", "").split(";", 1)[0].strip().lower() not in (
-                DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES | {"application/octet-stream"}
-                if is_material_upload
-                else DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES
+            if is_workbook_upload:
+                allowed_media = frozenset({CONTENT_WORKBOOK_UPLOAD_MEDIA_TYPE})
+            elif is_material_upload:
+                allowed_media = DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES | {"application/octet-stream"}
+            else:
+                allowed_media = DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES
+            if (
+                headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                not in allowed_media
             ):
                 await self._send_problem(
                     scope, receive, secured_send, 415, "API_CONTENT_TYPE_UNSUPPORTED"
@@ -130,6 +142,8 @@ class RequestBoundaryMiddleware:
                 )
                 return
         effective_limit = self.pdf_review_upload_limit if is_binary_upload else self.body_limit
+        if is_workbook_upload:
+            effective_limit = CONTENT_WORKBOOK_MAX_BYTES
         if method == "POST" and scope.get("path") == "/api/v1/content-planning/commands":
             # Final ordered pointer arrays may exceed the normal small command budget.
             effective_limit = 4 * 1024 * 1024

@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "ContentType": {
+      "enum": [
+        "MOCK_EXAM",
+        "TEXTBOOK",
+        "WEEKLY",
+        "OTHER"
+      ],
+      "type": "string"
+    },
+    "ContentWorkbookMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "content_title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "title": "Content Title",
+          "type": "string"
+        },
+        "content_type": {
+          "$ref": "#/$defs/ContentType"
+        },
+        "edition_label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "title": "Edition Label",
+          "type": "string"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "maximum": 3000,
+              "minimum": 1900,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Academic Year"
+        },
+        "print_status": {
+          "enum": [
+            "PRINTED",
+            "NOT_PRINTED",
+            "UNKNOWN"
+          ],
+          "title": "Print Status",
+          "type": "string"
+        },
+        "printed_on": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Printed On"
+        }
+      },
+      "required": [
+        "content_title",
+        "content_type",
+        "edition_label",
+        "academic_year",
+        "print_status",
+        "printed_on"
+      ],
+      "title": "ContentWorkbookMetadata",
+      "type": "object"
+    },
+    "ContentWorkbookRow": {
+      "additionalProperties": false,
+      "properties": {
+        "row_number": {
+          "maximum": 1048576,
+          "minimum": 2,
+          "title": "Row Number",
+          "type": "integer"
+        },
+        "group_label": {
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+          "title": "Group Label",
+          "type": "string"
+        },
+        "section_label": {
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+          "title": "Section Label",
+          "type": "string"
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Display Number"
+        },
+        "external_number": {
+          "pattern": "^[0-9]{5}$",
+          "title": "External Number",
+          "type": "string"
+        },
+        "points_milli": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Points Milli"
+        },
+        "note": {
+          "maxLength": 2000,
+          "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]*$",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "row_number",
+        "group_label",
+        "section_label",
+        "display_number",
+        "external_number",
+        "points_milli",
+        "note"
+      ],
+      "title": "ContentWorkbookRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "content-workbook-document/1.0",
+      "default": "content-workbook-document/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "template_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Template Version",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ContentWorkbookMetadata"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/ContentWorkbookRow"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "title": "Rows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metadata",
+    "rows"
+  ],
+  "title": "ContentWorkbookDocument",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/workbook-document/1.0"
+}

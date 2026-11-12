@@ -77,6 +77,24 @@
             <div class="page-heading"><h1 id="excel-title">Excel</h1><button id="excel-refresh" type="button" class="button quiet">새로고침</button></div>
             <p id="excel-message" class="form-message" role="status" aria-live="polite"></p>
             <div id="excel-retry" class="policy-notice" hidden><span>이전 요청의 처리 결과를 아직 확인하지 못했습니다.</span><button id="excel-retry-button" type="button" class="button secondary">같은 요청 다시 확인</button></div>
+            <details id="excel-import-panel" class="panel excel-import-panel">
+              <summary>엑셀에서 가져오기</summary>
+              <div class="excel-toolbar"><a class="button quiet" href="/studio/api/v1/content-planning/imports/template" download>빈 양식 다운로드</a></div>
+              <form id="excel-import-form" class="excel-inline">
+                <label for="excel-import-file">작성한 엑셀 파일<input id="excel-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+                <button id="excel-import-read" type="submit" class="button secondary">연결 내역 확인</button>
+              </form>
+              <p id="excel-import-message" class="form-message" role="status" aria-live="polite"></p>
+              <div class="excel-toolbar"><button id="excel-import-refresh" type="button" class="button quiet" hidden>연결 내역 다시 보기</button><button id="excel-import-clear" type="button" class="button quiet" disabled>확인 내역 닫기</button><button id="excel-import-open" type="button" class="button secondary" hidden>저장한 교재 열기</button></div>
+              <div id="excel-import-preview" hidden>
+                <h2 id="excel-import-title"></h2><p id="excel-import-filename"></p><p id="excel-import-summary"></p>
+                <p id="excel-import-notice" class="form-message"></p>
+                <div class="excel-table-scroll"><table class="excel-import-table"><thead><tr><th scope="col">엑셀 행</th><th scope="col">회차·구간</th><th scope="col">문항 번호</th><th scope="col">고유번호</th><th scope="col">연결 문항</th><th scope="col">배점</th><th scope="col">메모</th></tr></thead><tbody id="excel-import-rows"></tbody></table></div>
+                <div class="excel-toolbar"><button id="excel-import-previous" type="button" class="button quiet">이전</button><span id="excel-import-page"></span><button id="excel-import-next" type="button" class="button quiet">다음</button></div>
+                <div class="excel-checks"><label><input id="excel-import-confirm" type="checkbox"><span id="excel-import-confirm-label"></span></label></div>
+                <button id="excel-import-save" type="button" class="button primary" disabled>새 교재로 가져오기</button>
+              </div>
+            </details>
             <div class="excel-workspace">
               <aside class="panel excel-sidebar" aria-label="콘텐츠와 회차">
                 <form id="excel-find"><label for="excel-search">콘텐츠</label><div class="excel-inline"><input id="excel-search" maxlength="200" placeholder="콘텐츠 이름" autocomplete="off"><button class="button quiet" type="submit">찾기</button></div></form>

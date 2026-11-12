@@ -113,6 +113,7 @@ from eom_catalog_contracts.chat_ranked_candidate_read import (
     validate_chat_ranked_candidate_read_reply,
 )
 from eom_catalog_contracts.content_planning_rpc import CONTENT_PLANNING_OPERATIONS
+from eom_catalog_contracts.content_workbook_import import CONTENT_WORKBOOK_OPERATIONS
 from eom_catalog_contracts.curated_document_assembly_library import LIBRARY_REQUEST_TYPES
 from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDeliveryQuery,
@@ -163,6 +164,8 @@ from eom_catalog_service.content_planning_access import ContentPlanningError
 from eom_catalog_service.content_planning_dispatch import dispatch_content_planning
 from eom_catalog_service.content_planning_layout import ContentPlanningConflict
 from eom_catalog_service.content_planning_service import ContentPlanningService
+from eom_catalog_service.content_workbook_import_dispatch import dispatch_content_workbook
+from eom_catalog_service.content_workbook_import_service import ContentWorkbookImportService
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputError
 from eom_catalog_service.curated_document_assembly_item import CuratedDocumentAssemblyItemError
 from eom_catalog_service.curated_document_assembly_library_dispatch import (
@@ -318,6 +321,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if isinstance(raw_operation, str) and raw_operation in CONTENT_PLANNING_OPERATIONS:
                 self.wfile.write(dispatch_content_planning(self.server.content_planning, value))
                 self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in CONTENT_WORKBOOK_OPERATIONS:
+                self.request.settimeout(120.0)
+                dispatch_content_workbook(
+                    self.server.content_workbook_import,
+                    value,
+                    cast(BinaryIO, self.rfile),
+                    cast(BinaryIO, self.wfile),
+                )
                 return
             if isinstance(raw_operation, str) and raw_operation in MATERIAL_LEARNING_OPERATIONS:
                 dispatch_material_learning(
@@ -2025,6 +2037,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         external_item_previews: ExternalItemPreviewProjectionService | None = None,
         curated_document_assemblies: CuratedDocumentAssemblyService | None = None,
         content_planning: ContentPlanningService | None = None,
+        content_workbook_import: ContentWorkbookImportService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -2065,6 +2078,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.external_item_previews = external_item_previews
         self.curated_document_assemblies = curated_document_assemblies
         self.content_planning = content_planning
+        self.content_workbook_import = content_workbook_import
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata

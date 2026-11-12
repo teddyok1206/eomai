@@ -154,6 +154,16 @@ from eom_catalog_contracts.content_print_commands import (
     ContentPrintCommand,
     ContentPrintMutationResult,
 )
+from eom_catalog_contracts.content_workbook_import import (
+    ContentWorkbookError,
+    ContentWorkbookImportResult,
+    ContentWorkbookPreview,
+    ContentWorkbookRequest,
+    PrepareContentWorkbookRequest,
+    check_content_workbook_reply,
+    parse_content_workbook_reply,
+    parse_content_workbook_request,
+)
 from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
 from eom_catalog_contracts.curated_document_assembly_library import (
     CuratedAssemblyLibraryRequest,
@@ -200,6 +210,8 @@ from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ValidationError
+
+from eom_api.services.content_workbook_upload import send_workbook_upload
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
@@ -281,6 +293,41 @@ class CatalogApplicationClient:
         self.socket_path = socket_path
         self.expected_uid = expected_uid
         self.expected_gid = grp.getgrnam("eom-api").gr_gid if expected_gid is None else expected_gid
+
+    def content_workbook(
+        self, command: ContentWorkbookRequest, *, content: bytes | None = None
+    ) -> ContentWorkbookPreview | ContentWorkbookImportResult:
+        """Use the same authenticated Catalog owner for preparation, read and commit."""
+        try:
+            payload = command.model_dump(mode="json")
+            parsed = parse_content_workbook_request(payload)
+            if isinstance(parsed, PrepareContentWorkbookRequest):
+                if content is None:
+                    raise ValueError("workbook upload omitted bytes")
+                value = send_workbook_upload(
+                    parsed,
+                    content,
+                    socket_path=self.socket_path,
+                    validate_socket=self._validate_socket,
+                    read_response=self._read_response,
+                    connect_timeout=CONNECT_TIMEOUT_SECONDS,
+                    response_timeout=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            else:
+                if content is not None:
+                    raise ValueError("workbook metadata request cannot carry bytes")
+                value = self._raw_request(
+                    payload, timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS
+                )
+            reply = parse_content_workbook_reply(value)
+            check_content_workbook_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as exc:
+            raise CatalogApplicationClientError(
+                "CONTENT_IMPORT_UNAVAILABLE", "Catalog workbook response is invalid or unavailable"
+            ) from exc
+        if isinstance(reply, ContentWorkbookError):
+            raise CatalogApplicationClientError(reply.error_code, "Workbook operation failed")
+        return reply
 
     def create_material_learning(
         self, command: CreateMaterialLearningCommand

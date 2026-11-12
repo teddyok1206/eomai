@@ -6,6 +6,7 @@ import {loadPlanningCopy, pastePlanningCopy} from "./content-planning-copy.js";
 import {createContentPlanningLifecycle} from "./content-planning-lifecycle.js";
 import {createPlanningDestinationPicker} from "./content-planning-destination.js";
 import {createCuratedOutputLibrary} from "./curated-output-library.js";
+import {createContentWorkbookImport} from "./content-planning-import.js";
 
 const PAGE_SIZE = 50;
 const CONTENT_TYPES = Object.freeze({MOCK_EXAM: "모의고사", TEXTBOOK: "교재", WEEKLY: "주간지", OTHER: "기타"});
@@ -38,12 +39,22 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
   const comp = () => draft.composition();
   const labelKey = target => JSON.stringify(slotSelection(target));
   const section = () => comp()?.sections.find(value => value.section_id === selected);
-  const locked = () => busy || pending !== null || loadingSection || recoveryError || copyBusy || destinationBusy;
+  const localLocked = () => busy || pending !== null || loadingSection || recoveryError || copyBusy || destinationBusy;
+  const locked = () => localLocked() || workbookImport.locked();
   const editable = () => can("deliverable:update") && comp()?.deliverable_revision_id === currentRevision && !locked() && !lifecycle.selectionArchived();
   const dateText = value => new Date(value).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
   const lifecycle = createContentPlanningLifecycle({document, api, can, commit, confirm,
     openEdition: entry => loadEdition(entry.target.target_id, entry.current_revision_id),
     onStateChange: () => {sync(); renderRows();}});
+  const workbookImport = createContentWorkbookImport({document, api, can, storage, confirm,
+    isBlocked: localLocked, beforeCommit: mayLeave, onStateChange: sync,
+    onImported: async result => {
+      selectionEpoch++;
+      applyComposition(result.composition, result.current_revision_id);
+      if (selected) await chooseSection(selected);
+      else rememberLocation();
+      await refreshContents();
+    }});
 
   function label(target) {
     const key = labelKey(target);
@@ -51,6 +62,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
   }
   function remember(rows) {for (const row of rows) if (row.target.external_number && !labels.has(labelKey(row.target))) labels.set(labelKey(row.target), `고유번호 ${row.target.external_number}`);}
   function sync() {
+    workbookImport.sync();
     syncCopyControls();
     lifecycle.updateContext({owner, deliverableId: productId, editionId: comp()?.edition_id || null, disabled: locked() || draft.dirty()});
     const formReady = section()?.kind === "FORM" && draft.loaded(selected);
@@ -642,6 +654,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       clearDeliveries(); usageEpoch++; usageKey = null; usageCounts.clear(); owner = value; ownerEpoch++; selectionEpoch++; contentEpoch++;
       draft.reset(); labels.clear(); loaded = false; selected = null; productId = null; currentRevision = null;
       pending = null; pendingRejected = false; recoveryError = false; selectionTarget = null; busy = false; loadingSection = false;
+      workbookImport.setOwner(value);
       contents = []; editions = []; contentCursor = null; editionCursor = null; printCursor = null; moreInspect = null;
       $("#excel-editor").hidden = true; $("#excel-empty").hidden = false;
       for (const id of ["sections", "editions", "rows", "prints", "inspect-body"]) $("#excel-" + id).replaceChildren();
@@ -651,6 +664,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       active = true;
       lifecycle.open();
       outputLibrary.open();
+      workbookImport.open();
       if (owner && !pending) {
         try {pending = pendingStore.read(owner); pendingRejected = false; recoveryError = false; if (pending) message("이전 저장 요청이 남아 있습니다. 같은 요청 다시 확인을 눌러 결과를 이어서 확인해 주세요.");}
         catch (error) {recoveryError = true; message(error.message, true);}
@@ -658,7 +672,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       if (owner && !loaded) refreshContents();
       if (comp() && $("#excel-delivery-panel").open) loadDeliveries(); sync();
     },
-    close() {active = false; lifecycle.close(); outputLibrary.close(); clearDeliveries();},
+    close() {active = false; lifecycle.close(); outputLibrary.close(); workbookImport.close(); clearDeliveries();},
     locationRoute,
     restoreLocation,
     selectionHint: () => selectionTarget && !locked() ? `${comp().content_title} · ${comp().sections.find(s => s.section_id === selectionTarget.sectionId).label}` : null,
@@ -668,6 +682,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     install() {
       lifecycle.install();
       outputLibrary.install();
+      workbookImport.install();
       $("#excel-find").addEventListener("submit", event => {event.preventDefault(); refreshContents();});
       $("#excel-more-contents").addEventListener("click", () => refreshContents(true));
       $("#excel-more-editions").addEventListener("click", () => selectProduct(productId, true));
@@ -715,7 +730,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       $("#excel-delivery-prepare").addEventListener("click", prepareDelivery);
       $("#excel-delivery-refresh").addEventListener("click", () => loadDeliveries());
       $("#excel-more-deliveries").addEventListener("click", () => loadDeliveries(true));
-      document.defaultView?.addEventListener("beforeunload", event => {if (draft.dirty() || pending) {event.preventDefault(); event.returnValue = "";}});
+      document.defaultView?.addEventListener("beforeunload", event => {if (draft.dirty() || pending || workbookImport.locked()) {event.preventDefault(); event.returnValue = "";}});
       sync();
     },
   };

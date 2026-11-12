@@ -180,6 +180,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
             CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
             "MATERIAL_LEARNING_UNAVAILABLE",
+            "CONTENT_IMPORT_UNAVAILABLE",
         }
         denied = exc.code in {
             "CONTENT_PLANNING_PERMISSION_DENIED",
@@ -187,6 +188,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CURATED_SOURCE_PERMISSION_DENIED",
             "MATERIAL_LEARNING_PERMISSION_DENIED",
             "MATERIAL_LEARNING_SOURCE_OWNER_MISMATCH",
+            "CONTENT_WORKBOOK_PROPOSAL_OWNER_MISMATCH",
         }
         missing = exc.code in {
             "CONTENT_EDITION_NOT_FOUND",
@@ -202,9 +204,45 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CONTENT_IDEMPOTENCY_KEY_INVALID",
             "CURATED_ASSEMBLY_LIST_INVALID",
             "MATERIAL_LEARNING_REQUEST_INVALID",
+            "CONTENT_WORKBOOK_REQUEST_INVALID",
+            "CONTENT_WORKBOOK_UPLOAD_TRUNCATED",
+            "CONTENT_WORKBOOK_UPLOAD_EXCEEDED",
+            "CONTENT_WORKBOOK_UPLOAD_HASH_MISMATCH",
+            "CONTENT_WORKBOOK_PROPOSAL_INVALID",
+            "CONTENT_WORKBOOK_FILE_INVALID",
+            "CONTENT_WORKBOOK_FILE_CHANGED",
+            "CONTENT_WORKBOOK_PACKAGE_INVALID",
+            "CONTENT_WORKBOOK_PACKAGE_LIMIT",
+            "CONTENT_WORKBOOK_ACTIVE_CONTENT_FORBIDDEN",
+            "CONTENT_WORKBOOK_EXTERNAL_LINK_FORBIDDEN",
+            "CONTENT_WORKBOOK_TEMPLATE_INVALID",
+            "CONTENT_WORKBOOK_CELL_LIMIT",
+            "CONTENT_WORKBOOK_FORMULA_FORBIDDEN",
+            "CONTENT_WORKBOOK_MERGED_CELLS_UNSUPPORTED",
+            "CONTENT_WORKBOOK_ROW_INVALID",
+            "CONTENT_WORKBOOK_CELL_INVALID",
+            "CONTENT_WORKBOOK_ROW_LIMIT",
+            "CONTENT_WORKBOOK_METADATA_INVALID",
+            "CONTENT_WORKBOOK_YEAR_INVALID",
+            "CONTENT_WORKBOOK_DATE_INVALID",
+            "CONTENT_WORKBOOK_NUMBER_INVALID",
+            "CONTENT_WORKBOOK_POINTS_INVALID",
+            "CONTENT_WORKBOOK_VERSION_UNSUPPORTED",
+            "CONTENT_WORKBOOK_ROWS_EMPTY",
+            "CONTENT_WORKBOOK_ORDER_INVALID",
         }
         status = (
-            503 if unavailable else 403 if denied else 404 if missing else 400 if malformed else 409
+            408
+            if exc.code == "CONTENT_WORKBOOK_UPLOAD_TIMEOUT"
+            else 503
+            if unavailable
+            else 403
+            if denied
+            else 404
+            if missing
+            else 400
+            if malformed
+            else 409
         )
         return problem_response(
             request,

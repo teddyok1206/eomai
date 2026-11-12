@@ -42,6 +42,7 @@ from eom_catalog_service.content_planning_access import (
 )
 from eom_catalog_service.content_planning_editions import (
     create_edition_snapshot,
+    create_planned_content,
     save_edition_snapshot,
 )
 from eom_catalog_service.content_planning_layout import copy_assembly_slots
@@ -274,18 +275,7 @@ class ContentPlanningService:
                 copied_from_revision_id=source.deliverable_revision_id,
             )
         if isinstance(command, CreatePlannedContent):
-            product_id = new_content_id("deliverable")
-            product = DeliverableRecord(
-                deliverable_id=product_id,
-                deliverable_key="content-planning:" + product_id,
-                deliverable_type=command.content_type,
-                title=command.content_title,
-                edition="CONTENT_PLANNING",
-                lifecycle_state="IN_PRODUCTION",
-                created_by=actor.actor_id,
-            )
-            session.add(product)
-            session.flush()
+            return create_planned_content(session, command, actor)
         else:
             product = self._product(session, command.deliverable_id)
             if (

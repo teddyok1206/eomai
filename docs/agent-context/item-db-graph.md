@@ -70,6 +70,16 @@ process가 없는 고아 실행의 명시적 successor는 기존 `external_item_
 
 ## Excel 콘텐츠 편성
 
+표준 빈 XLSX의 가져오기는 `content_workbook_reader.py` →
+`content_workbook_resolution.py` → `content_workbook_import_service.py`를 따른다.
+업로드는 proposal 미리보기까지만 만들고 명시적 저장에서 기존 Edition/Form/slot owner를
+사용한다. 고유번호를 원본 source namespace별로 대조하며, 모호한 번호를 제목이나 유사도로
+임의 연결하지 않는다. 반복 사용은 별도 occurrence다. 원본 XLSX/해석 결과는 Artifact,
+DB에는 기존 receipt의 작은 proposal/edition pointer만 보관한다. 인쇄 완료를 사용자가
+명시한 파일만 기존 print owner로 같은 트랜잭션에서 기록한다. 원본 문항·Graph를 바꾸는
+문항 등록 기능이 아니다. UI는 `content-planning-import.js`, 상세 설계는
+`docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md`를 본다. 소스 구현과 운영 활성화는 구분한다.
+
 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`가 승인된 설계다. 기존 Deliverable과
 Form, curated Assembly를 확장하며 별도 문항/파일 registry를 만들지 않는다.
 `content_planning.py`/`curated_document_slots.py`가 판·구간·빈 자리·반복 occurrence 계약,

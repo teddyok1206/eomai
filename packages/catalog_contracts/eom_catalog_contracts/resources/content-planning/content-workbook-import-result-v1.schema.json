@@ -1,0 +1,304 @@
+{
+  "$defs": {
+    "ContentEditionCompositionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "content-edition-composition/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "deliverable_id": {
+          "pattern": "^deliverable_[0-9a-f]{32}$",
+          "title": "Deliverable Id",
+          "type": "string"
+        },
+        "edition_id": {
+          "pattern": "^edition_[0-9a-f]{32}$",
+          "title": "Edition Id",
+          "type": "string"
+        },
+        "deliverable_revision_id": {
+          "pattern": "^delivrev_[0-9a-f]{32}$",
+          "title": "Deliverable Revision Id",
+          "type": "string"
+        },
+        "revision_number": {
+          "minimum": 1,
+          "title": "Revision Number",
+          "type": "integer"
+        },
+        "previous_revision_id": {
+          "anyOf": [
+            {
+              "pattern": "^delivrev_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Previous Revision Id"
+        },
+        "content_title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "title": "Content Title",
+          "type": "string"
+        },
+        "content_type": {
+          "$ref": "#/$defs/ContentType"
+        },
+        "edition_label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "title": "Edition Label",
+          "type": "string"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "maximum": 3000,
+              "minimum": 1900,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Academic Year"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ContentSection"
+          },
+          "maxItems": 10000,
+          "title": "Sections",
+          "type": "array"
+        },
+        "created_by": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Created By",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "composition_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Composition Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "deliverable_id",
+        "edition_id",
+        "deliverable_revision_id",
+        "revision_number",
+        "previous_revision_id",
+        "content_title",
+        "content_type",
+        "edition_label",
+        "academic_year",
+        "sections",
+        "created_by",
+        "created_at",
+        "composition_sha256"
+      ],
+      "title": "ContentEditionCompositionV1",
+      "type": "object"
+    },
+    "ContentFormPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "form_id": {
+          "pattern": "^form_[0-9a-f]{32}$",
+          "title": "Form Id",
+          "type": "string"
+        },
+        "form_revision_id": {
+          "pattern": "^formrev_[0-9a-f]{32}$",
+          "title": "Form Revision Id",
+          "type": "string"
+        },
+        "form_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Form Sha256",
+          "type": "string"
+        },
+        "assembly_id": {
+          "pattern": "^assembly_[0-9a-f]{32}$",
+          "title": "Assembly Id",
+          "type": "string"
+        },
+        "assembly_revision_id": {
+          "pattern": "^assemblyrev_[0-9a-f]{32}$",
+          "title": "Assembly Revision Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "placement_count": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Placement Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "form_id",
+        "form_revision_id",
+        "form_sha256",
+        "assembly_id",
+        "assembly_revision_id",
+        "manifest_sha256",
+        "placement_count"
+      ],
+      "title": "ContentFormPointer",
+      "type": "object"
+    },
+    "ContentSection": {
+      "additionalProperties": false,
+      "properties": {
+        "section_id": {
+          "pattern": "^section_[0-9a-f]{32}$",
+          "title": "Section Id",
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "pattern": "^section_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Id"
+        },
+        "kind": {
+          "enum": [
+            "GROUP",
+            "FORM"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "title": "Label",
+          "type": "string"
+        },
+        "numbering": {
+          "$ref": "#/$defs/NumberingPolicy"
+        },
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentFormPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "section_id",
+        "parent_id",
+        "kind",
+        "ordinal",
+        "label",
+        "numbering",
+        "form"
+      ],
+      "title": "ContentSection",
+      "type": "object"
+    },
+    "ContentType": {
+      "enum": [
+        "MOCK_EXAM",
+        "TEXTBOOK",
+        "WEEKLY",
+        "OTHER"
+      ],
+      "type": "string"
+    },
+    "NumberingPolicy": {
+      "enum": [
+        "RESET_PER_SECTION",
+        "CONTINUE_WITHIN_GROUP"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "content-workbook-import-result/1.0",
+      "default": "content-workbook-import-result/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "disposition": {
+      "enum": [
+        "IMPORTED",
+        "ALREADY_IMPORTED"
+      ],
+      "title": "Disposition",
+      "type": "string"
+    },
+    "replayed": {
+      "title": "Replayed",
+      "type": "boolean"
+    },
+    "composition": {
+      "$ref": "#/$defs/ContentEditionCompositionV1"
+    },
+    "current_revision_id": {
+      "pattern": "^delivrev_[0-9a-f]{32}$",
+      "title": "Current Revision Id",
+      "type": "string"
+    },
+    "print_record_id": {
+      "anyOf": [
+        {
+          "pattern": "^print_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Print Record Id"
+    }
+  },
+  "required": [
+    "disposition",
+    "replayed",
+    "composition",
+    "current_revision_id",
+    "print_record_id"
+  ],
+  "title": "ContentWorkbookImportResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/workbook-import-result/1.0"
+}

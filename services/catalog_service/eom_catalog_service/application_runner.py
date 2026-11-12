@@ -20,6 +20,7 @@ from eom_catalog_service.approved_item_graph_publication_service import (
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.content_planning_service import ContentPlanningService
+from eom_catalog_service.content_workbook_import_service import ContentWorkbookImportService
 from eom_catalog_service.curated_document_assembly_service import CuratedDocumentAssemblyService
 from eom_catalog_service.document_review_evidence_service import (
     DocumentReviewEvidenceService,
@@ -366,6 +367,7 @@ def serve() -> int:
                 engine, external_item_documents
             ),
             content_planning=ContentPlanningService(engine),
+            content_workbook_import=ContentWorkbookImportService(engine),
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
                 retrieval=knowledge_retrieval,

@@ -28,6 +28,7 @@ from eom_web_gui.content_planning_contracts import (
     PrepareDelivery,
     PrintCommand,
 )
+from eom_web_gui.content_workbook_routes import install_content_workbook_routes
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
@@ -270,6 +271,8 @@ def create_app(
         if not isinstance(roles, list) or "ADMIN" not in roles:
             raise GatewayError(status=403, code="OPERATOR_ADMIN_REQUIRED")
         return session
+
+    install_content_workbook_routes(app, actual.gateway, require_session, require_csrf)
 
     @app.get("/studio", include_in_schema=False)
     async def studio_redirect() -> RedirectResponse:

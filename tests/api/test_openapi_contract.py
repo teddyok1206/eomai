@@ -28,6 +28,7 @@ AUTH_MUTATIONS = {
 }
 READ_ONLY_POSTS = {
     "content_planning_query",
+    "content_workbook_query",
     "content_planning_lifecycle_query",
     "item_db_creative_search",
     "item_db_external_source_search",

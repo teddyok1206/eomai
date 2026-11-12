@@ -39,7 +39,7 @@
     {
       "id": "item-db-graph",
       "note": "item-db-graph.md",
-      "keywords": ["DB", "Map", "Layer", "창작", "외부", "자료 학습", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage"],
+      "keywords": ["DB", "Map", "Layer", "창작", "외부", "자료 학습", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage", "Excel", "표준 엑셀 가져오기"],
       "source_paths": [
         "apps/application_api/eom_api/routers/item_db.py",
         "apps/application_api/eom_api/services/external_item_db_read.py",
@@ -95,10 +95,11 @@
         "tests/unit/test_content_planning_layout.py",
         "tests/unit/test_content_planning_workbook_reference.py",
         "tests/integration/test_content_planning_storage.py",
+        "tests/integration/test_content_workbook_import.py",
         "tests/integration/test_curated_assembly_library.py",
         "tests/integration/test_item_db_filter_options.py"
       ],
-      "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md"]
+      "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md", "docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md"]
     },
     {
       "id": "similarity-embedding",

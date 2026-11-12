@@ -1,0 +1,253 @@
+{
+  "$defs": {
+    "CommitContentWorkbookRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "session_id": {
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "authentication_time": {
+          "format": "date-time",
+          "title": "Authentication Time",
+          "type": "string"
+        },
+        "operation": {
+          "const": "COMMIT_CONTENT_WORKBOOK",
+          "default": "COMMIT_CONTENT_WORKBOOK",
+          "title": "Operation",
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/OriginArtifactMemberPointer"
+        },
+        "idempotency_key": {
+          "maxLength": 128,
+          "minLength": 16,
+          "pattern": "^[!-~]{16,128}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "proposal",
+        "idempotency_key"
+      ],
+      "title": "CommitContentWorkbookRequest",
+      "type": "object"
+    },
+    "OriginArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "OriginArtifactMemberPointer",
+      "type": "object"
+    },
+    "PrepareContentWorkbookRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "session_id": {
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "authentication_time": {
+          "format": "date-time",
+          "title": "Authentication Time",
+          "type": "string"
+        },
+        "operation": {
+          "const": "PREPARE_CONTENT_WORKBOOK",
+          "default": "PREPARE_CONTENT_WORKBOOK",
+          "title": "Operation",
+          "type": "string"
+        },
+        "original_filename": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^/\\\\\\x00-\\x1f\\x7f]+$",
+          "title": "Original Filename",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 8388608,
+          "minimum": 8,
+          "title": "Content Length",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "maxLength": 128,
+          "minLength": 16,
+          "pattern": "^[!-~]{16,128}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "original_filename",
+        "content_length",
+        "sha256",
+        "idempotency_key"
+      ],
+      "title": "PrepareContentWorkbookRequest",
+      "type": "object"
+    },
+    "ReadContentWorkbookRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "session_id": {
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "authentication_time": {
+          "format": "date-time",
+          "title": "Authentication Time",
+          "type": "string"
+        },
+        "operation": {
+          "const": "READ_CONTENT_WORKBOOK",
+          "default": "READ_CONTENT_WORKBOOK",
+          "title": "Operation",
+          "type": "string"
+        },
+        "proposal": {
+          "$ref": "#/$defs/OriginArtifactMemberPointer"
+        },
+        "offset": {
+          "default": 0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "proposal"
+      ],
+      "title": "ReadContentWorkbookRequest",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "COMMIT_CONTENT_WORKBOOK": "#/$defs/CommitContentWorkbookRequest",
+      "PREPARE_CONTENT_WORKBOOK": "#/$defs/PrepareContentWorkbookRequest",
+      "READ_CONTENT_WORKBOOK": "#/$defs/ReadContentWorkbookRequest"
+    },
+    "propertyName": "operation"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PrepareContentWorkbookRequest"
+    },
+    {
+      "$ref": "#/$defs/ReadContentWorkbookRequest"
+    },
+    {
+      "$ref": "#/$defs/CommitContentWorkbookRequest"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/workbook-request/1.0"
+}

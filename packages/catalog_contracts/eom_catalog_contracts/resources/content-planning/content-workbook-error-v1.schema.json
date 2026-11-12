@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "content-workbook-error/1.0",
+      "default": "content-workbook-error/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "error_code": {
+      "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+      "title": "Error Code",
+      "type": "string"
+    }
+  },
+  "required": [
+    "error_code"
+  ],
+  "title": "ContentWorkbookError",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/workbook-error/1.0"
+}

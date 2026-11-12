@@ -520,6 +520,7 @@ if [[ "${action}" == "content-planning-tests" ]]; then
   export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_content_planning_storage.py \
     tests/integration/test_content_planning_application.py \
+    tests/integration/test_content_workbook_import.py \
     tests/integration/test_content_planning_selected_copy.py \
     tests/integration/test_content_lifecycle.py \
     tests/integration/test_content_print_application.py \
