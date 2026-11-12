@@ -187,3 +187,28 @@ rollback됐다. 운영 조회에서 `knowledge-grounded-item`의 10월10일 미�
 - 보호된 배포 기록: `/var/lib/eom-shared-settings-release-r3-20261112`.
   최신 읽기 검증: ignored `staging/shared-settings-live-smoke-r3-20261112.json`.
   INDEX는 이전과 같은 failed 상태/InvocationID를 보존했으며 이번 작업 범위 밖이다.
+
+## 공용 모델 준비 완료 — 2026-11-12 후속
+
+1~6번의 실제 OBSERVE 뒤 일반 슬롯에 남은 누락은 `gpt-5.6-terra/medium`이었다.
+18개 프리셋은 준비됐지만 customer-support와 item-inference-transfer-comparison-axes는
+이 조합을 요구했다. 설정을 임의로 high로 바꾸거나 채팅06의 모델 검증을 빌려 쓰지 않았다.
+
+- 기존 scoped compatibility owner로 슬롯05의 medium·xhigh를 실제 각1회 실행했다.
+  2/2 PASS, 모델 호출2회. 기존 xhigh를 포함한 이유는 tested-slot 정책 교체 때 기존
+  허용 조합을 보존하기 위해서다. 기출/문항 내용은 사용하지 않은 합성 진단이다.
+- 정식 committed 보고서:
+  `artifact_1dd460fff10d4a3dae790babdd3b11b4` /
+  `rev_529668c1911a41618a0cf1fff8bd39be` / `report.json`,
+  SHA `sha256:7ff6fe03290e97528de31e8f873940e7705aec35442444da0a061c4c2b1e42d7`.
+- 기존 정책 installer로 exact predecessor를 검증해 설치했다. 기존 모든 pair 보존과
+  추가값이 `(05, gpt-5.6-terra, medium)` 하나뿐임을 설치 전에 확인했다.
+  현재 정책 SHA `sha256:a7be9176870007c7020914bdeaf405d885f0020c5f3b87482139538cb947e171`.
+  이전 정책은 installer의 hash별 복구 사본으로 보존한다. Codex 바이너리·계정 인증·
+  프리셋 모델·채팅06 모델·GPU runtime은 바꾸지 않았다.
+- 슬롯05의 새 snapshot은 기존 공식 기록 함수를 통해 추가했다. 이후 실제 조회에서
+  20개 baseline 모두 missing model/effort=0을 확인했다.
+- 근거 경로: `/var/lib/eom-shared-settings-medium-proof-20261112` 및 ignored
+  `staging/shared-settings-model-preflight-ready-20261112.json`.
+- 아직 공용 capacity 활성화 PASS는 아니다. 모델 준비 완료 후
+  `EOM → 2번 model-settings-release`에서 실제 관리자 발행 인증을 기다리는 단계다.
