@@ -32,6 +32,38 @@ from tests.unit.test_preset_model_selection import _draft, _preset, _self_hash
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_owner_unit_preflight_does_not_read_privileged_polkit_directory(monkeypatch):
+    from eom_orchestrator import worker_systemd
+
+    inspected = []
+
+    def check(path, **kwargs):
+        inspected.append(path)
+        if path.is_relative_to("/etc/polkit-1"):
+            raise PermissionError("root-only policy directory")
+
+    monkeypatch.setattr(worker_systemd, "_validate_root_owned_artifact", check)
+    worker_systemd.require_shared_worker_units()
+    assert len(inspected) == len(SHARED_WORKER_TEMPLATE_SHA256) == 11
+    with pytest.raises(PermissionError):
+        worker_systemd.require_shared_worker_deployment()
+
+
+def test_deployment_preflight_includes_polkit_and_all_fixed_units(monkeypatch):
+    from eom_orchestrator import worker_systemd
+
+    inspected = []
+    monkeypatch.setattr(
+        worker_systemd,
+        "_validate_root_owned_artifact",
+        lambda path, **kwargs: inspected.append((path, kwargs)),
+    )
+    worker_systemd.require_shared_worker_deployment()
+    assert len(inspected) == 12
+    assert inspected[0][0] == Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules")
+    assert all(options["expected_mode"] == 0o644 for _, options in inspected)
+
+
 def test_shared_release_requires_the_same_fresh_control_administrator():
     now = datetime(2026, 11, 12, tzinfo=UTC)
     values = dict(

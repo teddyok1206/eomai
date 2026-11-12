@@ -87,6 +87,12 @@ WorkflowRequest/MaterialLearningWorkflowRequest union narrowing 문제는 별도
 실제 운영 activation, root-owned 설치 unit 검증, HTTPS 관리자 화면 및 live model canary는
 **PENDING**이다. 이 문서를 근거로 이미 운영 전환됐다고 보고하지 않는다.
 
+운영 준비에서 `/etc/polkit-1/rules.d`는 실행 owner에게 읽기 권한이 없음을 확인했다.
+root 배포 검사는 `require_shared_worker_deployment`로 polkit와11개 unit를 확인하고,
+일반 owner의 발행 검사는 `require_shared_worker_units`로 고정 unit를 확인한다.
+디렉터리 권한/그룹을 넓히지 않으며 설치 시 polkit hash 검증을 생략하지 않는다.
+최초 발행 시도는 로그인/DB mutation 전 PermissionError로 종료됐고 기록을 보존한다.
+
 ### 배포 전 GUI 원칙 검토
 
 기존 Scientific Workbench 디자인 시스템과 GUI 원칙 재점검 문서를 대조했다.

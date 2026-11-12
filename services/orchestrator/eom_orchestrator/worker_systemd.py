@@ -748,15 +748,20 @@ def _validate_root_owned_artifact(path: Path, *, expected_mode: int, expected_sh
 
 
 def require_shared_worker_units() -> None:
-    """Release preflight only; never installs a template or starts a worker."""
-    _validate_root_owned_artifact(
-        Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules"),
-        expected_mode=0o644,
-        expected_sha256=SHARED_WORKER_POLKIT_SHA256,
-    )
+    """Owner-readable fixed units; never require access to root-only policy directories."""
     for (slot, seconds), digest in SHARED_WORKER_TEMPLATE_SHA256.items():
         _validate_root_owned_artifact(
             SYSTEMD_UNIT_ROOT / f"eom-worker-shared-{slot}-{seconds}@.service",
             expected_mode=0o644,
             expected_sha256=digest,
         )
+
+
+def require_shared_worker_deployment() -> None:
+    """Privileged deployment preflight includes the root-only polkit policy."""
+    _validate_root_owned_artifact(
+        Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules"),
+        expected_mode=0o644,
+        expected_sha256=SHARED_WORKER_POLKIT_SHA256,
+    )
+    require_shared_worker_units()
