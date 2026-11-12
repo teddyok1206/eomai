@@ -43,7 +43,9 @@
    → 기존 Artifact publisher → 평가 기록 → 기존 preset release를 수행한다. 프롬프트·
    모델·retrieval 규칙은 이 전환에서 변경하지 않는다. 모델 호출 수는0이며 출제 품질 PASS를
    뜻하지 않는다. 중단 뒤 동일 predecessor로 재개하면 정확히 발행된 successor를 재사용한다.
-   다른 draft 또는 무관한 current가 있으면 충돌을 보고하고 덮어쓰지 않는다.
+   같은 전환 정책의 draft만 재사용한다. 무관한 미발행 draft는 보존하며 현재 발행
+   predecessor에서 새 revision을 추가한다. 동일 정책 draft 중복이나 무관한 current는
+   충돌로 거부한다.
 9. 관리자 화면과 설치 manifest/current 정책을 확인한다. 승인된 bounded canary로
    (a) 일반 작업의 다른 빈 슬롯 배정과 실제 unit/timeout, (b) 프리셋별 모델 변경의 신규 실행 pin,
    (c) 채팅 모델 변경 후 새 질문1회와 COMPLETED를 확인한다. 운영 성공은 이 증거로만 닫는다.
@@ -154,3 +156,16 @@ root 배포 검사는 `require_shared_worker_deployment`로 polkit와11개 unit�
 동일20개 exact baseline을 official shared-slots release use case로 발행하며,
 인증 입력 전에는 공용 capacity/프리셋 successor를 발행했다고 주장하지 않는다.
 실제 인증 관리자 화면, 새 채팅 응답 및 선택 설정 적용 canary도 별도 확인 대상이다.
+
+## 활성화 사전 점검 후속 — 2026-11-12
+
+실제 관리자 인증은 성공했으나 `CONTROL_SHARED_DRAFT_CONFLICT`로 전환 준비 transaction이
+rollback됐다. 운영 조회에서 `knowledge-grounded-item`의 10월10일 미발행 모델 초안1개가
+확인됐고, 새 shared capacity/후속 preset은 아직 없다. 이 초안을 삭제하거나 발행하지 않는다.
+전환 owner가 정확한 현재 predecessor의 정책과 일치하는 전환 초안만 재사용하도록 수정했다.
+과거 초안 보존·동시4회 준비·같은 요청 재개·일치 초안 중복 거부를 fresh disposable DB에서
+검증했다(관련 suite36 PASS). 슬롯/모델/unit focused340 PASS, scoped mypy/ruff PASS.
+
+모델 사전 조회에서는 binding이 READY여도 최근 native catalog가 만료된 경우를 확인했다.
+새 인증을 요청하기 전에 기존 상태·사용량 OBSERVE로 갱신하며, 만료 기록을 유효하다고
+꾸미거나 모델을 자동 대체하지 않는다. 이 후속 source도 운영 적용/정책 발행과 구분한다.

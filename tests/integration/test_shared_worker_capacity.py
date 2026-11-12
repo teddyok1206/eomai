@@ -13,6 +13,7 @@ from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
     CodexCapabilitySnapshotRecord,
+    ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
     ResolvedExecutionPlanRecord,
     WorkerLeaseRecord,
@@ -287,6 +288,57 @@ def prepare(case, session):
     )
 
 
+def append_draft(session, baseline, *, unrelated):
+    """Append synthetic immutable alternatives using the normal revision owner."""
+    from eom_orchestrator.preset_lifecycle import create_execution_preset_draft
+
+    logical = session.get(ExecutionPresetRecord, baseline.preset_id)
+    roles = [p.model_dump(mode="json") for p in baseline.role_policies]
+    if unrelated:
+        roles[0]["model_candidates"][0]["model"] = "unpublished-editor-model"
+    return create_execution_preset_draft(
+        session,
+        preset_key=logical.preset_key,
+        display_name=baseline.display_name,
+        description=baseline.description,
+        role_policies=roles,
+        capacity_policy_revision_id=baseline.capacity_policy_revision_id,
+        general_knowledge_policy=str(baseline.general_knowledge_policy),
+        compatible_workflow_protocols=list(baseline.compatible_workflow_protocols),
+        created_by="disposable-test",
+        created_at=fixture.NOW,
+    )
+
+
+def test_unrelated_draft_is_preserved_and_exact_transition_is_reused(shared_case):
+    with Session(shared_case.engine) as db, db.begin():
+        unrelated = append_draft(db, shared_case.baseline, unrelated=True)
+        original = deepcopy(unrelated.canonical_document)
+        first = prepare(shared_case, db)
+        assert first.drafts[0].preset_revision_id != unrelated.preset_revision_id
+        assert first.drafts[0].role_policies == shared_case.baseline.role_policies
+        assert prepare(shared_case, db) == first
+        db.refresh(unrelated)
+        assert unrelated.state == "DRAFT"
+        assert unrelated.canonical_document == original
+        assert (
+            db.get(ExecutionPresetRecord, shared_case.baseline.preset_id).current_revision_id
+            == shared_case.baseline.preset_revision_id
+        )
+        db.rollback()
+
+
+def test_multiple_matching_transition_drafts_fail_without_choosing_latest(shared_case):
+    with Session(shared_case.engine) as db, db.begin():
+        first = prepare(shared_case, db)
+        duplicate = append_draft(db, first.drafts[0], unrelated=False)
+        assert duplicate.preset_revision_id != first.drafts[0].preset_revision_id
+        with pytest.raises(ControlPlaneError) as error:
+            prepare(shared_case, db)
+        assert error.value.code == "CONTROL_SHARED_DRAFT_CONFLICT"
+        db.rollback()
+
+
 def test_prepare_reuses_draft_capacity_and_preserves_running_plan(shared_case):
     with Session(shared_case.engine) as db, db.begin():
         prior = deepcopy(
@@ -308,6 +360,10 @@ def test_prepare_reuses_draft_capacity_and_preserves_running_plan(shared_case):
 
 
 def test_four_concurrent_prepare_commands_create_one_draft(shared_case):
+    with Session(shared_case.engine) as db, db.begin():
+        unrelated = append_draft(db, shared_case.baseline, unrelated=True)
+        unrelated_id = unrelated.preset_revision_id
+        unrelated_document = deepcopy(unrelated.canonical_document)
     barrier = Barrier(4)
 
     def submit(_):
@@ -319,6 +375,11 @@ def test_four_concurrent_prepare_commands_create_one_draft(shared_case):
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = tuple(pool.map(submit, range(4)))
     assert len(set(results)) == 1
+    with Session(shared_case.engine) as db:
+        assert db.get(ExecutionPresetRevisionRecord, unrelated_id).canonical_document == (
+            unrelated_document
+        )
+    assert results[0][1] != unrelated_id
 
 
 def test_shared_transition_replay_recognizes_exact_published_successor(shared_case):
@@ -333,8 +394,6 @@ def test_shared_transition_replay_recognizes_exact_published_successor(shared_ca
         document["content_sha256"] = content_sha256(
             {k: v for k, v in document.items() if k != "content_sha256"}
         )
-        from eom_orchestrator.control_models import ExecutionPresetRecord
-
         logical = db.get(ExecutionPresetRecord, shared_case.baseline.preset_id)
         successor = record_execution_preset_revision(
             db, preset_key=logical.preset_key, document=document, created_by="test"

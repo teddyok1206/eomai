@@ -85,6 +85,15 @@ heartbeat를 막는 긴 lock을 만들지 않는다. 전체 owner 재시작이�
 
 ## 실패·동시성·검증
 
+공용 전환의 입력은 검토된 **현재 발행 revision**이며 과거 미발행 초안이 아니다.
+운영에서 한 달 전의 다른 모델 초안이 전환을 막은 사례를 반영해, 같은 정책 hash의
+전환 초안만 재사용한다. 무관한 초안은 수정·발행·삭제하지 않고 기존 lifecycle로
+새 revision을 추가한다. 같은 전환에 일치하는 초안이 여러 개면 모호하므로 거부한다.
+기존 논리 preset row lock과 advisory lock 안에서 O(D)로 비교하며, 다른 current가
+된 경우의 거부·실행 pin·평가/발행 경계는 유지한다. 새 schema/DB/queue는 필요 없다.
+초안을 모두 삭제하거나 편집내용을 현재값에 합치는 대안은 사용자 작업을 잃거나
+미승인 모델을 발행하므로 사용하지 않는다.
+
 lease와 역할/모델의 권한 불일치, dangling/revoked/hash mismatch는 명시적으로 거부한다.
 계정 변경 후 이전 capability를 재사용하지 않는다. 관리자 변경은 기존 optimistic version과
 멱등 receipt로 처리한다. 설치·실행이 불명확하면 새 작업을 중복 제출하지 않는다.

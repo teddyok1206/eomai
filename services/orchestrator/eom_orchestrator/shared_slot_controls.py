@@ -227,17 +227,21 @@ def prepare_shared_slot_controls(
                 )
             )
         )
-        if pending:
-            if len(pending) != 1:
-                raise ControlPlaneError("CONTROL_SHARED_DRAFT_CONFLICT", "multiple pending drafts")
-            draft = validated_preset(pending[0])
-            expected = baseline.model_copy(
-                update={"capacity_policy_revision_id": capacity.capacity_policy_revision_id}
-            )
-            if execution_preset_policy_sha256(expected) != execution_preset_policy_sha256(draft):
-                raise ControlPlaneError(
-                    "CONTROL_SHARED_DRAFT_CONFLICT", "unrelated draft must be resolved first"
-                )
+        expected = baseline.model_copy(
+            update={"capacity_policy_revision_id": capacity.capacity_policy_revision_id}
+        )
+        expected_hash = execution_preset_policy_sha256(expected)
+        # Drafts are immutable alternatives, not exclusive editor locks. Reuse only
+        # this transition's exact policy; leave unrelated unpublished work untouched.
+        matching = [
+            draft
+            for row in pending
+            if execution_preset_policy_sha256(draft := validated_preset(row)) == expected_hash
+        ]
+        if len(matching) > 1:
+            raise ControlPlaneError("CONTROL_SHARED_DRAFT_CONFLICT", "ambiguous matching drafts")
+        if matching:
+            draft = matching[0]
         else:
             values: dict[str, Any] = dict(
                 session=session,

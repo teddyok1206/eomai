@@ -88,6 +88,9 @@ CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 uni
 root 배포 검사는 `require_shared_worker_deployment`가 polkit와 unit를 함께 확인하고,
 일반 owner의 발행은 `require_shared_worker_units`로 고정 unit만 확인한다.
 root-only polkit 디렉터리 접근 권한을 실행 계정에 주지 않는다.
+공용 전환은 현재 발행 revision에서 시작한다. 미발행 초안은 편집 lock이 아니므로
+동일 전환 정책의 초안만 재사용하고 무관한 초안은 보존한다. 일치 초안이 여러 개거나
+현재 발행값이 무관한 revision으로 바뀐 경우에는 거부한다.
 인증·사용량·계정별 모델 검사는 그 계정을 관측해야 하므로 여전히 정확한 대상 슬롯을 쓴다.
 
 프리셋 편집은 모든 역할의 model/effort만 바꾼다. 후보 수·순서, 지침/Graph/격리/timeout은
