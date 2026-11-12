@@ -85,6 +85,9 @@ CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 uni
 발행 기록으로 확인한다. capacity1.7의 신규 일반 작업은01–05를 안정적인 순환 순서로
 탐색하고06 채팅 예약을 제외한다. 기존 lease/host fence를 사용하며 과거 plan/cohort는
 다시 배정하지 않는다. GPU 제한도 새 정책에서는 물리03이 아니라 실행 역할로 센다.
+root 배포 검사는 `require_shared_worker_deployment`가 polkit와 unit를 함께 확인하고,
+일반 owner의 발행은 `require_shared_worker_units`로 고정 unit만 확인한다.
+root-only polkit 디렉터리 접근 권한을 실행 계정에 주지 않는다.
 인증·사용량·계정별 모델 검사는 그 계정을 관측해야 하므로 여전히 정확한 대상 슬롯을 쓴다.
 
 프리셋 편집은 모든 역할의 model/effort만 바꾼다. 후보 수·순서, 지침/Graph/격리/timeout은

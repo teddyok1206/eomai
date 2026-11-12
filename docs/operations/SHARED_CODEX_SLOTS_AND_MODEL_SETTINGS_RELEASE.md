@@ -120,3 +120,37 @@ root 배포 검사는 `require_shared_worker_deployment`로 polkit와11개 unit�
 운영 모델을 사용하지 않았다. disposable DB4개는 검사 후 공식 cleanup으로 제거했고,
 검증 결과 로그만 ignored staging에 보존했다. 운영 DB·인증·과거 실패·기존 실행은
 변경하지 않았다. 소스 기준선은 작업 시작 HEAD `3da07096`이며 아직 commit/deploy 전이다.
+
+## 운영 배포 체크포인트 — 2026-11-12 07:10 UTC
+
+위 ‘commit/deploy 전’은 소스 검증 당시 기록이다. 후속 운영 상태는 다음과 같다.
+
+- 기능 commit `20c767b2c4114ddafa1ae2d89fbacfe429b16b88`, 권한 분리 후속
+  `41efd26efd06fece9aa470ceb14e514696cc90f6`.
+- 최종 API/platform/Web/Catalog/runner/채팅 설치 source는 `41efd26e`.
+  자료 학습 coordinator도 이 설치본으로 자연 종료 후 교체했다. 기존 요청·child·cohort의
+  preset/Graph pin은 변경하지 않았다.
+- DB `0077 → 0078 → 0079`: 보호된 release operator의 정확한 callback으로 적용하고
+  verify, API/Catalog/HWPX 역할 조정 PASS. 후속41 배포에서는 migration 재실행 없음.
+- polkit와11개 신규 고정 unit의 소유권·mode·hash 및 systemd 검증 PASS.
+  실제 `eom-workflow-runner` OS identity에서 새 설치본의 unit preflight PASS.
+  정책 파일 접근 권한/그룹, worker 인증, 기본 모델은 변경하지 않았다.
+- 전체 Web517 PASS(실제 합성 Chromium 포함), 권한 후속 회귀295 PASS, scoped mypy와
+  formatter/linter PASS. 처음 전체 Web 검사에서 옛 제목을 기대한2개 assertion을
+  변경된 UI 제목으로 고친 후 전체 재실행했다.
+- HTTPS 로그인200, API READY, 배포된 HTML/JS/CSS5개가 최종 wheel bytes와 일치.
+  채팅 설정·프리셋 관리자 endpoint의 anonymous 조회는401.
+  API/Web/채팅 owner·worker/QUERY/runner/자료 학습·창작 coordinator active 확인.
+- QUERY 설치 source `11d826d2`와 수치 runtime은 유지하면서 API provider pin만 정식
+  호환 묶음으로 갱신했다. INDEX는 작업 전부터 failed/PID0였으며 동일 InvocationID와
+  설정을 보존했다. 이번 릴리스를 GPU 복구 성공으로 보고하지 않는다.
+- 보호된 실행/이전 wheel·설정 기록:
+  `/var/lib/eom-shared-settings-release-20261112`,
+  `/var/lib/eom-shared-settings-release-r2-20261112`.
+
+**정책 활성화는 아직 PENDING**이다. 최초 시도는 일반 owner가 root-only polkit 경로를
+읽으려다 로그인·DB 변경 전에 종료됐다. 책임 분리 후속 설치/실제 identity 검증 후
+`EOM → 2번 model-settings-release`에서 실제 guiadmin 로그인을 기다리고 있다.
+동일20개 exact baseline을 official shared-slots release use case로 발행하며,
+인증 입력 전에는 공용 capacity/프리셋 successor를 발행했다고 주장하지 않는다.
+실제 인증 관리자 화면, 새 채팅 응답 및 선택 설정 적용 canary도 별도 확인 대상이다.
