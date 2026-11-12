@@ -7,6 +7,7 @@ import {
   reconcileCurriculumSelection,
 } from "./curriculum-selector.js";
 import {createExecutionPresetEditor} from "./execution-preset-controller.js";
+import {createChatModelSettingsEditor} from "./chat-model-settings.js";
 import {guidedPresetBases} from "./execution-preset-editor.js";
 import {
   hwpxTargetFromAdminRevision,
@@ -206,6 +207,7 @@ const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
   showMessage, addDetail: addControlDetail,
 });
+const chatModelEditor = createChatModelSettingsEditor({document, api, isAdmin: hasAdminRole, showMessage});
 const UI_MODE_BY_VIEW = Object.freeze({
   chat: "human",
   workflow: "engine",
@@ -246,6 +248,7 @@ async function api(path, options = {}) {
   if (response.status === 401) {
     state.adminSettingsRequestSequence += 1;
     presetEditor.reset();
+    chatModelEditor.reset();
     window.location.replace("/studio/login");
     throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
   }
@@ -2461,6 +2464,7 @@ function installControlPlane() {
   $("#control-refresh").addEventListener("click", loadCodexControlPlane);
   $("#admin-settings-refresh").addEventListener("click", loadAdminSettings);
   presetEditor.install();
+  chatModelEditor.install();
   $("#codex-reauth-form").addEventListener("submit", startCodexReauthentication);
   $("#codex-reauth-close").addEventListener("click", closeCodexReauthentication);
   $("#codex-reauth-progress-close").addEventListener("click", closeCodexReauthentication);
@@ -2741,6 +2745,7 @@ async function loadAdminSettings() {
     const [presets] = await Promise.all([
       api("/admin/execution-presets"),
       loadOperatorAccounts(),
+      chatModelEditor.refresh(),
     ]);
     if (requestSequence !== state.adminSettingsRequestSequence
       || navigationVersion !== state.navigationVersion || !hasAdminRole()) return;
@@ -3780,7 +3785,7 @@ function renderCustomerSupportCase(item) {
   } else if (item.state === "FAILED") {
     response.textContent = "이번 진단을 완료하지 못했습니다. 새 문의를 중복 제출하지 말고 관리자에게 상태 확인을 요청해주세요.";
   } else {
-    response.textContent = "전용 고객지원 슬롯에서 문의를 확인하고 있습니다. 이 화면에서 상태가 자동으로 갱신됩니다.";
+    response.textContent = "사용 가능한 작업 슬롯에서 문의를 확인하고 있습니다. 이 화면에서 상태가 자동으로 갱신됩니다.";
   }
   root.append(response);
 
@@ -5397,6 +5402,7 @@ function installPdfDocumentReview() {
 async function logout() {
   state.adminSettingsRequestSequence += 1;
   presetEditor.reset();
+  chatModelEditor.reset();
   generalChat.setOwner(null);
   itemDb.setOwner(null);
   knowledgeMap.setOwner(null);

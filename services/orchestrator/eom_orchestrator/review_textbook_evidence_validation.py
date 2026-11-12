@@ -23,6 +23,7 @@ from eom_workflow import (
     validate_paired_document_review_v3_output_against_request,
     validate_single_document_review_textbook_usage,
 )
+from eom_workflow.shared_model_execution_plans import SharedPairedReviewPlan, SharedSingleReviewPlan
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
 
@@ -58,7 +59,12 @@ def validate_single_document_textbook_for_commit(
             "REVIEW_TEXTBOOK_PLAN_MISSING", "textbook review plan is missing"
         )
     try:
-        plan = ResolvedExecutionPlanV25.model_validate(record.canonical_document)
+        kind = (
+            SharedSingleReviewPlan
+            if record.canonical_document.get("schema_version") == "resolved-execution-plan/38.0"
+            else ResolvedExecutionPlanV25
+        )
+        plan = kind.model_validate(record.canonical_document)
     except ValueError as exc:
         raise EvidenceUsageValidationError(
             "REVIEW_TEXTBOOK_PLAN_INVALID", "textbook review plan is invalid"
@@ -136,7 +142,12 @@ def validate_paired_document_textbook_for_commit(
             "REVIEW_TEXTBOOK_PLAN_MISSING", "paired textbook review plan is missing"
         )
     try:
-        plan = ResolvedExecutionPlanV26.model_validate(record.canonical_document)
+        kind = (
+            SharedPairedReviewPlan
+            if record.canonical_document.get("schema_version") == "resolved-execution-plan/39.0"
+            else ResolvedExecutionPlanV26
+        )
+        plan = kind.model_validate(record.canonical_document)
     except ValueError as exc:
         raise EvidenceUsageValidationError(
             "REVIEW_TEXTBOOK_PLAN_INVALID", "paired textbook review plan is invalid"

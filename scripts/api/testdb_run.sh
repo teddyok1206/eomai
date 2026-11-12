@@ -46,10 +46,10 @@ if (($# != 2)) || \
     "$1" != "item-db-search-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
     "$1" != "material-learning-tests" && "$1" != "content-planning-tests" && \
-    "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
+    "$1" != "quality-review-tests" && "$1" != "chat-tests" && "$1" != "shared-slot-tests" && "$1" != "preset-model-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|item-db-search-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|item-db-search-tests|creative-registration-tests|creative-graph-tests|material-learning-tests|content-planning-tests|quality-review-tests|chat-tests|shared-slot-tests|preset-model-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -128,6 +128,19 @@ except TestDatabaseGuardError as exc:
 PY
 
 cd "${REPOSITORY_ROOT}"
+if [[ "${action}" == "shared-slot-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_shared_worker_capacity.py \
+    tests/integration/test_chat_model_settings.py \
+    tests/integration/test_creative_report_capacity.py
+  exit 0
+fi
+if [[ "${action}" == "preset-model-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_preset_model_validation_persistence.py
+  exit 0
+fi
 if [[ "${action}" == "catalog-artifact-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   "${PYTHON}" -m pytest -q \

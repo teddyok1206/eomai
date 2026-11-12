@@ -111,6 +111,11 @@ from eom_workflow.public_similarity_control import (
     select_public_similarity_evidence_source,
 )
 from eom_workflow.schemas import validate_role_input
+from eom_workflow.shared_model_execution_plans import (
+    SharedCustomerSupportPlan,
+    SharedPairedReviewPlan,
+    SharedSingleReviewPlan,
+)
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     SIMILARITY_EXECUTION_PLAN_SCHEMAS,
@@ -266,6 +271,8 @@ def materialize_execution_step(
         "resolved-execution-plan/29.0",
         "resolved-execution-plan/13.0",
         "resolved-execution-plan/25.0",
+        "resolved-execution-plan/38.0",
+        "resolved-execution-plan/39.0",
         "resolved-execution-plan/26.0",
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
@@ -327,6 +334,12 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV29.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/37.0":
+        plan = SharedCustomerSupportPlan.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/38.0":
+        plan = SharedSingleReviewPlan.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/39.0":
+        plan = SharedPairedReviewPlan.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/11.0":
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/12.0":
@@ -1200,6 +1213,12 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV29.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/37.0":
+        plan = SharedCustomerSupportPlan.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/38.0":
+        plan = SharedSingleReviewPlan.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/39.0":
+        plan = SharedPairedReviewPlan.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":

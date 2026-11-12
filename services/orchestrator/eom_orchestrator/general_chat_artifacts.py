@@ -123,6 +123,7 @@ class GeneralChatArtifactStore:
             RAG_RESULT_SCHEMA,
             "eom://schemas/general-chat/dispatch/4.0",
             "eom://schemas/general-chat/dispatch/5.0",
+            "eom://schemas/general-chat/dispatch/6.0",
             RAG_TOOL_RECORD_SCHEMA,
         }:
             raise ValueError("unsupported chat evidence schema")

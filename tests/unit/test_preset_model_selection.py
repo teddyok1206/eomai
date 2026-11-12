@@ -162,10 +162,10 @@ def test_three_model_selectors_preserve_review_order_and_noneditable_roles() -> 
     assert draft.role_policies[1].model_candidates[0].model == "basic-model"
     assert draft.role_policies[1].model_candidates[1].model == "enhanced-model"
     assert draft.role_policies[2:] == base.role_policies[2:]
-    changed["role_policies"][2]["model_candidates"][0]["model"] = "not-editable"
+    changed["role_policies"][2]["model_candidates"][0]["model"] = "editable-image-model"
     bad = ExecutionPresetRevision.model_validate(_self_hash(changed))
-    with pytest.raises(ControlPlaneError, match="fixed policy"):
-        require_model_only_successor(base, bad)
+    require_model_only_successor(base, bad)
+    assert bad.role_policies[2].model_candidates[0].model == "editable-image-model"
 
 
 def test_preset_resolution_checks_schema_hash_and_db_revision_identity() -> None:

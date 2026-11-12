@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import Callable
-from threading import Lock
+from threading import Lock, RLock
 from time import monotonic
 from uuid import uuid4
 
@@ -58,12 +58,15 @@ class ChatWorkerClient:
         endpoint: ChatSocketEndpoint,
         policy: ChatWorkerPolicy,
         tools: Callable[[ChatWorkerRequest], ChatToolBroker | ChatRagToolBroker] | None = None,
+        policy_supplier: Callable[[], ChatWorkerPolicy] | None = None,
     ) -> None:
         self.endpoint = endpoint
         self.policy = read_chat_worker_policy(policy.model_dump(mode="json"))
         self._boot_id: str | None = None
         self._admission_lock = Lock()
         self.tools = tools
+        self.policy_supplier = policy_supplier
+        self._configuration_lock = RLock()
 
     def _stream(self, request: ChatWorkerRequest) -> dict[str, object]:
         self.endpoint.require_socket()
@@ -113,7 +116,9 @@ class ChatWorkerClient:
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
         protocol = chat_worker_protocol_version(self.policy)
         request = ChatWorkerRequest(
-            schema_version="general-chat-worker-request/4.0"
+            schema_version="general-chat-worker-request/5.0"
+            if self.policy.schema_version == "general-chat-worker-policy/6.0"
+            else "general-chat-worker-request/4.0"
             if protocol == 4
             else "general-chat-worker-request/3.0"
             if protocol == 3
@@ -125,13 +130,17 @@ class ChatWorkerClient:
             if isinstance(command, ChatWorkerLookup)
             else self.policy.sha256,
             command=command,
+            selected_policy=self.policy
+            if self.policy.schema_version == "general-chat-worker-policy/6.0"
+            and not isinstance(command, ChatWorkerLookup)
+            else None,
         )
         document = request.model_dump(mode="json")
         read_chat_worker_request(document)
         try:
             reply_document = (
                 self._stream(request)
-                if request.schema_version.endswith(("/3.0", "/4.0"))
+                if request.schema_version.endswith(("/3.0", "/4.0", "/5.0"))
                 else exchange_chat_frame(
                     self.endpoint,
                     document,
@@ -157,6 +166,26 @@ class ChatWorkerClient:
         return reply
 
     def check_admission(self) -> None:
+        with self._configuration_lock:
+            self._check_admission()
+
+    def before_claim(self) -> None:
+        """Only the resident's idle/main loop switches; heartbeat never reloads."""
+        if self.policy_supplier is None:
+            return
+        with self._configuration_lock:
+            selected = self.policy_supplier()
+            if selected == self.policy:
+                return
+            old = self.policy
+            self.policy = read_chat_worker_policy(selected.model_dump(mode="json"))
+            try:
+                self._check_admission()
+            except Exception:
+                self.policy = old
+                raise
+
+    def _check_admission(self) -> None:
         reply = self._call(ChatWorkerProbe())
         assert isinstance(reply.value, ChatWorkerAdmission)
         if not reply.value.ready:

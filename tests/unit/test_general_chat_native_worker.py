@@ -36,7 +36,7 @@ def synthetic_native(monkeypatch):
     class Session:
         ready = False
 
-        def __init__(self, selected_channel, *, model, cwd):
+        def __init__(self, selected_channel, *, model, cwd, reasoning_effort=None):
             self.channel = selected_channel
             events.append(("construct", model, cwd))
 

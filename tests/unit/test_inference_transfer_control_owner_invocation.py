@@ -170,6 +170,21 @@ def test_capacity_read_rejects_nonexact_revision_before_authentication(
     assert reader.calls == session.calls == 0
 
 
+@pytest.mark.parametrize("version", ("1.4", "1.5", "1.6", "1.7"))
+def test_historical_bootstrap_rejects_newer_capacity_with_stable_error(
+    monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    owner, _, _ = _owner(monkeypatch)
+    pin = prepared_receipt().manifest.capacity
+    value = SimpleNamespace(
+        **(pin.model_dump() | {"schema_version": "worker-capacity-policy/" + version})
+    )
+    monkeypatch.setattr(invocation, "resolve_released_capacity_policy", lambda *_: value)
+    with pytest.raises(ControlPlaneError) as caught:
+        owner.read_capacity_pin(pin.capacity_policy_revision_id)
+    assert caught.value.code == "CONTROL_CAPACITY_POINTER_INVALID"
+
+
 def test_capacity_read_does_not_return_metadata_after_session_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

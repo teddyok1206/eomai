@@ -22,8 +22,18 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
     } or (
         version not in {1, 2, 3, 4}
         and not (
-            version == 5 and leaf in {"worker-policy", "dispatch", "owner-request", "owner-reply"}
+            version == 5
+            and leaf
+            in {
+                "worker-policy",
+                "dispatch",
+                "owner-request",
+                "owner-reply",
+                "worker-request",
+                "worker-reply",
+            }
         )
+        and not (version == 6 and leaf in {"worker-policy", "dispatch"})
     ):
         raise ValueError("unsupported chat envelope")
     root = files("eom_protocol").joinpath("schemas")
@@ -46,6 +56,7 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
         "general-chat-rag",
         "general-chat-worker-policy-v4",
         "general-chat-worker-policy-v5",
+        "general-chat-worker-policy-v6",
         "general-chat-turn-input-v4",
         "general-chat-turn-result-v4",
         "general-chat-delete",
@@ -65,7 +76,7 @@ def validate_chat_envelope(leaf: str, document: object) -> None:
     version = next(
         (
             v
-            for v in (5, 4, 3, 2, 1)
+            for v in (6, 5, 4, 3, 2, 1)
             if isinstance(document, dict)
             and document.get("schema_version") == f"general-chat-{leaf}/{v}.0"
         ),

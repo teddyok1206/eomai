@@ -30,6 +30,7 @@ from eom_identity_service.repository import effective_permissions
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from eom_orchestrator.preset_model_selection import current_model_preset
 from eom_workflow.control_plane import ExecutionPresetRevision
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
@@ -141,7 +142,7 @@ class MaterialGraphLearningService:
                 ):
                     return self._reconcile(prior.analysis_run_id, operator_id)
                 predecessor = prior.analysis_run_id
-        preset = self.controls.item
+            preset = current_model_preset(session, self.controls.item)
         run = self.analyses.create_with_pinned_preset(
             CreateKnowledgeAnalysisCommand(
                 source=ApprovedItemKnowledgeAnalysisSelection(
@@ -163,7 +164,6 @@ class MaterialGraphLearningService:
     def advance_item_solution(
         self, *, base_analysis_run_id: str, task_id: str, operator_id: str
     ) -> KnowledgeAnalysisApplicationResult:
-        preset = self.controls.solution
         with self.sessions() as session:
             authorize_material_learning(session, operator_id)
             task = session.get(MaterialLearningTaskRecord, task_id)
@@ -190,6 +190,7 @@ class MaterialGraphLearningService:
                 if prior.predecessor_analysis_run_id != base_analysis_run_id:
                     raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
                 return self._reconcile(prior.analysis_run_id, operator_id)
+            preset = current_model_preset(session, self.controls.solution)
         run = self.analyses.create_material_solution_with_pinned_preset(
             CreateKnowledgeSolutionAnalysisCommand(
                 base_analysis_run_id=base_analysis_run_id,
@@ -218,7 +219,16 @@ class MaterialGraphLearningService:
         selection: MaterialKnowledgeAnalysisSelection,
         operator_id: str,
     ) -> KnowledgeAnalysisApplicationResult:
-        preset = self.controls.document
+        with self.sessions() as session:
+            authorize_material_learning(session, operator_id)
+            task = session.get(MaterialLearningTaskRecord, task_id)
+            if task is None:
+                raise ValueError("MATERIAL_GRAPH_DOCUMENT_SOURCE_MISMATCH")
+            history = read_material_task_histories(session, (task,))[task.task_id]
+            previous = history.analysis_owner()
+            if previous is not None and previous.analysis_run_id is not None:
+                return self._reconcile(previous.analysis_run_id, operator_id)
+            preset = current_model_preset(session, self.controls.document)
         run = self.analyses.create_material_with_pinned_preset(
             CreateMaterialKnowledgeAnalysisCommand(
                 material_task_id=task_id,

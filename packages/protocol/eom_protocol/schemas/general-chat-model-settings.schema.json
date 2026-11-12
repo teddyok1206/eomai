@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "general-chat-model-settings/1.0",
+      "default": "general-chat-model-settings/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "settings_id": {
+      "const": "general-chat",
+      "default": "general-chat",
+      "title": "Settings Id",
+      "type": "string"
+    },
+    "revision_id": {
+      "pattern": "^chatmodelrev_[0-9a-f]{32}$",
+      "title": "Revision Id",
+      "type": "string"
+    },
+    "revision_number": {
+      "minimum": 1,
+      "title": "Revision Number",
+      "type": "integer"
+    },
+    "model": {
+      "pattern": "^[A-Za-z0-9._-]{1,128}$",
+      "title": "Model",
+      "type": "string"
+    },
+    "reasoning_effort": {
+      "enum": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "title": "Reasoning Effort",
+      "type": "string"
+    },
+    "created_by": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "title": "Created By",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision_id",
+    "revision_number",
+    "model",
+    "reasoning_effort",
+    "created_by",
+    "created_at",
+    "sha256"
+  ],
+  "title": "ChatModelSettings",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/model-settings/1.0"
+}

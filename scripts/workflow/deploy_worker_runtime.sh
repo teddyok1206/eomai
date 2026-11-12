@@ -127,6 +127,22 @@ for slot in 01 02 03 04 05 06; do
     "${REPOSITORY}/infra/systemd/eom-worker-usage-${slot}@.service"
   )
 done
+SHARED_UNITS=(
+  eom-worker-shared-01-900@.service
+  eom-worker-shared-01-3600@.service
+  eom-worker-shared-01-7200@.service
+  eom-worker-shared-02-900@.service
+  eom-worker-shared-02-3600@.service
+  eom-worker-shared-02-7200@.service
+  eom-worker-shared-03-900@.service
+  eom-worker-shared-03-3600@.service
+  eom-worker-shared-04-900@.service
+  eom-worker-shared-04-3600@.service
+  eom-worker-shared-05-1800@.service
+)
+for shared_unit in "${SHARED_UNITS[@]}"; do
+  SOURCES+=("${REPOSITORY}/infra/systemd/${shared_unit}")
+done
 getent group eom-codex-auth >/dev/null || fail "Codex auth broker group is unavailable"
 getent passwd eom-codex-auth-broker >/dev/null || fail "Codex auth broker user is unavailable"
 for source in "${SOURCES[@]}"; do
@@ -216,6 +232,10 @@ if [[ ${ACTION} == install ]]; then
       "${REPOSITORY}/infra/systemd/eom-worker-${kind}-05@.service" \
       "${UNIT_ROOT}/eom-worker-${kind}-05@.service"
   done
+  for shared_unit in "${SHARED_UNITS[@]}"; do
+    install -o root -g root -m 0644 \
+      "${REPOSITORY}/infra/systemd/${shared_unit}" "${UNIT_ROOT}/${shared_unit}"
+  done
   systemctl daemon-reload
   systemctl enable "${BROKER_SERVICE}" >/dev/null
   systemctl start "${BROKER_SERVICE}"
@@ -247,6 +267,11 @@ for kind in support document-review; do
   require_regular "${UNIT_ROOT}/eom-worker-${kind}-05@.service" root:root:644
   cmp -s "${REPOSITORY}/infra/systemd/eom-worker-${kind}-05@.service" \
     "${UNIT_ROOT}/eom-worker-${kind}-05@.service" || fail "slot 05 support unit source drift"
+done
+for shared_unit in "${SHARED_UNITS[@]}"; do
+    require_regular "${UNIT_ROOT}/${shared_unit}" root:root:644
+    cmp -s "${REPOSITORY}/infra/systemd/${shared_unit}" "${UNIT_ROOT}/${shared_unit}" || fail "shared worker unit source drift"
+    systemd-analyze verify "${UNIT_ROOT}/${shared_unit}"
 done
 
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644

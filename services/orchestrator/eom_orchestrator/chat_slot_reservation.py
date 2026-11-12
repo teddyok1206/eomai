@@ -206,6 +206,7 @@ def require_reserved_chat_admission(
     *,
     now: datetime,
     model: str | None = None,
+    reasoning_effort: str | None = None,
     turn: GeneralChatTurnRecord | None = None,
 ) -> ReservedChatBinding | None:
     """Called under capacity lock; uses SELECT-only identity/capability projections."""
@@ -263,6 +264,10 @@ def require_reserved_chat_admission(
     )
     if model is not None:
         capabilities = capabilities.where(CodexCapabilityEntryRecord.model == model)
+    if reasoning_effort is not None:
+        capabilities = capabilities.where(
+            CodexCapabilityEntryRecord.reasoning_effort == reasoning_effort
+        )
     if session.scalar(capabilities.limit(1)) is None:
         raise ChatError("GENERAL_CHAT_NOT_READY")
     return binding

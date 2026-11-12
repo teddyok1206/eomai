@@ -27,6 +27,7 @@ from eom_catalog_contracts.material_learning_preparation import (
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.preset_model_selection import current_model_preset
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.material_learning_plan import (
@@ -493,7 +494,7 @@ class MaterialLearningCoordinator:
                     operator_id=context.operator_id,
                     idempotency_key="material-child:" + task.task_id,
                     source_authorizer=self.authorizer,
-                    expected_preset=self.preset,
+                    expected_preset=current_model_preset(session, self.preset),
                 )
                 current.workflow_id = submitted.workflow_id
             return MaterialCoordinatorProgress(

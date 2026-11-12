@@ -20,6 +20,7 @@ from eom_orchestrator.preset_model_selection import (
 from eom_orchestrator.settings import Settings
 from eom_textbook_analysis.bundle import PopplerTesseractTextExtractor
 from eom_workflow.control_plane import ExecutionPresetRevision, WorkerCapacityPolicyV7
+from eom_workflow.shared_worker_capacity import SharedWorkerCapacityPolicy
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine
@@ -102,7 +103,7 @@ def build_material_learning_runtime(
         if len({value.capacity_policy_revision_id for value in presets}) != 1:
             raise ValueError("MATERIAL_LEARNING_RUNTIME_CAPACITY_INVALID")
         capacity = resolve_released_capacity_policy(session, presets[0].capacity_policy_revision_id)
-        if not isinstance(capacity, WorkerCapacityPolicyV7):
+        if not isinstance(capacity, (WorkerCapacityPolicyV7, SharedWorkerCapacityPolicy)):
             raise ValueError("MATERIAL_LEARNING_RUNTIME_CAPACITY_INVALID")
         definition = session.get(WorkflowDefinitionRecord, pins.definition_id)
         if definition is None or (definition.definition_key, definition.definition_version) != (

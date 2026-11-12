@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
+from eom_api_contracts.chat_model_settings import ChatModelSettingsRequest, ChatModelSettingsView
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.control_plane import (
     BeginCodexAuthEnrollmentRequest,
@@ -34,6 +35,75 @@ from eom_api.dependencies import (
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(tags=["codex-control-plane"])
+
+
+@router.get(
+    "/general-chat/model-settings",
+    operation_id="general_chat_model_settings_get",
+    response_model=SingleResponse[ChatModelSettingsView],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_READ, fresh=True, admin_only=True)
+        )
+    ],
+)
+def get_chat_model_settings(
+    request: Request, response: Response
+) -> SingleResponse[ChatModelSettingsView]:
+    value = request.app.state.services.preset_models.chat_settings()
+    response.headers["ETag"] = etag(value.resource_version)
+    return one(request, value)
+
+
+@router.post(
+    "/general-chat/model-settings",
+    operation_id="general_chat_model_settings_change",
+    response_model=SingleResponse[CommandResult],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_MANAGE, fresh=True, admin_only=True)
+        )
+    ],
+)
+def change_chat_model_settings(
+    request: Request,
+    body: ChatModelSettingsRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    del authentication
+
+    def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="general_chat_model_settings_change",
+            raw_key=idempotency_key,
+        )
+        settings = request.app.state.services.preset_models.change_chat_settings(
+            body=body, actor=actor, expected_version=expected_version, idempotency_key=key
+        )
+        return CommandResult(
+            command_id=settings.revision_id,
+            resource_type="general_chat_model_settings",
+            resource_id=settings.revision_id,
+            status="COMPLETED",
+            resource_version=settings.revision_number,
+            status_url="/api/v1/general-chat/model-settings",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body={**body.model_dump(mode="json"), "expected_version": expected_version},
+            resource_type="general_chat_model_settings",
+            callback=execute,
+            response_status=200,
+        ),
+    )
 
 
 @router.get(

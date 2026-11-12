@@ -42,6 +42,11 @@ from eom_workflow.public_similarity_control import (
     ResolvedExecutionPlanV31,
     ResolvedExecutionPlanV36,
 )
+from eom_workflow.shared_worker_capacity import (
+    PHYSICAL_ROLES,
+    SharedWorkerCapacityPolicy,
+    ordinary_slot_probe_order,
+)
 from eom_workflow.similarity_control import ResolvedExecutionPlanV23, ResolvedExecutionPlanV24
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -161,6 +166,7 @@ def _validated_document(
         | WorkerCapacityPolicyV4
         | WorkerCapacityPolicyV5
         | WorkerCapacityPolicyV6
+        | SharedWorkerCapacityPolicy
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -184,6 +190,7 @@ def _validated_document(
     | WorkerCapacityPolicyV4
     | WorkerCapacityPolicyV5
     | WorkerCapacityPolicyV6
+    | SharedWorkerCapacityPolicy
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -544,6 +551,10 @@ def record_capacity_policy_revision(
         model, normalized = _validated_document(
             "worker-capacity-policy-v7", document, WorkerCapacityPolicyV7
         )
+    elif schema_version == "worker-capacity-policy/1.7":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v8", document, SharedWorkerCapacityPolicy
+        )
     else:
         raise ControlPlaneError(
             "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
@@ -557,6 +568,7 @@ def record_capacity_policy_revision(
             WorkerCapacityPolicyV4,
             WorkerCapacityPolicyV5,
             WorkerCapacityPolicyV6,
+            SharedWorkerCapacityPolicy,
         ),
     ):
         raise AssertionError("validated capacity model has the wrong type")
@@ -616,6 +628,18 @@ def record_capacity_policy_revision(
         actual_roles: set[str] = set()
         for key in pool.slot_keys:
             native_role = configured_slots[key.removeprefix("slot")].role
+            if isinstance(model, SharedWorkerCapacityPolicy):
+                try:
+                    actual_roles.update(
+                        model.execution_roles_for_slot(
+                            pool_key=pool.pool_key, slot_key=key, native_role=native_role
+                        )
+                    )
+                except ValueError as exc:
+                    raise ControlPlaneError(
+                        "CONTROL_CAPACITY_ROLE_MISMATCH", "shared slot identity differs"
+                    ) from exc
+                continue
             if isinstance(model, (WorkerCapacityPolicyV5, WorkerCapacityPolicyV6)):
                 try:
                     native_role = model.execution_role_for_slot(
@@ -1447,6 +1471,38 @@ def _held_count(session: Session, *conditions: Any) -> int:
     )
 
 
+def _held_gpu_work_count(session: Session) -> int:
+    """Shared slots count execution purpose; old leases retain their physical GPU meaning."""
+    return int(
+        session.scalar(
+            select(func.count(WorkerLeaseRecord.lease_id))
+            .join(
+                WorkerCapacityPolicyRevisionRecord,
+                WorkerCapacityPolicyRevisionRecord.capacity_policy_revision_id
+                == WorkerLeaseRecord.capacity_policy_revision_id,
+            )
+            .join(JobRecord, JobRecord.job_id == WorkerLeaseRecord.job_id)
+            .join(WorkerSlotRecord, WorkerSlotRecord.slot_id == WorkerLeaseRecord.worker_slot_id)
+            .where(
+                WorkerLeaseRecord.state.in_(HELD_LEASE_STATES),
+                or_(
+                    and_(
+                        WorkerCapacityPolicyRevisionRecord.schema_version
+                        == "worker-capacity-policy/1.7",
+                        JobRecord.request["role"].astext == "image",
+                    ),
+                    and_(
+                        WorkerCapacityPolicyRevisionRecord.schema_version
+                        != "worker-capacity-policy/1.7",
+                        WorkerSlotRecord.gpu.is_(True),
+                    ),
+                ),
+            )
+        )
+        or 0
+    )
+
+
 def capacity_worker_role_clause(
     policy: WorkerCapacityPolicyRevisionRecord,
     *,
@@ -1455,6 +1511,45 @@ def capacity_worker_role_clause(
 ) -> ColumnElement[bool]:
     """Translate only an exact released capacity's explicit native-role grant."""
     native_role_clause = WorkerSlotRecord.role == execution_role
+    if policy.schema_version == "worker-capacity-policy/1.7":
+        value, normalized = _validated_document(
+            "worker-capacity-policy-v8", policy.canonical_document, SharedWorkerCapacityPolicy
+        )
+        assert isinstance(value, SharedWorkerCapacityPolicy)
+        _require_declared_hash(normalized, "content_sha256")
+        if (
+            value.capacity_policy_revision_id != policy.capacity_policy_revision_id
+            or value.capacity_policy_id != policy.capacity_policy_id
+            or value.content_sha256 != policy.content_sha256
+            or value.state != "RELEASED"
+            or policy.state != "RELEASED"
+            or any(
+                getattr(value, name) != getattr(policy, name)
+                for name in (
+                    "revision_number",
+                    "max_configured_slots",
+                    "max_active_codex",
+                    "max_active_per_slot",
+                    "max_active_gpu",
+                    "max_active_knowledge_analysis",
+                )
+            )
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CAPACITY_POINTER_INVALID", "shared capacity identity differs"
+            )
+        pool = next((row for row in value.pools if row.pool_key == pool_key), None)
+        if pool is None or execution_role not in pool.roles:
+            raise ControlPlaneError("CONTROL_CAPACITY_ROLE_MISMATCH", "shared role is absent")
+        return or_(
+            *(
+                and_(
+                    WorkerSlotRecord.slot_id == key.removeprefix("slot"),
+                    WorkerSlotRecord.role == PHYSICAL_ROLES[key],
+                )
+                for key in pool.slot_keys
+            )
+        )
     if policy.schema_version not in {
         "worker-capacity-policy/1.4",
         "worker-capacity-policy/1.5",
@@ -1656,6 +1751,12 @@ def acquire_worker_lease(
         raise ControlPlaneError(
             "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED", "knowledge analysis capacity is full"
         )
+    if (
+        policy.schema_version == "worker-capacity-policy/1.7"
+        and step.role == "image"
+        and _held_gpu_work_count(session) >= policy.max_active_gpu
+    ):
+        raise ControlPlaneError("CONTROL_CAPACITY_EXHAUSTED", "GPU worker capacity is full")
 
     eligible = session.execute(
         select(
@@ -1715,6 +1816,16 @@ def acquire_worker_lease(
             CodexCapabilitySnapshotRecord.observed_at.desc(),
         )
     ).all()
+    if policy.schema_version == "worker-capacity-policy/1.7":
+        order = {slot: index for index, slot in enumerate(ordinary_slot_probe_order(job_id))}
+        eligible = sorted(eligible, key=lambda row: order[row[0].slot_id])
+    busy_slots = set(
+        session.scalars(
+            select(WorkerLeaseRecord.worker_slot_id).where(
+                WorkerLeaseRecord.state.in_(HELD_LEASE_STATES)
+            )
+        )
+    )
     selected: (
         tuple[WorkerSlotRecord, CodexAuthBindingRecord, CodexCapabilitySnapshotRecord] | None
     ) = None
@@ -1723,17 +1834,12 @@ def acquire_worker_lease(
         if slot.slot_id in visited_slots:
             continue
         visited_slots.add(slot.slot_id)
-        if _held_count(session, WorkerLeaseRecord.worker_slot_id == slot.slot_id):
+        if slot.slot_id in busy_slots:
             continue
         if (
-            slot.gpu
-            and _held_count(
-                session,
-                WorkerLeaseRecord.worker_slot_id.in_(
-                    select(WorkerSlotRecord.slot_id).where(WorkerSlotRecord.gpu.is_(True))
-                ),
-            )
-            >= policy.max_active_gpu
+            policy.schema_version != "worker-capacity-policy/1.7"
+            and slot.gpu
+            and _held_gpu_work_count(session) >= policy.max_active_gpu
         ):
             continue
         selected = (slot, binding, snapshot)

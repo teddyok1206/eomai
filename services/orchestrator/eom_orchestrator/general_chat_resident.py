@@ -130,7 +130,11 @@ class GeneralChatResident:
             monitor.start()
             monitor_started = True
             while not stop.is_set():
+                before_claim = getattr(self.worker, "before_claim", None)
+                if before_claim is not None:
+                    before_claim()
                 self.worker.check_admission()
+                identity = self.worker.execution_identity
                 if stop.is_set():
                     break
                 claim = self.execution.claim_next(runtime_id=self.runtime_id)

@@ -28,6 +28,7 @@ const $ = () => ({{}});
 const rendered = [], received = [], messages = [], requests = [];
 const renderExecutionPresets = values => rendered.push(values);
 const presetEditor = {{setPresets: values => received.push(values)}};
+const chatModelEditor = {{refresh: async () => undefined}};
 const showMessage = (_node, message) => messages.push(message);
 const loadOperatorAccounts = async () => undefined;
 const api = () => new Promise((resolve,reject) => requests.push({{resolve,reject}}));
@@ -252,7 +253,7 @@ def _grounded_preset() -> dict[str, object]:
     return value
 
 
-def test_model_editor_offers_only_current_authoring_or_review_presets(tmp_path: Path) -> None:
+def test_model_editor_offers_every_current_preset_role(tmp_path: Path) -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node is required for the preset selection regression")
@@ -270,13 +271,13 @@ for (const role of ['authoring', 'review', 'support', 'image', 'item_management'
   const value = structuredClone(preset);
   const current = value.revisions[0];
   current.role_policies = [{{...current.role_policies[0], role}}];
-  // An old authoring policy must not make a support-only current policy editable.
+  // Edit the actual current policy, never an unrelated historical authoring policy.
   const historical = structuredClone(preset.revisions[0]);
   historical.preset_revision_id = 'execpresetrev_' + '9'.repeat(32);
   historical.revision_number = 1;
   value.revisions.unshift(historical);
   const bases = guidedPresetBases([value]);
-  assert.equal(bases.length, ['authoring', 'review'].includes(role) ? 1 : 0);
+  assert.equal(bases.length, 1);
   if (bases.length) assert.equal(bases[0].preset_revision_id, preset.current_revision_id);
 }}
 assert.equal(guidedPresetBases([{{...preset, state:'RETIRED'}}]).length, 0);
@@ -352,7 +353,8 @@ actions[0].action();
 assert.equal(inspected[0][1].revision_number, 7);
 actions[1].action();
 assert.deepEqual(deprecated, [[preset.preset_id,current.revision_number]]);
-assert.deepEqual(root.children[1].children.at(-1).children.map(value=>value.label), ['사용 중단']);
+assert.deepEqual(root.children[1].children.at(-1).children.map(value=>value.label),
+  ['초안 확인·적용','사용 중단']);
 assert.equal(JSON.stringify(values), before);
 // Consumed drafts behind the current release are not pending settings.
 renderExecutionPresets([{{...preset,revisions:preset.revisions.filter(value=>value.revision_number<=4)}}]);
@@ -434,7 +436,8 @@ if (scenario === 'v2_preservation') {{
   assert.throws(() => reviewedPresetDraft(base.draft, edits), /PRESET_FIXED_POLICY_CHANGED/);
 }} else if (scenario === 'fixed_other_role') {{
   edits.role_policies[2].model_candidates[0] = {{model: 'model-b', reasoning_effort: 'high'}};
-  assert.throws(() => reviewedPresetDraft(base.draft, edits), /PRESET_FIXED_POLICY_CHANGED/);
+  assert.equal(reviewedPresetDraft(base.draft, edits).role_policies[2]
+    .model_candidates[0].model, 'model-b');
 }} else if (scenario === 'missing_evidence') {{
   preset.revisions[0].role_policies[0].evidence_access = null;
   assert.equal(guidedPresetBases([preset]).length, 0);

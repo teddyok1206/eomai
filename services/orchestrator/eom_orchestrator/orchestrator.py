@@ -225,6 +225,8 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
         "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
     }
 )
+# Single-document textbook plans25/38 have no step-level evidence_access field;
+# their exact textbook binding is enforced by materialization and commit receipts.
 _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS | frozenset(
     {
         "resolved-execution-plan/3.0",
@@ -235,7 +237,7 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS 
         "resolved-execution-plan/17.0",
         "resolved-execution-plan/18.0",
         "resolved-execution-plan/20.0",
-        "resolved-execution-plan/25.0",
+        "resolved-execution-plan/39.0",
         "resolved-execution-plan/26.0",
     }
 )

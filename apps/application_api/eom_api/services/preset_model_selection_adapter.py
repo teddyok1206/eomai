@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Never
 
+from eom_api_contracts.chat_model_settings import ChatModelSettingsRequest, ChatModelSettingsView
 from eom_api_contracts.preset_model_selection import (
     PresetModelEvaluationRequest,
     PresetModelOptionsView,
@@ -14,11 +15,17 @@ from eom_operator_identity import ActorContext
 from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.general_chat_model_selection import (
+    change_chat_model_settings,
+    chat_model_candidates,
+    current_chat_model_settings,
+)
 from eom_orchestrator.preset_model_selection import preset_model_options, validated_preset
 from eom_orchestrator.preset_model_validation import (
     enqueue_preset_model_validation,
     validation_status,
 )
+from eom_protocol.general_chat_model_settings import ChatModelSettings
 from sqlalchemy import Engine
 
 from eom_api.errors import ApiError
@@ -26,6 +33,8 @@ from eom_api.errors import ApiError
 _MISSING_CODES = frozenset({"CONTROL_PRESET_MISSING", "CONTROL_VALIDATION_MISSING"})
 _CONFLICT_CODES = frozenset(
     {
+        "CONTROL_CHAT_MODEL_REPLAY_CONFLICT",
+        "CONTROL_CHAT_MODEL_VERSION_STALE",
         "CONTROL_PRESET_BASE_STALE",
         "CONTROL_PRESET_VERSION_STALE",
         "CONTROL_PRESET_RETIRED",
@@ -42,6 +51,54 @@ class PresetModelSelectionAdapter:
 
     def __init__(self, engine: Engine) -> None:
         self.sessions = build_session_factory(engine)
+
+    def chat_settings(self) -> ChatModelSettingsView:
+        try:
+            with self.sessions() as session:
+                current = current_chat_model_settings(session)
+                return ChatModelSettingsView.model_validate(
+                    {
+                        "current": {
+                            "model": current.model,
+                            "reasoning_effort": current.reasoning_effort,
+                        }
+                        if current
+                        else None,
+                        "revision_id": current.revision_id if current else None,
+                        "sha256": current.sha256 if current else None,
+                        "resource_version": current.revision_number if current else 1,
+                        "candidates": [
+                            item.model_dump(mode="json")
+                            for item in chat_model_candidates(
+                                session, observed_at=datetime.now(UTC)
+                            )
+                        ],
+                    }
+                )
+        except ControlPlaneError as exc:
+            self._raise_api_error(exc)
+
+    def change_chat_settings(
+        self,
+        *,
+        body: ChatModelSettingsRequest,
+        actor: ActorContext,
+        expected_version: int,
+        idempotency_key: str,
+    ) -> ChatModelSettings:
+        try:
+            with transaction(self.sessions) as session:
+                return change_chat_model_settings(
+                    session,
+                    model=body.model,
+                    reasoning_effort=body.reasoning_effort,
+                    expected_version=expected_version,
+                    requested_by=actor.actor_id,
+                    request_key=idempotency_key,
+                    requested_at=datetime.now(UTC),
+                )
+        except ControlPlaneError as exc:
+            self._raise_api_error(exc)
 
     def options(self, preset_id: str) -> PresetModelOptionsView:
         try:

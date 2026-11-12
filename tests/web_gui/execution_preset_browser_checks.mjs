@@ -51,6 +51,8 @@ async function api(path, request = {}) {
   await new Promise(resolve => {fixture.release=()=>{fixture.held=false;resolve();};});}
  if (kind==='OPTIONS') {
   const observed=structuredClone(options);
+  observed.roles=revision.role_policies.map(policy=>({role:policy.role,worker_pool_key:policy.worker_pool_key,
+    candidates:structuredClone(options.roles.find(value=>value.role===policy.role)?.candidates || options.roles[0].candidates)}));
   if (path.includes(alternatePreset.preset_id)) observed.preset_revision_id=alternatePreset.current_revision_id;
   for (const role of observed.roles) if (role.role===fixture.emptyRole) role.candidates=[];
   for (const role of observed.roles) if (role.role===fixture.missingFixedPairRole)
@@ -130,8 +132,9 @@ try {
   const calls = () => page.evaluate(() => window.presetFixture.calls);
 
   await reset();
-  assert.equal(await page.locator("[data-preset-model]").count(), 3);
-  assert.equal(await page.locator("[data-preset-effort]").count(), 3);
+  const modelCount = await page.evaluate(() => window.presetFixture.preset.revisions[0].role_policies.reduce((n, policy) => n + policy.model_candidates.length, 0));
+  assert.equal(await page.locator("[data-preset-model]").count(), modelCount);
+  assert.equal(await page.locator("[data-preset-effort]").count(), modelCount);
   assert.match(await page.locator("#preset-role-editors").innerText(), /기본 검토/);
   assert.match(await page.locator("#preset-role-editors").innerText(), /강화 검토/);
   assert.equal(await page.locator('option[value="max"],option[value="ultra"]').count(), 0);
@@ -259,19 +262,35 @@ try {
     assert.match(await page.locator("#preset-draft-message").innerText(), /로그인 상태/);
     assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
     assert.equal(await page.locator("#preset-role-editors").innerText().then(text => text.includes("현재 설정 사용 불가")), false);
-    if (role !== "image") assert.match(await page.locator("#preset-role-editors").innerText(), /모델 목록 확인 필요/);
+    assert.match(await page.locator("#preset-role-editors").innerText(), /모델 목록 확인 필요/);
     assert.equal((await calls()).some(call => call.method === "POST"), false);
     assert.equal((await calls()).some(call => !call.path.endsWith("/model-options")), false);
   }
 
-  // A nonempty fixed-role list must admit its preserved model/effort pair too.
+  // An image model is editable too, but a revoked current pair is never silently selected.
   await reset();
   await page.evaluate(() => {window.presetFixture.missingFixedPairRole="image";});
   await page.locator("#preset-base-select").selectOption("");
   await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
-  await page.waitForFunction(() => document.querySelector("#preset-draft-message").textContent.includes("승인 목록에 없습니다"));
+  await page.waitForFunction(() => document.querySelector("#preset-role-editors").textContent.includes("현재 설정 사용 불가"));
   assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
+  await model(2).selectOption("model-b");
+  assert.equal(await page.locator("#preset-review-open").isDisabled(), false);
   assert.equal((await calls()).some(call => call.method === "POST"), false);
+
+  await reset();
+  await page.evaluate(() => {
+    const fixture = window.presetFixture;
+    const revision = fixture.preset.revisions[0];
+    revision.role_policies = [{...revision.role_policies[0], role:"support", worker_pool_key:"support", reference_bundle:null}];
+    fixture.preset.preset_key="customer-support";
+    fixture.controller.setPresets([fixture.preset]);
+  });
+  await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
+  await page.waitForFunction(() => !document.querySelector("#preset-review-open").disabled);
+  assert.equal(await page.locator("[data-preset-model]").count(), 1);
+  await save();
+  assert.equal((await calls()).find(call=>call.path==="/admin/execution-presets").body.role_policies[0].role, "support");
 
   // Source/render packaging and the new controls fit narrow phone layouts.
   for (const width of [390, 320]) {

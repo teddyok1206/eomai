@@ -236,12 +236,22 @@ class CodexChatSession:
     outcome poisons/closes the process; this adapter never retries generation.
     """
 
-    def __init__(self, channel: ChatNativeChannel, *, model: str, cwd: str) -> None:
+    def __init__(
+        self,
+        channel: ChatNativeChannel,
+        *,
+        model: str,
+        cwd: str,
+        reasoning_effort: str | None = None,
+    ) -> None:
         _handle(model)
         if not cwd.startswith("/") or "\x00" in cwd:
             raise ValueError("chat native cwd must be fixed by the runtime")
         self.channel = channel
         self.model = model
+        if reasoning_effort not in {None, "minimal", "low", "medium", "high", "xhigh"}:
+            raise ValueError("invalid pinned reasoning effort")
+        self.reasoning_effort = reasoning_effort
         self.cwd = cwd
         self.ready = False
         self._diagnostic_method = "none"
@@ -479,6 +489,8 @@ class CodexChatSession:
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                 "environments": [],
             }
+            if self.reasoning_effort is not None:
+                turn_parameters["effort"] = self.reasoning_effort
             if isinstance(request, RagChatTurnInput):
                 turn_parameters["outputSchema"] = rag_chat_output_schema()
             elif isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput)):

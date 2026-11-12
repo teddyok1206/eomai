@@ -164,8 +164,9 @@ def test_execution_contract_selects_only_reviewed_fixed_templates() -> None:
     )
     with pytest.raises(ValueError, match="fixed unit contract"):
         worker_unit_name_for_execution(support, JOB_ID, timeout_seconds=899)
-    with pytest.raises(ValueError, match="fixed unit contract"):
-        worker_unit_name_for_execution(_slot(), JOB_ID, timeout_seconds=900)
+    assert worker_unit_name_for_execution(_slot(), JOB_ID, timeout_seconds=900) == (
+        f"eom-worker-shared-01-900@{JOB_ID}.service"
+    )
 
 
 @pytest.mark.parametrize("number,role", [(3, "image"), (4, "item_management")])
@@ -1409,9 +1410,14 @@ def test_exact_worker_activity_is_read_only_and_fail_closed(
 ) -> None:
     monkeypatch.setattr(
         "eom_orchestrator.worker_systemd._read_unit_active_returncode",
-        lambda _unit: active_returncode,
+        lambda unit: 3 if unit.startswith("eom-worker-shared-") else active_returncode,
     )
-    monkeypatch.setattr("eom_orchestrator.worker_systemd._read_unit_status", lambda _unit: status)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_status",
+        lambda unit: (
+            _status(main_code=0, started=0) if unit.startswith("eom-worker-shared-") else status
+        ),
+    )
 
     activity = inspect_worker_unit_activity(_slot(), JOB_ID)
 

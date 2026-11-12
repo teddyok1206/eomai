@@ -166,6 +166,6 @@ def test_current_selector_is_explicit_and_historical_wrapper_stays0051() -> None
     deploy = (ROOT / "scripts/api/deploy_release.sh").read_text()
     selector = "MIGRATION_VERIFY_" + CURRENT_MIGRATION_REVISION.rsplit("_", 1)[1]
     assert f'run_release_operator {selector} "${{COMMIT}}"' in deploy
-    assert f'if CURRENT_MIGRATION_REVISION != "{CURRENT_MIGRATION_REVISION}":' in deploy
+    assert "if CURRENT_MIGRATION_REVISION != expected_migration_revision:" in deploy
     old = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in old and "MIGRATION_UPGRADE_0055" not in old

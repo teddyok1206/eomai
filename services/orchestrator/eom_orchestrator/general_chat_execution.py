@@ -546,7 +546,12 @@ class GeneralChatExecutionService:
             capacity, turn = self._live_claim(session, claim)
             if turn.state == "CLAIMED":
                 require_reserved_chat_admission(
-                    session, capacity, now=self.clock(), model=identity.policy.model, turn=turn
+                    session,
+                    capacity,
+                    now=self.clock(),
+                    model=identity.policy.model,
+                    turn=turn,
+                    reasoning_effort=identity.policy.reasoning_effort,
                 )
             if turn.state == "RUNNING":
                 replay = turn
@@ -668,7 +673,9 @@ class GeneralChatExecutionService:
                 else GROUNDED_INPUT_SCHEMA
             )
             dispatch_schema = (
-                "eom://schemas/general-chat/dispatch/5.0"
+                "eom://schemas/general-chat/dispatch/6.0"
+                if identity.policy.schema_version == "general-chat-worker-policy/6.0"
+                else "eom://schemas/general-chat/dispatch/5.0"
                 if identity.policy.schema_version == "general-chat-worker-policy/5.0"
                 else "eom://schemas/general-chat/dispatch/4.0"
                 if isinstance(request, RagChatTurnInput)
@@ -695,7 +702,9 @@ class GeneralChatExecutionService:
         require_evidence(pointer, payload, schema_ref=input_schema)
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
-                schema_version="general-chat-dispatch/5.0"
+                schema_version="general-chat-dispatch/6.0"
+                if identity.policy.schema_version == "general-chat-worker-policy/6.0"
+                else "general-chat-dispatch/5.0"
                 if identity.policy.schema_version == "general-chat-worker-policy/5.0"
                 else "general-chat-dispatch/4.0"
                 if isinstance(request, RagChatTurnInput)

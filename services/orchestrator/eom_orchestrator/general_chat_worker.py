@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from threading import Lock
-from typing import Protocol
+from typing import Any, Protocol
 
 from eom_protocol.general_chat_grounding import AgentChatTurnInput
 from eom_protocol.general_chat_rag_tools import ChatNativeToolPort
@@ -39,6 +39,7 @@ class ChatHandoffPort(Protocol):
 
 class ChatAdmittedNativePort(Protocol):
     def require_admission(self, policy: ChatWorkerPolicy) -> None: ...
+    def select_policy(self, policy: ChatWorkerPolicy) -> None: ...
     def answer(
         self, request: ChatTurnInput, *, tools: ChatNativeToolPort | None = None
     ) -> ChatTurnResult: ...
@@ -67,11 +68,15 @@ class ChatWorkerApplication:
         request = read_chat_worker_request(request.model_dump(mode="json"))
         try:
             historical_lookup = isinstance(request.command, ChatWorkerLookup)
+            if request.selected_policy is not None and request.selected_policy != self.policy:
+                self._select_policy(request)
             if not historical_lookup and request.policy_sha256 != self.policy.sha256:
                 raise ChatWorkerFault(ChatWorkerError.NOT_READY)
             value = self._handle(request, tools=tools)
             reply = ChatWorkerReply(
-                schema_version="general-chat-worker-reply/4.0"
+                schema_version="general-chat-worker-reply/5.0"
+                if request.schema_version.endswith("/5.0")
+                else "general-chat-worker-reply/4.0"
                 if request.schema_version.endswith("/4.0")
                 else "general-chat-worker-reply/3.0"
                 if request.schema_version.endswith("/3.0")
@@ -95,7 +100,9 @@ class ChatWorkerApplication:
 
     def failure(self, request: ChatWorkerRequest, code: ChatWorkerError) -> ChatWorkerReply:
         return ChatWorkerReply(
-            schema_version="general-chat-worker-reply/4.0"
+            schema_version="general-chat-worker-reply/5.0"
+            if request.schema_version.endswith("/5.0")
+            else "general-chat-worker-reply/4.0"
             if request.schema_version.endswith("/4.0")
             else "general-chat-worker-reply/3.0"
             if request.schema_version.endswith("/3.0")
@@ -110,6 +117,33 @@ class ChatWorkerApplication:
             value=None,
             error_code=code,
         )
+
+    def _select_policy(self, request: ChatWorkerRequest) -> None:
+        selected = request.selected_policy
+        if not isinstance(request.command, ChatWorkerProbe) or selected is None:
+            raise ChatWorkerFault(ChatWorkerError.NOT_READY)
+
+        # Only model/effort and their configuration pin may vary. The installed
+        # executable, prompt/RAG hashes and private transport remain authoritative.
+        def fixed(policy: ChatWorkerPolicy) -> dict[str, Any]:
+            return {
+                k: v
+                for k, v in policy.model_dump(mode="json").items()
+                if k not in {"schema_version", "model", "reasoning_effort", "model_settings"}
+            }
+
+        if self.policy.schema_version not in {
+            "general-chat-worker-policy/5.0",
+            "general-chat-worker-policy/6.0",
+        } or fixed(selected) != fixed(self.policy):
+            raise ChatWorkerFault(ChatWorkerError.NOT_READY)
+        if not self._execution_lock.acquire(blocking=False):
+            raise ChatWorkerFault(ChatWorkerError.BUSY)
+        try:
+            self.native.select_policy(selected)
+            self.policy = selected
+        finally:
+            self._execution_lock.release()
 
     def _handle(
         self, request: ChatWorkerRequest, *, tools: ChatNativeToolPort | None

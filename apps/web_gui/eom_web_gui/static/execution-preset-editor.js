@@ -4,7 +4,7 @@ const GENERAL_KNOWLEDGE_POLICIES = new Set(["DENY", "ALLOW_WITH_PROVENANCE"]);
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const REVISION_PATTERN = /^execpresetrev_[0-9a-f]{32}$/;
 const SHA_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const EDITABLE_ROLES = new Set(["authoring", "review"]);
+const EDITABLE_ROLES = ROLES;
 
 function requiredString(value, errorCode) {
   if (typeof value !== "string" || !value.length) throw new Error(errorCode);
@@ -273,7 +273,8 @@ export function approvedPresetModelOptions(base, response) {
 
 export function presetCandidateLabel(role, index) {
   if (role === "review") return index === 0 ? "기본 검토" : index === 1 ? "강화 검토" : `검토 후보 ${index + 1}`;
-  return role === "authoring" ? index === 0 ? "출제" : `출제 후보 ${index + 1}` : role;
+  const label = {authoring: "출제", image: "그림 구성", item_management: "등록 점검", support: "기능 담당"}[role] || role;
+  return index === 0 ? label : `${label} 후보 ${index + 1}`;
 }
 
 export function presetValidationSucceeded(value, target) {

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, overload
 
 from eom_workflow import (
     CodexCapabilitySnapshot,
@@ -23,16 +23,19 @@ from eom_workflow import (
     WorkerCapacityPolicyV7,
     validate_control_contract,
 )
+from eom_workflow.shared_worker_capacity import SharedWorkerCapacityPolicy
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.capability_snapshot_queries import current_assignment_snapshot_clause
+from eom_orchestrator.chat_slot_reservation import ordinary_slot_allowed_clause
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
     CodexCapabilitySnapshotRecord,
     CodexControlCommandRecord,
+    ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
     WorkerCapacityPolicyRevisionRecord,
     WorkerCapacityPoolRoleRecord,
@@ -54,6 +57,8 @@ Capacity = (
     | WorkerCapacityPolicyV4
     | WorkerCapacityPolicyV5
     | WorkerCapacityPolicyV6
+    | WorkerCapacityPolicyV7
+    | SharedWorkerCapacityPolicy
 )
 _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.0": ("worker-capacity-policy", WorkerCapacityPolicy),
@@ -63,6 +68,7 @@ _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.4": ("worker-capacity-policy-v5", WorkerCapacityPolicyV5),
     "worker-capacity-policy/1.5": ("worker-capacity-policy-v6", WorkerCapacityPolicyV6),
     "worker-capacity-policy/1.6": ("worker-capacity-policy-v7", WorkerCapacityPolicyV7),
+    "worker-capacity-policy/1.7": ("worker-capacity-policy-v8", SharedWorkerCapacityPolicy),
 }
 _EXECUTION_EFFORTS = frozenset(str(effort) for effort in ReasoningEffort)
 
@@ -117,9 +123,9 @@ def require_model_only_successor(base: Preset, draft: Preset) -> None:
         ):
             body.pop(field)
         for policy in body["role_policies"]:
-            if policy["role"] in {"authoring", "review"}:
-                # Count/order have execution meaning (ordinary vs enhanced review).
-                policy["model_candidates"] = [None] * len(policy["model_candidates"])
+            # Count/order have execution meaning (ordinary vs enhanced review).
+            # Model/effort are editable for every role of this exact preset.
+            policy["model_candidates"] = [None] * len(policy["model_candidates"])
         return body
 
     if (
@@ -130,6 +136,58 @@ def require_model_only_successor(base: Preset, draft: Preset) -> None:
         raise ControlPlaneError(
             "CONTROL_PRESET_FIXED_POLICY_CHANGED", "model selection changed a fixed policy"
         )
+
+
+@overload
+def current_model_preset(
+    session: Session, baseline: ExecutionPresetRevision
+) -> ExecutionPresetRevision: ...
+
+
+@overload
+def current_model_preset(
+    session: Session, baseline: ExecutionPresetRevisionV2
+) -> ExecutionPresetRevisionV2: ...
+
+
+def current_model_preset(session: Session, baseline: Preset) -> Preset:
+    """Select settings for a NEW child Workflow, not an existing execution/replay.
+
+    Resident material-learning owners retain an installed safety baseline. Only
+    model-only successors and the explicit shared-capacity transition may replace
+    that baseline. A changed prompt, source policy or role remains a release issue.
+    """
+    logical = session.get(ExecutionPresetRecord, baseline.preset_id)
+    if logical is None or logical.state != "ACTIVE" or logical.current_revision_id is None:
+        raise ControlPlaneError("CONTROL_PRESET_NOT_PUBLISHED", "preset is unavailable")
+    row = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+    if row is None:
+        raise ControlPlaneError("CONTROL_PRESET_POINTER_INVALID", "current preset is missing")
+    current = validated_preset(row)
+    if current.state != "RELEASED" or current.preset_id != baseline.preset_id:
+        raise ControlPlaneError("CONTROL_PRESET_POINTER_INVALID", "current preset differs")
+    comparable = baseline
+    if current.capacity_policy_revision_id != baseline.capacity_policy_revision_id:
+        capacity = resolve_released_capacity_policy(session, current.capacity_policy_revision_id)
+        if not isinstance(capacity, SharedWorkerCapacityPolicy):
+            raise ControlPlaneError("CONTROL_PRESET_FIXED_POLICY_CHANGED", "capacity changed")
+        comparable = baseline.model_copy(
+            update={"capacity_policy_revision_id": current.capacity_policy_revision_id}
+        )
+    require_model_only_successor(comparable, current.model_copy(update={"state": "DRAFT"}))
+    return current
+
+
+def uses_shared_ordinary_slots(session: Session, preset: Preset) -> bool:
+    row = session.get(WorkerCapacityPolicyRevisionRecord, preset.capacity_policy_revision_id)
+    if row is None:
+        raise ControlPlaneError("CONTROL_CAPACITY_POINTER_INVALID", "capacity is missing")
+    if row.schema_version != "worker-capacity-policy/1.7":
+        return False
+    return isinstance(
+        resolve_released_capacity_policy(session, preset.capacity_policy_revision_id),
+        SharedWorkerCapacityPolicy,
+    )
 
 
 def preset_model_options(
@@ -362,9 +420,11 @@ def _available_capacity_models(
         )
     bindings = tuple(
         session.execute(
-            select(CodexAuthBindingRecord, WorkerSlotRecord).join(
+            select(CodexAuthBindingRecord, WorkerSlotRecord)
+            .join(
                 WorkerSlotRecord, WorkerSlotRecord.slot_id == CodexAuthBindingRecord.worker_slot_id
             )
+            .where(ordinary_slot_allowed_clause(WorkerSlotRecord.slot_id))
         ).all()
     )
     binding_ids = tuple(binding.binding_id for binding, _slot in bindings)
@@ -410,38 +470,26 @@ def _available_capacity_models(
     observed_pools: set[tuple[str, str]] = set()
     for binding, slot in bindings:
         snapshot = latest.get(binding.binding_id)
-        if (
-            not slot.enabled
-            or binding.state != "READY"
-            or binding.observed_at is None
-            or binding.observed_at > observed_at
-            or binding.worker_slot_id != slot.slot_id
-            or binding.valid_until is None
-            or binding.valid_until <= observed_at
-            or snapshot is None
-            or snapshot.observed_at > observed_at
-            or snapshot.valid_until <= observed_at
-            or snapshot.codex_cli_version != binding.codex_cli_version
-        ):
-            continue
-        validated = _validated_capability(snapshot, binding)
-        native_pairs = _native_model_pairs(
+        pairs = _slot_model_pairs(
+            binding,
+            slot,
+            snapshot,
             latest_observations.get(binding.binding_id),
-            binding=binding,
-            slot=slot,
             observed_at=observed_at,
         )
-        if native_pairs is None:
+        if pairs is None:
             continue
-        pairs = {
-            (capability.model, str(effort))
-            for capability in validated.capabilities
-            if capability.state == "AVAILABLE"
-            for effort in capability.reasoning_efforts
-        }
-        pairs.intersection_update(native_pairs)
         for pool_key, members in memberships.items():
             if slot.slot_id not in members:
+                continue
+            if isinstance(capacity_model, SharedWorkerCapacityPolicy):
+                roles = capacity_model.execution_roles_for_slot(
+                    pool_key=pool_key, slot_key=f"slot{slot.slot_id}", native_role=str(slot.role)
+                )
+                for role in roles:
+                    if (pool_key, role) in pool_roles:
+                        eligible.setdefault((pool_key, role), set()).update(pairs)
+                        observed_pools.add((pool_key, role))
                 continue
             role = str(slot.role)
             if isinstance(capacity_model, (WorkerCapacityPolicyV5, WorkerCapacityPolicyV6)):
@@ -464,6 +512,93 @@ def _available_capacity_models(
         for scope, pairs in eligible.items()
     }
     return options, frozenset(observed_pools)
+
+
+def _slot_model_pairs(
+    binding: CodexAuthBindingRecord,
+    slot: WorkerSlotRecord,
+    snapshot: CodexCapabilitySnapshotRecord | None,
+    observation: CodexControlCommandRecord | None,
+    *,
+    observed_at: datetime,
+) -> set[tuple[str, str]] | None:
+    if (
+        not slot.enabled
+        or binding.state != "READY"
+        or binding.observed_at is None
+        or binding.observed_at > observed_at
+        or binding.worker_slot_id != slot.slot_id
+        or binding.valid_until is None
+        or binding.valid_until <= observed_at
+        or snapshot is None
+        or snapshot.observed_at > observed_at
+        or snapshot.valid_until <= observed_at
+        or snapshot.codex_cli_version != binding.codex_cli_version
+    ):
+        return None
+    validated = _validated_capability(snapshot, binding)
+    native_pairs = _native_model_pairs(
+        observation, binding=binding, slot=slot, observed_at=observed_at
+    )
+    if native_pairs is None:
+        return None
+    pairs = {
+        (capability.model, str(effort))
+        for capability in validated.capabilities
+        if capability.state == "AVAILABLE"
+        for effort in capability.reasoning_efforts
+    }
+    return pairs.intersection(native_pairs)
+
+
+def slot_model_candidates(
+    session: Session, *, slot_id: str, observed_at: datetime
+) -> tuple[ModelCandidate, ...]:
+    """Read one exact slot's current-account catalog ∩ reviewed capability.
+
+    This read is not permission to claim the slot. Ordinary pool callers must still
+    exclude the reserved chat identity; the chat owner uses the reservation owner.
+    """
+    slot = session.get(WorkerSlotRecord, slot_id)
+    binding = session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == slot_id)
+    )
+    if slot is None or binding is None:
+        return ()
+    snapshot = session.scalar(
+        select(CodexCapabilitySnapshotRecord)
+        .join(
+            CodexAuthBindingRecord,
+            CodexAuthBindingRecord.binding_id == CodexCapabilitySnapshotRecord.binding_id,
+        )
+        .where(
+            CodexCapabilitySnapshotRecord.binding_id == binding.binding_id,
+            current_assignment_snapshot_clause(),
+        )
+        .order_by(
+            CodexCapabilitySnapshotRecord.observed_at.desc(),
+            CodexCapabilitySnapshotRecord.capability_snapshot_id.desc(),
+        )
+        .limit(1)
+    )
+    observation = session.scalar(
+        select(CodexControlCommandRecord)
+        .where(
+            CodexControlCommandRecord.binding_id == binding.binding_id,
+            CodexControlCommandRecord.command_type == "OBSERVE",
+            CodexControlCommandRecord.state == "SUCCEEDED",
+        )
+        .order_by(
+            CodexControlCommandRecord.processed_at.desc(),
+            CodexControlCommandRecord.command_id.desc(),
+        )
+        .limit(1)
+    )
+    pairs = _slot_model_pairs(binding, slot, snapshot, observation, observed_at=observed_at)
+    return tuple(
+        ModelCandidate(model=model, reasoning_effort=ReasoningEffort(effort))
+        for model, effort in sorted(pairs or ())
+    )
 
 
 def non_live_invocation_cases(preset: Preset) -> tuple[str, ...]:
@@ -514,6 +649,16 @@ def validate_model_selection(
     session: Session, base: Preset, draft: Preset, *, observed_at: datetime
 ) -> tuple[str, ...]:
     require_model_only_successor(base, draft)
+    return (
+        "FIXED_POLICY_PRESERVED",
+        *validate_preset_model_admission(session, draft, observed_at=observed_at),
+    )
+
+
+def validate_preset_model_admission(
+    session: Session, draft: Preset, *, observed_at: datetime
+) -> tuple[str, ...]:
+    """Shared admission owner; caller separately validates the allowed policy change."""
     options, unknown_roles = _available_role_models(session, draft, observed_at=observed_at)
     for policy in draft.role_policies:
         if policy.role in unknown_roles:
@@ -533,7 +678,6 @@ def validate_model_selection(
         if policy.reference_bundle is not None:
             _validate_bundle_pointer(session, policy.reference_bundle, expected_kind="REFERENCE")
     return (
-        "FIXED_POLICY_PRESERVED",
         "FRESH_ROLE_CAPABILITY",
         "RELEASED_BUNDLE_POINTERS",
         *non_live_invocation_cases(draft),

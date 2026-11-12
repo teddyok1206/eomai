@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/39.0",
+  "title": "EOM Shared-slot Preset-model Execution Plan V39",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "review_request_sha256",
+    "documents",
+    "textbook_evidence",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "resolved-execution-plan/39.0"
+    },
+    "plan_id": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/plan_id"
+    },
+    "workflow_id": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/workflow_id"
+    },
+    "workload_class": {
+      "const": "CODEX"
+    },
+    "preset_id": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_id"
+    },
+    "preset_revision_id": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_revision_id"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_sha256"
+    },
+    "workflow_definition_key": {
+      "const": "pdf-document-review"
+    },
+    "workflow_definition_version": {
+      "const": "1.5.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/workflow_definition_sha256"
+    },
+    "review_request_sha256": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/review_request_sha256"
+    },
+    "documents": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/documents"
+    },
+    "textbook_evidence": {
+      "$ref": "eom://schemas/knowledge/review-textbook-evidence/1.0"
+    },
+    "capacity_policy_revision_id": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/capacity_policy_revision_id"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode",
+          "evidence_access"
+        ],
+        "properties": {
+          "step_key": {
+            "const": "review_document"
+          },
+          "role": {
+            "const": "support"
+          },
+          "model": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "reasoning_effort": {
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "reference_bundle": {
+            "type": "null"
+          },
+          "worker_pool_key": {
+            "const": "customer-support"
+          },
+          "timeout_seconds": {
+            "const": 3600
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "general_knowledge_mode": {
+            "const": "ALLOWED_WITH_PROVENANCE"
+          },
+          "evidence_access": {
+            "const": "EVIDENCE_CONTEXT"
+          }
+        }
+      }
+    },
+    "resolver_version": {
+      "const": "39.0.0"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/resolved_at"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/plan_sha256"
+    }
+  }
+}

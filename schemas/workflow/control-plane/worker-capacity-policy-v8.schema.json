@@ -1,0 +1,168 @@
+{
+  "$defs": {
+    "RevisionState": {
+      "enum": [
+        "DRAFT",
+        "RELEASED",
+        "DEPRECATED"
+      ],
+      "title": "RevisionState",
+      "type": "string"
+    },
+    "SharedWorkerPool": {
+      "additionalProperties": false,
+      "properties": {
+        "pool_key": {
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+          "title": "Pool Key",
+          "type": "string"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/WorkerRole"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Roles",
+          "type": "array"
+        },
+        "slot_keys": {
+          "items": {
+            "enum": [
+              "slot01",
+              "slot02",
+              "slot03",
+              "slot04",
+              "slot05"
+            ],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "title": "Slot Keys",
+          "type": "array"
+        },
+        "max_active": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Max Active",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pool_key",
+        "roles",
+        "slot_keys",
+        "max_active"
+      ],
+      "title": "SharedWorkerPool",
+      "type": "object"
+    },
+    "WorkerRole": {
+      "enum": [
+        "authoring",
+        "image",
+        "review",
+        "item_management",
+        "support"
+      ],
+      "title": "WorkerRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "worker-capacity-policy/1.7",
+      "default": "worker-capacity-policy/1.7",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "SHARED_ORDINARY_SLOTS",
+      "default": "SHARED_ORDINARY_SLOTS",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "capacity_policy_id": {
+      "pattern": "^capacity_[0-9a-f]{32}$",
+      "title": "Capacity Policy Id",
+      "type": "string"
+    },
+    "capacity_policy_revision_id": {
+      "pattern": "^capacityrev_[0-9a-f]{32}$",
+      "title": "Capacity Policy Revision Id",
+      "type": "string"
+    },
+    "revision_number": {
+      "minimum": 1,
+      "title": "Revision Number",
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/RevisionState"
+    },
+    "max_configured_slots": {
+      "const": 6,
+      "default": 6,
+      "title": "Max Configured Slots",
+      "type": "integer"
+    },
+    "max_active_codex": {
+      "const": 4,
+      "default": 4,
+      "title": "Max Active Codex",
+      "type": "integer"
+    },
+    "max_active_per_slot": {
+      "const": 1,
+      "default": 1,
+      "title": "Max Active Per Slot",
+      "type": "integer"
+    },
+    "max_active_gpu": {
+      "const": 1,
+      "default": 1,
+      "title": "Max Active Gpu",
+      "type": "integer"
+    },
+    "max_active_knowledge_analysis": {
+      "const": 4,
+      "default": 4,
+      "title": "Max Active Knowledge Analysis",
+      "type": "integer"
+    },
+    "pools": {
+      "items": {
+        "$ref": "#/$defs/SharedWorkerPool"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Pools",
+      "type": "array"
+    },
+    "content_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "capacity_policy_id",
+    "capacity_policy_revision_id",
+    "revision_number",
+    "state",
+    "pools",
+    "content_sha256",
+    "created_at"
+  ],
+  "title": "SharedWorkerCapacityPolicy",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/worker-capacity-policy/1.7"
+}

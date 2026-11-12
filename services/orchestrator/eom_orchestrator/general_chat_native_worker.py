@@ -12,6 +12,7 @@ from typing import Literal, cast
 
 from eom_identifiers import sha256_bytes
 from eom_protocol.general_chat_grounding import AgentChatTurnInput
+from eom_protocol.general_chat_model_settings import ChatModelSettingsPin, ReasoningEffort
 from eom_protocol.general_chat_rag_tools import ChatNativeToolPort, ChatRagToolPort
 from eom_protocol.general_chat_rag_turn import RagChatTurnInput
 from eom_protocol.general_chat_tools import ChatToolPort
@@ -46,12 +47,18 @@ from eom_orchestrator.general_chat_stdio import (
 
 
 def source_chat_worker_policy(
-    *, model: str, protocol: Literal[3, 4] = 3, native_runtime: CodexCliIdentity | None = None
+    *,
+    model: str,
+    protocol: Literal[3, 4] = 3,
+    native_runtime: CodexCliIdentity | None = None,
+    reasoning_effort: ReasoningEffort | None = None,
+    model_settings: ChatModelSettingsPin | None = None,
 ) -> ChatWorkerPolicy:
     if native_runtime is not None and protocol != 4:
         raise ValueError("selected chat CLI requires existing RAG-capable transport")
+    policy_version = 6 if model_settings else 5 if native_runtime else protocol
     value: dict[str, object] = {
-        "schema_version": f"general-chat-worker-policy/{5 if native_runtime else protocol}.0",
+        "schema_version": f"general-chat-worker-policy/{policy_version}.0",
         "agent_prompt_sha256": sha256_bytes(AGENT_CHAT_INSTRUCTIONS.encode("utf-8")),
         "grounded_prompt_sha256": sha256_bytes(GROUNDED_CHAT_INSTRUCTIONS.encode("utf-8")),
         "model": model,
@@ -63,6 +70,10 @@ def source_chat_worker_policy(
         value["rag_prompt_sha256"] = sha256_bytes(RAG_CHAT_INSTRUCTIONS.encode("utf-8"))
     if native_runtime is not None:
         value["native_runtime"] = native_runtime.model_dump(mode="json")
+    if model_settings is not None:
+        value.update(
+            reasoning_effort=reasoning_effort, model_settings=model_settings.model_dump(mode="json")
+        )
     return read_chat_worker_policy(value)
 
 
@@ -73,6 +84,8 @@ class IsolatedCodexChatWorker:
             model=self.policy.model,
             protocol=4 if chat_worker_protocol_version(self.policy) == 4 else 3,
             native_runtime=self.policy.native_runtime,
+            reasoning_effort=self.policy.reasoning_effort,
+            model_settings=self.policy.model_settings,
         ):
             raise ChatWorkerFault(ChatWorkerError.NOT_READY)
         self.channel: CodexChatStdio | None = None
@@ -102,6 +115,25 @@ class IsolatedCodexChatWorker:
                 self.runtime_guard.assert_unchanged()
         except Exception:
             raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
+
+    def select_policy(self, policy: ChatWorkerPolicy) -> None:
+        """Owner-admitted model settings only; caller holds the execution lock."""
+        self.require_admission(self.policy)
+        if (
+            self.channel is not None
+            or self.session is not None
+            or policy.schema_version != "general-chat-worker-policy/6.0"
+        ):
+            raise ChatWorkerFault(ChatWorkerError.BUSY)
+        if policy != source_chat_worker_policy(
+            model=policy.model,
+            protocol=4,
+            native_runtime=policy.native_runtime,
+            reasoning_effort=policy.reasoning_effort,
+            model_settings=policy.model_settings,
+        ):
+            raise ChatWorkerFault(ChatWorkerError.NOT_READY)
+        self.policy = policy
 
     def answer(
         self, request: ChatTurnInput, *, tools: ChatNativeToolPort | None = None
@@ -142,7 +174,10 @@ class IsolatedCodexChatWorker:
                     model=self.policy.model, native_runtime=self.policy.native_runtime
                 )
             self.session = CodexChatSession(
-                self.channel, model=self.policy.model, cwd=str(CHAT_WORKSPACE)
+                self.channel,
+                model=self.policy.model,
+                cwd=str(CHAT_WORKSPACE),
+                reasoning_effort=self.policy.reasoning_effort,
             )
             self.session.initialize()
         except Exception:

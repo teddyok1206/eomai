@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from eom_web_gui.chat_model_settings_contracts import (
+    ChatModelSettingsSubmission,
+    ChatModelSettingsView,
+)
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
@@ -746,6 +750,16 @@ class WebServices:
     ) -> ExecutionPresetModelOptions:
         _require_admin(session)
         return await self.gateway.execution_preset_model_options(session, preset_id)
+
+    async def chat_model_settings(self, session: WebSession) -> ChatModelSettingsView:
+        _require_admin(session)
+        return await self.gateway.chat_model_settings(session)
+
+    async def change_chat_model_settings(
+        self, session: WebSession, value: ChatModelSettingsSubmission
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.change_chat_model_settings(session, value)
 
     async def evaluate_execution_preset(
         self,

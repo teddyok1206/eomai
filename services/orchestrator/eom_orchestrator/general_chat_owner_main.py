@@ -11,11 +11,14 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Thread
 
+from eom_protocol.general_chat_worker_messages import ChatWorkerPolicy
+
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.general_chat_artifacts import GeneralChatArtifactStore
 from eom_orchestrator.general_chat_coordinator import run_chat_coordinator
 from eom_orchestrator.general_chat_execution import GeneralChatExecutionService
 from eom_orchestrator.general_chat_knowledge import CatalogChatKnowledgeClient
+from eom_orchestrator.general_chat_model_selection import current_chat_model_settings
 from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
 from eom_orchestrator.general_chat_owner_runtime import (
@@ -89,6 +92,20 @@ def main() -> int:
             protocol=4 if config.rag_policy is not None else 3,
             native_runtime=config.native_runtime,
         )
+
+        def selected_policy() -> ChatWorkerPolicy:
+            with repository.sessions() as session:
+                selected = current_chat_model_settings(session)
+            if selected is None:
+                return policy
+            return source_chat_worker_policy(
+                model=selected.model,
+                protocol=4,
+                native_runtime=config.native_runtime,
+                reasoning_effort=selected.reasoning_effort,
+                model_settings=selected.pin,
+            )
+
         endpoint = ChatSocketEndpoint(
             Path("/run/eom-general-chat-worker/worker.sock"),
             worker.pw_uid,
@@ -145,7 +162,10 @@ def main() -> int:
             args=(
                 execution,
                 lambda: ChatWorkerClient(
-                    endpoint=endpoint, policy=policy, tools=execution.tool_broker
+                    endpoint=endpoint,
+                    policy=selected_policy(),
+                    tools=execution.tool_broker,
+                    policy_supplier=selected_policy,
                 ),
             ),
             kwargs={"stop": stop, "report_state": lambda code: sys.stderr.write(code + "\n")},

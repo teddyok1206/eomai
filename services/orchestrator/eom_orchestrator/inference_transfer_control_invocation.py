@@ -176,11 +176,23 @@ class AuthenticatedInferenceTransferControlOwner:
         self._authorize_current_principal(principal.operator_id)
         with self.sessions() as session:
             capacity = resolve_released_capacity_policy(session, revision_id)
-            result = InferenceTransferBootstrapCapacityPin(
-                capacity_policy_id=capacity.capacity_policy_id,
-                capacity_policy_revision_id=capacity.capacity_policy_revision_id,
-                schema_version=capacity.schema_version,
-                content_sha256=capacity.content_sha256,
+            if capacity.schema_version not in {
+                "worker-capacity-policy/1.0",
+                "worker-capacity-policy/1.1",
+                "worker-capacity-policy/1.2",
+                "worker-capacity-policy/1.3",
+            }:
+                raise ControlPlaneError(
+                    "CONTROL_CAPACITY_POINTER_INVALID",
+                    "historical bootstrap does not support this capacity family",
+                )
+            result = InferenceTransferBootstrapCapacityPin.model_validate(
+                {
+                    "capacity_policy_id": capacity.capacity_policy_id,
+                    "capacity_policy_revision_id": capacity.capacity_policy_revision_id,
+                    "schema_version": capacity.schema_version,
+                    "content_sha256": capacity.content_sha256,
+                }
             )
         self._authorize_current_principal(principal.operator_id)
         return result

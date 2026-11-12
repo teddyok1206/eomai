@@ -19,6 +19,7 @@ from referencing import Registry, Resource
 from eom_protocol.general_chat import (
     ChatBoundaryValue,
 )
+from eom_protocol.general_chat_model_settings import ChatModelSettingsPin, ReasoningEffort
 from eom_protocol.general_chat_schema_family import validate_chat_envelope
 from eom_protocol.general_chat_ticket import ChatWorkerTicket as ChatWorkerTicket
 from eom_protocol.general_chat_ticket import WorkerHash
@@ -62,6 +63,7 @@ class ChatWorkerPolicy(ChatBoundaryValue):
         "general-chat-worker-policy/3.0",
         "general-chat-worker-policy/4.0",
         "general-chat-worker-policy/5.0",
+        "general-chat-worker-policy/6.0",
     ] = "general-chat-worker-policy/1.0"
     model: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9._-]+$")
     native_profile: Literal[
@@ -74,10 +76,15 @@ class ChatWorkerPolicy(ChatBoundaryValue):
     grounded_prompt_sha256: WorkerHash | None = None
     agent_prompt_sha256: WorkerHash | None = None
     rag_prompt_sha256: WorkerHash | None = None
+    reasoning_effort: ReasoningEffort | None = None
+    model_settings: ChatModelSettingsPin | None = None
 
     @model_validator(mode="after")
     def selected_runtime_policy(self) -> ChatWorkerPolicy:
-        if self.schema_version == "general-chat-worker-policy/5.0":
+        if self.schema_version in {
+            "general-chat-worker-policy/5.0",
+            "general-chat-worker-policy/6.0",
+        }:
             if (
                 self.native_profile != "codex-app-server/environment-free/2.0"
                 or self.native_runtime is None
@@ -91,6 +98,13 @@ class ChatWorkerPolicy(ChatBoundaryValue):
             or self.native_runtime is not None
         ):
             raise ValueError("legacy policy cannot adopt a selected native runtime")
+        configurable = self.schema_version == "general-chat-worker-policy/6.0"
+        if configurable != (self.reasoning_effort is not None and self.model_settings is not None):
+            raise ValueError("configurable policy requires exact model settings")
+        if not configurable and (
+            self.reasoning_effort is not None or self.model_settings is not None
+        ):
+            raise ValueError("historical policy cannot acquire model settings")
         return self
 
     @model_serializer(mode="wrap")
@@ -98,7 +112,13 @@ class ChatWorkerPolicy(ChatBoundaryValue):
         value = handler(self)
         if not isinstance(value, dict):
             raise ValueError("policy serializer must return an object")
-        if self.schema_version != "general-chat-worker-policy/5.0":
+        if self.schema_version != "general-chat-worker-policy/6.0":
+            value.pop("reasoning_effort", None)
+            value.pop("model_settings", None)
+        if self.schema_version not in {
+            "general-chat-worker-policy/5.0",
+            "general-chat-worker-policy/6.0",
+        }:
             value.pop("native_runtime", None)
         if self.schema_version == "general-chat-worker-policy/1.0":
             value.pop("grounded_prompt_sha256", None)
@@ -106,11 +126,13 @@ class ChatWorkerPolicy(ChatBoundaryValue):
             "general-chat-worker-policy/3.0",
             "general-chat-worker-policy/4.0",
             "general-chat-worker-policy/5.0",
+            "general-chat-worker-policy/6.0",
         }:
             value.pop("agent_prompt_sha256", None)
         if self.schema_version not in {
             "general-chat-worker-policy/4.0",
             "general-chat-worker-policy/5.0",
+            "general-chat-worker-policy/6.0",
         }:
             value.pop("rag_prompt_sha256", None)
         return value
@@ -127,6 +149,7 @@ _CHAT_POLICY_PROTOCOLS: Mapping[str, Literal[1, 2, 3, 4]] = MappingProxyType(
         "general-chat-worker-policy/3.0": 3,
         "general-chat-worker-policy/4.0": 4,
         "general-chat-worker-policy/5.0": 4,
+        "general-chat-worker-policy/6.0": 4,
     }
 )
 
@@ -174,19 +197,42 @@ class ChatWorkerRequest(ChatBoundaryValue):
         "general-chat-worker-request/2.0",
         "general-chat-worker-request/3.0",
         "general-chat-worker-request/4.0",
+        "general-chat-worker-request/5.0",
     ] = "general-chat-worker-request/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     policy_sha256: WorkerHash
     command: ChatWorkerCommand
+    selected_policy: ChatWorkerPolicy | None = None
 
     @model_validator(mode="after")
     def pinned_ticket_policy(self) -> ChatWorkerRequest:
+        if self.schema_version == "general-chat-worker-request/5.0":
+            if isinstance(self.command, ChatWorkerLookup):
+                if self.selected_policy is not None:
+                    raise ValueError("historical lookup cannot switch settings")
+            elif (
+                self.selected_policy is None
+                or self.selected_policy.schema_version != "general-chat-worker-policy/6.0"
+                or self.selected_policy.sha256 != self.policy_sha256
+            ):
+                raise ValueError("configured request requires exact selected policy")
+        elif self.selected_policy is not None:
+            raise ValueError("historical request cannot switch settings")
         if (
             isinstance(self.command, ChatWorkerLookup)
             and self.command.ticket.policy_sha256 != self.policy_sha256
         ):
             raise ValueError("worker lookup policy mismatch")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_request(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        value = handler(self)
+        if not isinstance(value, dict):
+            raise ValueError("request serializer must return an object")
+        if self.schema_version != "general-chat-worker-request/5.0":
+            value.pop("selected_policy", None)
+        return value
 
 
 class ChatWorkerAdmission(ChatBoundaryValue):
@@ -210,6 +256,7 @@ class ChatWorkerReply(ChatBoundaryValue):
         "general-chat-worker-reply/2.0",
         "general-chat-worker-reply/3.0",
         "general-chat-worker-reply/4.0",
+        "general-chat-worker-reply/5.0",
     ] = "general-chat-worker-reply/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     boot_id: WorkerBootId

@@ -1,6 +1,7 @@
 /* EOM fixed worker and HWPX StartUnit boundary. Installed root-owned; no transient units. */
 polkit.addRule(function(action, subject) {
     var workerUnit = /^eom-worker-(01|02|03|04|05|06)@job_[0-9a-f]{32}\.service$/;
+    var sharedWorkerUnit = /^eom-worker-shared-(01|02|03|04|05)-(900|1800|3600|7200)@job_[0-9a-f]{32}\.service$/;
     var creativeReportWorkerUnit = /^eom-worker-analysis-04@job_[0-9a-f]{32}\.service$/;
     var supportWorkerUnit = /^eom-worker-support-(05|06)@job_[0-9a-f]{32}\.service$/;
     var documentReviewWorkerUnit = /^eom-worker-document-review-(05|06)@job_[0-9a-f]{32}\.service$/;
@@ -39,7 +40,7 @@ polkit.addRule(function(action, subject) {
     var unit = action.lookup("unit");
     var verb = action.lookup("verb");
     if (verb === "start" && subject.user === "eom-workflow-runner"
-        && (workerUnit.test(unit) || supportWorkerUnit.test(unit)
+        && (workerUnit.test(unit) || sharedWorkerUnit.test(unit) || supportWorkerUnit.test(unit)
             || creativeReportWorkerUnit.test(unit)
             || documentReviewWorkerUnit.test(unit)
             || probeUnit.test(unit) || authUnit.test(unit)

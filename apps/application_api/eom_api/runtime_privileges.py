@@ -77,6 +77,8 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "execution_preset_role_policies",
     "execution_preset_validations",
     "execution_presets",
+    "general_chat_model_settings",
+    "general_chat_model_setting_revisions",
     # The Studio Item DB reads source-only rows through the API runtime; original
     # Office bytes and publication remain owned by the protected Catalog boundary.
     "external_item_edition_documents",
@@ -150,6 +152,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "general_chat_model_setting_revisions",
     "hwpx_curated_builds",
     "item_db_similarity_searches",
     "api_audit_events",
@@ -202,6 +205,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
 )
 
 UPDATE_TABLES: Final[tuple[str, ...]] = (
+    "general_chat_model_settings",
     "api_idempotency_records",
     "api_sessions",
     "api_tokens",

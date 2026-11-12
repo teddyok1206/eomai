@@ -36,6 +36,7 @@ _FAMILIES: Final = MappingProxyType(
                 "eom://schemas/general-chat/dispatch/3.0",
                 "eom://schemas/general-chat/dispatch/4.0",
                 "eom://schemas/general-chat/dispatch/5.0",
+                "eom://schemas/general-chat/dispatch/6.0",
             }
         ),
     }

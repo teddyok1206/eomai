@@ -49,6 +49,20 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_orchestrator/shared_slot_controls.py",
+            "eom_orchestrator/shared_worker_units.py",
+            "eom_orchestrator/general_chat_model_selection.py",
+            "eom_orchestrator/general_chat_model_settings_store.py",
+            "eom_workflow/shared_worker_capacity.py",
+            "eom_workflow/shared_model_execution_plans.py",
+            "eom_workflow/resources/control-plane/worker-capacity-policy-v8.schema.json",
+            "eom_workflow/resources/control-plane/resolved-execution-plan-v37.schema.json",
+            "eom_workflow/resources/control-plane/resolved-execution-plan-v38.schema.json",
+            "eom_workflow/resources/control-plane/resolved-execution-plan-v39.schema.json",
+            "eom_protocol/general_chat_model_settings.py",
+            "eom_protocol/schemas/general-chat-model-settings.schema.json",
+            "eom_protocol/schemas/general-chat-worker-policy-v6.schema.json",
+            "eom_protocol/schemas/general-chat-worker-request-v5.schema.json",
             "eom_catalog_service/evidence_usage_receipts.py",
             "eom_catalog_service/ordinary_item_graph_publication_service.py",
             "eom_catalog_service/registered_review_embedding_capture.py",
@@ -148,6 +162,17 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "embedding_batch_plan_v11_schema; "
                 "assert embedding_batch_plan_v11_schema()['$id'] == "
                 "'eom://schemas/workflow/embedding-batch-plan/1.1'; "
+                "from eom_workflow.control_schemas import load_control_schema; "
+                "assert load_control_schema('worker-capacity-policy-v8')['$id'] == "
+                "'eom://schemas/workflow/worker-capacity-policy/1.7'; "
+                "assert load_control_schema('resolved-execution-plan-v39')['$id'] == "
+                "'eom://schemas/workflow/resolved-execution-plan/39.0'; "
+                "from eom_protocol.general_chat_schema_family import chat_family_validator; "
+                "assert chat_family_validator('worker-policy',6).schema['$id'] == "
+                "'eom://schemas/general-chat/worker-policy/6.0'; "
+                "from eom_orchestrator.shared_slot_controls import prepare_shared_slot_controls; "
+                "from eom_orchestrator.general_chat_model_selection "
+                "import current_chat_model_settings; "
                 "print(Resolver.__module__)"
             ),
             str(wheel),

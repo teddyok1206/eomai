@@ -108,7 +108,9 @@ def test_schema_first_mirrors_and_predecessor_bytes_are_preserved() -> None:
         for p in BASE.glob("*.json")
         if "-v4." not in p.name
         and "-v5." not in p.name
-        and p.name != "general-chat-rag.schema.json"
+        and "-v6." not in p.name
+        and p.name
+        not in {"general-chat-rag.schema.json", "general-chat-model-settings.schema.json"}
     )
     assert len(paths) == 28
     assert hashlib.sha256(

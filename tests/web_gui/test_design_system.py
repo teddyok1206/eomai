@@ -208,7 +208,7 @@ def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths()
 
 def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert '<details id="advanced-preset-policy"' in HTML
-    assert "출제·검토 모델 설정" in HTML
+    assert "모델·생각하는 깊이" in HTML
     assert 'id="preset-base-select"' in HTML
     assert 'id="preset-review-panel"' in HTML
     assert 'id="preset-review-confirm"' in HTML

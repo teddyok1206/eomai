@@ -79,6 +79,28 @@ CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 uni
 실행 설정 화면은 current released revision과 편집 중인 새 draft만 다룬다. 과거 revision을
 숨기는 UI 정책은 evaluation/실행 plan의 immutable 참조 삭제를 뜻하지 않는다.
 
+## 공용 슬롯·모델 설정 후속 소스
+
+`SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md`가 새 설계다. 활성 여부는 별도 설치/
+발행 기록으로 확인한다. capacity1.7의 신규 일반 작업은01–05를 안정적인 순환 순서로
+탐색하고06 채팅 예약을 제외한다. 기존 lease/host fence를 사용하며 과거 plan/cohort는
+다시 배정하지 않는다. GPU 제한도 새 정책에서는 물리03이 아니라 실행 역할로 센다.
+인증·사용량·계정별 모델 검사는 그 계정을 관측해야 하므로 여전히 정확한 대상 슬롯을 쓴다.
+
+프리셋 편집은 모든 역할의 model/effort만 바꾼다. 후보 수·순서, 지침/Graph/격리/timeout은
+고정이다. `current_model_preset`은 resident 자료 학습 owner의 **새 child Workflow**에만
+현재 호환 모델 설정을 선택한다. 기존 child/replay와 frozen cohort pin을 바꾸지 않는다.
+
+ChatGPT는 가짜 Workflow 프리셋 없이 같은 관리자 영역의 별도 카드다. 설정 current와
+immutable revision을 읽고 policy6/dispatch6에 pin한다. private worker request5의 idle
+PROBE만 모델 설정을 전환할 수 있고 실행 중에는 거부한다. client의 `before_claim`만
+새 설정을 읽으며 heartbeat는 재선택하지 않는다. 기존 결과 조회는 원래 ticket을 사용한다.
+
+customer support37·단일 자료 검토38·짝 자료 검토39는 모델 가변 successor다.
+기존10/25/26 및 public-similarity36 계약과 hash는 그대로 보존한다.
+자료 검토의 결과 등록은 `review_textbook_evidence_validation`에서도38/39를 읽는다.
+모델 선택이 바뀌어도 기존 교과서 근거·원문·결과 hash 검증과 receipt를 생략하지 않는다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/general-chat.js`
@@ -97,6 +119,12 @@ CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 uni
 - `services/orchestrator/eom_orchestrator/job_execution_queries.py`
 - `services/orchestrator/eom_orchestrator/chat_support_routing.py`
 - `apps/application_api/eom_api/services/control_plane_adapter.py`
+- `packages/workflow/eom_workflow/shared_worker_capacity.py`
+- `services/orchestrator/eom_orchestrator/shared_slot_controls.py`
+- `services/orchestrator/eom_orchestrator/preset_model_selection.py`
+- `services/orchestrator/eom_orchestrator/general_chat_model_selection.py`
+- `services/orchestrator/eom_orchestrator/review_textbook_evidence_validation.py`
+- `apps/web_gui/eom_web_gui/static/chat-model-settings.js`
 
 ## 검증과 근거
 

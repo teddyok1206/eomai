@@ -249,9 +249,9 @@ def test_runtime_and_policy_are_frozen_and_part_of_exact_policy_hash() -> None:
 
 
 @pytest.mark.parametrize("leaf", ("worker-request", "worker-reply"))
-def test_v5_does_not_invent_unsupported_transport_families(leaf: str) -> None:
+def test_policy_v6_does_not_imply_a_transport_v6(leaf: str) -> None:
     with pytest.raises(ValueError, match="unsupported chat envelope"):
-        chat_family_validator(leaf, 5)
+        chat_family_validator(leaf, 6)
 
 
 @pytest.mark.parametrize("leaf", ("owner-request", "owner-reply"))

@@ -191,9 +191,17 @@
     {
       "id": "chat-identity-slots",
       "note": "chat-identity-slots.md",
-      "keywords": ["ChatGPT", "대화", "대화 삭제", "Markdown", "로그인", "계정", "비밀번호", "인증", "슬롯", "사용량", "slot", "quota", "capability", "session", "CSRF"],
+      "keywords": ["ChatGPT", "대화", "대화 삭제", "Markdown", "로그인", "계정", "비밀번호", "인증", "슬롯", "공용 슬롯", "프리셋 모델", "생각하는 깊이", "사용량", "slot", "quota", "capability", "session", "CSRF"],
       "source_paths": [
         "apps/web_gui/eom_web_gui/static/general-chat.js",
+        "apps/web_gui/eom_web_gui/static/chat-model-settings.js",
+        "apps/web_gui/eom_web_gui/static/execution-preset-controller.js",
+        "packages/workflow/eom_workflow/shared_worker_capacity.py",
+        "packages/workflow/eom_workflow/shared_model_execution_plans.py",
+        "services/orchestrator/eom_orchestrator/shared_slot_controls.py",
+        "services/orchestrator/eom_orchestrator/preset_model_selection.py",
+        "services/orchestrator/eom_orchestrator/general_chat_model_selection.py",
+        "services/orchestrator/eom_orchestrator/review_textbook_evidence_validation.py",
         "apps/web_gui/eom_web_gui/static/chat-markdown.js",
         "apps/application_api/eom_api/services/general_chat_service.py",
         "services/orchestrator/eom_orchestrator/general_chat_owner.py",
@@ -208,8 +216,8 @@
         "services/orchestrator/eom_orchestrator/codex_compatibility_policy.py",
         "scripts/workflow/install_codex_compatibility_policy.py"
       ],
-      "test_paths": ["tests/unit/test_private_chat_document_read.py", "tests/unit/test_postgres_local_indexing_fence.py", "tests/unit/test_codex_compatibility_policy_install.py"],
-      "reference_paths": ["docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md", "docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md", "docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md"]
+      "test_paths": ["tests/unit/test_private_chat_document_read.py", "tests/unit/test_postgres_local_indexing_fence.py", "tests/unit/test_codex_compatibility_policy_install.py", "tests/unit/test_shared_worker_capacity.py", "tests/unit/test_chat_model_settings.py", "tests/integration/test_shared_worker_capacity.py", "tests/integration/test_chat_model_settings.py", "tests/web_gui/test_chat_model_settings_browser.py"],
+      "reference_paths": ["docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md", "docs/architecture/SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md", "docs/operations/SHARED_CODEX_SLOTS_AND_MODEL_SETTINGS_RELEASE.md", "docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md", "docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md"]
     },
     {
       "id": "development-operations",

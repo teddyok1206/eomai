@@ -12,6 +12,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
     ResolvedExecutionPlanRecord,
     ResolvedExecutionPlanStepRecord,
+    WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.execution_resolver import (
@@ -155,6 +156,11 @@ class FakeSession:
         if model is ExecutionPresetRevisionRecord:
             assert identity == self.preset_logical.current_revision_id
             return self.preset_revision
+        if model is WorkerCapacityPolicyRevisionRecord:
+            assert (
+                identity == self.preset_revision.canonical_document["capacity_policy_revision_id"]
+            )
+            return SimpleNamespace(schema_version="worker-capacity-policy/1.3")
         return None
 
     def add(self, value: object) -> None:

@@ -159,7 +159,8 @@ class WorkerCapacityPolicyRevisionRecord(Base):
             "AND max_active_gpu = 1 AND (max_active_knowledge_analysis BETWEEN 1 AND 2 "
             "OR (schema_version = 'worker-capacity-policy/1.4' "
             "AND max_active_knowledge_analysis = 3))) OR "
-            "(schema_version IN ('worker-capacity-policy/1.5','worker-capacity-policy/1.6') "
+            "(schema_version IN ('worker-capacity-policy/1.5','worker-capacity-policy/1.6',"
+            "'worker-capacity-policy/1.7') "
             "AND max_configured_slots = 6 "
             "AND max_active_codex = 4 AND max_active_per_slot = 1 AND max_active_gpu = 1 "
             "AND max_active_knowledge_analysis = 4)",

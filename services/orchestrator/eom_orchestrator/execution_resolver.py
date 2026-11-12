@@ -87,6 +87,11 @@ from eom_workflow.public_similarity_control import (
     bind_public_similarity_execution_plan,
     validate_public_similarity_plan_context,
 )
+from eom_workflow.shared_model_execution_plans import (
+    SharedCustomerSupportPlan,
+    SharedPairedReviewPlan,
+    SharedSingleReviewPlan,
+)
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     PreparedSimilarityPlan,
@@ -116,6 +121,7 @@ from eom_orchestrator.control_service import (
     record_knowledge_backed_execution_plan,
     record_resolved_execution_plan,
 )
+from eom_orchestrator.preset_model_selection import uses_shared_ordinary_slots
 
 RESOLVER_VERSION = "1.0.0"
 KNOWLEDGE_BACKED_RESOLVER_VERSION = "3.0.0"
@@ -836,7 +842,13 @@ def resolve_customer_support_plan(
     )
     if existing is not None:
         try:
-            existing_plan = ResolvedExecutionPlanV10.model_validate(existing.canonical_document)
+            kind = (
+                SharedCustomerSupportPlan
+                if existing.canonical_document.get("schema_version")
+                == "resolved-execution-plan/37.0"
+                else ResolvedExecutionPlanV10
+            )
+            existing_plan = kind.model_validate(existing.canonical_document)
         except ValueError as exc:
             raise ControlPlaneError(
                 "CONTROL_PLAN_INVALID",
@@ -912,7 +924,10 @@ def resolve_customer_support_plan(
             "customer support requires exactly one model candidate",
         )
     candidate = policy.model_candidates[0]
-    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "medium":
+    shared = uses_shared_ordinary_slots(session, preset)
+    if not shared and (
+        candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "medium"
+    ):
         raise ControlPlaneError(
             "CONTROL_PRESET_POLICY_INVALID",
             "customer support requires the reviewed model policy",
@@ -934,7 +949,9 @@ def resolve_customer_support_plan(
     if actual_resolved_at.tzinfo is None or actual_resolved_at.utcoffset() != timedelta(0):
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document: dict[str, object] = {
-        "schema_version": "resolved-execution-plan/10.0",
+        "schema_version": "resolved-execution-plan/37.0"
+        if shared
+        else "resolved-execution-plan/10.0",
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
         "workload_class": "CODEX",
@@ -947,13 +964,17 @@ def resolve_customer_support_plan(
         "support_case_sha256": content_sha256(support_case.model_dump(mode="json")),
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "10.0.0",
+        "resolver_version": "37.0.0" if shared else "10.0.0",
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    validate_control_contract("resolved-execution-plan-v10", document)
-    model = ResolvedExecutionPlanV10.model_validate(document)
+    validate_control_contract(
+        "resolved-execution-plan-v37" if shared else "resolved-execution-plan-v10", document
+    )
+    model = (SharedCustomerSupportPlan if shared else ResolvedExecutionPlanV10).model_validate(
+        document
+    )
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=model.plan_id,
@@ -1079,7 +1100,12 @@ def resolve_pdf_document_review_plan(
     if existing is not None:
         try:
             plan_model = (
-                ResolvedExecutionPlanV25 if textbook_successor else ResolvedExecutionPlanV13
+                SharedSingleReviewPlan
+                if existing.canonical_document.get("schema_version")
+                == "resolved-execution-plan/38.0"
+                else ResolvedExecutionPlanV25
+                if textbook_successor
+                else ResolvedExecutionPlanV13
             )
             existing_plan = plan_model.model_validate(existing.canonical_document)
         except ValueError as exc:
@@ -1171,7 +1197,8 @@ def resolve_pdf_document_review_plan(
             "PDF document review policy differs from its isolated reviewed policy",
         )
     candidate = policy.model_candidates[0]
-    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh":
+    shared = textbook_successor and uses_shared_ordinary_slots(session, preset)
+    if not shared and (candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh"):
         raise ControlPlaneError(
             "CONTROL_PRESET_POLICY_INVALID",
             "PDF document review requires its reviewed model policy",
@@ -1194,7 +1221,11 @@ def resolve_pdf_document_review_plan(
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document: dict[str, object] = {
         "schema_version": (
-            "resolved-execution-plan/25.0" if textbook_successor else "resolved-execution-plan/13.0"
+            "resolved-execution-plan/38.0"
+            if shared
+            else "resolved-execution-plan/25.0"
+            if textbook_successor
+            else "resolved-execution-plan/13.0"
         ),
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
@@ -1209,7 +1240,7 @@ def resolve_pdf_document_review_plan(
         "document": review_request.document.model_dump(mode="json"),
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "25.0.0" if textbook_successor else "13.0.0",
+        "resolver_version": "38.0.0" if shared else "25.0.0" if textbook_successor else "13.0.0",
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
@@ -1217,11 +1248,15 @@ def resolve_pdf_document_review_plan(
         document["textbook_evidence"] = textbook_evidence.model_dump(mode="json")
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
     validate_control_contract(
-        "resolved-execution-plan-v25" if textbook_successor else "resolved-execution-plan-v13",
+        "resolved-execution-plan-v38"
+        if shared
+        else "resolved-execution-plan-v25"
+        if textbook_successor
+        else "resolved-execution-plan-v13",
         document,
     )
     model = (
-        ResolvedExecutionPlanV25.model_validate(document)
+        (SharedSingleReviewPlan if shared else ResolvedExecutionPlanV25).model_validate(document)
         if textbook_successor
         else ResolvedExecutionPlanV13.model_validate(document)
     )
@@ -1344,7 +1379,13 @@ def _resolve_textbook_paired_document_review_plan(
     )
     if existing is not None:
         try:
-            plan = ResolvedExecutionPlanV26.model_validate(existing.canonical_document)
+            kind = (
+                SharedPairedReviewPlan
+                if existing.canonical_document.get("schema_version")
+                == "resolved-execution-plan/39.0"
+                else ResolvedExecutionPlanV26
+            )
+            plan = kind.model_validate(existing.canonical_document)
         except ValueError as exc:
             raise ControlPlaneError(
                 "CONTROL_PLAN_INVALID", "stored paired plan is invalid"
@@ -1397,7 +1438,8 @@ def _resolve_textbook_paired_document_review_plan(
             "CONTROL_REVIEW_TEXTBOOK_POLICY_INVALID", "paired textbook policy differs"
         )
     candidate = policy.model_candidates[0]
-    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh":
+    shared = uses_shared_ordinary_slots(session, preset)
+    if not shared and (candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh"):
         raise ControlPlaneError("CONTROL_PRESET_POLICY_INVALID", "paired model policy differs")
     step = ResolvedStepExecutionV3(
         step_key="review_document",
@@ -1417,7 +1459,9 @@ def _resolve_textbook_paired_document_review_plan(
     if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document: dict[str, object] = {
-        "schema_version": "resolved-execution-plan/26.0",
+        "schema_version": "resolved-execution-plan/39.0"
+        if shared
+        else "resolved-execution-plan/26.0",
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
         "workload_class": "CODEX",
@@ -1432,13 +1476,15 @@ def _resolve_textbook_paired_document_review_plan(
         "textbook_evidence": textbook_evidence.model_dump(mode="json"),
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "26.0.0",
+        "resolver_version": "39.0.0" if shared else "26.0.0",
         "resolved_at": timestamp.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    validate_control_contract("resolved-execution-plan-v26", document)
-    plan = ResolvedExecutionPlanV26.model_validate(document)
+    validate_control_contract(
+        "resolved-execution-plan-v39" if shared else "resolved-execution-plan-v26", document
+    )
+    plan = (SharedPairedReviewPlan if shared else ResolvedExecutionPlanV26).model_validate(document)
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=plan.plan_id,

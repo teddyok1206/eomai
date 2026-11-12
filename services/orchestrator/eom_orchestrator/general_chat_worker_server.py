@@ -131,7 +131,7 @@ class ChatWorkerRpcServer:
                     connection, deadline=monotonic() + WORKER_PROBE_TIMEOUT
                 )
                 request = read_chat_worker_request(document)
-                if stream != request.schema_version.endswith(("/3.0", "/4.0")):
+                if stream != request.schema_version.endswith(("/3.0", "/4.0", "/5.0")):
                     raise ChatTransportError("INVALID")
                 deadline = monotonic() + (
                     WORKER_EXECUTE_TIMEOUT

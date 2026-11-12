@@ -581,6 +581,24 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "10.0",
             "sha256:95a552e420322d54bcd02dfc9180c407d42dddd9cafab347bccd4abd730e0b53",
         ),
+        "resolved-execution-plan-v37": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v37.schema.json",
+            "resources/control-plane/resolved-execution-plan-v37.schema.json",
+            "37.0",
+            "sha256:34f606691274a51db6fe69935f9b60065a22745f70be42f19c243fd586b79cf2",
+        ),
+        "resolved-execution-plan-v38": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v38.schema.json",
+            "resources/control-plane/resolved-execution-plan-v38.schema.json",
+            "38.0",
+            "sha256:fa03e2b60e27dca27545b0868a641c62fcbcd1ec11f49e474fe3813c1b57e19a",
+        ),
+        "resolved-execution-plan-v39": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v39.schema.json",
+            "resources/control-plane/resolved-execution-plan-v39.schema.json",
+            "39.0",
+            "sha256:43061501a5951773ad29d6ae56f3e659cadcf19578b71169e0bdeb60b6138639",
+        ),
         "resolved-execution-plan-v11": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v11.schema.json",
             "resources/control-plane/resolved-execution-plan-v11.schema.json",
@@ -853,6 +871,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/worker-capacity-policy-v7.schema.json",
             "1.6",
             "sha256:df363249d573da3fc34acbe1272846fc0f54d60efee8dea98b479d6cc3181462",
+        ),
+        "worker-capacity-policy-v8": ControlSchemaResource(
+            "schemas/workflow/control-plane/worker-capacity-policy-v8.schema.json",
+            "resources/control-plane/worker-capacity-policy-v8.schema.json",
+            "1.7",
+            "sha256:433fb4c5edf70304832996fdb21763b9bdcef826880848445b28c8e19156878b",
         ),
         "worker-slot-inventory-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/worker-slot-inventory-v2.schema.json",

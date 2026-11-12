@@ -14,7 +14,11 @@ from uuid import uuid4
 from eom_protocol import ErrorCode
 
 from eom_orchestrator.errors import PlatformError
-from eom_orchestrator.worker_registry import WorkerSlot
+from eom_orchestrator.shared_worker_units import (
+    SHARED_WORKER_POLKIT_SHA256,
+    SHARED_WORKER_TEMPLATE_SHA256,
+)
+from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_ROLES, WorkerSlot
 
 SYSTEMCTL = Path("/usr/bin/systemctl")
 SYSTEMD_UNIT_ROOT = Path("/etc/systemd/system")
@@ -236,6 +240,10 @@ def worker_unit_name_for_execution(slot: WorkerSlot, job_id: str, *, timeout_sec
         return f"{specialized_unit}@{canonical_job_id}.service"
     if timeout_seconds == fixed_worker_timeout_seconds(slot):
         return f"eom-worker-{slot_id}@{canonical_job_id}.service"
+    if (slot_id, timeout_seconds) in SHARED_WORKER_TEMPLATE_SHA256 and str(
+        slot.role
+    ) == FIXED_WORKER_SLOT_ROLES[slot_id]:
+        return f"eom-worker-shared-{slot_id}-{timeout_seconds}@{canonical_job_id}.service"
     raise ValueError("worker timeout does not match a fixed unit contract")
 
 
@@ -387,7 +395,13 @@ def _start_unit(unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
 def launch_worker_unit(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -> FixedUnitRun:
     try:
         unit_name = worker_unit_name_for_execution(slot, job_id, timeout_seconds=timeout_seconds)
-    except ValueError as exc:
+        if unit_name.startswith("eom-worker-shared-"):
+            _validate_root_owned_artifact(
+                SYSTEMD_UNIT_ROOT / unit_name.replace(job_id, ""),
+                expected_mode=0o644,
+                expected_sha256=SHARED_WORKER_TEMPLATE_SHA256[(slot.slot_id, timeout_seconds)],
+            )
+    except (KeyError, OSError, ValueError) as exc:
         raise PlatformError(
             ErrorCode.WORKER_UNAVAILABLE, "worker timeout does not match fixed unit contract"
         ) from exc
@@ -647,6 +661,11 @@ def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitAct
 
     standard_unit = worker_unit_name(slot, job_id)
     unit_names = [standard_unit]
+    unit_names.extend(
+        f"eom-worker-shared-{slot.slot_id}-{seconds}@{validate_job_id(job_id)}.service"
+        for key, seconds in SHARED_WORKER_TEMPLATE_SHA256
+        if key == slot.slot_id
+    )
     if validate_slot(slot) == "03":
         unit_names.append(f"eom-worker-analysis-03@{validate_job_id(job_id)}.service")
     if validate_slot(slot) == "04":
@@ -726,3 +745,18 @@ def _validate_root_owned_artifact(path: Path, *, expected_mode: int, expected_sh
     actual_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
     if actual_sha256 != expected_sha256:
         raise ValueError("installed worker artifact hash is invalid")
+
+
+def require_shared_worker_units() -> None:
+    """Release preflight only; never installs a template or starts a worker."""
+    _validate_root_owned_artifact(
+        Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules"),
+        expected_mode=0o644,
+        expected_sha256=SHARED_WORKER_POLKIT_SHA256,
+    )
+    for (slot, seconds), digest in SHARED_WORKER_TEMPLATE_SHA256.items():
+        _validate_root_owned_artifact(
+            SYSTEMD_UNIT_ROOT / f"eom-worker-shared-{slot}-{seconds}@.service",
+            expected_mode=0o644,
+            expected_sha256=digest,
+        )

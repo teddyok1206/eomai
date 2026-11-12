@@ -19,6 +19,10 @@ from eom_web_gui.chat_grounding_contracts import (
     ChatGroundingSubmission,
 )
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
+from eom_web_gui.chat_model_settings_contracts import (
+    ChatModelSettingsSubmission,
+    ChatModelSettingsView,
+)
 from eom_web_gui.chat_rag_contracts import ChatGroundingViewsV2
 from eom_web_gui.content_lifecycle_contracts import (
     LIFECYCLE_RESULT,
@@ -1108,6 +1112,12 @@ class ApplicationGateway(Protocol):
     ) -> CodexDeviceChallengeView: ...
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def chat_model_settings(self, session: WebSession) -> ChatModelSettingsView: ...
+
+    async def change_chat_model_settings(
+        self, session: WebSession, value: ChatModelSettingsSubmission
+    ) -> dict[str, Any]: ...
 
     async def create_execution_preset_draft(
         self, session: WebSession, payload: dict[str, Any], idempotency_key: str
@@ -3804,6 +3814,28 @@ class HttpApplicationGateway:
             "/api/v1/execution-presets",
             json=payload,
             headers={"Idempotency-Key": idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def chat_model_settings(self, session: WebSession) -> ChatModelSettingsView:
+        response = await self._authorized(session, "GET", "/api/v1/general-chat/model-settings")
+        try:
+            return ChatModelSettingsView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def change_chat_model_settings(
+        self, session: WebSession, value: ChatModelSettingsSubmission
+    ) -> dict[str, Any]:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/general-chat/model-settings",
+            json=value.model_dump(mode="json", include={"model", "reasoning_effort"}),
+            headers={
+                "If-Match": f'"v{value.resource_version}"',
+                "Idempotency-Key": value.idempotency_key,
+            },
         )
         return sanitize_mapping(self._data(response))
 

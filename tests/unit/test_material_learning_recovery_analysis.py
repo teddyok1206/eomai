@@ -106,6 +106,7 @@ def case(monkeypatch, *, base_state="ACCEPTED", solution_state="FAILED"):
         lambda *_args, **_kwargs: SimpleNamespace(work=extraction_work()),
     )
     monkeypatch.setattr(owner, "authorize_material_learning", lambda *_args: None)
+    monkeypatch.setattr(owner, "current_model_preset", Mock(return_value=preset))
     return graph, current, old, base, solution
 
 
@@ -118,6 +119,7 @@ def test_retry_reuses_accepted_base_without_new_worker(monkeypatch):
     graph.analyses.create_with_pinned_preset.assert_not_called()
     assert old.analysis_run_id == BASE and base.state == "ACCEPTED"
     assert task.analysis_run_id is None  # Do not duplicate a unique child owner.
+    owner.current_model_preset.assert_not_called()
 
 
 def test_retry_creates_only_failed_base_successor_and_keeps_old_failure(monkeypatch):
@@ -132,6 +134,7 @@ def test_retry_creates_only_failed_base_successor_and_keeps_old_failure(monkeypa
     assert command.predecessor_analysis_run_id == BASE
     assert command.idempotency_key == "material-base:" + task.task_id
     assert result.state == "ACCEPTED" and base.state == "FAILED" and old.analysis_run_id == BASE
+    owner.current_model_preset.assert_called_once()
 
 
 @pytest.mark.parametrize("state", ["ACCEPTED", "FAILED"])

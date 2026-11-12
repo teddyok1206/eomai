@@ -49,24 +49,19 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       .some((policy) => !options.get(policy.role)?.length));
   }
 
-  function fixedModelOptionsUnavailable() {
-    return Boolean(base && options && base.draft.role_policies.some((policy) =>
-      !["authoring", "review"].includes(policy.role) && policy.model_candidates.some((candidate) =>
-        !allowedPairs.get(policy.role)?.has(candidateOptionValue(candidate.model, candidate.reasoning_effort)))));
-  }
 
   function sync() {
     const busy = action !== null;
     $("#preset-base-select").disabled = busy || !bases.length;
     for (const field of document.querySelectorAll("#preset-guided-form input:not([readonly]), #preset-guided-form textarea")) {
-      field.disabled = busy || !base || !options;
+      field.disabled = true;
     }
     $("#preset-general-knowledge").disabled = true;
     const candidateFields = Array.from(document.querySelectorAll("[data-preset-model], [data-preset-effort]"));
     for (const field of candidateFields) {
       field.disabled = busy || !options || !field.options.length || field.options.length === 1 && !field.value;
     }
-    $("#preset-review-open").disabled = busy || !base || !options || modelOptionsNeedRefresh() || fixedModelOptionsUnavailable()
+    $("#preset-review-open").disabled = busy || !base || !options || modelOptionsNeedRefresh()
       || candidateFields.some((field) => !field.value);
     $("#preset-draft-submit").disabled = busy || !reviewed || !$("#preset-review-confirm").checked;
     $("#preset-validation-submit").disabled = busy || !target || Boolean(target.validation_id);
@@ -144,7 +139,6 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     const root = $("#preset-role-editors");
     root.replaceChildren();
     for (const [roleIndex, policy] of base.draft.role_policies.entries()) {
-      if (!["authoring", "review"].includes(policy.role)) continue;
       const candidates = options.get(policy.role) || [];
       const models = [...new Set(candidates.map((candidate) => candidate.model))].sort();
       for (const [candidateIndex, candidate] of policy.model_candidates.entries()) {
@@ -210,9 +204,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       renderRoles();
       message(modelOptionsNeedRefresh()
         ? "코덱스 계정에서 ‘상태 확인’을 한 뒤 실행 설정을 다시 선택하세요. 로그인 상태가 바뀌면 모델 목록도 다시 확인해 주세요."
-        : fixedModelOptionsUnavailable()
-          ? "변경하지 않는 역할의 기존 모델·추론 설정이 승인 목록에 없습니다. 코덱스 계정 상태와 관리 정책을 확인하세요."
-        : "출제와 검토 모델을 각각 선택하세요. 진행 중인 작업은 바뀌지 않습니다.");
+        : "이 프리셋의 역할별 모델과 생각하는 깊이를 선택하세요. 다른 프리셋이나 진행 중인 작업은 바뀌지 않습니다.");
     } catch (failure) {
       if (sequence !== readVersion || base !== capturedBase) return;
       options = null;
@@ -230,7 +222,6 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
         role: policy.role,
         timeout_seconds: policy.timeout_seconds,
         model_candidates: policy.model_candidates.map((candidate, candidateIndex) => {
-          if (!["authoring", "review"].includes(policy.role)) return {...candidate};
           const suffix = `[data-role-index="${roleIndex}"][data-candidate-index="${candidateIndex}"]`;
           const selected = {
             model: $(`[data-preset-model]${suffix}`).value,
@@ -247,7 +238,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
   }
 
   function reviewEdits() {
-    if (action || !base || !options || modelOptionsNeedRefresh() || fixedModelOptionsUnavailable() || !isAdmin()) return;
+    if (action || !base || !options || modelOptionsNeedRefresh() || !isAdmin()) return;
     try {
       clearValidation();
       reviewed = reviewedPresetDraft(base.draft, collectEdits());
@@ -255,7 +246,6 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       summary.replaceChildren();
       addDetail(summary, "실행 설정", reviewed.display_name);
       for (const policy of reviewed.role_policies) {
-        if (!["authoring", "review"].includes(policy.role)) continue;
         for (const [index, candidate] of policy.model_candidates.entries()) {
           addDetail(summary, presetCandidateLabel(policy.role, index), `${candidate.model} · ${EFFORT_LABELS[candidate.reasoning_effort]}`);
         }
@@ -285,7 +275,6 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     const summary = $("#preset-release-summary");
     addDetail(summary, "실행 설정", revision.display_name || preset.preset_key);
     for (const policy of revision.role_policies) {
-      if (!["authoring", "review"].includes(policy.role)) continue;
       for (const [index, candidate] of policy.model_candidates.entries()) {
         addDetail(summary, presetCandidateLabel(policy.role, index), `${candidate.model} · ${EFFORT_LABELS[candidate.reasoning_effort]}`);
       }

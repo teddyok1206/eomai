@@ -17,6 +17,8 @@ TABLE_PRIVILEGES: Final = MappingProxyType(
         "general_chat_capacity": frozenset({"SELECT", "UPDATE"}),
         "general_chat_conversations": frozenset({"SELECT", "INSERT", "UPDATE"}),
         "general_chat_turns": frozenset({"SELECT", "INSERT", "UPDATE"}),
+        "general_chat_model_settings": frozenset({"SELECT"}),
+        "general_chat_model_setting_revisions": frozenset({"SELECT"}),
         "job_events": frozenset({"SELECT", "INSERT"}),
         "jobs": frozenset({"SELECT", "INSERT"}),
         "protocol_versions": frozenset({"SELECT", "INSERT"}),
@@ -64,7 +66,7 @@ COLUMN_PRIVILEGES: Final = MappingProxyType(
             }
         ),
         ("codex_capability_entries", "SELECT"): frozenset(
-            {"capability_snapshot_id", "model", "state"}
+            {"capability_snapshot_id", "model", "reasoning_effort", "state"}
         ),
     }
 )

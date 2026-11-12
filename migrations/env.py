@@ -27,6 +27,7 @@ import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.local_indexing_service_models
 import eom_identity_service.models  # noqa: F401
 import eom_orchestrator.control_models
+import eom_orchestrator.general_chat_model_settings_store
 import eom_orchestrator.general_chat_models
 import eom_orchestrator.knowledge_analysis_models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401

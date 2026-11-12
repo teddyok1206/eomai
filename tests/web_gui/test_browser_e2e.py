@@ -41,7 +41,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "중단원 선택",
             "소단원 목록 준비 중",
             "어떤 문항을 만들까요?",
-            "출제·검토 모델 설정",
+            "모델·생각하는 깊이",
             "새 설정 초안 생성 전 확인",
             "설정 확인 및 적용",
             "계정 로그인 변경",

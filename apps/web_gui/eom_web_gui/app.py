@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eom_web_gui.chat_grounding_contracts import ChatGroundedTurnSubmission, ChatGroundingSubmission
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
+from eom_web_gui.chat_model_settings_contracts import ChatModelSettingsSubmission
 from eom_web_gui.content_lifecycle_contracts import ChangeLifecycle, LifecycleQuery
 from eom_web_gui.content_planning_contracts import (
     PlanningCommand,
@@ -1894,6 +1895,19 @@ def create_app(
             content=challenge.model_dump(mode="json"),
             headers={"Cache-Control": "no-store"},
         )
+
+    @app.get(f"{API_PREFIX}/admin/general-chat/model-settings")
+    async def chat_model_settings(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        value = await actual.chat_model_settings(session)
+        return value.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/admin/general-chat/model-settings")
+    async def change_chat_model_settings(
+        value: ChatModelSettingsSubmission, session: Annotated[WebSession, Depends(require_csrf)]
+    ) -> dict[str, Any]:
+        return await actual.change_chat_model_settings(session, value)
 
     @app.get(f"{API_PREFIX}/admin/execution-presets")
     async def execution_presets(
