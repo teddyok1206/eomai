@@ -42,3 +42,18 @@
 592 PASS. JS 구문 검사·diff 공백 검사 PASS. Python/DB/worker 변경은 없다.
 설치 API DB role의 읽기 전용 조회에서 현재 13개 작업 단계의 후보는 모두 유일하며,
 문항 제작의 검토 후보는 기존 Terra high/xhigh로 정상이다. 운영 설정을 보정하지 않았다.
+
+## 운영 반영
+
+- 2026-11-12 11:43:58 UTC, Web `858680cfaaa3e091b6e98b220e50ccb8d70e3735`
+  설치·활성화 완료. 설치 RECORD 80개와 실제 Web 서비스 계정 검증 PASS.
+- wheel SHA-256: `534238494ba6262652115223688a4b04b3b97764b00274a99660e265ef15185f`.
+- 실제 HTTPS ready·로그인 페이지·변경된 JS/CSS bytes와 wheel 일치 PASS.
+  로그인 페이지 조회는 사용자 인증·수동 저장 확인의 대체 증거가 아니다.
+- API/QUERY/INDEX/runner/자료 학습/채팅/HWPX 서비스의 PID·invocation·상태와
+  Web 설정·허용 모델 정책 hash는 배포 전후 동일하다. INDEX는 배포 전부터 failed였으며
+  이번 Web 변경으로 재시작하거나 복구하지 않았다.
+- DB 변경 0, 모델 호출 0. 사용자 화면 확인은 아직 PENDING이다.
+- 운영 기록: `/var/lib/eom-preset-duplicate-web-release-20261112/activated.json`.
+  이전 Web `fd35ed69631305610ee29e16b4d340376d798582`의 검증된 wheel을
+  같은 배포의 보호된 staging에 보존해 rollback 가능하다.
