@@ -194,6 +194,54 @@ def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
         )
 
 
+def test_typed_inquiry_bottom_stem_is_removed_only_from_the_result_section() -> None:
+    draft = parse_content_team_markdown_v2(INQUIRY_ITEM.encode("utf-8"))
+    assert draft.inquiry is not None
+    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
+    question = SimpleNamespace(
+        stem=draft.stem,
+        bottom_stem="",
+        is_inquiry_experiment=True,
+        inquiry_goal=draft.inquiry.goal,
+        inquiry_procedure=draft.inquiry.procedure,
+        inquiry_result=f"{draft.inquiry.result}\n\n{expected}",
+    )
+    before = draft.model_dump(mode="json")
+    assert _bind_typed_bottom_stem_for_handoff(question, draft, score_display=draft.score_display)
+    assert question.bottom_stem == expected
+    assert question.inquiry_result == draft.inquiry.result
+    assert question.inquiry_procedure == draft.inquiry.procedure
+    assert question.inquiry_goal == draft.inquiry.goal
+    assert question.stem == draft.stem
+    assert draft.model_dump(mode="json") == before
+    assert not _bind_typed_bottom_stem_for_handoff(
+        question, draft, score_display=draft.score_display
+    )
+
+
+@pytest.mark.parametrize("invalid", ["wrong-field", "duplicate", "different-score", "empty-body"])
+def test_typed_inquiry_bottom_stem_rejects_unproven_result_suffix(invalid: str) -> None:
+    draft = parse_content_team_markdown_v2(INQUIRY_ITEM.encode("utf-8"))
+    assert draft.inquiry is not None
+    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
+    results = {
+        "wrong-field": draft.inquiry.result,
+        "duplicate": f"{expected}\n\n{draft.inquiry.result}\n\n{expected}",
+        "different-score": f"{draft.inquiry.result}\n\n{draft.bottom_stem} [9점]",
+        "empty-body": f"\n\n{expected}",
+    }
+    question = SimpleNamespace(
+        stem=f"{draft.stem}\n\n{expected}",
+        bottom_stem="",
+        is_inquiry_experiment=True,
+        inquiry_result=results[invalid],
+    )
+    before = vars(question).copy()
+    with pytest.raises(HwpxError, match="typed bottom stem"):
+        _bind_typed_bottom_stem_for_handoff(question, draft, score_display=draft.score_display)
+    assert vars(question) == before
+
+
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
 @pytest.mark.parametrize(
     ("source", "expected_table_count", "expected_visual_count", "expected_labeled_count"),
@@ -285,6 +333,17 @@ def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
             0,
             0,
             id="typed-inquiry-routes-through-inquiry-renderer",
+        ),
+        pytest.param(
+            INQUIRY_ITEM.replace(
+                "이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?",
+                "위 탐구 결과에 맞는 설명을 모두 고르면?",
+                1,
+            ),
+            0,
+            0,
+            0,
+            id="typed-inquiry-bottom-stem-outside-handoff-vocabulary",
         ),
     ],
 )

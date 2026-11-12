@@ -421,22 +421,28 @@ def _bind_typed_bottom_stem_for_handoff(
     if question.bottom_stem == expected:
         return False
     suffix = f"\n\n{expected}"
+    # Inquiry parsing moves the remaining main text into the final result section.
+    # The typed draft selects that owner; do not search unrelated question fields.
+    field = "inquiry_result" if draft.inquiry is not None else "stem"
+    containing_text = getattr(question, field, None)
     if (
         question.bottom_stem
-        or not question.stem.endswith(suffix)
-        or question.stem.count(expected) != 1
+        or not isinstance(containing_text, str)
+        or (draft.inquiry is not None and not question.is_inquiry_experiment)
+        or not containing_text.endswith(suffix)
+        or containing_text.count(expected) != 1
     ):
         raise HwpxError(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
             "typed bottom stem differs from the handoff parser boundary",
         )
-    remaining_stem = question.stem[: -len(suffix)]
+    remaining_stem = containing_text[: -len(suffix)]
     if not remaining_stem.strip():
         raise HwpxError(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
             "typed bottom stem consumed the complete handoff stem",
         )
-    question.stem = remaining_stem
+    setattr(question, field, remaining_stem)
     question.bottom_stem = expected
     return True
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+from eom_catalog_contracts import load_integrated_science_editorial_outline
 from eom_catalog_service.registry_service import RegistryService
 from eom_hwpx_manager import (
     ExamHwpxApplicationService,
@@ -283,7 +284,12 @@ def lifespan_for(
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        services.engine.dispose()
+        try:
+            # Validate immutable selection resources before concurrent HTTP requests
+            # can race their first schema-registry construction and exceed BFF timeouts.
+            load_integrated_science_editorial_outline()
+            yield
+        finally:
+            services.engine.dispose()
 
     return lifespan
