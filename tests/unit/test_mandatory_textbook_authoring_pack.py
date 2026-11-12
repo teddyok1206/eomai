@@ -2,12 +2,18 @@
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from eom_catalog_service.content_pack_files import build_pack, compile_pack
+from eom_catalog_service.workflow_catalog import (
+    WorkflowCatalogService,
+    _local_image_prompt_contract,
+)
+from eom_content_pack import ContentPackError
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
-from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
+from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES, LocalImageProviderBindingV6
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
@@ -21,6 +27,7 @@ from eom_workflow import (
     EvidenceResultArtifactPointerV3,
     ResolvedExecutionPlanV19,
     ReviewEvidenceUsageValidationReceiptV3,
+    WorkflowRequest,
 )
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV12,
@@ -28,6 +35,8 @@ from eom_workflow.models import (
     RoleWorkerInput,
     WorkerRequest,
 )
+from eom_workflow_runner.models import WorkflowInstanceRecord
+from sqlalchemy.orm import Session
 
 from tests.unit.test_content_team_v3_protocol import _content_v3
 from tests.unit.test_execution_materializer import _knowledge_fixture
@@ -40,11 +49,103 @@ from tests.unit.test_graph_review_v11_protocol import (
     _v12_review_document,
 )
 from tests.unit.test_item_authoring_textbook_selection import _textbook
+from tests.unit.test_workflow_start_resolution import _PackBindingSession
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "content/packs/generated-knowledge-item/1.20.18"
 TARGET = ROOT / "content/packs/generated-knowledge-item/1.20.19"
 TEXTBOOK_ID = "evidenceitem_" + "4" * 32
+
+
+@pytest.mark.parametrize("version", ("1.20.17", "1.20.18", "1.20.19"))
+@pytest.mark.parametrize(
+    "form,panels",
+    (
+        ("AUTO", None),
+        ("TEXT", None),
+        ("DATA", None),
+        ("INQUIRY", None),
+        ("TABLE", 1),
+        ("TABLE", 2),
+        ("IMAGE", 1),
+        ("IMAGE", 2),
+        ("MIXED", 2),
+    ),
+)
+def test_public_authoring_pack_admits_its_v5_brief(
+    version: str, form: str, panels: int | None
+) -> None:
+    value = WorkflowRequest.model_validate_json(
+        (TARGET / "fixtures/smoke-request.json").read_text()
+    ).model_dump(mode="json")
+    value["item_brief"]["material_requirement"].update(form=form, panel_count=panels)
+    if form == "IMAGE":
+        value["item_brief"]["material_requirement"]["image_supporting_data"] = "NONE"
+    if form in {"TEXT", "TABLE", "DATA", "INQUIRY"}:
+        value["image_mode"] = "skip"
+        value["profiles"]["image"] = None
+    request = WorkflowRequest.model_validate(value)
+    WorkflowCatalogService._require_item_brief_release("generated-knowledge-item", version, request)
+
+
+@pytest.mark.parametrize("version", ("1.20.11", "1.20.20"))
+def test_v5_brief_does_not_admit_old_or_unreviewed_pack(version: str) -> None:
+    request = WorkflowRequest.model_validate_json(
+        (TARGET / "fixtures/smoke-request.json").read_text()
+    )
+    with pytest.raises(ContentPackError):
+        WorkflowCatalogService._require_item_brief_release(
+            "generated-knowledge-item", version, request
+        )
+
+
+def test_mandatory_textbook_pack_binds_through_real_compatibility_and_image_guards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = WorkflowRequest.model_validate_json(
+        (TARGET / "fixtures/smoke-request.json").read_text()
+    )
+    pack = compile_pack(TARGET)
+    session = _PackBindingSession()
+    session.activation.content_pack_release_id = session.release.content_pack_release_id
+    session.release.version = "1.20.19"
+    session.release.compatibility_json = pack.manifest.compatibility.model_dump(mode="json")
+    profiles = [
+        SimpleNamespace(
+            profile_type=p.profile.type,
+            profile_key=p.profile.key,
+            profile_version=p.profile.version,
+            profile_sha256=content_sha256(p.model_dump(mode="json")),
+            template_relative_path=p.template,
+            input_schema_ref=p.input_schema_ref,
+            output_schema_ref=p.output_schema_ref,
+            compiled_profile_json=p.model_dump(mode="json"),
+        )
+        for p in pack.profiles
+    ]
+    session.scalars = lambda _query: profiles  # type: ignore[attr-defined]
+    binding = LocalImageProviderBindingV6.model_validate_json(
+        (ROOT / "config/local-image-provider.ssd1b.v6.json").read_text()
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.load_local_image_provider_binding_any",
+        lambda _path: binding,
+    )
+    service = object.__new__(WorkflowCatalogService)
+    service.settings = cast(
+        Any, SimpleNamespace(local_image_provider_binding=Path("/unused-test-binding"))
+    )
+    context = service.bind_request(
+        request,
+        definition_key="generic-item-development",
+        definition_version="1.16.0",
+        session=cast(Session, session),
+    )
+    assert context["content_pack"]["version"] == "1.20.19"
+    assert context["local_image_provider"] == binding.model_dump(mode="json")
+    workflow = WorkflowInstanceRecord()
+    workflow.runtime_context = context
+    assert _local_image_prompt_contract(workflow) == "ASSESSMENT_REFERENCE_COMPOSITION_V3"
 
 
 def test_successor_preserves_predecessor_image_and_team_guidance(tmp_path: Path) -> None:

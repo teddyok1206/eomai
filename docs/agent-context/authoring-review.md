@@ -17,6 +17,12 @@ context는 새 출제 근거로 재사용하지 않는다. 교과서 원문을 �
 `../architecture/CONTENT_TEAM_AUTHORING_PROMPT_V5_DESIGN.md`의 2026-11-11 절을 확인한다.
 소스 구현은 운영 활성화의 증거가 아니다.
 
+Catalog의 V5 요청·그림 binding·reference-composition 호환 집합은
+`similarity_prompt_context.SIMILARITY_REFERENCE_PACK_VERSIONS`의 명시적 successor를
+함께 사용한다. 단일 과거 Pack 상수만 복사하면 최신 활성 Pack의 정상 요청까지
+거부할 수 있다. 새 Pack 검사는 prompt/hash뿐 아니라 실제 `bind_request`의
+brief·profile·그림 guard를 우회하지 않고 통과시키는 회귀를 포함한다.
+
 출제자와 검토자는 직접 대화하지 않는다. Runner가 directive와 역할 결과·step attempt를
 연결해 최대 3차 개선 경로를 관리한다. 검토 차수와 인프라 retry 횟수는 별개이며,
 `WORKER_RESULT_INVALID` 같은 결과 문제를 어떤 correction 경로가 받을 수 있는지는
