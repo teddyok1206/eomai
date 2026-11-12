@@ -108,3 +108,32 @@ ZIP/XML/수식을 검사한다. private 전송 길이/hash·현재 actor·reply 
 - **소스 구현·비운영 검증 단계이며 운영 배포는 하지 않았다.** 운영 활성화 시 기존
   platform/Catalog/API/Web 호환 release 절차를 사용한다. 실제 사용자 자료 업로드나
   교재 배치 변경은 이번 개발 검증에서 실행하지 않았다.
+
+## 운영 배포 — 2026-11-12 UTC
+
+후속 사용자 승인으로 구현 commit `7b1fa87813af7ae8a77c8ca22915eb1517afd792`를 운영에
+반영했다. 앞 절의 미배포 표시는 소스 검증 완료 당시의 기록이다.
+
+- API/contracts/shared platform·Catalog·runner 및 Web을 같은 후보로 설치했다.
+  기존 공식 installer와 no-migration 호환 release 절차를 사용했다.
+- QUERY owner `11d826d2`와 기존 numerical/controller는 유지하고 API provider의 정확한
+  source/wheel/member hash만 호환 갱신했다. 채팅은 기존 06번 슬롯과 인증을 유지한다.
+- DB head `20261110_0077` 그대로이며 migration·권한 확대·문항/Graph/임베딩 재생성은 없다.
+  INDEX·자료 학습 설정 및 실행 identity, Pack1.20.19와 기존 출제 경로를 보존했다.
+- 처리 중 worker/command/HWPX/chat/native query가 없음을 확인한 뒤 기존 creative
+  producer를 SIGINT drain하고 교체했다. Catalog/API→채팅 worker→채팅 owner→QUERY→Web
+  순서로 재개했으며 기존 네 runner·maintenance·producer도 다시 active임을 확인했다.
+- 설치 API/platform/contracts 실제 member2,887개를 원 wheel과 대조했다. Web 설치 검증은
+  76개 파일 PASS. HTTPS의 HTML/app/import-controller/편성 JS/CSS가 wheel과 일치한다.
+  API READY·HTTPS 로그인 화면200·Catalog 신규 Workbook branch와 미인증 경로401 확인 PASS.
+- INDEX는 배포 전 이미 failed/PID0이었다. 그 상태와 identity를 그대로 보존했으며, 이번
+  업로드 배포를 임베딩 복구/실행 성공으로 해석하지 않는다. 자료 학습 PID/identity는 동일하다.
+- 실제 사용자 인증으로 workbook 업로드·교재 저장은 실행하지 않았다. 비운영 통합/실제
+  Chromium 검사와 위 운영 설치 smoke를 구분하며, 사용자 양식 다운로드 확인은 별도다.
+  운영 테스트 교재·문항/배치·실패 이력 변경·신규 모델 실행은 모두0건이다.
+
+보호된 release/rollback wheel·설정·설치·smoke 근거는
+`/var/lib/eom-excel-workbook-release-20261112`에 보관한다. 이전 API/Catalog `c0dafbe3`,
+Web `d1328814`의 호환 복구 포인터를 보존하며 데이터 삭제나 DDL 후퇴로 복구하지 않는다.
+최초 진단 smoke의 정적 자산 URL 오기(`/studio/static`,404)는 진단 스크립트만
+`/studio/assets`로 고친 뒤 재검증했다. 운영 구현 수정이나 재배포는 없었으며 이전 로그는 보존했다.
