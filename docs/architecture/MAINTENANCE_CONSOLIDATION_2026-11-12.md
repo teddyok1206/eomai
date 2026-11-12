@@ -79,6 +79,7 @@
 
 ## 완료 범위
 
-S1–S5 소스 구현과 연결·disposable DB·설치 검증을 완료했다. 운영 서비스는 변경하지 않았다.
+S1–S5 소스 구현과 연결·disposable DB·설치 검증을 완료했다. 이후 사용자의 별도
+푸시·운영 배포 승인으로 `a7fc195d` 호환 릴리스를 반영했다.
 실행 시간, 검증 결과, 실패 후 재검증 및 후속 배포 경계는
 [검증 기록](../operations/MAINTENANCE_CONSOLIDATION_VERIFICATION_2026-11-12.md)에 정리했다.

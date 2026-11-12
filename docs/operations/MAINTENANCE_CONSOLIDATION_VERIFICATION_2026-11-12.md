@@ -1,8 +1,9 @@
 # 기존 구조 정비 검증 — 2026-11-12
 
-상태: **소스 구현·검증 완료, 운영 미배포**. 출발 commit `13f95be8`.
+상태: **소스 검증 및 사용자 후속 승인에 따른 운영 배포 완료**.
+출발 commit `13f95be8`, 운영 source `a7fc195d607bdca917cce0d48a4897b1db313c9b`.
 계획: [S1–S5 설계](../architecture/MAINTENANCE_CONSOLIDATION_2026-11-12.md).
-이 기록은 새로운 운영 배포·학습·문항 생성 승인이나 실제 서비스 복구 결과가 아니다.
+아래 소스 검증 기록과 후속 운영 반영 기록을 구분한다. 이 문서 자체는 새 모델 실행 승인이 아니다.
 
 ## 최근 문항 제작 시간
 
@@ -58,7 +59,7 @@
 `73aab0db99bd9b24e21a9bf15717067832bdec8a1b88c1ca3fb2725f836028de`.
 이 wheel은 작업 트리 설치 시뮬레이션이며 운영용 clean-commit release로 간주하지 않는다.
 
-## 보존 및 남은 운영 경계
+## 소스 검증 시점의 보존 및 남은 운영 경계
 
 - 팀장 프롬프트, released contract/Pack bytes, 문항·Graph·풀이보고서·임베딩,
   현재 모델 설정, 완료 산출물과 실패 이력을 변경하지 않았다.
@@ -71,3 +72,50 @@
 - 전체 시스템 무결함·실서비스 PASS·출제 속도 개선을 이번 검증으로 주장하지 않는다.
 
 일시적인 검사 자료는 Git에 넣지 않고 별도 증거로 관리한다. 반복 suite는 중복 합산하지 않는다.
+
+## 후속 승인에 따른 운영 반영 — 2026-11-12 UTC
+
+사용자의 “푸시, 운영 배포” 승인 후 `main`을 GitHub에 푸시하고 clean commit에서
+공식 build-only 경로로 세 wheel을 다시 만들었다. 위 작업 트리 검증 wheel을 배포하지 않았다.
+
+| 구성요소 | 운영 선택 |
+| --- | --- |
+| 공유 platform / API / API contracts / Catalog / Workflow Runner | `a7fc195d607bdca917cce0d48a4897b1db313c9b` |
+| creative 등록 owner 및 notify unit | 같은 `a7fc195d`의 설치본·템플릿 |
+| Web | 기존 `858680cfaaa3e091b6e98b220e50ccb8d70e3735` 보존 |
+| QUERY owner | 기존 `11d826d29587c48a2416fb26825c5748cb737d22` 보존, API provider pin만 호환 갱신 |
+| INDEX·GPU 수치 환경 / 자료 학습 | 설치 파일 및 실행 identity 보존 |
+| migration | `20261112_0079` 유지, DDL 없음 |
+
+실제 배포 wheel SHA-256:
+
+- platform: `6c4e55b3785445c6fe8c8d8da25aa508f2452fd985e2f02e262aac9a231d6ff2`
+- API: `ef649f1f98fa3113d56443996d333f6bc3a5add17dc8fa7206d6bf8e13dc7660`
+- API contracts: `bf7bfb5525ea47a84999e143916429513f38cec11b70d7f9cf105c31f72e67bb`
+
+### 실행 경계 및 확인
+
+- 실제 worker lease·실행 command·HWPX·채팅·QUERY/GPU transient work가 모두 없는
+  창을 확인한 뒤 기존 owner installer와 typed configuration codec으로 호환 전환했다.
+- API/Web의 짧은 중단 후 Catalog/API → 채팅 worker/owner → QUERY → HWPX/Web/Runner
+  순서로 복구했다. Web 패키지·모델 선택·슬롯 인증·원본 및 실패 이력은 변경하지 않았다.
+- API `READY`, HTTPS 로그인 화면 200, 배포 Web wheel과 정적 파일 5개 bytes 일치,
+  익명 관리자 설정 접근 401을 확인했다. 관련 서비스 14개가 active이며 PID가 있다.
+- creative owner는 기존 exit 78에서 새 `Type=notify`로 scope/pin 초기화를 통과했다.
+  이후 `PROCESSING` 및 기존 등록 대상의 `PUBLISHING` 진행을 관찰했다.
+  시작 시점의 `verified_count=0`은 복원 중인 owner의 진행 projection이며 전체 등록 수가 아니다.
+- 첫 후속 검사에서 READY 직후의 read model `STARTING`을 잘못 실패로 취급했다.
+  이는 서비스 실패가 아니라 검증 스크립트의 판정 오류였다. 실패 로그를 보존하고,
+  readiness와 첫 source scan을 구분한 재검사에서 `PROCESSING` 및 전체 checks PASS를 확인했다.
+- 별도 로그인·문항 생성·채팅 응답·GPU canary는 요청하지 않았다. 인증된 사용자 화면의
+  실제 업무 검증까지 PASS로 확대 해석하지 않는다.
+
+운영 기록: `/var/lib/eom-maintenance-release-20261112/`의 `prepared.json`,
+`rollback.json`, `installed.json`, `activated.json`, `postdeploy.json`.
+이전 wheel·설정·unit bytes는 복구용으로 보존한다. 자동 rollback이나 과거 실패 재해석은 없다.
+배포 operator의 소스 정리 때문에 이전 context/admission 기록을 다시 쓰지 않았고,
+이번 무 migration 배포에서는 privileged migration callback을 호출하지 않았다.
+
+별도 기존 장애: `eom-embedding-index-owner.service`는 배포 전부터 failed였으며
+이번에도 동일 invocation을 보존했다. 이번 배포로 GPU INDEX가 복구됐다고 주장하지 않는다.
+기존 원본 보류 항목도 그대로 남겨 두며, 등록 전체 완료를 이번 배포의 완료 조건으로 삼지 않는다.
