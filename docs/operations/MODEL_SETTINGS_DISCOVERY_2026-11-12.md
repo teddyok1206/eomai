@@ -37,3 +37,16 @@ Web-only 배포를 사용한다. API/platform/QUERY/INDEX/문항 worker의 설�
 소스 검증: Web suite **534 PASS**(옵트인 Chromium 포함), 별도 집중/문맥 검사
 25 PASS, 변경 Python의 Ruff/format 및 release-integrity mypy PASS.
 기존 Starlette/httpx deprecation warning은 검증 실패가 아니다.
+
+## 운영 반영
+
+2026-11-12 10:49:40 UTC, Web `fd35ed69631305610ee29e16b4d340376d798582`를 배포했다.
+wheel SHA-256: `1759bd4e6b1d7c5ec0a9e1768ad0e3d720875778b820270cbf80731770f41fe1`.
+설치 RECORD 80개·실제 Web 서비스 identity·HTTPS 변경 자산 일치·로그인 화면·READY PASS.
+API/QUERY/INDEX/실행 runner/자료 학습/채팅/HWPX의 프로세스·설정은 보존했다.
+INDEX는 배포 전부터 failed였으며 이 변경으로 재시작하거나 복구하지 않았다.
+
+정확한 롤백 wheel과 적용 영수증은
+`/var/lib/eom-model-choice-web-release-20261112/`에 보존했다.
+DB 변경0, 모델 실행0. 사용자의 새 버튼 확인은 아직 PENDING이다.
+다른 모델의 실행 허용 확대나 max/ultra 실행 계약 확장을 완료했다고 주장하지 않는다.
