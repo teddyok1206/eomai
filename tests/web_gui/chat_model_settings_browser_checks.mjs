@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "chat-model-settings.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "chat-model-settings.js", "model-choice-buttons.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createChatModelSettingsEditor} from './chat-model-settings.js';
@@ -55,17 +55,18 @@ try {
   assert.match(await page.locator("#chat-model-current").innerText(),/model-a/);
   assert.equal(await page.locator("#preset-base-revision").isVisible(),false);
   assert.equal(await page.locator("#preset-capacity-revision").isVisible(),false);
-  await page.locator("#chat-model-select").focus();
-  assert.equal(await page.locator("#chat-model-select").evaluate(node=>node===document.activeElement),true);
+  const modelButton = page.locator("#chat-model-select").locator("..").getByRole("button", {name:"model-a",exact:true});
+  await modelButton.focus();
+  assert.equal(await modelButton.evaluate(node=>node===document.activeElement),true);
   if(process.env.EOM_SETTINGS_SCREENSHOT_DIR){
     await mkdir(process.env.EOM_SETTINGS_SCREENSHOT_DIR,{recursive:true});
     await page.locator("#advanced-preset-policy").screenshot({path:process.env.EOM_SETTINGS_SCREENSHOT_DIR+'/desktop.png'});
   }
-  await page.locator("#chat-model-select").selectOption("model-b");
+  await page.locator("#chat-model-select").locator("..").getByRole("button", {name:"model-b",exact:true}).click();
   await page.locator("#chat-model-save").click();
   await page.waitForFunction(()=>document.querySelector("#chat-model-message").textContent.includes("저장했습니다"));
   assert.equal(await page.evaluate(()=>window.chatModelFixture.saves),1);
-  await page.locator("#chat-model-select").selectOption("model-a");
+  await page.locator("#chat-model-select").locator("..").getByRole("button", {name:"model-a",exact:true}).click();
   await page.evaluate(()=>{window.chatModelFixture.fail=true;});
   await page.locator("#chat-model-save").click();
   await page.waitForFunction(()=>document.querySelector("#chat-model-message").textContent.includes("SYNTHETIC_TIMEOUT"));
@@ -75,7 +76,7 @@ try {
   assert.equal(posts[1].body.idempotency_key,posts[2].body.idempotency_key);
   assert.equal(await page.evaluate(()=>window.chatModelFixture.saves),2);
   await page.evaluate(()=>{window.chatModelFixture.hold='POST';});
-  await page.locator("#chat-model-select").selectOption("model-b");
+  await page.locator("#chat-model-select").locator("..").getByRole("button", {name:"model-b",exact:true}).click();
   await page.locator("#chat-model-save").click();
   await page.waitForFunction(()=>window.chatModelFixture.held);
   await page.locator("#chat-model-save").evaluate(node=>node.click());

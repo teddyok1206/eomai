@@ -87,6 +87,11 @@ ID/hash·참조·실행 중 검사와 기존 DB-owner maintenance 트랜잭션�
 운영 API/worker에는 삭제 권한을 주지 않는다. 상세는
 `docs/architecture/FEATURE_MODEL_SETTINGS_CONSOLIDATION.md`를 본다.
 
+모델 설정의 상태 확인은 `model-catalog-observation.js`로 실행 관리의 공식 OBSERVE와
+같은 멱등·진행 중 요청을 공유한다. 목록과 실행 허용은 다르다. 토글 UI는 검증된 조합만
+선택 가능하게 하고, native 목록에만 있는 모델은 이유를 표시한다. 상태 확인은 모델
+추론·계정 로그인·프리셋 발행을 시작하지 않는다.
+
 ## 공용 슬롯·모델 설정 후속 소스
 
 `SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md`가 새 설계다. 활성 여부는 별도 설치/

@@ -16,7 +16,7 @@ function section(start, end) {
 const renderer = section("function operatorRoleChoices(", "function operatorMutationBody(");
 const primitives = section("function renderDefinitionList(", "function renderStages(")
   + section("function controlCard(", "function codexSlotCard(")
-  + section("function addControlDetail(", "function presetRoleLabel(");
+  + section("function addControlDetail(", "function workerSlotLabel(");
 const fixture = `
 import {hasPermission} from './studio-permissions.js';
 const $ = selector => document.querySelector(selector);

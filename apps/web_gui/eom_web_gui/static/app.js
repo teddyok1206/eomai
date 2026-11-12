@@ -8,6 +8,7 @@ import {
 } from "./curriculum-selector.js";
 import {createExecutionPresetEditor} from "./execution-preset-controller.js";
 import {createChatModelSettingsEditor} from "./chat-model-settings.js";
+import {createModelCatalogObservation} from "./model-catalog-observation.js";
 import {
   hwpxTargetFromAdminRevision,
   hwpxTargetFromBuild,
@@ -201,11 +202,13 @@ const materialLearning = createMaterialLearning({document, api, setStateStatus,
   explainError: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });
+const modelCatalogObservation = createModelCatalogObservation({api, isAdmin: hasAdminRole});
 const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
-  showMessage, addDetail: addControlDetail,
+  showMessage, addDetail: addControlDetail, modelCatalog: modelCatalogObservation.load,
 });
-const chatModelEditor = createChatModelSettingsEditor({document, api, isAdmin: hasAdminRole, showMessage});
+const chatModelEditor = createChatModelSettingsEditor({document, api, isAdmin: hasAdminRole, showMessage,
+  modelCatalog: modelCatalogObservation.load});
 const UI_MODE_BY_VIEW = Object.freeze({
   chat: "human",
   workflow: "engine",
@@ -247,6 +250,7 @@ async function api(path, options = {}) {
     state.adminSettingsRequestSequence += 1;
     presetEditor.reset();
     chatModelEditor.reset();
+    modelCatalogObservation.reset();
     window.location.replace("/studio/login");
     throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
   }
@@ -3179,7 +3183,14 @@ async function refreshCodexAccount(account) {
     await loadCodexAccounts();
     return;
   }
-  await sendAccountCommand(account, "OBSERVE");
+  try {
+    showMessage($("#codex-account-message"), "상태·사용량 확인 중…");
+    await modelCatalogObservation.observe(account);
+    await loadCodexAccounts();
+    showMessage($("#codex-account-message"), "상태·사용량 확인 완료", "success");
+  } catch (failure) {
+    showMessage($("#codex-account-message"), `계정 작업 실패: ${failure.message}`, "error");
+  }
 }
 
 function renderCodexAccounts(accounts) {
@@ -5336,6 +5347,7 @@ async function logout() {
   state.adminSettingsRequestSequence += 1;
   presetEditor.reset();
   chatModelEditor.reset();
+  modelCatalogObservation.reset();
   generalChat.setOwner(null);
   itemDb.setOwner(null);
   knowledgeMap.setOwner(null);

@@ -17,6 +17,18 @@ Orchestrator가 기능 → 단계 → 실제 ExecutionPreset의 고정 대응을
 
 ## 모델 및 조회 경계
 
+모델 설정의 `상태 확인 · 모델 목록 갱신`은 기존 account OBSERVE 명령을 호출한 뒤
+같은 preset의 model-options를 다시 읽는다. Web의 작은 observation controller를 실행 관리와
+모델 설정이 공유한다. binding별 Map은 진행 중 요청과 멱등 키만 보유하며, 실패한 HTTP
+응답/대기 만료는 같은 명령을 재조회한다. 최대6개 슬롯, 조회 O(슬롯 수 + 모델 수), 새 DB나
+worker protocol은 없다. 로그아웃 때 화면 상태를 폐기하고 늦은 응답은 적용하지 않는다.
+
+토글은 기존 select의 값을 표현하고 서버 검증을 대신하지 않는다. 계정의 신선한 native
+catalog에만 있는 모델도 `실행 검증 필요`로 표시하지만 선택·발행 권한은 기존
+native catalog ∩ 계정별 검증 ∩ pool/role의 model-options만 제공한다. 미지원 추론 깊이도
+지원되는 것으로 바꾸지 않는다. 단순한 목록 GET만으로 계정 관측을 대신하거나,
+화면에서 native catalog를 허용 정책으로 승격하는 대안은 쓰지 않는다.
+
 - 논리 기능·단계 키는 코드에 정의한 작은 불변 값이다. 동적 registry나 추가 table은 없다.
 - 실행 정본은 기존 preset logical ID → immutable revision → policy/bundle pointers다.
 - 단계별 현행 preset만 indexed lookup으로 일괄 조회한다. 동일 key가 여러 단계에 소속되거나

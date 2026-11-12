@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "execution-preset-controller.js", "execution-preset-editor.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "execution-preset-controller.js", "execution-preset-editor.js", "model-choice-buttons.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 const projectedPresets = process.env.EOM_WEB_PRESET_FIXTURE_PATH
   ? JSON.parse(await readFile(process.env.EOM_WEB_PRESET_FIXTURE_PATH, "utf8")) : null;
@@ -96,6 +96,11 @@ async function api(path, request = {}) {
  throw new Error('UNEXPECTED_FIXTURE_OPERATION');
 }
 const controller = createExecutionPresetEditor({document,api,isAdmin:()=>true,
+ modelCatalog:async(_kind,request={})=>{
+  fixture.catalogRefreshes=(fixture.catalogRefreshes||0)+Number(Boolean(request.refresh));
+  if(request.refresh&&fixture.holdCatalog){fixture.held=true;await new Promise(resolve=>{fixture.release=()=>{fixture.held=false;resolve();};});}
+  return {models:[{model:'model-a',efforts:['medium','high','ultra']},{model:'model-b',efforts:['high','xhigh']},{model:'discovered-model',efforts:['high']}],failures:[]};
+ },
  refresh:async()=>controller.setFeatures(features()),showMessage:(node,text)=>{node.textContent=text;},
  addDetail:(node,label,value)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;node.append(dt,dd);}});
 function features() {return [
@@ -136,11 +141,26 @@ try {
   };
   const model = index => page.locator(`[data-preset-model][data-role-index="${index}"][data-candidate-index="0"]`);
   const effort = index => page.locator(`[data-preset-effort][data-role-index="${index}"][data-candidate-index="0"]`);
-  const review = async () => {await model(0).selectOption("model-b");await page.locator("#preset-review-open").click();await page.locator("#preset-review-confirm").check();};
+  const chooseModel = (index, value) => model(index).locator("..").getByRole("button", {name:value, exact:true}).click();
+  const review = async () => {await chooseModel(0,"model-b");await page.locator("#preset-review-open").click();await page.locator("#preset-review-confirm").check();};
   const save = async () => {await review();await page.locator("#preset-draft-submit").click();await page.waitForFunction(() => !document.querySelector("#preset-release-panel").hidden);};
   const held = () => page.waitForFunction(() => window.presetFixture.held);
   const releaseHeld = () => page.evaluate(() => window.presetFixture.release());
   const calls = () => page.evaluate(() => window.presetFixture.calls);
+
+  await reset();
+  // All discovered choices are visible, but catalog-only entries cannot be selected.
+  assert.equal(await model(0).locator("..").getByRole("button", {name:/discovered-model.*실행 검증 필요/}).isDisabled(), true);
+  assert.equal(await effort(0).locator("..").getByRole("button", {name:/ultra.*현재 실행 규약 미지원/}).isDisabled(), true);
+  await chooseModel(0,"model-b");
+  await page.evaluate(() => {window.presetFixture.holdCatalog=true;});
+  await page.locator("#preset-model-refresh").click();await held();
+  await page.locator("#preset-model-refresh").evaluate(node => node.click());
+  assert.equal(await page.evaluate(() => window.presetFixture.catalogRefreshes), 1);
+  await releaseHeld();
+  await page.waitForFunction(() => !document.querySelector("#preset-model-refresh").disabled);
+  assert.equal(await model(0).inputValue(), "model-b");
+  assert.equal((await calls()).some(call => call.method === "POST"), false);
 
   await reset();
   const modelCount = await page.evaluate(() => window.presetFixture.preset.revisions[0].role_policies.reduce((n, policy) => n + policy.model_candidates.length, 0));
@@ -287,8 +307,8 @@ try {
     await page.evaluate(value => {window.presetFixture.emptyRole=value;}, role);
     await page.locator("#preset-base-select").selectOption("");
     await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
-    await page.waitForFunction(() => document.querySelector("#preset-draft-message").textContent.includes("‘상태 확인’"));
-    assert.match(await page.locator("#preset-draft-message").innerText(), /로그인 상태/);
+    await page.waitForFunction(() => document.querySelector("#preset-draft-message").textContent.includes("‘상태 확인 · 모델 목록 갱신’"));
+    assert.match(await page.locator("#preset-draft-message").innerText(), /다른 화면으로 이동할 필요가 없습니다/);
     assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
     assert.equal(await page.locator("#preset-role-editors").innerText().then(text => text.includes("현재 설정 사용 불가")), false);
     assert.match(await page.locator("#preset-role-editors").innerText(), /모델 목록 확인 필요/);
@@ -303,7 +323,7 @@ try {
   await page.locator("#preset-base-select").selectOption("execpresetrev_" + "2".repeat(32));
   await page.waitForFunction(() => document.querySelector("#preset-role-editors").textContent.includes("현재 설정 사용 불가"));
   assert.equal(await page.locator("#preset-review-open").isDisabled(), true);
-  await model(2).selectOption("model-b");
+  await chooseModel(2,"model-b");
   assert.equal(await page.locator("#preset-review-open").isDisabled(), false);
   assert.equal((await calls()).some(call => call.method === "POST"), false);
 

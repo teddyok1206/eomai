@@ -66,7 +66,8 @@ const vm = require('node:vm');
 const calls = [];
 const context = {
   loadCodexAccounts: async () => calls.push('READ_ONLY'),
-  sendAccountCommand: async (_account, command) => calls.push(command),
+  modelCatalogObservation: {observe: async () => calls.push('OBSERVE')},
+  $: () => ({}), showMessage: () => {},
 };
 vm.createContext(context);
 vm.runInContext(FUNCTION, context);
@@ -82,7 +83,10 @@ vm.runInContext(FUNCTION, context);
   await context.refreshCodexAccount({...exhausted, assignment_purpose: 'GENERAL_CHAT',
     active_chat_count: 1, chat_runtime_state: 'UNAVAILABLE'});
   await context.refreshCodexAccount({...exhausted, active_auth_enrollment_id: 'authflow_test'});
-  assert.deepEqual(calls, ['OBSERVE', 'OBSERVE', 'OBSERVE', 'OBSERVE', 'READ_ONLY']);
+  assert.deepEqual(calls, [
+    'OBSERVE', 'READ_ONLY', 'OBSERVE', 'READ_ONLY', 'OBSERVE', 'READ_ONLY',
+    'OBSERVE', 'READ_ONLY', 'READ_ONLY',
+  ]);
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 """.replace("FUNCTION", json.dumps(function))
     completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)

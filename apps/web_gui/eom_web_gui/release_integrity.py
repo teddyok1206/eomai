@@ -50,6 +50,8 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/chat-markdown.js",
         "static/chat-knowledge.js",
         "static/chat-model-settings.js",
+        "static/model-choice-buttons.js",
+        "static/model-catalog-observation.js",
         "static/curriculum-selector.js",
         "static/eom-mark.svg",
         "static/execution-preset-editor.js",

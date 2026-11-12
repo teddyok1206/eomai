@@ -535,7 +535,13 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .policy-role-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .policy-role-card h3 { margin: 0; font-size: 15px; }
 .policy-role-card header span { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
-.policy-role-fields { display: grid; grid-template-columns: minmax(240px, 1fr) 150px; gap: 10px; }
+.policy-role-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.model-choice-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.model-choice { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 9px 13px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: white; color: var(--eom-text); font: inherit; cursor: pointer; }
+.model-choice[aria-pressed="true"] { border-color: var(--eom-primary); background: var(--eom-blue-50); box-shadow: inset 0 0 0 1px var(--eom-primary); }
+.model-choice:focus-visible { outline: 2px solid var(--eom-focus); outline-offset: 3px; }
+.model-choice:disabled { cursor: default; color: var(--eom-text-muted); }
+.model-choice-state, .model-choice-empty { color: var(--eom-text-muted); font-size: var(--eom-type-caption); font-weight: 400; }
 .policy-candidate-list { display: grid; gap: 8px; }
 .policy-pointer-details { margin-top: 12px; border-top: 1px solid var(--eom-border); }
 .policy-pointer-details summary { padding: 10px 0 0; color: var(--eom-info-cobalt); font-size: var(--eom-type-caption); font-weight: 700; cursor: pointer; }

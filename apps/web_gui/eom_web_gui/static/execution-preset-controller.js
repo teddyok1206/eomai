@@ -6,6 +6,7 @@ import {
   presetValidationSucceeded,
   reviewedPresetDraft,
 } from "./execution-preset-editor.js";
+import {modelChoiceButtons, discoveredModelChoices, discoveredEffortChoices} from "./model-choice-buttons.js";
 
 const EFFORT_LABELS = {minimal: "최소", low: "낮음", medium: "보통", high: "높음", xhigh: "매우 높음"};
 const DRAFT_ID = /^execpresetrev_[0-9a-f]{32}$/;
@@ -14,7 +15,8 @@ const POLL_LIMIT = 30;
 
 // This controller owns only the administrator's model-policy editing session.
 // The server owns capability admission, evaluation evidence and release decisions.
-export function createExecutionPresetEditor({document, api, isAdmin, refresh, showMessage, addDetail}) {
+export function createExecutionPresetEditor({document, api, isAdmin, refresh, showMessage, addDetail,
+  modelCatalog = async () => ({models: [], failures: []})}) {
   const $ = (selector) => document.querySelector(selector);
   let presets = [];
   let features = [];
@@ -22,6 +24,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
   let bases = [];
   let base = null;
   let options = null;
+  let catalog = [];
   let allowedPairs = new Map();
   let reviewed = null;
   let editorVersion = 0;
@@ -57,6 +60,8 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     $("#feature-model-select").disabled = busy || !features.length;
     $("#preset-draft-resume").disabled = busy;
     $("#preset-base-select").disabled = busy || !bases.length;
+    $("#preset-model-refresh").disabled = busy || !base || !isAdmin();
+    $("#preset-model-refresh").textContent = action === "OBSERVE" ? "상태 확인 중…" : "상태 확인 · 모델 목록 갱신";
     for (const field of document.querySelectorAll("#preset-guided-form input:not([readonly]), #preset-guided-form textarea")) {
       field.disabled = true;
     }
@@ -64,6 +69,10 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     const candidateFields = Array.from(document.querySelectorAll("[data-preset-model], [data-preset-effort]"));
     for (const field of candidateFields) {
       field.disabled = busy || !options || !field.options.length || field.options.length === 1 && !field.value;
+      const isModel = field.dataset.presetModel === "true";
+      const model = isModel ? field.value : $(`[data-preset-model][data-role-index="${field.dataset.roleIndex}"][data-candidate-index="${field.dataset.candidateIndex}"]`)?.value;
+      modelChoiceButtons(field, isModel ? "모델" : "생각하는 깊이", isModel
+        ? discoveredModelChoices(catalog) : discoveredEffortChoices(catalog, model, EFFORT_LABELS));
     }
     $("#preset-review-open").disabled = busy || !base || !options || modelOptionsNeedRefresh()
       || candidateFields.some((field) => !field.value);
@@ -108,6 +117,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     invalidate();
     base = null;
     options = null;
+    catalog = [];
     allowedPairs = new Map();
     $("#preset-base-revision").value = "-";
     $("#preset-display-name").value = "";
@@ -132,21 +142,23 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
 
   function renderEfforts(modelSelect, effortSelect, candidates, selectedEffort) {
     effortSelect.replaceChildren();
-    const efforts = candidates.filter((candidate) => candidate.model === modelSelect.value)
-      .map((candidate) => candidate.reasoning_effort);
+    const allowed = new Set(candidates.filter(candidate => candidate.model === modelSelect.value)
+      .map(candidate => candidate.reasoning_effort));
+    const efforts = Object.keys(EFFORT_LABELS).filter(effort => allowed.has(effort));
     if (!efforts.length) appendOption(effortSelect, "", candidates.length
       ? "모델을 먼저 선택하세요" : "목록 확인 필요");
     for (const effort of efforts) appendOption(effortSelect, effort, EFFORT_LABELS[effort], effort === selectedEffort);
     if (!efforts.includes(selectedEffort) && efforts.length) effortSelect.value = efforts[0];
   }
 
-  function renderRoles() {
+  function renderRoles(selections = new Map()) {
     const root = $("#preset-role-editors");
     root.replaceChildren();
     for (const [roleIndex, policy] of base.draft.role_policies.entries()) {
       const candidates = options.get(policy.role) || [];
       const models = [...new Set(candidates.map((candidate) => candidate.model))].sort();
-      for (const [candidateIndex, candidate] of policy.model_candidates.entries()) {
+      for (const [candidateIndex, configured] of policy.model_candidates.entries()) {
+        const candidate = selections.get(`${roleIndex}:${candidateIndex}`) || configured;
         const card = document.createElement("section");
         card.className = "policy-role-card";
         const heading = document.createElement("h3");
@@ -186,6 +198,14 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     }
   }
 
+  function renderModelOptions(response, discovered, selections) {
+    options = approvedPresetModelOptions(base, response);
+    catalog = discovered.models;
+    allowedPairs = new Map([...options].map(([role, candidates]) => [role,
+      new Set(candidates.map(candidate => candidateOptionValue(candidate.model, candidate.reasoning_effort)))]));
+    renderRoles(selections);
+  }
+
   async function chooseBase() {
     if (action || !isAdmin()) return;
     const selected = $("#preset-base-select").value;
@@ -204,14 +224,14 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
     message("사용할 수 있는 모델을 확인하고 있습니다.");
     sync();
     try {
-      const response = await api(`/admin/execution-presets/${encodeURIComponent(base.preset_id)}/model-options`);
+      const [response, discovered] = await Promise.all([
+        api(`/admin/execution-presets/${encodeURIComponent(base.preset_id)}/model-options`),
+        modelCatalog("WORKFLOW"),
+      ]);
       if (sequence !== readVersion || base !== capturedBase) return;
-      options = approvedPresetModelOptions(base, response);
-      allowedPairs = new Map([...options].map(([role, candidates]) => [role,
-        new Set(candidates.map((candidate) => candidateOptionValue(candidate.model, candidate.reasoning_effort)))]));
-      renderRoles();
+      renderModelOptions(response, discovered);
       message(modelOptionsNeedRefresh()
-        ? "코덱스 계정에서 ‘상태 확인’을 한 뒤 실행 설정을 다시 선택하세요. 로그인 상태가 바뀌면 모델 목록도 다시 확인해 주세요."
+        ? "‘상태 확인 · 모델 목록 갱신’을 눌러주세요. 다른 화면으로 이동할 필요가 없습니다."
         : "");
     } catch (failure) {
       if (sequence !== readVersion || base !== capturedBase) return;
@@ -219,6 +239,41 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
       message(`모델 목록을 불러오지 못했습니다: ${failure.message}`, "error");
     }
     sync();
+  }
+
+  async function refreshModels() {
+    if (action || !base || !isAdmin()) return;
+    const captured = base;
+    const selections = new Map(Array.from(document.querySelectorAll("[data-preset-model]")).map(field => {
+      const suffix = `[data-role-index="${field.dataset.roleIndex}"][data-candidate-index="${field.dataset.candidateIndex}"]`;
+      return [`${field.dataset.roleIndex}:${field.dataset.candidateIndex}`, {
+        model: field.value, reasoning_effort: $(`[data-preset-effort]${suffix}`).value,
+      }];
+    }));
+    invalidate();
+    const sequence = ++readVersion;
+    action = "OBSERVE";
+    sync();
+    message("작업 계정의 상태와 모델 목록을 확인하고 있습니다. 실행 설정은 변경하지 않습니다.");
+    try {
+      const discovered = await modelCatalog("WORKFLOW", {refresh: true});
+      if (sequence !== readVersion || base !== captured || !isAdmin()) return;
+      const response = await api(`/admin/execution-presets/${encodeURIComponent(base.preset_id)}/model-options`);
+      if (sequence !== readVersion || base !== captured || !isAdmin()) return;
+      renderModelOptions(response, discovered, selections);
+      message(discovered.failures.length ? `일부 계정 확인 실패: ${discovered.failures.join(" · ")}`
+        : modelOptionsNeedRefresh() ? "목록은 갱신했지만 사용할 수 있는 모델의 실행 검증이 필요합니다."
+          : "모델 목록을 갱신했습니다. 선택한 설정은 아직 저장하지 않았습니다.",
+      discovered.failures.length || modelOptionsNeedRefresh() ? "warning" : "success");
+    } catch (failure) {
+      if (sequence !== readVersion || base !== captured) return;
+      options = null;
+      allowedPairs = new Map();
+      message(`모델 상태 확인 실패: ${failure.message}`, "error");
+    } finally {
+      if (action === "OBSERVE") action = null;
+      sync();
+    }
   }
 
   function collectEdits() {
@@ -484,6 +539,7 @@ export function createExecutionPresetEditor({document, api, isAdmin, refresh, sh
 
   function install() {
     $("#feature-model-select").addEventListener("change", chooseFeature);
+    $("#preset-model-refresh").addEventListener("click", refreshModels);
     $("#preset-draft-resume").addEventListener("click", () => {
       const draft = pendingDraft();
       if (draft) inspectDraft(presets.find(value => value.preset_id === base.preset_id), draft);
