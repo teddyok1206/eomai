@@ -4,6 +4,9 @@
 최신 상태(09:25 UTC): **`e03af582` 호환 운영 배포 및 20개 프리셋 공용 슬롯 정책 활성화 완료**.
 사용자의 관리자 화면·새 채팅 답변 확인과 서버 COMPLETED 대조도 완료했다.
 모델 변경 후 신규 작업 적용 canary는 별도 확인 대상이다.
+후속10:30 UTC: 관리자 설정은7개 기능으로 통합됐고 구 프리셋7개 퇴역·미참조 버전36개
+삭제까지 운영 반영됐다. 최신 화면/정리 증거는
+[기능별 설정 릴리스](FEATURE_MODEL_SETTINGS_RELEASE_2026-11-12.md)를 따른다.
 설계: [공용 슬롯과 모델 설정](../architecture/SHARED_CODEX_SLOTS_AND_PRESET_MODEL_SETTINGS.md).
 
 ## 사용자 동작
