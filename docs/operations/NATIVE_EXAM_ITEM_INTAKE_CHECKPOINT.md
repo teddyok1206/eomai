@@ -261,6 +261,16 @@ Slack은 50쌍 native pilot milestone을 한 번 보고했다. 보고 ID는
 보존했다. 실제 자료 등록 후 기존 증분 INDEX의 pending/active 대상과 원인을 확인해야 하며,
 현재 임베딩이 실행 중이라고 보고하지 않는다.
 
+후속 읽기 진단에서 마지막 종료는 `TimeoutExpired`이며
+`eom_orchestrator.inference_transfer_cpu_systemd:273`의 15초 `systemctl show` 관측이었다.
+이것만으로 GPU 수치 계산 실패나 저장된 벡터 손상을 뜻하지 않는다. 기존 INDEX source
+`47fc5366`과 이번 `7084bbc4`의 material lineage·approved Item source·공개 V11 풀이 선택
+owner 네 파일에는 차이가 없다. 원본 한글/Excel을 가리키는 추가 component와 metadata2는
+임베딩 입력을 별도 형식으로 바꾸지 않는다. 이 소스 호환 점검은 실제 신규 문항의 벡터
+저장 완료를 증명하지 않는다. 원래 pending Workflow/parent와 retained unit을 공식 읽기/
+관측으로 확인한 뒤 동일 pin의 기존 INDEX service를 재개한다. 실패 이력·완성 벡터를
+수정하거나 새 key로 원래 실행을 우회하지 않는다.
+
 다음 작업은 실제 operator 한 번의 로그인으로 원본 업로드·첫 회차 접수·native Q/S 다운로드와
 DB 원본 metadata·공개 풀이·공통 Graph를 검증한 뒤 같은 세션에서 나머지 17회를 이어 넣는
 것이다. 준비된 원문은 450쌍이지만 운영 Item 등록은 아직 시작 전이다. 완료하지 않은 모델
