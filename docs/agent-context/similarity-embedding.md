@@ -82,6 +82,13 @@ caller의 UID/GID·birth·unit 검사는 그대로다. INDEX 전용 controller d
 QUERY/controller 주 진입점·수치 runtime은 보존할 수 있다. 상세 검증은 위 운영 기록과
 `tests/unit/test_embedding_native_process_member_transition.py`를 확인한다.
 
+descriptor의 `daemon-reload` 제한을 수정해도 INDEX가 구 controller를 별도 pin하면
+그 수정은 활성화되지 않는다. 공용 bootstrap/QUERY와 INDEX delegation을 구분하고,
+INDEX owner의 `controller_release`와 root env의 INDEX release/bootstrap SHA를 함께
+검토한다. 설치 root import 뒤에도 실제 CUDA 완료와 shard/binding/index 등록·Workflow
+완료를 따로 확인한다. 수치 runtime/model/space 변경 없이 전환한 근거는
+`docs/operations/GPU_INDEX_BATCH_STORAGE_ACCEPTANCE_2026-11-13.md`를 참고한다.
+
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·
