@@ -66,9 +66,14 @@ global queue/gate를 추가하지 않았다. 고정 Web TTL·pre-auth burst·rea
 프로세스 전체 RSS나 운영 처리량의 측정값은 아니다. source/HTTP stream은 합성이고
 실제 NAS 파일·모델·GPU를 사용하지 않았다.
 
-설치 없는 snapshot Web wheel은 package inventory 82개·RECORD 해시를 확인했고 실제
-격리 Web interpreter에서 새 다운로드 모듈 import가 통과했다. 이는 clean-commit 운영
-release나 설치/활성화 승인과 다르다.
+수정 commit `a9dbdf3a2551739b4b5d1a792bbb1f2466534190`의 clean tree에서 공식
+`scripts/web_gui/build_release.sh`도 실행했다. package inventory/RECORD와 실제 Web
+interpreter의 isolated import, 별도 venv 설치 시뮬레이션 **82 files PASS**다.
+운영 환경에는 설치하지 않았다.
+
+Web wheel SHA-256:
+`7b67011d2e78b6874b603d40b2940fde24c1c1c99d6a985d5ca7a962b1c3869e`.
+API/platform과의 호환 배포는 별도로 필요하며 Web wheel 성공만으로 운영 반영을 선언하지 않는다.
 
 설계와 세부 검증 위치:
 
