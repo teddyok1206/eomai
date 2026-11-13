@@ -20,6 +20,7 @@
 
 - [개발 규칙과 검토 체크리스트](../AGENTS.md)
 - [시스템 지도](agent-context/system-map.md) · [모듈·의존 경계](architecture/MODULE_BOUNDARIES.md)
+- [실제 사용자 오류 위험과 설계 원칙 검토](architecture/REAL_USER_FAILURE_RISK_REVIEW_2026-11-13.md)
 - [테스트·호환 배포·파일 정리](agent-context/development-operations.md)
 - [API 문제 진단](operations/API_TROUBLESHOOTING.md)
 - [운영 배포 실행 경계](operations/RELEASE_OPERATOR_RUNTIME.md)
