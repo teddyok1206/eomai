@@ -80,6 +80,11 @@ DB에는 기존 receipt의 작은 proposal/edition pointer만 보관한다. 인�
 문항 등록 기능이 아니다. UI는 `content-planning-import.js`, 상세 설계는
 `docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md`를 본다. 소스 구현과 운영 활성화는 구분한다.
 
+양식 행 수와 실제 GROUP/FORM 수는 다르다. `content_workbook_layout.require_workbook_layout`가
+실제 layout과 같은 bounded iterator로 기존 Edition 10,000 section 한도를 준비·조회·저장에
+적용한다. 초과 proposal을 준비 완료로 표시하지 않고 `CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE`로
+거절하며, 보관된 Artifact/receipt는 수정하지 않는다. V1 `can_commit` 의미도 유지한다.
+
 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`가 승인된 설계다. 기존 Deliverable과
 Form, curated Assembly를 확장하며 별도 문항/파일 registry를 만들지 않는다.
 `content_planning.py`/`curated_document_slots.py`가 판·구간·빈 자리·반복 occurrence 계약,

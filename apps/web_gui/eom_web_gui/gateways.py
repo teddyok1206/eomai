@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -126,6 +127,15 @@ from eom_web_gui.contracts import (
     StudioWorkbenchOverview,
 )
 from eom_web_gui.curated_hwpx_contracts import CuratedHwpxSubmission, CuratedHwpxView
+from eom_web_gui.downloads import (
+    DOWNLOAD_CONCURRENCY,
+    DownloadCapacityBusy,
+    DownloadContent,
+    DownloadInvalid,
+    bounded_error_response,
+    close_download_response,
+    read_verified_download,
+)
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
     ChatCreateSubmission,
@@ -391,14 +401,14 @@ class LoginResult:
 
 @dataclass(frozen=True)
 class HwpxDownload:
-    content: bytes
+    content: DownloadContent
     content_type: str
     content_disposition: str
 
 
 @dataclass(frozen=True)
 class ExternalItemDocumentDownload:
-    content: bytes
+    content: DownloadContent
     content_type: str
     content_disposition: str
     etag: str
@@ -406,7 +416,7 @@ class ExternalItemDocumentDownload:
 
 @dataclass(frozen=True)
 class ExternalItemPreviewDownload:
-    content: bytes
+    content: DownloadContent
     etag: str
 
 
@@ -426,7 +436,7 @@ class ItemMedia:
 
 @dataclass(frozen=True)
 class DocumentReviewPdfDownload:
-    content: bytes
+    content: DownloadContent
     content_type: str
     content_disposition: str
 
@@ -1694,31 +1704,31 @@ class HttpApplicationGateway:
     ) -> HwpxDownload:
         _require_id(assembly_id, "assembly_")
         _require_id(build_id, "hwpxbuild_")
-        response = await self._authorized(
+        async with self._download(
             session,
-            "GET",
             f"/api/v1/item-db/assemblies/{assembly_id}/hwpx-builds/{build_id}/download",
             timeout=135.0,
-        )
-        if (
-            response.headers.get("content-type", "").split(";", 1)[0]
-            != "application/vnd.hancom.hwpx"
-            or not re.fullmatch(
-                r'attachment; filename="[A-Za-z0-9_.-]+\.hwpx"',
-                response.headers.get("content-disposition", ""),
+        ) as response:
+            if (
+                response.headers.get("content-type", "").split(";", 1)[0]
+                != "application/vnd.hancom.hwpx"
+                or not re.fullmatch(
+                    r'attachment; filename="[A-Za-z0-9_.-]+\.hwpx"',
+                    response.headers.get("content-disposition", ""),
+                )
+                or response.headers.get("content-length") is None
+            ):
+                raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response,
+                error_code="HWPX_DOWNLOAD_RESPONSE_INVALID",
+                maximum_bytes=256 * 1024**2,
+                expected_sha256=response.headers.get("etag", ""),
+                prefixes=(b"PK\x03\x04",),
             )
-            or not 0 < len(response.content) <= 256 * 1024**2
-            or response.headers.get("content-length") != str(len(response.content))
-            or response.headers.get("etag")
-            != "sha256:" + hashlib.sha256(response.content).hexdigest()
-            or not response.content.startswith(b"PK\x03\x04")
-        ):
-            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
-        return HwpxDownload(
-            response.content,
-            response.headers["content-type"],
-            response.headers["content-disposition"],
-        )
+            return HwpxDownload(
+                body, response.headers["content-type"], response.headers["content-disposition"]
+            )
 
     async def general_chat_knowledge_search(
         self, session: WebSession, value: ChatKnowledgeRequest
@@ -1881,6 +1891,7 @@ class HttpApplicationGateway:
             transport=transport,
         )
         self._workflow_start_timeout = workflow_start_timeout
+        self._download_slots = asyncio.BoundedSemaphore(DOWNLOAD_CONCURRENCY)
         self._reference_item_start_enabled = reference_item_start_enabled
         self.observe = ObserveClient(
             base_url=observability_url,
@@ -2459,57 +2470,57 @@ class HttpApplicationGateway:
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
     ) -> ExternalItemDocumentDownload:
-        response = await self._authorized(
+        async with self._download(
             session,
-            "GET",
             f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/download",
             params={"source_revision_id": source_revision_id},
             headers={"Accept": "application/vnd.hancom.hwp, application/vnd.hancom.hwpx"},
-        )
-        content_type = response.headers.get("content-type", "").split(";", 1)[0]
-        disposition = response.headers.get("content-disposition", "")
-        declared_length = response.headers.get("content-length", "")
-        etag = response.headers.get("etag", "")
-        actual_hash = "sha256:" + hashlib.sha256(response.content).hexdigest()
-        if (
-            content_type not in {"application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"}
-            or not disposition.startswith('attachment; filename="external-item-')
-            or not declared_length.isascii()
-            or not declared_length.isdecimal()
-            or int(declared_length) != len(response.content)
-            or not 0 < len(response.content) <= 100 * 1024 * 1024
-            or etag != f'"{actual_hash}"'
-        ):
-            raise GatewayError(status=502, code="EXTERNAL_ITEM_DOCUMENT_RESPONSE_INVALID")
-        return ExternalItemDocumentDownload(response.content, content_type, disposition, etag)
+        ) as response:
+            content_type = response.headers.get("content-type", "").split(";", 1)[0]
+            disposition = response.headers.get("content-disposition", "")
+            etag = response.headers.get("etag", "")
+            if (
+                content_type not in {"application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"}
+                or not disposition.startswith('attachment; filename="external-item-')
+                or response.headers.get("content-length") is None
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="EXTERNAL_ITEM_DOCUMENT_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response,
+                error_code="EXTERNAL_ITEM_DOCUMENT_RESPONSE_INVALID",
+                maximum_bytes=100 * 1024**2,
+                expected_sha256=etag[1:-1],
+            )
+            return ExternalItemDocumentDownload(body, content_type, disposition, etag)
 
     async def external_item_db_preview_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
     ) -> ExternalItemPreviewDownload:
-        response = await self._authorized(
+        async with self._download(
             session,
-            "GET",
             f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/preview.pdf",
             params={"source_revision_id": source_revision_id},
             headers={"Accept": "application/pdf"},
-        )
-        content_type = response.headers.get("content-type", "").split(";", 1)[0]
-        disposition = response.headers.get("content-disposition", "")
-        declared_length = response.headers.get("content-length", "")
-        etag = response.headers.get("etag", "")
-        actual_hash = "sha256:" + hashlib.sha256(response.content).hexdigest()
-        if (
-            content_type != "application/pdf"
-            or disposition != 'inline; filename="external-item-preview.pdf"'
-            or not declared_length.isascii()
-            or not declared_length.isdecimal()
-            or int(declared_length) != len(response.content)
-            or not 8 <= len(response.content) <= 256 * 1024 * 1024
-            or not response.content.startswith(b"%PDF-")
-            or etag != f'"{actual_hash}"'
-        ):
-            raise GatewayError(status=502, code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID")
-        return ExternalItemPreviewDownload(response.content, etag)
+        ) as response:
+            etag = response.headers.get("etag", "")
+            if (
+                response.headers.get("content-type", "").split(";", 1)[0] != "application/pdf"
+                or response.headers.get("content-disposition")
+                != 'inline; filename="external-item-preview.pdf"'
+                or response.headers.get("content-length") is None
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response,
+                error_code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID",
+                maximum_bytes=256 * 1024**2,
+                minimum_bytes=8,
+                expected_sha256=etag[1:-1],
+                prefixes=(b"%PDF-",),
+            )
+            return ExternalItemPreviewDownload(body, etag)
 
     async def external_item_db_prepare_preview(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
@@ -2963,7 +2974,10 @@ class HttpApplicationGateway:
             f"/api/v1/pdf-document-reviews/upload-intents-v2/{upload_intent_id}",
         )
         try:
-            return PdfDocumentReviewUploadIntentView.model_validate(self._data(response))
+            value = PdfDocumentReviewUploadIntentView.model_validate(self._data(response))
+            if value.upload_intent_id != upload_intent_id:
+                raise ValueError("upload intent identity differs")
+            return value
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
@@ -2980,18 +2994,31 @@ class HttpApplicationGateway:
         _require_id(upload_intent_id, "pdfreviewintent_")
         if not 8 <= content_length <= 256 * 1024 * 1024:
             raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
-        response = await self._authorized(
-            session,
-            "PUT",
-            f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}/content",
-            content=content,
-            headers={
-                "Content-Type": media_type,
-                "Content-Length": str(content_length),
-                "Idempotency-Key": idempotency_key,
-            },
-            timeout=self._workflow_start_timeout,
-        )
+        try:
+            response = await self._authorized(
+                session,
+                "PUT",
+                f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}/content",
+                content=content,
+                headers={
+                    "Content-Type": media_type,
+                    "Content-Length": str(content_length),
+                    "Idempotency-Key": idempotency_key,
+                },
+                timeout=self._workflow_start_timeout,
+            )
+        except GatewayError as error:
+            if error.code != "APPLICATION_API_UNAVAILABLE" or error.status != 503:
+                raise
+            try:
+                retained = await self.pdf_document_review_upload_intent(session, upload_intent_id)
+            except GatewayError as observation_error:
+                if observation_error.status in {401, 403}:
+                    raise
+                raise error from None
+            if retained.state in {"PROCESSING", "STARTED"}:
+                return retained
+            raise
         command = self._data(response)
         if (
             command.get("resource_type") != "pdf_document_review"
@@ -3039,7 +3066,10 @@ class HttpApplicationGateway:
             f"/api/v1/pdf-document-reviews/sets/{review_set_id}",
         )
         try:
-            return DocumentReviewSetView.model_validate(self._data(response))
+            value = DocumentReviewSetView.model_validate(self._data(response))
+            if value.review_set_id != review_set_id:
+                raise ValueError("review set identity differs")
+            return value
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
@@ -3059,21 +3089,37 @@ class HttpApplicationGateway:
             raise GatewayError(status=422, code="PAIRED_DOCUMENT_REVIEW_ROLE_INVALID")
         if not 8 <= content_length <= 256 * 1024 * 1024:
             raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
-        response = await self._authorized(
-            session,
-            "PUT",
-            (
-                f"/api/v1/pdf-document-reviews/sets/{review_set_id}/documents/"
-                f"{document_role}/content"
-            ),
-            content=content,
-            headers={
-                "Content-Type": media_type,
-                "Content-Length": str(content_length),
-                "Idempotency-Key": idempotency_key,
-            },
-            timeout=self._workflow_start_timeout,
-        )
+        try:
+            response = await self._authorized(
+                session,
+                "PUT",
+                (
+                    f"/api/v1/pdf-document-reviews/sets/{review_set_id}/documents/"
+                    f"{document_role}/content"
+                ),
+                content=content,
+                headers={
+                    "Content-Type": media_type,
+                    "Content-Length": str(content_length),
+                    "Idempotency-Key": idempotency_key,
+                },
+                timeout=self._workflow_start_timeout,
+            )
+        except GatewayError as error:
+            if error.code != "APPLICATION_API_UNAVAILABLE" or error.status != 503:
+                raise
+            try:
+                retained = await self.paired_document_review_set(session, review_set_id)
+            except GatewayError as observation_error:
+                if observation_error.status in {401, 403}:
+                    raise
+                raise error from None
+            member = next((row for row in retained.documents if row.role == document_role), None)
+            if retained.state == "STARTED" or (
+                member is not None and member.state in {"PROCESSING", "COMMITTED"}
+            ):
+                return retained
+            raise
         command = self._data(response)
         resource_type = command.get("resource_type")
         resource_id = command.get("resource_id")
@@ -3159,26 +3205,30 @@ class HttpApplicationGateway:
         session: WebSession,
         value: DocumentReviewCorrectionView,
     ) -> HwpxDownload:
-        response = await self._authorized(
+        async with self._download(
             session,
-            "GET",
             (
                 f"/api/v1/pdf-document-reviews/{value.workflow_id}/corrections/"
                 f"{value.correction_id}/download"
             ),
             headers={"Accept": "application/vnd.hancom.hwpx"},
-        )
-        content_type = response.headers.get("content-type", "")
-        disposition = response.headers.get("content-disposition", "")
-        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
-        if (
-            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
-            or not disposition.startswith('attachment; filename="')
-            or len(response.content) != value.output_content_length
-            or actual_sha256 != value.output_sha256
-        ):
-            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
-        return HwpxDownload(response.content, content_type, disposition)
+        ) as response:
+            content_type = response.headers.get("content-type", "")
+            disposition = response.headers.get("content-disposition", "")
+            if content_type.split(";", 1)[
+                0
+            ] != "application/vnd.hancom.hwpx" or not disposition.startswith(
+                'attachment; filename="'
+            ):
+                raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response,
+                error_code="HWPX_DOWNLOAD_RESPONSE_INVALID",
+                maximum_bytes=256 * 1024**2,
+                expected_length=value.output_content_length,
+                expected_sha256=value.output_sha256,
+            )
+            return HwpxDownload(body, content_type, disposition)
 
     async def create_document_review_annotation(
         self,
@@ -3244,26 +3294,28 @@ class HttpApplicationGateway:
         )
         if output is None:
             raise GatewayError(status=404, code="DOCUMENT_REVIEW_ANNOTATION_NOT_FOUND")
-        response = await self._authorized(
+        async with self._download(
             session,
-            "GET",
             (
                 f"/api/v1/pdf-document-reviews/{value.workflow_id}/annotations/"
                 f"{value.annotation_id}/documents/{document_role}/download"
             ),
             headers={"Accept": "application/pdf"},
-        )
-        content_type = response.headers.get("content-type", "")
-        disposition = response.headers.get("content-disposition", "")
-        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
-        if (
-            content_type.split(";", 1)[0] != "application/pdf"
-            or not disposition.startswith('attachment; filename="')
-            or len(response.content) != output.content_length
-            or actual_sha256 != output.sha256
-        ):
-            raise GatewayError(status=502, code="PDF_DOWNLOAD_RESPONSE_INVALID")
-        return DocumentReviewPdfDownload(response.content, content_type, disposition)
+        ) as response:
+            content_type = response.headers.get("content-type", "")
+            disposition = response.headers.get("content-disposition", "")
+            if content_type.split(";", 1)[0] != "application/pdf" or not disposition.startswith(
+                'attachment; filename="'
+            ):
+                raise GatewayError(status=502, code="PDF_DOWNLOAD_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response,
+                error_code="PDF_DOWNLOAD_RESPONSE_INVALID",
+                maximum_bytes=256 * 1024**2,
+                expected_length=output.content_length,
+                expected_sha256=output.sha256,
+            )
+            return DocumentReviewPdfDownload(body, content_type, disposition)
 
     async def pdf_document_reviews(
         self, session: WebSession, *, cursor: str | None
@@ -4592,21 +4644,9 @@ class HttpApplicationGateway:
 
     async def mock_exam_hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
         _require_id(build_id, "hwpxbuild_")
-        response = await self._authorized(
-            session,
-            "GET",
-            f"/api/v1/assessment-hwpx-builds/{build_id}/download",
-            headers={"Accept": "application/vnd.hancom.hwpx"},
+        return await self._read_hwpx_download(
+            session, f"/api/v1/assessment-hwpx-builds/{build_id}/download"
         )
-        content_type = response.headers.get("content-type", "")
-        disposition = response.headers.get("content-disposition", "")
-        if (
-            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
-            or not disposition.startswith('attachment; filename="')
-            or len(response.content) > 64 * 1024 * 1024
-        ):
-            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
-        return HwpxDownload(response.content, content_type, disposition)
 
     async def item_media(
         self,
@@ -4844,21 +4884,24 @@ class HttpApplicationGateway:
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
         _require_id(build_id, "hwpxbuild_")
-        response = await self._authorized(
-            session,
-            "GET",
-            f"/api/v1/hwpx-builds/{build_id}/download",
-            headers={"Accept": "application/vnd.hancom.hwpx"},
-        )
-        content_type = response.headers.get("content-type", "")
-        disposition = response.headers.get("content-disposition", "")
-        if (
-            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
-            or not disposition.startswith('attachment; filename="')
-            or len(response.content) > 64 * 1024 * 1024
-        ):
-            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
-        return HwpxDownload(response.content, content_type, disposition)
+        return await self._read_hwpx_download(session, f"/api/v1/hwpx-builds/{build_id}/download")
+
+    async def _read_hwpx_download(self, session: WebSession, path: str) -> HwpxDownload:
+        async with self._download(
+            session, path, headers={"Accept": "application/vnd.hancom.hwpx"}
+        ) as response:
+            content_type = response.headers.get("content-type", "")
+            disposition = response.headers.get("content-disposition", "")
+            if content_type.split(";", 1)[
+                0
+            ] != "application/vnd.hancom.hwpx" or not disposition.startswith(
+                'attachment; filename="'
+            ):
+                raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+            body = await self._verified_download_body(
+                response, error_code="HWPX_DOWNLOAD_RESPONSE_INVALID", maximum_bytes=64 * 1024**2
+            )
+            return HwpxDownload(body, content_type, disposition)
 
     async def explorer(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult:
         if query.entity == ExplorerEntity.ITEM_REVISIONS:
@@ -5026,6 +5069,7 @@ class HttpApplicationGateway:
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool | None] | None = None,
         timeout: float | None = None,
+        stream_response: bool = False,
     ) -> httpx.Response:
         # HTTPX serializes ``None`` query values as empty strings. FastAPI then
         # treats those empty enum/integer/cursor values as supplied-but-invalid
@@ -5049,6 +5093,7 @@ class HttpApplicationGateway:
                 **(headers or {}),
             },
             timeout=timeout,
+            stream_response=stream_response,
         )
         if response.status_code != 401:
             if response.status_code >= 400:
@@ -5073,6 +5118,7 @@ class HttpApplicationGateway:
                 **(headers or {}),
             },
             timeout=timeout,
+            stream_response=stream_response,
         )
         if response.status_code >= 400:
             raise _gateway_error(response)
@@ -5106,9 +5152,28 @@ class HttpApplicationGateway:
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool] | None = None,
         timeout: float | None = None,
+        stream_response: bool = False,
     ) -> httpx.Response:
         try:
-            if timeout is None:
+            if stream_response:
+                if method != "GET" or content is not None or json is not None:
+                    raise ValueError("streamed downloads require a read-only GET")
+                request = self._client.build_request(
+                    method,
+                    path,
+                    headers=headers,
+                    params=params,
+                    timeout=self._client.timeout if timeout is None else timeout,
+                )
+                response = await self._client.send(request, stream=True)
+                if response.status_code >= 400:
+                    try:
+                        response = await bounded_error_response(response)
+                    except DownloadInvalid as exc:
+                        raise GatewayError(
+                            status=502, code="APPLICATION_API_RESPONSE_INVALID"
+                        ) from exc
+            elif timeout is None:
                 response = await self._client.request(
                     method,
                     path,
@@ -5127,9 +5192,64 @@ class HttpApplicationGateway:
                     params=params,
                     timeout=timeout,
                 )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, TimeoutError) as exc:
             raise GatewayError(status=503, code="APPLICATION_API_UNAVAILABLE") from exc
         return response
+
+    @asynccontextmanager
+    async def _download(
+        self,
+        session: WebSession,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        params: dict[str, str | int | float | bool | None] | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[httpx.Response]:
+        response = await self._authorized(
+            session,
+            "GET",
+            path,
+            params=params,
+            headers={"Accept-Encoding": "identity", **(headers or {})},
+            timeout=timeout,
+            stream_response=True,
+        )
+        try:
+            yield response
+        finally:
+            try:
+                await close_download_response(response)
+            except (httpx.HTTPError, TimeoutError) as exc:
+                raise GatewayError(status=503, code="APPLICATION_API_UNAVAILABLE") from exc
+
+    async def _verified_download_body(
+        self,
+        response: httpx.Response,
+        *,
+        error_code: str,
+        maximum_bytes: int,
+        minimum_bytes: int = 1,
+        expected_length: int | None = None,
+        expected_sha256: str | None = None,
+        prefixes: tuple[bytes, ...] = (),
+    ) -> DownloadContent:
+        try:
+            return await read_verified_download(
+                response,
+                slots=self._download_slots,
+                maximum_bytes=maximum_bytes,
+                minimum_bytes=minimum_bytes,
+                expected_length=expected_length,
+                expected_sha256=expected_sha256,
+                prefixes=prefixes,
+            )
+        except DownloadInvalid as exc:
+            raise GatewayError(status=502, code=error_code) from exc
+        except DownloadCapacityBusy as exc:
+            raise GatewayError(status=503, code="DOWNLOAD_CAPACITY_BUSY") from exc
+        except (httpx.HTTPError, TimeoutError) as exc:
+            raise GatewayError(status=503, code="APPLICATION_API_UNAVAILABLE") from exc
 
     @staticmethod
     def _document(response: httpx.Response) -> dict[str, Any]:

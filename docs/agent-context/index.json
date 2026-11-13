@@ -149,6 +149,8 @@
       "note": "document-output.md",
       "keywords": ["HWPX", "HWP", "PDF", "그림", "미리보기", "자료 검토", "문서 검토", "주석", "합본", "출력", "다운로드", "annotation", "preview", "Builder"],
       "source_paths": [
+        "apps/web_gui/eom_web_gui/downloads.py",
+        "apps/web_gui/eom_web_gui/static/document-review-pending.js",
         "apps/web_gui/eom_web_gui/static/item-preview.js",
         "apps/web_gui/eom_web_gui/item_preview_projection.py",
         "services/hwpx_manager/eom_hwpx_manager/application_service.py",

@@ -21,6 +21,7 @@ ContentLabel = Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[^\
 AcademicYear = Annotated[int, Field(strict=True, ge=1900, le=3000)]
 type ContentType = Literal["MOCK_EXAM", "TEXTBOOK", "WEEKLY", "OTHER"]
 type NumberingPolicy = Literal["RESET_PER_SECTION", "CONTINUE_WITHIN_GROUP"]
+CONTENT_MAX_SECTIONS = 10000
 
 
 class ContentFormPointer(FrozenModel):
@@ -37,7 +38,7 @@ class ContentSectionStructure(FrozenModel):
     section_id: SectionId
     parent_id: SectionId | None
     kind: Literal["GROUP", "FORM"]
-    ordinal: int = Field(strict=True, ge=1, le=10000)
+    ordinal: int = Field(strict=True, ge=1, le=CONTENT_MAX_SECTIONS)
     label: ContentLabel
     numbering: NumberingPolicy
 
@@ -97,7 +98,7 @@ class ContentEditionCompositionV1(FrozenModel):
     content_type: ContentType
     edition_label: ContentLabel
     academic_year: AcademicYear | None
-    sections: tuple[ContentSection, ...] = Field(max_length=10000)
+    sections: tuple[ContentSection, ...] = Field(max_length=CONTENT_MAX_SECTIONS)
     created_by: ActorId
     created_at: UtcDatetime
     composition_sha256: Sha256

@@ -42,7 +42,7 @@ from eom_catalog_service.content_planning_models import (
 from eom_catalog_service.content_planning_storage import load_content_edition, read_edition_revision
 from eom_catalog_service.content_print_models import ContentPrintRecord
 from eom_catalog_service.content_print_records import ContentPrintService
-from eom_catalog_service.content_workbook_layout import workbook_layout
+from eom_catalog_service.content_workbook_layout import require_workbook_layout, workbook_layout
 from eom_catalog_service.content_workbook_reader import read_content_workbook
 from eom_catalog_service.content_workbook_resolution import resolve_workbook_rows
 from eom_catalog_service.curated_document_slot_resolution import resolve_curated_slots
@@ -101,6 +101,7 @@ class ContentWorkbookImportService:
         ):
             raise ContentPlanningError("CONTENT_WORKBOOK_UPLOAD_HASH_MISMATCH")
         document = read_content_workbook(path)
+        require_workbook_layout(document)
         with self.sessions() as session:
             self.authorize(session, actor, write=True)
             resolutions = resolve_workbook_rows(session, document)
@@ -211,6 +212,7 @@ class ContentWorkbookImportService:
         with self.sessions() as session:
             self.authorize(session, actor, write=False)
         proposal = self._proposal(pointer, actor)
+        require_workbook_layout(proposal.document)
         total = len(proposal.document.rows)
         if not 0 <= offset <= total or not 1 <= limit <= 100:
             raise ContentPlanningError("CONTENT_WORKBOOK_REQUEST_INVALID")

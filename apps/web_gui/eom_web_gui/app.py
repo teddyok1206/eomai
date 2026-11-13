@@ -69,6 +69,7 @@ from eom_web_gui.contracts import (
     StudioWorkbenchOverview,
 )
 from eom_web_gui.curated_hwpx_contracts import CuratedHwpxSubmission
+from eom_web_gui.downloads import download_response
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
 from eom_web_gui.general_chat_contracts import (
     ChatCreateSubmission,
@@ -692,6 +693,15 @@ def create_app(
         result = await actual.create_pdf_document_review_upload_intent(session, value)
         return result.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/upload-intents/{{upload_intent_id}}")
+    async def pdf_document_review_upload_intent(
+        upload_intent_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.pdf_document_review_upload_intent(session, upload_intent_id)
+        ).model_dump(mode="json")
+
     @app.put(
         f"{API_PREFIX}/pdf-document-reviews/upload-intents/{{upload_intent_id}}/content",
         status_code=202,
@@ -737,6 +747,15 @@ def create_app(
     ) -> dict[str, Any]:
         result = await actual.create_paired_document_review_set(session, value)
         return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/sets/{{review_set_id}}")
+    async def paired_document_review_set(
+        review_set_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.paired_document_review_set(session, review_set_id)).model_dump(
+            mode="json"
+        )
 
     @app.put(
         (
@@ -838,7 +857,7 @@ def create_app(
             correction_id,
         )
         value = await actual.gateway.document_review_correction_download(session, correction)
-        return Response(
+        return download_response(
             content=value.content,
             media_type=value.content_type,
             headers={"Content-Disposition": value.content_disposition},
@@ -891,7 +910,7 @@ def create_app(
             annotation,
             document_role,
         )
-        return Response(
+        return download_response(
             content=value.content,
             media_type=value.content_type,
             headers={"Content-Disposition": value.content_disposition},
@@ -1223,7 +1242,7 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> Response:
         result = await actual.gateway.download_curated_hwpx(session, assembly_id, build_id)
-        return Response(
+        return download_response(
             content=result.content,
             media_type=result.content_type,
             headers={
@@ -1348,7 +1367,7 @@ def create_app(
         value = await actual.gateway.external_item_db_document_download(
             session, source_id, source_revision_id, edition
         )
-        return Response(
+        return download_response(
             content=value.content,
             media_type=value.content_type,
             headers={
@@ -1372,7 +1391,7 @@ def create_app(
         value = await actual.gateway.external_item_db_preview_download(
             session, source_id, source_revision_id, edition
         )
-        return Response(
+        return download_response(
             content=value.content,
             media_type="application/pdf",
             headers={
@@ -1479,7 +1498,7 @@ def create_app(
     ) -> Response:
         validate_download_request(build_id)
         value = await actual.gateway.mock_exam_hwpx_download(session, build_id)
-        return Response(
+        return download_response(
             content=value.content,
             media_type=value.content_type,
             headers={"Content-Disposition": value.content_disposition},
@@ -1780,7 +1799,7 @@ def create_app(
     ) -> Response:
         validate_download_request(build_id)
         value = await actual.gateway.hwpx_download(session, build_id)
-        return Response(
+        return download_response(
             content=value.content,
             media_type=value.content_type,
             headers={"Content-Disposition": value.content_disposition},

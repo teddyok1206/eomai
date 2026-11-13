@@ -304,6 +304,56 @@ def test_office_intake_rejects_declared_format_signature_mismatch(
     assert recorder.values is None
 
 
+def test_normalized_hwp_named_hwpx_keeps_source_bytes_and_explicit_submission_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, recorder = _service(tmp_path, monkeypatch)
+    source = tmp_path / "교재.hwp"
+    payload = _hwpx_bytes()
+    source.write_bytes(payload)
+    expected_hash = sha256_file(source)
+
+    pointer = service.ingest(
+        source,
+        original_filename=source.name + ".hwpx",
+        source_format="HWPX",
+        actor_id="operator_" + "a" * 32,
+        idempotency_key="api:document-review:normalized-filename",
+    )
+
+    assert source.name == "교재.hwp"
+    assert source.read_bytes() == payload
+    assert pointer.original_filename == "교재.hwp.hwpx"
+    assert pointer.source_format == "HWPX"
+    assert pointer.original_source.member_path == "source/original.hwpx"
+    assert pointer.original_source.sha256 == expected_hash
+    assert recorder.manifest is not None
+    assert recorder.manifest.original_filename == "교재.hwp.hwpx"
+
+
+def test_normalized_submission_name_does_not_admit_arbitrary_zip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, recorder = _service(tmp_path, monkeypatch)
+    source = tmp_path / "not-hwpx.hwp"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("notes.txt", b"not a Hancom package")
+
+    with pytest.raises(OfficeDocumentReviewIntakeError) as failure:
+        service.ingest(
+            source,
+            original_filename=source.name + ".hwpx",
+            source_format="HWPX",
+            actor_id="operator_" + "a" * 32,
+            idempotency_key="api:document-review:normalized-invalid-package",
+        )
+
+    assert failure.value.code == "DOCUMENT_REVIEW_SOURCE_INVALID"
+    assert recorder.values is None
+
+
 def test_office_intake_does_not_offer_hwp_correction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

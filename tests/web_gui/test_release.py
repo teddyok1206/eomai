@@ -13,7 +13,7 @@ def test_runtime_dependencies_are_pinned_and_explainable() -> None:
     project = tomllib.loads((ROOT / "apps/web_gui/pyproject.toml").read_text(encoding="utf-8"))
     dependencies = project["project"]["dependencies"]
     names = {re.split(r"[=<>]", value, maxsplit=1)[0].casefold() for value in dependencies}
-    assert names == {"fastapi", "httpx", "pydantic", "pyyaml", "typer", "uvicorn"}
+    assert names == {"anyio", "fastapi", "httpx", "pydantic", "pyyaml", "typer", "uvicorn"}
     assert all("==" in value for value in dependencies)
     assert not names & {"jinja2", "react", "vue", "playwright"}
 

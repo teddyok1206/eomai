@@ -1,5 +1,14 @@
 # 문서 미리보기와 출력과 자료 검토
 
+## Web 다운로드 자원
+
+`downloads.py`가 인증된 download 응답을 chunk별 길이·해시 검증 뒤 1MiB 이하는 bytes,
+큰 파일은 임시 spool로 전달한다. `download_response`는 ASGI 송신 종료·취소·disconnect에서
+spool과 capacity를 닫는다. 두 개의 큰 다운로드만 동시에 보유하며 오류 본문도 bounded다.
+HTTP/socket 정리는 AnyIO shield 안에서 제한 시간으로 끝낸다. 이 임시 materialization은
+Artifact 정본이나 DB가 아니다. 원래 API/Catalog의 권한·revision/hash owner를 유지한다.
+`WEB_DOWNLOAD_RESOURCE_BOUNDARY.md`와 `test_bounded_downloads.py`/`test_bounded_download_edges.py`를 본다.
+
 DB 간편 출력은 `item-db-assembly.js`가 기존 저장 경계를 먼저 호출하고 동일
 `item-db-delivery.js`의 `start()`로 제작을 연결한다. 조회/완료 재열기는 새 제작이 아니다.
 늦은 latest 응답 후 control이 폐기되면 POST하지 않고, 실패 build의 명시적 재제작에서
@@ -79,6 +88,16 @@ PDF·HWP·HWPX 입력을 검증하고, Office 입력에는 앞단 변환을 붙�
 `review_textbook_evidence_service.py`와 Orchestrator receipt validation을 함께 본다.
 단순 COMPLETE 플래그가 모든 과학적 판단이나 실제 출판 품질의 증명은 아니다.
 worker 결과 스키마 검증 실패와 변환 결과 없음, 페이지 투영 실패, 주석 저장 실패는 다른 경계다.
+
+자료 검토 화면은 `document-review-pending.js`의 owner별 tab-storage 참조로 기존 upload
+intent/set과 멱등 key를 재사용한다. bytes·지시문·자격은 저장하지 않는다. 긴 upload 응답이
+불명확해도 exact GET 상태가 PROCESSING/STARTING이면 재전송하지 않고 제한된 횟수만
+조회한다. 새 submit은 local digest 대기 전에 기존 GET epoch를 무효화해야 한다.
+주석/교정 callback은 workflow·선택 sequence·owner가 모두 맞을 때만 화면을 바꾸고,
+bounded transient key cache가 중복 클릭과 A→B→A에서 같은 작업의 재생성을 막는다.
+새 `.hwp`가 실제 HWPX면 원래 File을 바꾸지 않고 제출명에 `.hwpx`를 붙여 안내하며,
+package 전체 검증은 기존 Catalog가 한다. 상세는 `DOCUMENT_REVIEW_BROWSER_RECOVERY.md`,
+실제 callback 회귀는 `tests/web_gui/test_document_review_recovery.py`를 본다.
 
 ## DB 조립의 native 출력
 

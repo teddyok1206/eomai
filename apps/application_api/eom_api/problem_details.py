@@ -222,6 +222,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CONTENT_WORKBOOK_ROW_INVALID",
             "CONTENT_WORKBOOK_CELL_INVALID",
             "CONTENT_WORKBOOK_ROW_LIMIT",
+            "CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE",
             "CONTENT_WORKBOOK_METADATA_INVALID",
             "CONTENT_WORKBOOK_YEAR_INVALID",
             "CONTENT_WORKBOOK_DATE_INVALID",

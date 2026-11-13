@@ -47,6 +47,17 @@ Web은 파일 선택·결과 표·명시적 저장만 담당한다. API는 실�
 
 ## 접근 패턴과 성능
 
+2026-11-13 소스 보강: 준비·기존 proposal 조회·저장은 `content_workbook_layout.py`의 같은 ordered group/form
+iterator로 실제 생성할 section 한도를 확인한다. 한도는 기존 Edition 계약의 10,000개로
+유지하며, 행 10,000개와 동일한 뜻은 아니다. 빈 묶음은 GROUP을 만들지 않는다. membership은
+set이므로 시간 O(행 수), 공간 O(고유 구간 수)이며, 미리보기 검사는 새 ID나 slot을 생성하지
+않는다. 초과하면 `CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE`로 준비 전에 거절한다.
+이미 보관한 과대 proposal도 같은 오류로 조회/저장을 거절하지만 Artifact·receipt는 보존한다.
+V1 preview의 `can_commit == 미연결 행 없음` 의미와 schema bytes는 바꾸지 않는다.
+새 저장소·cache·DB index·transaction·queue가 필요하지 않으며, 정본 source/revision/hash와
+기존 권한/멱등 경계도 그대로다. preview에서 별도 수식으로 개수를 세거나 실제 전체 layout을
+생성하는 대안보다, 실제 layout과 작은 키 iterator를 공유하는 방법이 단순하고 일치성이 높다.
+
 주 작업은 순서대로 행 읽기, 고유번호 membership/dedup, indexed source 조회, 불변 계획 조회와
 원자적 편성 생성이다. 행은 tuple, 번호별 후보는 dict/set, 순서는 입력 occurrence로 유지한다.
 전체 시간은 파일 크기+행 수에 선형이고, DB는 namespace+번호 기존 unique index를 사용한 bounded

@@ -167,6 +167,22 @@ try {
   assert.equal(await page.locator("#excel-import-file").inputValue(), "");
   assert.match(await page.evaluate(() => fixture.confirmations.at(-1)), /서버 기록은 삭제하지 않습니다/);
 
+  // A historical proposal may be valid V1 but exceed the actual Edition tree
+  // bound. Its read rejection must remove the old "ready" preview, not leave
+  // a save button enabled; server Artifact/receipt identities stay untouched.
+  await upload();
+  await page.locator("#excel-import-confirm").check();
+  const boundedPin = await page.evaluate(() => sessionStorage.getItem('eom:excel:workbook:1:operator-c'));
+  await page.evaluate(() => {fixture.queryCode = 'CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE';});
+  await page.locator("#excel-import-refresh").click();
+  await page.waitForFunction(() => document.getElementById("excel-import-message").textContent.includes("합성 서버 거절"));
+  assert.equal(await page.locator("#excel-import-preview").isHidden(), true);
+  assert.equal(await page.locator("#excel-import-save").isDisabled(), true);
+  assert.equal(await page.locator("#excel-import-clear").isEnabled(), true);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('eom:excel:workbook:1:operator-c')), boundedPin);
+  await page.locator("#excel-import-clear").click();
+  await page.evaluate(() => {fixture.queryCode = null;});
+
   // Timeout, invalid response and an unknown source-prefixed code are NOT
   // terminal-rejection proof. They retain the exact pending command/key.
   for (const code of ["HTTP_504", "APPLICATION_API_RESPONSE_INVALID", "CURATED_SOURCE_OTHER"]) {
@@ -197,5 +213,5 @@ try {
   await page.locator("#excel-import-clear").click();
   assert.equal(await page.evaluate(() => sessionStorage.getItem('eom:excel:workbook:1:operator-c')), null);
   assert.equal(errors.length, 0, errors.join("\n"));
-  console.log("CONTENT_WORKBOOK_IMPORT_BROWSER=PASS live_writes=0 cases=explicit-save,paging,pointer,owner,print,replay,xss,missing,open,new-file,upload-retry,known-rejection-close,unknown-replay-fence");
+  console.log("CONTENT_WORKBOOK_IMPORT_BROWSER=PASS live_writes=0 cases=explicit-save,paging,pointer,owner,print,replay,xss,missing,open,new-file,upload-retry,known-rejection-close,unknown-replay-fence,structure-limit");
 } finally {await browser.close(); server.close();}

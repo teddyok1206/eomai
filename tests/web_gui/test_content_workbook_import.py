@@ -308,3 +308,42 @@ def test_workbook_import_actual_browser_owner_replay_preview_and_explicit_commit
     assert result.returncode == 0, result.stderr
     assert "CONTENT_WORKBOOK_IMPORT_BROWSER=PASS" in result.stdout
     assert "live_writes=0" in result.stdout
+
+
+def test_structure_rejection_removes_stale_ready_preview_and_keeps_original_request():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node is required for the production rejection callback check")
+    source = Path("apps/web_gui/eom_web_gui/static/content-planning-import.js")
+    program = r"""
+const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const codes = source.slice(source.indexOf('const REJECTED_IMPORT_CODES ='),
+                          source.indexOf('const REJECTED_IMPORT_GUIDANCE ='));
+const callback = source.slice(source.indexOf('  function recordRejection(error) {'),
+                             source.indexOf('  function persist(value) {'));
+assert.ok(codes.length && callback.length, 'production callback must exist');
+for (const key of [null, 'original-command-key']) {
+  let renders = 0;
+  const pin = {proposal:{sha256:'synthetic-original'},key};
+  const context = {pin, preview:{can_commit:true}, rejected:null, render:()=>{renders++;}};
+  vm.runInNewContext(codes+callback+"recordRejection({code:'CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE'});",context);
+  assert.equal(context.preview,null);
+  assert.equal(context.pin,pin);
+  assert.equal(context.pin.key,key);
+  assert.equal(context.rejected,key ? 'CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE' : null);
+  assert.equal(renders,1);
+}
+console.log('WORKBOOK_STRUCTURE_REJECTION=PASS');
+"""
+    result = subprocess.run(
+        [node, "-e", program, str(source)], capture_output=True, text=True, timeout=20
+    )
+    assert result.returncode == 0, result.stderr
+    assert "WORKBOOK_STRUCTURE_REJECTION=PASS" in result.stdout
+    vocabulary = json.loads(
+        Path("apps/web_gui/eom_web_gui/static/presentation-vocabulary.ko-KR.json").read_text()
+    )
+    message = vocabulary["errors"]["CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE"]
+    assert message["audience"] == "USER"
+    assert "10,000" in message["action"] and "문항 수" in message["action"]

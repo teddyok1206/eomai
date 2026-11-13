@@ -11,6 +11,7 @@ const REJECTED_IMPORT_CODES = new Set([
   "CURATED_SOURCE_STALE", "CURATED_SOURCE_POINTER_INVALID", "CURATED_SOURCE_SELECTION_INVALID",
   "CURATED_SOURCE_PERMISSION_DENIED", "CONTENT_PLANNING_PERMISSION_DENIED",
   "CONTENT_WORKBOOK_UNRESOLVED", "CONTENT_WORKBOOK_REQUEST_INVALID",
+  "CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE",
   "CONTENT_WORKBOOK_PROPOSAL_INVALID", "CONTENT_WORKBOOK_PROPOSAL_OWNER_MISMATCH",
 ]);
 const REJECTED_IMPORT_GUIDANCE = "이 연결 내역으로 계속 저장할 수 없습니다. 이전 요청에서 이미 저장됐을 수 있으니 Excel 목록에서 기존 저장 여부를 확인한 뒤 이 연결 내역을 닫아 주세요.";
@@ -44,6 +45,10 @@ export function createContentWorkbookImport({document, api, can, storage = globa
   const message = (text, error = false) => {$("message").textContent = text; $("message").className = `form-message${error ? " error" : ""}`;};
   function recordRejection(error) {
     if (pin?.key && REJECTED_IMPORT_CODES.has(error.code)) rejected = error.code;
+    if (error.code === "CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE") {
+      preview = null;
+      render();
+    }
   }
   function persist(value) {
     if (!owner) throw new Error("로그인한 사용자를 확인해 주세요.");

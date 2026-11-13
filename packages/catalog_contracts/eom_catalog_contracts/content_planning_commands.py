@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, TypeAdapter, model_validator
 
 from eom_catalog_contracts.content_planning import (
+    CONTENT_MAX_SECTIONS,
     AcademicYear,
     ContentEditionCompositionV1,
     ContentLabel,
@@ -25,7 +26,7 @@ from eom_catalog_contracts.validation import validate_contract
 class _NewEdition(FrozenModel):
     edition_label: ContentLabel
     academic_year: AcademicYear | None
-    sections: tuple[ContentSectionStructure, ...] = Field(max_length=10000)
+    sections: tuple[ContentSectionStructure, ...] = Field(max_length=CONTENT_MAX_SECTIONS)
 
     @model_validator(mode="after")
     def valid_structure(self) -> Self:

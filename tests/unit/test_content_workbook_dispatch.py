@@ -113,6 +113,24 @@ def test_disabled_service_returns_stable_unavailable_without_consuming_file():
     assert read_bytes == 0
 
 
+@pytest.mark.parametrize("operation", ["prepare", "read", "commit"])
+def test_structure_rejection_is_preserved_across_existing_dispatch(tmp_path, operation):
+    service = fake_service(tmp_path)
+    getattr(service, operation).side_effect = ContentPlanningError(
+        "CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE"
+    )
+    if operation == "prepare":
+        request = prepare()
+    elif operation == "read":
+        request = ReadContentWorkbookRequest(**identity(), proposal=proposal())
+    else:
+        request = CommitContentWorkbookRequest(
+            **identity(), proposal=proposal(), idempotency_key=KEY
+        )
+    reply, _ = dispatched(service, request.model_dump(mode="json"))
+    assert reply["error_code"] == "CONTENT_WORKBOOK_STRUCTURE_TOO_LARGE"
+
+
 def test_read_and_commit_do_not_consume_binary_input(tmp_path):
     service = fake_service(tmp_path)
     request = ReadContentWorkbookRequest(**identity(), proposal=proposal(), offset=0, limit=1)

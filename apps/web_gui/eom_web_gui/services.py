@@ -382,6 +382,11 @@ class WebServices:
     ) -> PdfDocumentReviewUploadIntentView:
         return await self.gateway.create_pdf_document_review_upload_intent(session, value)
 
+    async def pdf_document_review_upload_intent(
+        self, session: WebSession, upload_intent_id: str
+    ) -> PdfDocumentReviewUploadIntentView:
+        return await self.gateway.pdf_document_review_upload_intent(session, upload_intent_id)
+
     async def upload_pdf_document_review_content(
         self,
         session: WebSession,
@@ -407,6 +412,11 @@ class WebServices:
         value: PairedDocumentReviewSubmission,
     ) -> DocumentReviewSetView:
         return await self.gateway.create_paired_document_review_set(session, value)
+
+    async def paired_document_review_set(
+        self, session: WebSession, review_set_id: str
+    ) -> DocumentReviewSetView:
+        return await self.gateway.paired_document_review_set(session, review_set_id)
 
     async def upload_paired_document_review_member(
         self,
