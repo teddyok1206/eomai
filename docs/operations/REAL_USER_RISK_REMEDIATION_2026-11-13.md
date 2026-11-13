@@ -1,8 +1,11 @@
 # 실제 사용자 위험 수정 결과
 
 기준은 [11월 13일 위험 검토](../architecture/REAL_USER_FAILURE_RISK_REVIEW_2026-11-13.md)의
-U01–U06이다. 사용자 수정 요청 후 기존 담당 모듈에서 고쳤다. **운영 배포 기록은 아니다.**
+U01–U06이다. 사용자 수정 요청 후 기존 담당 모듈에서 고쳤고, 후속 운영 배포도 완료했다.
 출발 source는 `ab930a52`이며 정본·실패 이력·현재 슬롯/GPU·인증 설정은 변경하지 않았다.
+
+위 상태는 소스 검증 시점의 기록이다. 이후 사용자의 운영 배포 승인에 따른 결과는
+아래 **운영 반영** 절에 구분해 기록했다.
 
 ## 수정 결과
 
@@ -84,3 +87,72 @@ API/platform과의 호환 배포는 별도로 필요하며 Web wheel 성공만�
 
 이후 운영 반영은 호환 API/platform/Web release로 진행하며 현재 GPU 수치 설치본·owner
 실행 pin과 기존 작업을 보존한다. 이번 소스 검증을 운영 사용자 acceptance로 대신하지 않는다.
+
+## 운영 반영
+
+2026-11-13 사용자 배포 승인 후 실제 설치 source를
+`c8a851fef5075db071577bb208d80425b693898c`로 전환했다. 이는 a9dbdf3a 수정과
+검증 문서가 포함된 clean commit이다. 운영 DB head는 `20261112_0079`로 유지하며
+DDL·비밀번호·모델 선택·슬롯 인증·기존 실패/문항/Graph/벡터를 변경하지 않았다.
+
+| 구성요소 | 실제 반영 |
+| --- | --- |
+| API·API contracts·공유 platform/Catalog/Runner | c8a851fe의 세 wheel |
+| Web | c8a851fe, 실제 eom-web identity의 RECORD 82 files 검증 PASS |
+| Catalog·Workflow·채팅 release source | 실제 코드 source에 맞춰 c8a851fe, 기존 unit/model/native/auth는 보존 |
+| QUERY | 기존 owner 11d826d2 보존; API provider commit/wheel/member hash와 config pin만 호환 갱신 |
+| 창작 등록 owner | 기존 a7fc195d unit/env 유지, SIGINT 정상 drain 후 같은 설정으로 재개 |
+| INDEX·controller | 47fc5366 / a7fc195d 유지, 기존 PID 203375 및 invocation ae8aa922… 보존 |
+| 자료 학습 | 기존 PID 3392845 및 invocation ddd00986…·설정 보존 |
+
+실제 배포 wheel SHA-256:
+
+- platform: `fe7dd8cc4255f64412dba6c31e066cc961cef077bd521e9508d92ff8699a88ce`
+- API: `d9e84c12e93e8e14a0fab9b8a5ea52e912b4e6c31e8cd6d3dde8582deadc0ab3`
+- API contracts: `b72e0bf4f484670f2c228ef429d3139fd2c4525a8212ca7007ba43137401dec6`
+- Web: `99dc459fa05adb0b11e403a5b5fc8a8bd2f771c7f267c93e781d8e0e5179f11a`
+
+배포 당시 GPU controller가 실행 중이어서 종료를 기다렸다. 기존 worker lease·실행/대기
+command·HWPX·채팅·native transient와 Catalog RPC를 확인한 뒤 전환했다. shared wheel과
+Web 설치를 먼저 끝내고 native-idle을 다시 검사한 다음 config/unit 파일 교체와
+daemon-reload를 인접 실행했다. INDEX를 위한 가짜 작업·GPU mutex pause·재핀은 사용하지 않았다.
+관측 창의 idle 확인을 전역 원자적 admission lock이 있었다는 뜻으로 확대하지 않는다.
+
+Catalog/API → 채팅 worker → 채팅 owner/private socket → QUERY → HWPX/Web →
+broker/runner → 원래 창작 등록 owner 순서로 시작했다. 배포 후 관련 서비스 14개 active,
+Web/API/INDEX/material의 `NeedDaemonReload=no`를 확인했다. Web 재시작으로 기존
+브라우저 세션이 종료될 수 있으며, 실제 사용자 재로그인 검증과 별개다.
+
+### 배포 중 오류와 복구
+
+첫 활성화에서 API/platform 설치·파일 검증 후 Web 설치 helper에 Path 대신 str을 넘겨
+`AttributeError`가 발생했다. 이 실패 로그·첫 operator bytes·시작/정지 기록을 보존했다.
+설치된 API bytes와 c8a851fe source, 아직 변경되지 않은 config와 서비스 정지를 다시
+확인한 뒤 `resume-api-installed` 단계로 **API 재설치 없이** Web 설치부터 이어갔다.
+기존 실패를 성공으로 덮거나 자동 rollback하지 않았다.
+
+pip는 이전 uninstall 임시 폴더 일부를 제거하지 못했다는 경고를 냈다. 실행 대상 package
+bytes·RECORD와 두 환경의 `pip check`는 정상이다. 배포 중 이를 임의 삭제하지 않았다.
+
+### 배포 후 확인
+
+- 실제 API health smoke / Web smoke PASS, API READY.
+- 실제 HTTPS 로그인 화면과 app.js·신규 document-review-pending.js·Excel import JS·
+  한국어 vocabulary가 새 wheel bytes와 일치했다.
+- 익명 session 및 신규 단일 intent/paired set GET 접근은 401이다. 없는 route나 502로
+  인증 차단을 대신하지 않는다.
+- 실제 설치된 격리 Web interpreter에서 2MiB 합성 download를 검증된 spool로 받아
+  ASGI 송신·종료·permit 회수 PASS. 실제 네트워크/모델/DB 사용이 없는 검사다.
+- API/Web 환경 모두 `No broken requirements found`.
+- INDEX/자료 학습 PID·invocation·관련 파일 hash는 전환 전후 같았다. 배포 후 INDEX의
+  source-read 단계 이벤트와 창작 owner의 VERIFIED/PROCESSING 진행을 관찰했다.
+  관측한 창작 verified_count 증가를 새 문항/새 모델 호출 수로 해석하지 않는다.
+- 이번 배포가 새 GPU shard/전체 corpus 완료 또는 실제 사용자 파일/Hancom 품질을
+  검증한 것은 아니다. 인증된 사용자 화면 확인은 `PENDING_REAL_USER_LOGIN`으로 남긴다.
+
+정본 배포·복구 기록: `/var/lib/eom-real-user-risk-release-20261113/`의 prepared.json,
+actual-rollback.json, activation-started.json, stopped.json, activation-resume-requested.json,
+installed.json, activated.json, postdeploy.json 및 before/after config. 보호된 operator는
+`/usr/local/libexec/eom-real-user-risk-release-20261113/`에 버전별로 보존한다.
+기존0079 DB를 유지한 채 exact 이전 wheel/config로 복구할 수 있으며, 기록 삭제나 DB
+다운그레이드를 복구 절차로 사용하지 않는다.
