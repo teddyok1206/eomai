@@ -3,7 +3,8 @@
 2026-11-13 UTC. 목표는 18회 450문항의 문제·해설 native HWPX, 원본 Excel metadata,
 기존 자료 학습·Registry·공개 풀이·공통 Graph·증분 임베딩 연결 및 운영 반영이다.
 설계 정본은 `docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`다. 이 기록의 소스 후보와
-실제 운영 활성화를 구별한다. 현재 새 자료의 운영 등록이나 모델 실행은 하지 않았다.
+실제 운영 활성화를 구별한다. 최신 상태는 아래 **호환 배포와 실제 UID 검증 완료**를 본다.
+앞선 단계의 실패·대기 기록은 당시의 증거이며 덮어쓰지 않는다.
 
 ## 보존할 운영 경계
 
@@ -226,3 +227,43 @@ native 등록 3개를 포함한 재실행은 `staging/native-exam-material-db-r2
 Slack은 50쌍 native pilot milestone을 한 번 보고했다. 보고 ID는
 `devreport_476a2d7a1ae04a8fbb93d431f34857e2`이며 HTTP200/SAVED였다. 반복 진행률 보고는
 만들지 않는다. 중요한 발견·사용자 인증 필요·완료만 기존 정책에 따라 보고한다.
+
+## 호환 배포와 실제 UID 검증 완료
+
+2026-11-13 20:06 UTC 확인. 실제 API/platform/Web과 자료 학습 owner는
+`7084bbc4fc3dd9d9b8eb5c075f3de801800bd033`으로 배포·활성화했다. 기존 교체 대상의
+진행 중 worker/command/HWPX/chat/GPU 작업 0과 자료 준비 checkpoint의 quiescence를
+확인한 뒤 기존 학습 owner를 SIGINT로 정상 drain했다. INDEX 파일·source·InvocationID,
+인증·모델/슬롯 정책·기존 정본·실패 이력은 보존했다. DB는 `20261112_0079` 읽기 확인만
+수행했고 migration/DDL은 없다.
+
+- 실제 Catalog UID 988이 고정 parser unit을 호출하고 worker UID 984/GID 985가 실행했다.
+  HWP 2개와 HWPX 2개, 총 100 fragment가 기존 qualification SHA와 모두 일치했다.
+  namespace 안에서 NAS·API 환경 파일·Catalog 원본 staging·실제 Catalog 프로세스 환경에
+  대한 16개 open 시도는 모두 거부됐다. 보호 데이터는 읽지 않았다.
+  `staging/native-exam-actual-catalog-uid-preflight-r3-20261113.log`와 보호된
+  `/var/lib/eom-native-exam-release-r2-20261113/native-preflight.json`이 증거다.
+- 원문 parser는 기존 별도 CPU capsule/최종 converter bundle을 유지한다. 공유 GPU runtime
+  package를 수정하지 않았다. root 소유 중간 runtime directory와 실제 worker leaf의 권한을
+  구분한 수정도 이번 설치본에 포함됐다. 앞선 실패 unit·사전검증 이력은 보존한다.
+- 공식 `ContentPackService.import_source/release`로 `uploaded-material-item/1.1.0`을
+  출시하고, 실제 발급된 ID만 자료 학습의 optional native pin에 연결했다. 기존 1.0 Pack과
+  모든 다른 release/전역 activation은 변경하지 않았다. Catalog는 고정 native 설정을 읽는다.
+  `staging/native-exam-native-controls-stage-20261113.log`와 `...-verify-20261113.log`는 PASS다.
+- API 준비 상태 READY, 관련 서비스 14개 active, 실제 HTTPS assets가 설치 wheel과 일치하고
+  anonymous 신규 route는 거부됐다. `staging/native-exam-release-r2-postdeploy-20261113.json`.
+  이는 실제 업로드·모델 풀이·Graph·벡터 저장 완료의 대체 증거가 아니다.
+- 임시 DB는 공식 cleanup으로 제거했다. 52 PASS와 정리 기록은 각각
+  `staging/native-exam-material-db-r5-20261113.log`,
+  `staging/native-exam-testdb-cleanup-20261113.log`에 남아 있다.
+
+배포 전부터 INDEX owner는 실행 PID가 없는 과거 failed 상태였고 이번 교체에서는 그대로
+보존했다. 실제 자료 등록 후 기존 증분 INDEX의 pending/active 대상과 원인을 확인해야 하며,
+현재 임베딩이 실행 중이라고 보고하지 않는다.
+
+다음 작업은 실제 operator 한 번의 로그인으로 원본 업로드·첫 회차 접수·native Q/S 다운로드와
+DB 원본 metadata·공개 풀이·공통 Graph를 검증한 뒤 같은 세션에서 나머지 17회를 이어 넣는
+것이다. 준비된 원문은 450쌍이지만 운영 Item 등록은 아직 시작 전이다. 완료하지 않은 모델
+처리·임베딩을 완료로 표시하지 않는다. Hancom 자체 육안 검토는 NOT_RECORDED다.
+
+배포 milestone Slack: `devreport_f475d2978462408fb73324545366424f` HTTP200/SAVED.
