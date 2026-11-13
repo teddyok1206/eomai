@@ -71,7 +71,12 @@ from eom_api_contracts.item_bank import (
     ProductionItemContentComponentViewV2,
     ProductionPastExamContextView,
 )
-from eom_api_contracts.item_db_registration import AiItemDbEntryView, MaterialItemDbEntryView
+from eom_api_contracts.item_db_registration import (
+    AiItemDbEntryView,
+    MaterialDbEntryView,
+    MaterialItemDbEntryView,
+    MaterialNativeItemDbEntryView,
+)
 from eom_api_contracts.items import (
     ItemApprovalView,
     ItemComponentView,
@@ -980,9 +985,10 @@ class QueryAdapter:
         limit: int,
         cursor: str | None,
         usage_filter: ContentUsageFilter | None = None,
-    ) -> PageResult[MaterialItemDbEntryView]:
+    ) -> PageResult[MaterialDbEntryView]:
         """Uploaded external Items in the current shared Graph, not invented Notion rows."""
         from eom_catalog_contracts.material_item_lineage import MaterialImportedItemMetadata
+        from eom_catalog_contracts.material_native_files import MaterialImportedNativeItemMetadata
         from eom_catalog_service.material_learning_models import (
             LearningMaterialRecord,
             LearningMaterialRevisionRecord,
@@ -1054,7 +1060,16 @@ class QueryAdapter:
                 ).tuples()
             )
             values = tuple(
-                MaterialItemDbEntryView(
+                MaterialNativeItemDbEntryView(
+                    metadata=MaterialImportedNativeItemMetadata.model_validate(
+                        revision.metadata_json
+                    ),
+                    material_title=title,
+                    registration=registration_view(revision),
+                )
+                if revision.metadata_json.get("schema_version")
+                == "material-imported-native-item-metadata/2.0"
+                else MaterialItemDbEntryView(
                     metadata=MaterialImportedItemMetadata.model_validate(revision.metadata_json),
                     material_title=title,
                     registration=registration_view(revision),
@@ -1655,6 +1670,10 @@ class QueryAdapter:
             ExternalItemReadError,
             read_creative_registration_sources,
         )
+        from eom_catalog_service.material_native_item_read import (
+            MaterialNativeItemReadError,
+            read_native_material_original_metadata,
+        )
 
         try:
             with self.sessions() as session:
@@ -1665,10 +1684,20 @@ class QueryAdapter:
                     },
                     source_namespace="notion-integrated-science",
                 )
-        except ExternalItemReadError as exc:
+                native_pins = {
+                    entry.item_revision_id: entry.item_manifest_sha256
+                    for entry in entries
+                    if entry.item_type_key == "uploaded-material-item"
+                }
+                native_sources = (
+                    read_native_material_original_metadata(session, item_manifests=native_pins)
+                    if native_pins
+                    else {}
+                )
+        except (ExternalItemReadError, MaterialNativeItemReadError) as exc:
             status = 404 if exc.code == "ITEM_DB_SOURCE_NOT_FOUND" else 409
             raise ApiError(status, exc.code, "Original source unavailable", str(exc)) from exc
-        return {
+        units = {
             revision_id: tuple(
                 value for value in (source.major_unit, source.minor_unit) if value and value.strip()
             )
@@ -1676,6 +1705,15 @@ class QueryAdapter:
             else ()
             for revision_id, source in sources.items()
         }
+        units.update(
+            {
+                revision_id: (value.metadata.original_unit,)
+                if value.metadata.original_unit and value.metadata.original_unit.strip()
+                else ()
+                for revision_id, value in native_sources.items()
+            }
+        )
+        return units
 
     @staticmethod
     def _current_assessment_snapshot_id(session: Session) -> str | None:

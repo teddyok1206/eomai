@@ -16,7 +16,6 @@ from eom_catalog_contracts.material_learning_authorization import (
 from eom_catalog_contracts.material_learning_intake import (
     MATERIAL_SOURCE_FORMATS,
     ControlMaterialLearningRunCommand,
-    CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
     GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
@@ -24,6 +23,8 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialSourceUploadCommand,
     RetryMaterialLearningRunCommand,
 )
+from eom_catalog_contracts.material_native_intake import parse_material_learning_create
+from eom_catalog_contracts.material_native_prepare import PrepareNativeMaterialExamCommand
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.repository import IdempotencyConflict
 from pydantic import BaseModel, ValidationError
@@ -38,10 +39,12 @@ from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceService,
 )
 from eom_catalog_service.material_learning_store import MaterialLearningStorageError
+from eom_catalog_service.material_native_preparation import MaterialNativePreparationService
 
 MATERIAL_LEARNING_OPERATIONS = frozenset(
     {
         "INGEST_MATERIAL_LEARNING_SOURCE",
+        "PREPARE_NATIVE_MATERIAL_EXAM",
         "CREATE_MATERIAL_LEARNING",
         "LIST_MATERIAL_LEARNING_RUNS",
         "GET_MATERIAL_LEARNING_RUN",
@@ -53,6 +56,29 @@ MATERIAL_LEARNING_OPERATIONS = frozenset(
 )
 
 
+def _receive_material_file(
+    incoming: BinaryIO, path: Path, *, content_length: int, sha256: str
+) -> None:
+    """A bounded private upload hand-off shared by original and metadata inputs."""
+    digest = hashlib.sha256()
+    with path.open("xb") as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        remaining = content_length
+        while remaining:
+            chunk = incoming.read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_TRUNCATED")
+            stream.write(chunk)
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if incoming.read(1):
+            raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_EXCEEDED")
+        stream.flush()
+        os.fsync(stream.fileno())
+    if "sha256:" + digest.hexdigest() != sha256:
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_HASH_MISMATCH")
+
+
 def dispatch_material_learning(
     value: object,
     incoming: BinaryIO,
@@ -62,6 +88,7 @@ def dispatch_material_learning(
     intake: MaterialLearningIntakeService | None,
     reads: MaterialLearningReadService | None,
     authorizations: CatalogMaterialLearningAuthorizationService | None = None,
+    native_preparation: MaterialNativePreparationService | None = None,
 ) -> None:
     reply: BaseModel
     try:
@@ -96,26 +123,28 @@ def dispatch_material_learning(
                 path = Path(directory) / (
                     "original" + MATERIAL_SOURCE_FORMATS[command.source_format].suffix
                 )
-                digest = hashlib.sha256()
-                with path.open("xb") as stream:
-                    os.fchmod(stream.fileno(), 0o600)
-                    remaining = command.content_length
-                    while remaining:
-                        chunk = incoming.read(min(1024 * 1024, remaining))
-                        if not chunk:
-                            raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_TRUNCATED")
-                        stream.write(chunk)
-                        digest.update(chunk)
-                        remaining -= len(chunk)
-                    if incoming.read(1):
-                        raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_EXCEEDED")
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                if "sha256:" + digest.hexdigest() != command.sha256:
-                    raise MaterialLearningSourceError("MATERIAL_LEARNING_UPLOAD_HASH_MISMATCH")
+                _receive_material_file(
+                    incoming, path, content_length=command.content_length, sha256=command.sha256
+                )
                 reply = sources.ingest(path, command)
+        elif operation == "PREPARE_NATIVE_MATERIAL_EXAM":
+            native_command = PrepareNativeMaterialExamCommand.model_validate(value)
+            if native_preparation is None:
+                raise MaterialLearningSourceError("MATERIAL_NATIVE_PREPARATION_UNAVAILABLE")
+            native_preparation.authorize_upload(native_command)
+            with tempfile.TemporaryDirectory(
+                prefix="material-native-upload.", dir=native_preparation.settings.staging_root
+            ) as directory:
+                path = Path(directory) / "metadata.xlsx"
+                _receive_material_file(
+                    incoming,
+                    path,
+                    content_length=native_command.workbook_bytes,
+                    sha256=native_command.workbook_sha256,
+                )
+                reply = native_preparation.prepare_and_create(path, native_command)
         elif operation == "CREATE_MATERIAL_LEARNING":
-            create = CreateMaterialLearningCommand.model_validate(value)
+            create = parse_material_learning_create(value)
             if intake is None:
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
             reply = intake.create(create)

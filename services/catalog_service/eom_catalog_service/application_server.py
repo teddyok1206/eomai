@@ -255,6 +255,12 @@ from eom_catalog_service.material_learning_dispatch import (
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_read import MaterialLearningReadService
 from eom_catalog_service.material_learning_source import MaterialLearningSourceService
+from eom_catalog_service.material_native_item_read import MaterialNativeItemReadService
+from eom_catalog_service.material_native_item_read_dispatch import (
+    MATERIAL_NATIVE_READ_OPERATIONS,
+    dispatch_native_material_item_read,
+)
+from eom_catalog_service.material_native_preparation import MaterialNativePreparationService
 from eom_catalog_service.mock_exam_assembly_service import (
     MockExamAssemblyError,
     MockExamAssemblyService,
@@ -332,6 +338,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 )
                 return
             if isinstance(raw_operation, str) and raw_operation in MATERIAL_LEARNING_OPERATIONS:
+                if raw_operation == "PREPARE_NATIVE_MATERIAL_EXAM":
+                    self.request.settimeout(300.0)
                 dispatch_material_learning(
                     value,
                     cast(BinaryIO, self.rfile),
@@ -340,7 +348,17 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     intake=self.server.material_learning_intake,
                     reads=self.server.material_learning_reads,
                     authorizations=self.server.material_learning_authorizations,
+                    native_preparation=self.server.material_native_preparation,
                 )
+                return
+            if isinstance(raw_operation, str) and raw_operation in MATERIAL_NATIVE_READ_OPERATIONS:
+                self.request.settimeout(120.0)
+                dispatch_native_material_item_read(
+                    value,
+                    cast(BinaryIO, self.wfile),
+                    service=self.server.material_native_item_reads,
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "GET_ITEM_VISUAL_PRESENTATION":
                 from eom_catalog_service.item_visual_presentation_dispatch import (
@@ -2030,6 +2048,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         material_learning_intake: MaterialLearningIntakeService | None = None,
         material_learning_reads: MaterialLearningReadService | None = None,
         material_learning_authorizations: CatalogMaterialLearningAuthorizationService | None = None,
+        material_native_preparation: MaterialNativePreparationService | None = None,
+        material_native_item_reads: MaterialNativeItemReadService | None = None,
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
@@ -2071,6 +2091,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.material_learning_intake = material_learning_intake
         self.material_learning_reads = material_learning_reads
         self.material_learning_authorizations = material_learning_authorizations
+        self.material_native_preparation = material_native_preparation
+        self.material_native_item_reads = material_native_item_reads
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence

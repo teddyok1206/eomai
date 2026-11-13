@@ -16,10 +16,20 @@ import {createMaterialLearning} from './material-learning.js';
 const state = {presentationVocabulary: ${vocabulary}};
 ${presenters}
 const runId = 'materialrun_' + '1'.repeat(32);
-const fixture = window.fixture = {calls: [], runs: [], failCreate: true, held: false, release: null, taskState: 'RUNNING'};
+const fixture = window.fixture = {calls: [], runs: [], failCreate: true, failNativeCreate: true, sourceFormat: 'PDF', held: false, release: null, taskState: 'RUNNING'};
 async function api(path, options = {}) {
-  fixture.calls.push({path, key: options.headers?.['Idempotency-Key'], body: options.body instanceof File ? options.body.name : options.body});
-  if (path.startsWith('/material-learning/sources?')) return {original_filename: options.body.name, source_format: 'PDF'};
+  let body = options.body;
+  if (body instanceof Blob && !(body instanceof File)) {
+    const bytes = new Uint8Array(await body.arrayBuffer()), end = bytes.indexOf(10);
+    body = {metadata: JSON.parse(new TextDecoder().decode(bytes.slice(0, end))), workbook: [...bytes.slice(end + 1)]};
+  }
+  fixture.calls.push({path, key: options.headers?.['Idempotency-Key'], body: options.body instanceof File ? options.body.name : body});
+  if (path.startsWith('/material-learning/sources?')) return {original_filename: options.body.name, source_format: fixture.sourceFormat, original: {sha256: 'sha256:' + 'a'.repeat(64)}};
+  if (path === '/material-learning/native-exams') {
+    if (fixture.failNativeCreate) {fixture.failNativeCreate = false; throw new Error('일시적인 한글 준비 오류');}
+    fixture.runs = [{run_id: runId, title: body.metadata.upload.title, material_kind: 'MOCK_EXAM', state: 'PROCESSING', task_counts: [{state: 'RUNNING', count: 1}], created_at: '2026-11-05T20:00:00Z', updated_at: '2026-11-06T00:00:00Z'}];
+    return {run_id: runId};
+  }
   if (path === '/material-learning' && options.method === 'POST') {
     if (fixture.failCreate) { fixture.failCreate = false; throw new Error('일시적인 접수 오류'); }
     fixture.runs = [{run_id: runId, title: options.body.upload.title, material_kind: 'WORKBOOK', state: 'PROCESSING', task_counts: [{state: 'COMPLETED', count: 2}, {state: 'RUNNING', count: 1}], created_at: '2026-11-05T20:00:00Z', updated_at: '2026-11-06T00:00:00Z'}];
@@ -112,6 +122,38 @@ try {
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#material-learning-detail').textContent(), '');
   assert.equal(await page.locator('#material-learning-runs').textContent(), '');
+  const uploadCount = await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length);
+  await page.locator('#material-title').fill('한글 문항 모의고사');
+  await page.locator('#material-description').fill('내부 검증용 원본·문항 정보');
+  await page.locator('#material-main').setInputFiles({name: '문제.hwp', mimeType: 'application/octet-stream', buffer: Buffer.from('native-main-synthetic')});
+  await page.locator('#material-workbook').setInputFiles({name: '문항정보.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK-synthetic-workbook')});
+  await page.locator('#material-rights').check();
+  await page.locator('#material-learning-start').click();
+  assert.match(await page.locator('#material-learning-message').textContent(), /문제·해설 한글 파일도 모두 필요/);
+  assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), uploadCount, 'incomplete native pair uploaded sources');
+  await page.locator('#material-solutions').setInputFiles({name: '해설.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\nsolutions')});
+  await page.locator('#material-learning-start').click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-message').textContent.includes('모두 한글 파일'));
+  assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path === '/material-learning/native-exams').length), 0, 'PDF was accepted for native splitting');
+  await page.evaluate(() => {fixture.sourceFormat = 'HWPX';});
+  await page.locator('#material-main').setInputFiles({name: '문제.hwp', mimeType: 'application/octet-stream', buffer: Buffer.from('native-main-synthetic')});
+  await page.locator('#material-solutions').setInputFiles({name: '해설.hwpx', mimeType: 'application/octet-stream', buffer: Buffer.from('native-solutions-synthetic')});
+  await page.locator('#material-learning-start').click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-message').textContent.includes('일시적인 한글 준비 오류'));
+  const nativeUploadCount = await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length);
+  await page.locator('#material-learning-start').click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-runs').textContent.includes('한글 문항 모의고사'));
+  const nativeRequests = await page.evaluate(() => fixture.calls.filter(call => call.path === '/material-learning/native-exams'));
+  assert.equal(nativeRequests.length, 2);
+  assert.equal(nativeRequests[0].key, nativeRequests[1].key, 'retry changed native request identity');
+  assert.deepEqual(nativeRequests[0].body, nativeRequests[1].body, 'retry changed framed workbook bytes or metadata');
+  assert.equal(nativeRequests[1].body.metadata.schema_version, 'material-native-exam-upload/1.0');
+  assert.equal(nativeRequests[1].body.metadata.exam_key, 'source-' + 'a'.repeat(64));
+  assert.equal(nativeRequests[1].body.metadata.workbook_filename, '문항정보.xlsx');
+  assert.deepEqual(nativeRequests[1].body.metadata.sources.map(source => source.source_role), ['MAIN', 'SOLUTIONS']);
+  assert.deepEqual(nativeRequests[1].body.workbook, [...Buffer.from('PK-synthetic-workbook')]);
+  assert.deepEqual(Object.keys(nativeRequests[1].body.metadata).sort(), ['schema_version', 'upload', 'sources', 'source_namespace', 'exam_key', 'workbook_filename'].sort(), 'browser supplied actor or producer authority');
+  assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), nativeUploadCount, 'native retry recopied sources');
   assert.deepEqual(errors, []);
-  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress pause-resume failed-unit-successor source-position safe-text stale-owner live-writes=0');
+  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress pause-resume failed-unit-successor source-position safe-text stale-owner native-framed-xlsx native-pair-validation native-replay live-writes=0');
 } finally {await browser.close(); await new Promise(resolve => server.close(resolve));}

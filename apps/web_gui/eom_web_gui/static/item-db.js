@@ -447,9 +447,12 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
 
   function renderMaterialEntry(entry) {
     const metadata = entry.metadata;
-    const location = `${entry.material_title} · ${metadata.physical_pages.join(", ")}쪽`;
+    const native = entry.schema_version === "material-item-db-entry/2.0";
+    const location = native
+      ? `${entry.material_title} · ${metadata.item_number}번 · ${metadata.original_unit || "소속 단원 정보 없음"}`
+      : `${entry.material_title} · ${metadata.physical_pages.join(", ")}쪽`;
     return resultRow(entry.registration.item_revision_id, metadata.title,
-      [location, approvalLabel(entry.registration), "문항 정보에서 확인"],
+      [location, approvalLabel(entry.registration), native ? "편집 가능한 원본 한글" : "문항 정보에서 확인"],
       (row) => {
         detailSequence++;
         selectItem(null, null);
@@ -458,19 +461,46 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         root.replaceChildren(node(document, "h3", "", metadata.title));
         root.append(metadataList([
           ["문항 종류", "외부"], ["자료", entry.material_title],
+          ...(entry.schema_version === "material-item-db-entry/2.0" ? [
+            ["고유번호", metadata.external_number || "미입력"],
+            ["소속 단원", metadata.original_unit || "소속 단원 정보 없음"],
+            ["원본 분류", metadata.original_classification],
+            ["원본 문항명", metadata.source_name],
+          ] : []),
           ["원본 파일", metadata.source_filename],
           ["자료 내 문항 번호", metadata.printed_label],
           ["목차 위치", metadata.section_path.join(" → ")],
           ["원본 페이지", metadata.physical_pages.join(", ")],
         ], "item-db-detail-summary"));
+        if (native) appendNativeDocuments(root, entry.registration);
         appendRegistration(root, entry.registration);
       });
+  }
+
+  function appendNativeDocuments(root, registration) {
+    const section = node(document, "section", "item-db-detail-section");
+    section.append(node(document, "h4", "", "원본 한글 파일"));
+    if (!canReadSource()) {
+      section.append(node(document, "p", "", "원본 파일 조회 권한이 없습니다."));
+    } else {
+      section.append(node(document, "p", "muted-label", "업로드한 문제·해설에서 나눈 편집 가능한 문항별 HWPX입니다. AI가 다시 만든 파일이 아닙니다."));
+      const links = node(document, "div", "button-row");
+      for (const [role, label] of [["MAIN", "원본 문항 HWPX"], ["SOLUTIONS", "원본 해설 HWPX"]]) {
+        const link = node(document, "a", "button secondary", label);
+        link.href = `/studio/api/v1/item-db/registrations/${encodeURIComponent(registration.item_revision_id)}/native-document?`
+          + new URLSearchParams({manifest_sha256: registration.item_manifest_sha256, source_role: role});
+        links.append(link);
+      }
+      section.append(links);
+    }
+    root.append(section);
   }
 
   function originalUnitPanel(source = null) {
     const section = node(document, "section", "item-db-original-unit");
     section.append(node(document, "h4", "", "소속 단원"));
-    const units = [source?.major_unit, source?.minor_unit].filter(value => value?.trim());
+    const units = [source?.original_unit, source?.major_unit, source?.minor_unit]
+      .filter(value => value?.trim());
     section.append(node(document, "p", "", units.join(" → ") || "소속 단원 정보 없음"));
     return section;
   }
@@ -490,6 +520,10 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       if (request !== detailSequence) return;
       const resolved = originalUnitPanel(source);
       section.replaceChildren(...Array.from(resolved.children));
+      if (source?.schema_version === "material-imported-native-item-metadata/2.0") {
+        section.append(metadataList([["고유번호", source.external_number || "미입력"], ["자료 내 문항 번호", source.printed_label]]));
+        appendNativeDocuments(section, entry);
+      }
     } catch (error) {
       if (request !== detailSequence) return;
       value.textContent = "소속 단원을 불러오지 못했습니다.";

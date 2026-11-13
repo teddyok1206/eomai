@@ -2,6 +2,9 @@ const KINDS = Object.freeze({TEXTBOOK: "교과서", REFERENCE_BOOK: "참고서",
 const TASK_KINDS = Object.freeze({PREPARE: "파일 준비", DISCOVER: "구성 확인", EXPLANATION: "설명 지식", QUESTION: "문항"});
 const TERMINAL = new Set(["COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"]);
 const MAX_BYTES = 256 * 1024 * 1024;
+const MAX_NATIVE_SOURCE_BYTES = 50 * 1024 * 1024;
+const MAX_WORKBOOK_BYTES = 8 * 1024 * 1024;
+const MAX_NATIVE_METADATA_BYTES = 64 * 1024;
 
 export function materialLearningProgress(run) {
   const counters = new Map((run.task_counts || []).map(value => [value.state, value.count]));
@@ -177,8 +180,13 @@ export function createMaterialLearning({document, api, setStateStatus, explainEr
     const form = $("#material-learning-form");
     if (!form.reportValidity()) return;
     const main = $("#material-main").files[0], solutions = $("#material-solutions").files[0] || null;
-    if ([main, solutions].filter(Boolean).some(file => file.size < 8 || file.size > MAX_BYTES)) {
-      message("파일 한 개의 크기는 256MB 이하여야 합니다.", true); return;
+    const workbook = $("#material-workbook").files[0] || null;
+    const maxSource = workbook ? MAX_NATIVE_SOURCE_BYTES : MAX_BYTES;
+    if ([main, solutions].filter(Boolean).some(file => file.size < 8 || file.size > maxSource)) {
+      message(workbook ? "엑셀과 함께 올리는 한글 파일은 각각 50MB 이하여야 합니다." : "파일 한 개의 크기는 256MB 이하여야 합니다.", true); return;
+    }
+    if (workbook && (!solutions || !/\.xlsx$/iu.test(workbook.name) || workbook.size < 8 || workbook.size > MAX_WORKBOOK_BYTES)) {
+      message("문항 정보 엑셀은 8MB 이하의 .xlsx 파일을 골라 주세요. 문제·해설 한글 파일도 모두 필요합니다.", true); return;
     }
     const uploadSpec = {
       schema_version: "material-learning-upload/1.0", title: $("#material-title").value.trim(),
@@ -186,7 +194,7 @@ export function createMaterialLearning({document, api, setStateStatus, explainEr
       additional_instructions: $("#material-instructions").value.trim(), curriculum_unit_hints: [], rights_confirmed: true,
     };
     const signature = JSON.stringify(uploadSpec);
-    if (!intent || intent.signature !== signature || intent.main !== main || intent.solutions !== solutions) intent = {signature, main, solutions, key: key(), keys: new Map()};
+    if (!intent || intent.signature !== signature || intent.main !== main || intent.solutions !== solutions || intent.workbook !== workbook) intent = {signature, main, solutions, workbook, key: key(), keys: new Map()};
     const token = version;
     const controls = [...form.elements];
     busy = true; controls.forEach(control => { control.disabled = true; });
@@ -198,8 +206,26 @@ export function createMaterialLearning({document, api, setStateStatus, explainEr
         status.textContent = "해설 파일을 보관하고 있습니다…";
         sources.push({source_role: "SOLUTIONS", source_upload: await upload(solutions, token)});
       }
-      status.textContent = "학습을 접수하고 있습니다…";
-      const accepted = await api("/material-learning", {method: "POST", mutation: true, body: {upload: uploadSpec, sources, idempotency_key: intent.key}});
+      let accepted;
+      if (workbook) {
+        // Container detection belongs to the source owner, not a filename guess.
+        if (sources.some(source => !["HWP", "HWPX"].includes(source.source_upload.source_format))) throw new Error("문항 정보 엑셀은 문제·해설이 모두 한글 파일일 때 함께 사용할 수 있습니다.");
+        const metadata = {
+          schema_version: "material-native-exam-upload/1.0", upload: uploadSpec, sources,
+          source_namespace: "studio-native-exam", exam_key: `source-${sources[0].source_upload.original.sha256.slice(7)}`,
+          workbook_filename: workbook.name,
+        };
+        const line = new TextEncoder().encode(JSON.stringify(metadata));
+        if (line.byteLength > MAX_NATIVE_METADATA_BYTES) throw new Error("출처 정보가 너무 깁니다. 자료 제목과 설명을 줄여 주세요.");
+        status.textContent = "문제·해설을 문항별 한글 파일로 준비하고 있습니다. 잠시 기다려 주세요…";
+        accepted = await api("/material-learning/native-exams", {
+          method: "POST", mutation: true, body: new Blob([line, "\n", workbook]),
+          headers: {"Content-Type": "application/vnd.eom.native-exam", "Idempotency-Key": intent.key},
+        });
+      } else {
+        status.textContent = "학습을 접수하고 있습니다…";
+        accepted = await api("/material-learning", {method: "POST", mutation: true, body: {upload: uploadSpec, sources, idempotency_key: intent.key}});
+      }
       if (token !== version) return;
       selected = accepted.run_id; intent = null; form.reset();
       message("자료를 접수했습니다. 페이지 준비부터 순서대로 처리하며, 이 화면을 닫아도 작업은 계속됩니다.");

@@ -25,7 +25,10 @@ def pins():
 def test_runtime_reads_only_explicit_small_release_pins(monkeypatch):
     for key, value in pins().items():
         monkeypatch.setenv("EOM_MATERIAL_" + key.upper(), value)
-    assert MaterialLearningRuntimePins.from_environment().model_dump() == pins()
+    assert MaterialLearningRuntimePins.from_environment().model_dump() == {
+        **pins(),
+        "native_content_pack_release_id": None,
+    }
     monkeypatch.delenv("EOM_MATERIAL_ITEM_PRESET_REVISION_ID")
     with pytest.raises(ValueError):
         MaterialLearningRuntimePins.from_environment()

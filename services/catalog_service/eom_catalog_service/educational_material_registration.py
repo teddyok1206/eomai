@@ -14,7 +14,6 @@ from eom_catalog_contracts.material_learning import (
     MaterialLearningRights,
     SourceRole,
 )
-from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentReceipt,
     MaterialDocumentRevision,
@@ -24,13 +23,12 @@ from eom_catalog_contracts.material_learning_preparation import (
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import ArtifactRevisionRecord
-from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
+from eom_catalog_service.material_intake_read import material_intake_pointer, read_material_intake
 from eom_catalog_service.material_learning_artifacts import (
-    pin_material_primary,
     publish_material_metadata,
     read_material_metadata,
 )
@@ -124,23 +122,22 @@ class MaterialDocumentRegistrationService:
             raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_IDENTITY_INVALID")
         with self.sessions() as session:
             source = self._require_intake(session, revision, operator_id=operator_id)
-            intake_pointer = pin_material_primary(
+            intake_pointer = material_intake_pointer(
                 session,
-                ArtifactMemberPointer(
-                    artifact_id=source.manifest_artifact_id,
-                    artifact_revision_id=source.manifest_artifact_revision_id,
-                    member_path=source.manifest_member_path,
-                    schema_ref="eom://schemas/material-learning/intake/1.0",
-                    media_type="application/json",
-                    sha256=source.manifest_sha256,
-                ),
-            ).pointer
-            intake = read_material_metadata(
+                artifact_id=source.manifest_artifact_id,
+                revision_id=source.manifest_artifact_revision_id,
+                sha256=source.manifest_sha256,
+            )
+            if intake_pointer.member_path != source.manifest_member_path:
+                raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_SOURCE_STALE")
+
+            def authorize_intake_read() -> None:
+                self._require_intake(session, revision, operator_id=operator_id)
+
+            intake = read_material_intake(
                 self.artifacts,
                 intake_pointer,
-                MaterialLearningIntakeManifest,
-                schema_ref="eom://schemas/material-learning/intake/1.0",
-                member_path="material/intake.json",
+                authorize=authorize_intake_read,
             )
             expected_kind = material_document_kind(intake.upload.material_kind)
             selected = next(

@@ -180,6 +180,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
             CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
             "MATERIAL_LEARNING_UNAVAILABLE",
+            "MATERIAL_NATIVE_READ_UNAVAILABLE",
             "CONTENT_IMPORT_UNAVAILABLE",
         }
         denied = exc.code in {
@@ -188,6 +189,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CURATED_SOURCE_PERMISSION_DENIED",
             "MATERIAL_LEARNING_PERMISSION_DENIED",
             "MATERIAL_LEARNING_SOURCE_OWNER_MISMATCH",
+            "MATERIAL_NATIVE_READ_PERMISSION_DENIED",
             "CONTENT_WORKBOOK_PROPOSAL_OWNER_MISMATCH",
         }
         missing = exc.code in {
@@ -198,6 +200,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CURATED_ASSEMBLY_NOT_FOUND",
             "MATERIAL_LEARNING_RUN_NOT_FOUND",
             "MATERIAL_LEARNING_TASK_NOT_FOUND",
+            "MATERIAL_NATIVE_ITEM_SOURCE_NOT_FOUND",
         }
         malformed = exc.code in {
             "CONTENT_PLANNING_REQUEST_INVALID",

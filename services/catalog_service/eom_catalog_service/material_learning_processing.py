@@ -43,6 +43,9 @@ from eom_catalog_service.material_learning_store import (
 from eom_catalog_service.material_task_history import read_material_task_histories
 
 _ANALYSIS_FAILURES = frozenset({"FAILED", "REJECTED", "CANCELLED"})
+_REGISTRATION_SOURCE_EXCEPTIONS = frozenset(
+    {"MATERIAL_ITEM_SOURCE_UNREADABLE", "MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED"}
+)
 _KNOWLEDGE_COMMAND_REF = "eom://schemas/knowledge/create-material-knowledge-analysis/1.0"
 _TERMINAL_SOURCE_LIMITS = frozenset(
     {
@@ -216,7 +219,7 @@ class MaterialLearningProcessingService:
                     task_id=task.task_id, operator_id=context.operator_id
                 )
             except ValueError as error:
-                if str(error) != "MATERIAL_ITEM_SOURCE_UNREADABLE":
+                if str(error) not in _REGISTRATION_SOURCE_EXCEPTIONS:
                     raise
                 with self.sessions.begin() as session:
                     run = lock_material_run(session, claim, now=datetime.now(UTC))
@@ -228,7 +231,7 @@ class MaterialLearningProcessingService:
                         current,
                         MaterialTaskState.EXCEPTION,
                         now=datetime.now(UTC),
-                        error_code="MATERIAL_ITEM_SOURCE_UNREADABLE",
+                        error_code=str(error),
                     )
                 return MaterialCoordinatorProgress(claim.run_id, task.task_id, "EXCEPTION")
             self._set_state(

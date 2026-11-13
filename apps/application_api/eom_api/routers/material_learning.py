@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Annotated, Literal
 
 from eom_api_contracts import SingleResponse
-from eom_catalog_contracts.material_learning import MaterialLearningUpload
+from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialLearningUpload
 from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
-    CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
     GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
@@ -23,9 +24,19 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialSourceUploadReceipt,
     RetryMaterialLearningRunCommand,
 )
+from eom_catalog_contracts.material_native_intake import parse_material_learning_create
+from eom_catalog_contracts.material_native_prepare import (
+    MATERIAL_NATIVE_METADATA_MAX_BYTES,
+    MATERIAL_NATIVE_UPLOAD_MAX_BYTES,
+    MATERIAL_NATIVE_UPLOAD_MEDIA_TYPE,
+    MATERIAL_NATIVE_XLSX_MAX_BYTES,
+    NativeMaterialExamUpload,
+    PrepareNativeMaterialExamCommand,
+)
 from eom_catalog_contracts.models import FrozenModel, UtcDatetime
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Header, Path, Query, Request
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import Field
 from starlette.concurrency import run_in_threadpool
 
@@ -39,6 +50,13 @@ router = APIRouter(prefix="/material-learning", tags=["material-learning"])
 class CreateMaterialLearningRequest(FrozenModel):
     upload: MaterialLearningUpload
     sources: tuple[MaterialLearningSourceSelection, ...] = Field(min_length=1, max_length=2)
+
+
+class CreateNativeMaterialLearningRequest(FrozenModel):
+    schema_version: Literal["material-learning-create/2.0"]
+    upload: MaterialLearningUpload
+    sources: tuple[MaterialLearningSourceSelection, ...] = Field(min_length=2, max_length=2)
+    native_bundle: MaterialArtifactMember
 
 
 class MaterialLearningControlRequest(FrozenModel):
@@ -185,6 +203,102 @@ async def upload_material_source(
     return one(request, receipt)
 
 
+def _unique_metadata_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("Duplicate metadata key")
+        value[key] = item
+    return value
+
+
+def _invalid_native_upload() -> ApiError:
+    return ApiError(
+        422,
+        "MATERIAL_NATIVE_UPLOAD_INVALID",
+        "Invalid native exam upload",
+        "Provide paired native sources and one bounded metadata workbook.",
+    )
+
+
+@router.post(
+    "/native-exams",
+    operation_id="material_native_exam_prepare",
+    status_code=202,
+    response_model=SingleResponse[MaterialLearningAcceptance],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_CREATE, admin_only=True))
+    ],
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                MATERIAL_NATIVE_UPLOAD_MEDIA_TYPE: {
+                    "schema": {"type": "string", "format": "binary"}
+                }
+            },
+        }
+    },
+)
+async def prepare_native_material_exam(
+    request: Request,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    content_length: Annotated[int, Header(ge=9, le=MATERIAL_NATIVE_UPLOAD_MAX_BYTES)],
+) -> SingleResponse[MaterialLearningAcceptance]:
+    # One bounded XLSX materialization; all workbook parsing and canonical commits
+    # stay with Catalog, not the public API or browser.
+    prefix = bytearray()
+    content = bytearray()
+    digest = hashlib.sha256()
+    metadata: NativeMaterialExamUpload | None = None
+    received = 0
+    async for chunk in request.stream():
+        received += len(chunk)
+        if received > content_length:
+            raise _invalid_native_upload()
+        if metadata is None:
+            delimiter = chunk.find(b"\n")
+            prefix.extend(chunk if delimiter < 0 else chunk[:delimiter])
+            if len(prefix) > MATERIAL_NATIVE_METADATA_MAX_BYTES:
+                raise _invalid_native_upload()
+            if delimiter < 0:
+                continue
+            try:
+                metadata = NativeMaterialExamUpload.model_validate(
+                    json.loads(prefix.decode("utf-8"), object_pairs_hook=_unique_metadata_object)
+                )
+            except (ValueError, RecursionError, JsonSchemaValidationError) as exc:
+                raise _invalid_native_upload() from exc
+            chunk = chunk[delimiter + 1 :]
+        if len(content) + len(chunk) > MATERIAL_NATIVE_XLSX_MAX_BYTES:
+            raise _invalid_native_upload()
+        content.extend(chunk)
+        digest.update(chunk)
+    if received != content_length or metadata is None or len(content) < 8:
+        raise _invalid_native_upload()
+    try:
+        command = PrepareNativeMaterialExamCommand(
+            actor_id=authentication.operator.operator_id,
+            idempotency_key=idempotency_key,
+            upload=metadata.upload,
+            sources=metadata.sources,
+            source_namespace=metadata.source_namespace,
+            exam_key=metadata.exam_key,
+            workbook_filename=metadata.workbook_filename,
+            workbook_sha256="sha256:" + digest.hexdigest(),
+            workbook_bytes=len(content),
+        )
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise _invalid_native_upload() from exc
+    acceptance = await run_in_threadpool(
+        request.app.state.services.catalog_application.prepare_native_material_exam,
+        command,
+        content=bytes(content),
+    )
+    return one(request, acceptance)
+
+
 @router.post(
     "",
     operation_id="material_learning_create",
@@ -196,18 +310,28 @@ async def upload_material_source(
 )
 def create_material_learning(
     request: Request,
-    body: CreateMaterialLearningRequest,
+    body: CreateMaterialLearningRequest | CreateNativeMaterialLearningRequest,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[MaterialLearningAcceptance]:
     # Idempotency belongs to the durable Catalog command; an HTTP timeout must
     # replay this exact key, not leave a separate API command stuck IN_PROGRESS.
-    command = CreateMaterialLearningCommand(
-        actor_id=authentication.operator.operator_id,
-        idempotency_key=idempotency_key,
-        upload=body.upload,
-        sources=body.sources,
-    )
+    try:
+        command = parse_material_learning_create(
+            {
+                **body.model_dump(mode="json"),
+                "actor_id": authentication.operator.operator_id,
+                "idempotency_key": idempotency_key,
+                "operation": "CREATE_MATERIAL_LEARNING",
+            }
+        )
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ApiError(
+            422,
+            "MATERIAL_LEARNING_REQUEST_INVALID",
+            "Invalid material learning request",
+            "Provide sources owned by the authenticated operator and an explicit supported schema.",
+        ) from exc
     return one(
         request, request.app.state.services.catalog_application.create_material_learning(command)
     )

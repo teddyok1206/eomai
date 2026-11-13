@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-item-binding/1.0",
+  "title": "Native editable item files and exact workbook row binding",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-native-item-binding/1.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "unit_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "exam_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "source_namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+    },
+    "item_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "printed_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "original_source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "native_source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "document": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "split_evidence": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "split_plan_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "section_member": {
+                "type": "string",
+                "pattern": "^Contents/section[0-9]+\\.xml$"
+              },
+              "start_paragraph": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "end_paragraph": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100000
+              },
+              "subtree_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "section_member",
+              "start_paragraph",
+              "end_paragraph",
+              "subtree_sha256"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 10000
+        }
+      },
+      "required": [
+        "source_role",
+        "original_source_sha256",
+        "native_source_sha256",
+        "document",
+        "split_evidence",
+        "split_plan_sha256",
+        "ranges"
+      ]
+    },
+    "solution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "original_source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "native_source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "document": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "split_evidence": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "split_plan_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "section_member": {
+                "type": "string",
+                "pattern": "^Contents/section[0-9]+\\.xml$"
+              },
+              "start_paragraph": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "end_paragraph": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100000
+              },
+              "subtree_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "section_member",
+              "start_paragraph",
+              "end_paragraph",
+              "subtree_sha256"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 10000
+        }
+      },
+      "required": [
+        "source_role",
+        "original_source_sha256",
+        "native_source_sha256",
+        "document",
+        "split_evidence",
+        "split_plan_sha256",
+        "ranges"
+      ]
+    },
+    "workbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workbook": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "parsed_workbook": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "worksheet_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "row_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "row_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "workbook",
+        "parsed_workbook",
+        "worksheet_name",
+        "row_number",
+        "row_sha256"
+      ]
+    },
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "external_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]{5}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_unit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 32767
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_classification": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 32767
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_name": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 32767
+        }
+      },
+      "required": [
+        "external_number",
+        "original_unit",
+        "original_classification",
+        "source_name"
+      ]
+    },
+    "binding_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "unit_key",
+    "exam_key",
+    "source_namespace",
+    "item_number",
+    "printed_label",
+    "question",
+    "solution",
+    "workbook",
+    "source_metadata",
+    "binding_sha256"
+  ]
+}

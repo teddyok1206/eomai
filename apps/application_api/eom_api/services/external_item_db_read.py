@@ -15,6 +15,7 @@ from eom_api_contracts.external_item_db import (
 )
 from eom_api_contracts.item_db_registration import CreativeItemDbEntryView, ItemDbRegistrationView
 from eom_catalog_contracts.content_usage_filter import ContentUsageFilter
+from eom_catalog_contracts.material_native_files import MaterialImportedNativeItemMetadata
 from eom_catalog_service.external_item_models import ExternalItemSourceRecord
 from eom_catalog_service.external_item_read_service import (
     ExternalItemListEntry,
@@ -33,6 +34,10 @@ from eom_catalog_service.item_db_excel_export import (
     ItemDbExportRow,
     ItemDbRenderedXlsx,
     render_item_database_xlsx,
+)
+from eom_catalog_service.material_native_item_read import (
+    MaterialNativeItemReadError,
+    read_native_material_original_metadata,
 )
 from eom_catalog_service.models import ItemRevisionRecord
 from eom_orchestrator.database import build_session_factory
@@ -91,7 +96,7 @@ class ExternalItemDbReadApplication:
 
     def registration_source(
         self, revision_id: str, manifest_sha256: str
-    ) -> ExternalItemDbEntryView | None:
+    ) -> ExternalItemDbEntryView | MaterialImportedNativeItemMetadata | None:
         try:
             with self.sessions() as session:
                 entry = read_creative_registration_source(
@@ -100,10 +105,19 @@ class ExternalItemDbReadApplication:
                     manifest_sha256=manifest_sha256,
                     source_namespace=_NAMESPACE,
                 )
-        except ExternalItemReadError as exc:
+                native = (
+                    read_native_material_original_metadata(
+                        session, item_manifests={revision_id: manifest_sha256}
+                    ).get(revision_id)
+                    if entry is None
+                    else None
+                )
+        except (ExternalItemReadError, MaterialNativeItemReadError) as exc:
             status = 404 if exc.code == "ITEM_DB_SOURCE_NOT_FOUND" else 409
             raise ApiError(status, exc.code, "Original source unavailable", str(exc)) from exc
-        return _entry(entry) if entry is not None else None
+        return (
+            native.metadata if native is not None else _entry(entry) if entry is not None else None
+        )
 
     def list(
         self,

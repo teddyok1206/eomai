@@ -12,10 +12,7 @@ from eom_catalog_contracts.material_learning import (
     MaterialPageAddress,
     material_work_schema_ref,
 )
-from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
-from eom_catalog_contracts.material_learning_preparation import (
-    MaterialPreparedArtifact,
-)
+from eom_catalog_contracts.material_native_intake import MaterialIntake, MaterialPrepared
 from eom_identifiers import content_sha256
 from eom_workflow.material_learning_plan import MaterialDiscoveryWindow, PlannedMaterialUnit
 
@@ -35,8 +32,8 @@ class MaterialLearningWorkService:
         self,
         *,
         task_id: str,
-        prepared: MaterialPreparedArtifact,
-        intake: MaterialLearningIntakeManifest,
+        prepared: MaterialPrepared,
+        intake: MaterialIntake,
         window: MaterialDiscoveryWindow,
     ) -> MaterialDiscoveryWork:
         positions = tuple(
@@ -58,8 +55,8 @@ class MaterialLearningWorkService:
         self,
         *,
         task_id: str,
-        prepared: MaterialPreparedArtifact,
-        intake: MaterialLearningIntakeManifest,
+        prepared: MaterialPrepared,
+        intake: MaterialIntake,
         question: PlannedMaterialUnit,
         solutions: tuple[MaterialDiscoveredUnit, ...],
     ) -> MaterialExtractionWork:
@@ -88,8 +85,8 @@ class MaterialLearningWorkService:
     def _common(
         self,
         task_id: str,
-        prepared: MaterialPreparedArtifact,
-        intake: MaterialLearningIntakeManifest,
+        prepared: MaterialPrepared,
+        intake: MaterialIntake,
         positions: tuple[MaterialPageAddress, ...],
     ) -> dict[str, object]:
         if (
@@ -109,7 +106,7 @@ class MaterialLearningWorkService:
         }
 
     def pages(
-        self, prepared: MaterialPreparedArtifact, positions: tuple[MaterialPageAddress, ...]
+        self, prepared: MaterialPrepared, positions: tuple[MaterialPageAddress, ...]
     ) -> tuple[MaterialInputPage, ...]:
         """O(selected pages log chunks); parse each selected chunk once per task."""
         if not 1 <= len(positions) <= 32 or len(set(positions)) != len(positions):

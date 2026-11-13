@@ -128,6 +128,21 @@ class WebServices:
     ) -> MaterialLearningAcceptance:
         return await self.gateway.create_material_learning(session, value)
 
+    async def prepare_native_material_exam(
+        self,
+        session: WebSession,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningAcceptance:
+        return await self.gateway.prepare_native_material_exam(
+            session,
+            content_length=content_length,
+            content=content,
+            idempotency_key=idempotency_key,
+        )
+
     async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns:
         return await self.gateway.material_learning_runs(session)
 

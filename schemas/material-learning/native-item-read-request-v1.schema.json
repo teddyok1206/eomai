@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-item-read-request/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "actor_id", "item_revision_id", "item_manifest_sha256", "source_role"],
+  "properties": {
+    "operation": {"enum": ["GET_NATIVE_MATERIAL_ITEM_SOURCE", "GET_NATIVE_MATERIAL_ITEM_DOCUMENT"]},
+    "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+    "item_manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_role": {"enum": ["MAIN", "SOLUTIONS", null]}
+  },
+  "allOf": [{
+    "if": {"properties": {"operation": {"const": "GET_NATIVE_MATERIAL_ITEM_SOURCE"}}},
+    "then": {"properties": {"source_role": {"type": "null"}}},
+    "else": {"properties": {"source_role": {"enum": ["MAIN", "SOLUTIONS"]}}}
+  }]
+}

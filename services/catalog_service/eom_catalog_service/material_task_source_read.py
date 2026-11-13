@@ -4,14 +4,12 @@ from dataclasses import dataclass
 
 from eom_catalog_contracts.material_knowledge_analysis import CreateMaterialKnowledgeAnalysisCommand
 from eom_catalog_contracts.material_learning import MaterialDiscoveryWork, MaterialExtractionWork
-from eom_catalog_contracts.material_learning_intake import (
-    MaterialLearningIntakeManifest,
-    MaterialTaskSourcePage,
-)
+from eom_catalog_contracts.material_learning_intake import MaterialTaskSourcePage
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.material_intake_read import material_intake_pointer, read_material_intake
 from eom_catalog_service.material_knowledge_source import (
     reauthorize_material_document_source,
     resolve_material_document_source,
@@ -29,7 +27,10 @@ from eom_catalog_service.material_learning_models import (
     MaterialLearningRunRecord,
     MaterialLearningTaskRecord,
 )
-from eom_catalog_service.material_learning_source import MaterialLearningSourceError
+from eom_catalog_service.material_learning_source import (
+    MaterialLearningSourceError,
+    authorize_material_learning,
+)
 from eom_catalog_service.material_task_history import MaterialTaskHistory
 
 
@@ -140,7 +141,7 @@ def read_material_task_source(
             )
             # The source's original filename is not an identity; resolve
             # the enclosing intake before presenting it below.
-            filenames = _filenames(session, revision, artifacts)
+            filenames = _filenames(session, revision, artifacts, operator_id=operator_id)
             locations = {
                 (region.source_role, region.physical_page)
                 for region in command.source.selected_regions
@@ -178,26 +179,30 @@ def read_material_task_source(
 
 
 def _filenames(
-    session: Session, revision: LearningMaterialRevisionRecord, artifacts: CatalogArtifactService
+    session: Session,
+    revision: LearningMaterialRevisionRecord,
+    artifacts: CatalogArtifactService,
+    *,
+    operator_id: str,
 ) -> dict[str, str]:
-    pointer = pin_material_primary(
+    if revision.created_by != operator_id:
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_AUTHORIZATION_FAILED")
+    pointer = material_intake_pointer(
         session,
-        ArtifactMemberPointer(
-            artifact_id=revision.manifest_artifact_id,
-            artifact_revision_id=revision.manifest_artifact_revision_id,
-            member_path=revision.manifest_member_path,
-            schema_ref="eom://schemas/material-learning/intake/1.0",
-            media_type="application/json",
-            sha256=revision.manifest_sha256,
-        ),
-    ).pointer
-    intake = read_material_metadata(
+        artifact_id=revision.manifest_artifact_id,
+        revision_id=revision.manifest_artifact_revision_id,
+        sha256=revision.manifest_sha256,
+    )
+    intake = read_material_intake(
         artifacts,
         pointer,
-        MaterialLearningIntakeManifest,
-        schema_ref=pointer.schema_ref,
-        member_path=pointer.member_path,
+        authorize=lambda: authorize_material_learning(session, operator_id),
     )
+    if (
+        intake.requested_by != operator_id
+        or intake.material_revision_id != revision.material_revision_id
+    ):
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_INPUT_MISMATCH")
     return {
         selection.source_role: selection.source_upload.original_filename
         for selection in intake.sources

@@ -68,7 +68,10 @@ def socket_server(tmp_path, response):
                         raise AssertionError("missing request header terminator")
                     header.extend(chunk)
                 observed["request"] = json.loads(header)
-                if observed["request"]["operation"] == "PREPARE_CONTENT_WORKBOOK":
+                if observed["request"]["operation"] in {
+                    "PREPARE_CONTENT_WORKBOOK",
+                    "PREPARE_NATIVE_MATERIAL_EXAM",
+                }:
                     body = bytearray()
                     while chunk := connection.recv(65536):
                         body.extend(chunk)

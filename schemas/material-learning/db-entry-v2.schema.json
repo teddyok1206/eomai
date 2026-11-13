@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/db-entry/2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "metadata", "material_title", "registration"],
+  "properties": {
+    "schema_version": {"const": "material-item-db-entry/2.0"},
+    "metadata": {"$ref": "eom://schemas/material-learning/item-metadata/2.0"},
+    "material_title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "registration": {"$ref": "eom://schemas/material-learning/db-entry/1.0#/properties/registration"}
+  }
+}

@@ -214,6 +214,9 @@ def registration_case(creative_engine, material_intake, controls, tmp_path, monk
         len(encoded),
     )
     monkeypatch.setattr(owner, "resolve_completed_material_task", lambda *args, **kwargs: resolved)
+    # This fixture deliberately substitutes the completed-worker/source owner.
+    # It is a V1 Registry transaction fixture, not native intake authorization.
+    monkeypatch.setattr(owner, "resolve_native_material_registration_binding", lambda *a, **k: None)
     publisher = ControlFileSetPublisher(
         creative_engine,
         Settings(staging_root=settings.staging_root, nas_artifact_root=settings.nas_artifact_root),

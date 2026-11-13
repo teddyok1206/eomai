@@ -75,6 +75,24 @@ class MaterialLearningArtifactMember(WebModel):
     bytes: int = Field(strict=True, ge=1, le=2 * 1024 * 1024 * 1024)
 
 
+class MaterialNativeItemMetadata(MaterialItemMetadata):
+    schema_version: Literal["material-imported-native-item-metadata/2.0"]
+    printed_label: str = Field(min_length=1, max_length=100)
+    native_binding: MaterialLearningArtifactMember
+    item_number: int = Field(strict=True, ge=1, le=10000)
+    external_number: str | None = Field(pattern=r"^[0-9]{5}$")
+    original_unit: str | None = Field(max_length=32767)
+    original_classification: str | None = Field(max_length=32767)
+    source_name: str = Field(max_length=32767)
+
+
+class MaterialNativeItemDbEntry(WebModel):
+    schema_version: Literal["material-item-db-entry/2.0"]
+    metadata: MaterialNativeItemMetadata
+    material_title: str = Field(min_length=1, max_length=200)
+    registration: ItemDbRegistration
+
+
 class MaterialLearningSourceReceipt(WebModel):
     schema_version: Literal["material-learning-source-receipt/1.0"]
     manifest: MaterialLearningArtifactMember

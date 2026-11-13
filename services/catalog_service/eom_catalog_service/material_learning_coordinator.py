@@ -8,7 +8,7 @@ every use is reauthorized. Model commands remain with the existing runner.
 
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
@@ -18,11 +18,20 @@ from eom_catalog_contracts.material_learning import (
     MaterialDiscoveryWork,
     MaterialExtractionWork,
 )
-from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialPreparationInput,
     MaterialPreparationProfile,
-    MaterialPreparedArtifact,
+)
+from eom_catalog_contracts.material_native_files import material_native_printed_number
+from eom_catalog_contracts.material_native_intake import (
+    MATERIAL_NATIVE_PREPARATION_REF,
+    MaterialIntake,
+    MaterialNativeExamBundle,
+    MaterialNativeLearningIntakeManifest,
+    MaterialNativePreparationInput,
+    MaterialPreparation,
+    MaterialPrepared,
+    require_native_material_checkpoint_chain,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
@@ -45,6 +54,14 @@ from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.material_claim_renewal import maintain_material_claim
+from eom_catalog_service.material_intake_read import (
+    material_intake_pointer,
+    material_preparation_pointer,
+    material_prepared_pointer,
+    read_material_intake,
+    read_material_preparation,
+    read_material_prepared,
+)
 from eom_catalog_service.material_learning_artifacts import (
     publish_material_metadata,
     read_material_metadata,
@@ -72,11 +89,21 @@ from eom_catalog_service.material_learning_store import (
     transition_material_task,
 )
 from eom_catalog_service.material_learning_work import MaterialLearningWorkService
+from eom_catalog_service.material_native_resolution import read_material_native_bundle
 from eom_catalog_service.material_task_results import resolve_completed_material_task
 from eom_catalog_service.settings import CatalogSettings
 
 _TERMINAL_TASKS = frozenset({"COMPLETED", "FAILED", "EXCEPTION", "CANCELLED"})
 _LEASE = timedelta(minutes=15)
+_NATIVE_DISCOVERY_SOURCE_ERRORS = frozenset(
+    {
+        "MATERIAL_NATIVE_DISCOVERY_ROLE_MISMATCH",
+        "MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID",
+        "MATERIAL_NATIVE_DISCOVERY_NUMBER_DUPLICATED",
+        "MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE",
+        "MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,8 +118,8 @@ class MaterialCoordinatorProgress:
 class MaterialProcessingContext:
     run_id: str
     operator_id: str
-    intake: MaterialLearningIntakeManifest
-    prepared: MaterialPreparedArtifact
+    intake: MaterialIntake
+    prepared: MaterialPrepared
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +128,89 @@ class MaterialDiscoveryPlan:
     ranges: tuple[DiscoveredMaterialRange, ...]
     by_unit: Mapping[str, PlannedMaterialUnit]
     by_task: Mapping[str, DiscoveredMaterialRange]
+
+
+def bind_native_material_discovery_plan(
+    plan: MaterialDiscoveryPlan, bundle: MaterialNativeExamBundle
+) -> MaterialDiscoveryPlan:
+    """Native file/Excel numbers constrain discovery; they never invent model regions."""
+    expected = {item.item_number for item in bundle.items}
+    questions: dict[int, PlannedMaterialUnit] = {}
+    solutions: dict[int, PlannedMaterialUnit] = {}
+    originals = {"MAIN": bundle.main_original, "SOLUTIONS": bundle.solutions_original}
+    for planned in plan.by_unit.values():
+        unit = planned.unit
+        if unit.kind not in {"QUESTION", "SOLUTION"}:
+            continue
+        role = "MAIN" if unit.kind == "QUESTION" else "SOLUTIONS"
+        if planned.source.source_role != role:
+            raise ValueError("MATERIAL_NATIVE_DISCOVERY_ROLE_MISMATCH")
+        if planned.source.original != originals[role]:
+            raise ValueError("MATERIAL_NATIVE_DISCOVERY_SOURCE_MISMATCH")
+        try:
+            number = material_native_printed_number(unit.printed_label)
+        except ValueError as exc:
+            raise ValueError("MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID") from exc
+        selected = questions if unit.kind == "QUESTION" else solutions
+        if number in selected:
+            raise ValueError("MATERIAL_NATIVE_DISCOVERY_NUMBER_DUPLICATED")
+        if unit.continuation != "COMPLETE":
+            raise ValueError("MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE")
+        selected[number] = planned
+    if set(questions) != expected or set(solutions) != expected:
+        raise ValueError("MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH")
+    units = dict(plan.by_unit)
+    for number, question in questions.items():
+        # This pair belongs to one verified native exam, not a fuzzy global
+        # number join across chapters or unrelated generic materials.
+        units[question.unit_key] = replace(
+            question,
+            solution_unit_keys=(solutions[number].unit_key,),
+            issue_codes=tuple(
+                code
+                for code in question.issue_codes
+                if code
+                not in {
+                    "NO_SOURCE_SOLUTION_INDEPENDENT_SOLUTION_REQUIRED",
+                    "AMBIGUOUS_SOURCE_SOLUTION",
+                }
+            ),
+        )
+    return replace(plan, by_unit=MappingProxyType(units))
+
+
+def build_material_preparation_input(
+    intake: MaterialIntake,
+    *,
+    intake_pointer: MaterialArtifactMember,
+    task_id: str,
+    profile: MaterialPreparationProfile,
+) -> MaterialPreparation:
+    """New inputs pin the committed intake family; V1 inputs remain byte-compatible."""
+    value = dict(
+        schema_version="material-learning-preparation-input/1.0",
+        task_id=task_id,
+        material_id=intake.material_id,
+        material_revision_id=intake.material_revision_id,
+        intake_manifest=intake_pointer.model_dump(mode="json"),
+        profile=profile.model_dump(mode="json"),
+    )
+    if isinstance(intake, MaterialNativeLearningIntakeManifest):
+        value.update(
+            schema_version="material-learning-preparation-input/2.0",
+            native_bundle=intake.native_bundle.model_dump(mode="json"),
+        )
+        work: MaterialPreparation = MaterialNativePreparationInput.model_validate(
+            {**value, "input_sha256": content_sha256(value)}
+        )
+    else:
+        work = MaterialPreparationInput.model_validate(
+            {**value, "input_sha256": content_sha256(value)}
+        )
+    require_native_material_checkpoint_chain(
+        intake, preparation=work, intake_pointer=intake_pointer
+    )
+    return work
 
 
 def read_material_discovery_plan(
@@ -211,9 +321,7 @@ class MaterialLearningCoordinator:
                 raise ValueError("MATERIAL_LEARNING_SOURCE_STALE")
             renew_material_claim(session, claim, now=datetime.now(UTC), lease_duration=_LEASE)
 
-    def intake(
-        self, claim: MaterialRunClaim
-    ) -> tuple[MaterialLearningIntakeManifest, MaterialArtifactMember]:
+    def intake(self, claim: MaterialRunClaim) -> tuple[MaterialIntake, MaterialArtifactMember]:
         with self.sessions() as session:
             run = session.get(MaterialLearningRunRecord, claim.run_id)
             if run is None:
@@ -221,21 +329,20 @@ class MaterialLearningCoordinator:
             revision = session.get(LearningMaterialRevisionRecord, run.material_revision_id)
             if revision is None:
                 raise ValueError("MATERIAL_LEARNING_REVISION_NOT_FOUND")
-            pointer = self.metadata_pointer(
+            pointer = material_intake_pointer(
                 session,
-                revision.manifest_artifact_id,
-                revision.manifest_artifact_revision_id,
-                revision.manifest_sha256,
-                "material/intake.json",
-                "eom://schemas/material-learning/intake/1.0",
+                artifact_id=revision.manifest_artifact_id,
+                revision_id=revision.manifest_artifact_revision_id,
+                sha256=revision.manifest_sha256,
             )
-        value = read_material_metadata(
+            expected = (revision.material_id, revision.material_revision_id, run.created_by)
+        value = read_material_intake(
             self.artifacts,
             pointer,
-            MaterialLearningIntakeManifest,
-            schema_ref=pointer.schema_ref,
-            member_path=pointer.member_path,
+            authorize=lambda: self.authorize(claim),
         )
+        if (value.material_id, value.material_revision_id, value.requested_by) != expected:
+            raise ValueError("MATERIAL_LEARNING_SOURCE_INPUT_MISMATCH")
         # Polling reads only this small immutable manifest. Actual preparation,
         # execution and registration use their source owners' byte/hash checks;
         # do not stream every original book again for each status checkpoint.
@@ -264,31 +371,31 @@ class MaterialLearningCoordinator:
         )
 
     def context(self, claim: MaterialRunClaim) -> MaterialProcessingContext:
-        intake, _ = self.intake(claim)
+        intake, intake_pointer = self.intake(claim)
         with self.sessions() as session:
             run = session.get(MaterialLearningRunRecord, claim.run_id)
             if run is None:
                 raise ValueError("MATERIAL_LEARNING_RUN_NOT_FOUND")
-            pointer = self.metadata_pointer(
+            if (
+                run.prepared_artifact_id is None
+                or run.prepared_artifact_revision_id is None
+                or run.prepared_sha256 is None
+            ):
+                raise ValueError("MATERIAL_LEARNING_CHECKPOINT_MISSING")
+            pointer = material_prepared_pointer(
                 session,
-                run.prepared_artifact_id,
-                run.prepared_artifact_revision_id,
-                run.prepared_sha256,
-                "material/prepared.json",
-                "eom://schemas/material-learning/prepared/1.0",
+                artifact_id=run.prepared_artifact_id,
+                revision_id=run.prepared_artifact_revision_id,
+                sha256=run.prepared_sha256,
             )
-        prepared = read_material_metadata(
+        prepared = read_material_prepared(
             self.artifacts,
             pointer,
-            MaterialPreparedArtifact,
-            schema_ref=pointer.schema_ref,
-            member_path=pointer.member_path,
+            authorize=lambda: self.authorize(claim),
         )
-        if (prepared.material_id, prepared.material_revision_id) != (
-            intake.material_id,
-            intake.material_revision_id,
-        ):
-            raise ValueError("MATERIAL_LEARNING_PREPARED_SOURCE_CHANGED")
+        require_native_material_checkpoint_chain(
+            intake, prepared=prepared, intake_pointer=intake_pointer
+        )
         return MaterialProcessingContext(claim.run_id, intake.requested_by, intake, prepared)
 
     def prepare(self, claim: MaterialRunClaim) -> MaterialCoordinatorProgress:
@@ -310,36 +417,30 @@ class MaterialLearningCoordinator:
                 transition_material_task(
                     session, run, task, MaterialTaskState.PREPARING, now=datetime.now(UTC)
                 )
-            input_pointer = (
-                self.metadata_pointer(
+            input_pointer = None
+            if task.input_artifact_revision_id is not None:
+                if task.input_artifact_id is None or task.input_sha256 is None:
+                    raise ValueError("MATERIAL_LEARNING_CHECKPOINT_MISSING")
+                input_pointer = material_preparation_pointer(
                     session,
-                    task.input_artifact_id,
-                    task.input_artifact_revision_id,
-                    task.input_sha256,
-                    "material/preparation-input.json",
-                    "eom://schemas/material-learning/preparation-input/1.0",
+                    artifact_id=task.input_artifact_id,
+                    revision_id=task.input_artifact_revision_id,
+                    sha256=task.input_sha256,
                 )
-                if task.input_artifact_revision_id
-                else None
-            )
         if input_pointer is None:
-            value = dict(
-                schema_version="material-learning-preparation-input/1.0",
-                task_id=task_id,
-                material_id=intake.material_id,
-                material_revision_id=intake.material_revision_id,
-                intake_manifest=intake_pointer.model_dump(mode="json"),
-                profile=self.profile.model_dump(mode="json"),
-            )
-            work = MaterialPreparationInput.model_validate(
-                {**value, "input_sha256": content_sha256(value)}
+            work = build_material_preparation_input(
+                intake, intake_pointer=intake_pointer, task_id=task_id, profile=self.profile
             )
             input_pointer = publish_material_metadata(
                 self.artifacts,
                 self.settings,
                 work,
                 member_path="material/preparation-input.json",
-                schema_ref="eom://schemas/material-learning/preparation-input/1.0",
+                schema_ref=(
+                    MATERIAL_NATIVE_PREPARATION_REF
+                    if isinstance(work, MaterialNativePreparationInput)
+                    else "eom://schemas/material-learning/preparation-input/1.0"
+                ),
                 artifact_type="material-learning-preparation-input",
                 idempotency_key="material-prepare-input:" + task_id,
             )
@@ -349,17 +450,21 @@ class MaterialLearningCoordinator:
                 assert checkpoint is not None
                 self.pin_input(checkpoint, input_pointer)
         else:
-            work = read_material_metadata(
+            work = read_material_preparation(
                 self.artifacts,
                 input_pointer,
-                MaterialPreparationInput,
-                schema_ref=input_pointer.schema_ref,
-                member_path=input_pointer.member_path,
+                authorize=lambda: self.authorize(claim),
             )
+        require_native_material_checkpoint_chain(
+            intake, preparation=work, intake_pointer=intake_pointer
+        )
         outcome = self.preparation.prepare(
             work,
             operator_id=intake.requested_by,
             authorize=lambda: self.authorize(claim),
+        )
+        require_native_material_checkpoint_chain(
+            intake, preparation=work, prepared=outcome.prepared, intake_pointer=intake_pointer
         )
         with self.sessions.begin() as session:
             run = lock_material_run(session, claim, now=datetime.now(UTC))
@@ -551,10 +656,20 @@ class MaterialLearningCoordinator:
         if self._plan is not None and self._plan.run_id == claim.run_id:
             return self._plan
         with self.sessions() as session:
-            self._plan = read_material_discovery_plan(
+            plan = read_material_discovery_plan(
                 session, self.artifacts, run_id=claim.run_id, operator_id=context.operator_id
             )
-        return self._plan
+        if isinstance(context.intake, MaterialNativeLearningIntakeManifest):
+            bundle = read_material_native_bundle(
+                self.artifacts,
+                context.intake.native_bundle,
+                sources=context.intake.sources,
+                operator_id=context.operator_id,
+                authorize=lambda: self.authorize(claim),
+            )
+            plan = bind_native_material_discovery_plan(plan, bundle)
+        self._plan = plan
+        return plan
 
     def discovery_step(
         self, claim: MaterialRunClaim, context: MaterialProcessingContext
@@ -608,7 +723,25 @@ class MaterialLearningCoordinator:
                     error_code="MATERIAL_LEARNING_DISCOVERY_INCOMPLETE",
                 )
                 return MaterialCoordinatorProgress(claim.run_id, failed, "FAILED")
-        plan = self.discovery_plan(claim, context)
+        try:
+            plan = self.discovery_plan(claim, context)
+        except ValueError as error:
+            code = str(error)
+            if (
+                not isinstance(context.intake, MaterialNativeLearningIntakeManifest)
+                or code not in _NATIVE_DISCOVERY_SOURCE_ERRORS
+            ):
+                raise
+            with self.sessions.begin() as session:
+                run = lock_material_run(session, claim, now=datetime.now(UTC))
+                transition_material_run(
+                    session,
+                    run,
+                    MaterialLearningState.FAILED,
+                    now=datetime.now(UTC),
+                    error_code=code,
+                )
+            return MaterialCoordinatorProgress(claim.run_id, None, "FAILED")
         with self.sessions.begin() as session:
             run = lock_material_run(session, claim, now=datetime.now(UTC))
             ordinal = 2 + len(plan.ranges)

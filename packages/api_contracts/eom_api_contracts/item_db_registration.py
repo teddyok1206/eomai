@@ -3,6 +3,7 @@
 from typing import Literal
 
 from eom_catalog_contracts.material_item_lineage import MaterialImportedItemMetadata
+from eom_catalog_contracts.material_native_files import MaterialImportedNativeItemMetadata
 from eom_catalog_contracts.validation import validate_contract
 from pydantic import Field, model_validator
 
@@ -43,3 +44,18 @@ class MaterialItemDbEntryView(ApiModel):
     def declared_entry(self) -> "MaterialItemDbEntryView":
         validate_contract("material-learning-db-entry-v1", self.model_dump(mode="json"))
         return self
+
+
+class MaterialNativeItemDbEntryView(ApiModel):
+    schema_version: Literal["material-item-db-entry/2.0"] = "material-item-db-entry/2.0"
+    metadata: MaterialImportedNativeItemMetadata
+    material_title: str = Field(min_length=1, max_length=200)
+    registration: ItemDbRegistrationView
+
+    @model_validator(mode="after")
+    def declared_entry(self) -> "MaterialNativeItemDbEntryView":
+        validate_contract("material-learning-db-entry-v2", self.model_dump(mode="json"))
+        return self
+
+
+type MaterialDbEntryView = MaterialItemDbEntryView | MaterialNativeItemDbEntryView

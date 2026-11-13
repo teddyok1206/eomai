@@ -12,6 +12,7 @@
 | 문항 DB·간편 출력 | [DB와 Excel의 역할](architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md) | [문항 DB·조립](operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) |
 | Excel 콘텐츠 편성 | [콘텐츠·판·회차와 사용 이력](architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md) | [실제 저장·출력 검증](operations/EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md) |
 | 자료 학습·Map | [자료 입력·Graph 등록](architecture/MATERIAL_LEARNING_UPLOAD_PIPELINE.md) | [자료 학습](operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md) · [Map Layer](operations/MAP_LAYERS_RELEASE_2026-11-06.md) |
+| 한글 시험지·해설지 등록 | [문항별 편집 원문·Excel 메타데이터](architecture/NATIVE_EXAM_ITEM_INTAKE.md) | [원문 검증과 운영 연결 현황](operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md) |
 | 유사도·임베딩 | [GraphRAG·증분 인덱싱](architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md) | [목록 검색·기록](operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md) · [저장 병목 개선](operations/INDEX_PUBLICATION_PERFORMANCE_2026-11-09.md) |
 | 자료 검토·한글 출력 | [문서 입출력 지도](agent-context/document-output.md) | [편집 가능한 합본](operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) · [한글→PDF 수식](operations/OFFICE_PDF_EQUATION_RELEASE_2026-11-06.md) |
 | 채팅·계정·슬롯 | [대화와 계정의 책임](agent-context/chat-identity-slots.md) | [6번 채팅 전용·슬롯 복구](operations/CHAT_SLOT06_RELEASE_2026-11-10.md) |

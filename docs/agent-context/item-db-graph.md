@@ -177,6 +177,15 @@ snapshot V10은 구 교과서 계약을 완화한 것이 아니다. source/role 
 있다는 사실만으로 전체 coordinator나 운영 활성화가 완료됐다고 추정하지 않는다.
 최신 미완료 항목은 `docs/operations/MATERIAL_LEARNING_IMPLEMENTATION_CHECKPOINT.md`.
 
+Native 시험지 입력의 metadata2는 `material_native_item_read.py`가 기존 material/Item
+revision과 6개 component, committed binding/intake, 원본·권리·XLSX Artifact의 lifecycle을
+확인해 읽는다. 실제 읽는 사람의 `ITEM_READ`·`CONTENT_INTAKE_READ` 권한을 사용하며
+원본 업로더로 가장하지 않는다. DB 목록은 `MaterialNativeItemDbEntryView` successor,
+원본 단원은 XLSX의 raw `original_unit`이고 Notion 행이나 Graph 단원으로 위장하지 않는다.
+문항·해설 HWPX 다운로드는 canonical `OTHER:0/1` pointer를 그대로 연다. 이 두 파일을
+기존 V1 native 조립 입력으로 이름만 바꾸어 전달하지 않으며 pair 합본은 별도 후속 경계다.
+구현 존재와 실제 배포·450문항 처리 완료는 운영 evidence로 구분한다.
+
 자료 설명 append는 기존 structured Graph V2–V6에 해당하는 공식 publication을 선택한다.
 미출시 snapshot V10이 일반 자료 source를 보존하며, 설명을 추가하려고 기존 교과서
 Graph에 가짜 기출/문항 placement나 구조 V6를 강제하지 않는다. 실제 임시 DB 경로는
@@ -215,12 +224,57 @@ child owner는 원래 task에 남긴다. `material_task_source_read.py`는 명�
 source bytes를 읽고, routine progress는 metadata만 조회한다. 추출 입력이 없는 구조 예외는
 coordinator의 같은 `read_material_discovery_plan`을 재사용해 원래 페이지/번호를 보여준다.
 
+편집 가능한 시험지·해설지 원문 분할은 `docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`와
+`material_native_preparation.py`의 공식 준비 경로를 따른다. API의
+`POST /material-learning/native-exams`는 기존 원본 업로드 receipt 두 개와 actor-free
+metadata JSON 한 줄, 최대8MiB XLSX를 받는다. 실제 actor·byte length·SHA는 API가 확정하고,
+동일 Catalog socket의 `PREPARE_NATIVE_MATERIAL_EXAM`으로 전송한다. XLSX/native parsing과
+Artifact commit은 Catalog/격리 parser의 책임이며 API에서 수행하지 않는다. 이 작업만300초
+대기하고 일반 RPC timeout은 늘리지 않는다. 명시적 create/2.0의 native bundle을 원래
+`parse_material_learning_create`로 해석하며 V1 입력을 새 계약으로 재해석하지 않는다.
+Catalog UID는 transient unit을 만들지 않는다. `native_exam_preparer.py`가 고정된
+`eom-native-exam-preparer@nativeexam_<32hex>`만 시작하고, 별도 eom-image UID가 단일
+job bind mount의 0640 입력을 읽어 0640 결과 ZIP을 쓴다. Catalog 부모·NAS·DB socket과
+인증 경로는 worker에서 차단한다. 기존 Builder 설치본·request/result 계약은 재사용하며
+불확실한 실행의 workspace는 삭제하지 않는다. 이 경계는
+`tests/unit/test_native_exam_systemd_preparer.py`에서 검증한다.
+관련 입출력 검증은 `tests/api/test_material_native_upload_routes.py`와
+`test_material_native_upload_client.py`를 본다. 구현 후보의 존재는 운영 활성화 증거가 아니다.
+
+원문 파일이 연결된 외부 문항은 Notion source ID를 만들지 않는다.
+`material_native_item_read.py`가 실제 권한·Item revision/manifest·등록 binding·원문 intake를
+해결하고, API `GET /item-db/registrations/{revision}/native-source`와 `native-document`가
+같은 private Catalog operation을 사용한다. 다운로드는 MAIN/SOLUTIONS 역할만 받고
+편집 가능한 개별 HWPX의 실제 SHA/길이를 스트림 종료까지 검사한다. arbitrary Artifact
+경로나 model이 만든 파일 identity를 입력받지 않는다. 회귀 검증은
+`tests/api/test_material_native_item_read.py`다.
+
 API `GET /item-db/materials`와 DB 외부 분류는 current shared Graph membership을 확인해
 작은 등록 metadata를 읽는다. Notion 행이나 임의 고유번호를 만들지 않는다. Map V2는 같은
 Graph에서 외부 layer를 표시하며 V1 bytes/소비를 보존한다. 새 설명 source V5는 retrieval
 owner의 명시적 material evidence V6 경로로 읽고 구 consumer로 억지 전달하지 않는다.
 `public_solution_source_capture.py`는 source category와 representation을 분리하여 새 외부
 문항을 원래 Notion 보고서로 잘못 해석하지 않고 실제 accepted V11/common projection을 쓴다.
+
+한글 문제·해설과 문항 정보 XLSX의 신규 입력 후보는
+`docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`를 먼저 읽는다. 기존 자료 학습 화면의
+선택 엑셀은 `POST /material-learning/native-exams`의 제한된 JSON 한 줄 + XLSX stream을
+공식 API로 전달하고, 실제 actor·원본 receipt·권한·파일 hash 검증은 API/Catalog가 소유한다.
+`material_native_preparation.py`는 보호된 CPU 도구로 원본을 문항별 native HWPX로 준비하고
+`material_native_publication.py`가 기존 Artifact owner에 primary HWPX와 단일 공유 Excel을
+등록한 뒤 원래 intake.create에 V2 bundle pointer만 넘긴다. worker가 NAS에 쓰거나 XLSX의
+빈 고유번호를 새로 만들지 않는다. 원본·문항 번호·고정 producer/plan이 native 문항 identity를
+결정하며 Excel hash/고유번호의 추가만으로 native 파일을 재등록하지 않는다. V1 intake는
+그대로 유지하고 `material_intake_read.py`와 명시적 checkpoint-chain 검증이 V1/V2를 구분한다.
+이 경로의 source/test 존재는 운영 활성화나 전체 원본의 native 보존 승인 증거가 아니다.
+DB의 외부 목록은 `material-item-db-entry/1.0`과 native `2.0`을 명시적으로 구분한다.
+원본 Excel의 소속 단원·분류·문항명·비어 있을 수 있는 고유번호를 표시하며, 등록 문항의
+`/source` 조회도 같은 native metadata2를 읽는다. 원본 문항/해설 HWPX 다운로드는
+`/registrations/{revision}/native-document`에 고정 manifest hash와 MAIN/SOLUTIONS 역할만
+넘긴다. 임의 Artifact/path를 받지 않고 기존 API/Catalog owner가 현재 권한을 확인한다.
+Web은 bytes의 media/length/SHA를 검증해 전달하며, 이 원본 다운로드와 새 HWPX 렌더링·합본은
+다른 사용 경로다. GUI/stream 회귀는 `tests/web_gui/test_material_native_items.py`와 기존
+`item_db_browser_checks.mjs`를 본다.
 
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`

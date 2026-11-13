@@ -11,12 +11,19 @@ from eom_catalog_contracts.material_learning import (
 )
 from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
-    CreateMaterialLearningCommand,
     MaterialLearningAcceptance,
     MaterialLearningControlResult,
     MaterialLearningIntakeManifest,
     MaterialLearningRetryResult,
     RetryMaterialLearningRunCommand,
+)
+from eom_catalog_contracts.material_native_intake import (
+    MATERIAL_NATIVE_INTAKE_REF,
+    CreateNativeMaterialLearningCommand,
+    MaterialIntake,
+    MaterialLearningCreate,
+    MaterialNativeLearningIntakeManifest,
+    parse_material_learning_create,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
@@ -42,6 +49,10 @@ from eom_catalog_service.material_learning_store import (
     create_material_learning,
     material_submission_identity,
     transition_material_run,
+)
+from eom_catalog_service.material_native_resolution import (
+    read_material_native_bundle,
+    verify_material_native_bundle_files,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -115,11 +126,25 @@ class MaterialLearningIntakeService:
             authorize_material_learning(session, command.actor_id)
             return result
 
-    def create(self, command: CreateMaterialLearningCommand) -> MaterialLearningAcceptance:
-        command = CreateMaterialLearningCommand.model_validate(command.model_dump(mode="json"))
+    def create(self, command: MaterialLearningCreate) -> MaterialLearningAcceptance:
+        command = parse_material_learning_create(command.model_dump(mode="json"))
         # Resolver checks original uploader, immutable bytes, permissions and lifecycle.
         for selection in command.sources:
             self.sources.resolve(selection.source_upload, operator_id=command.actor_id)
+        if isinstance(command, CreateNativeMaterialLearningCommand):
+
+            def authorize_native() -> None:
+                with self.sessions() as session:
+                    authorize_material_learning(session, command.actor_id)
+
+            native = read_material_native_bundle(
+                self.artifacts,
+                command.native_bundle,
+                sources=command.sources,
+                operator_id=command.actor_id,
+                authorize=authorize_native,
+            )
+            verify_material_native_bundle_files(self.artifacts, native, authorize=authorize_native)
         identity = material_submission_identity(command.actor_id, command.idempotency_key)
         request_sha = content_sha256(command.model_dump(mode="json"))
         attestation = {
@@ -149,21 +174,38 @@ class MaterialLearningIntakeService:
             schema_ref="eom://schemas/material-learning/rights/1.0",
             idempotency_key="material-rights:" + identity.material_revision_id,
         )
-        intake = MaterialLearningIntakeManifest(
-            material_id=identity.material_id,
-            material_revision_id=identity.material_revision_id,
-            requested_by=command.actor_id,
-            request_sha256=request_sha,
-            upload=command.upload,
-            sources=command.sources,
-            rights_attestation=rights_member,
-        )
+        intake: MaterialIntake
+        if isinstance(command, CreateNativeMaterialLearningCommand):
+            intake = MaterialNativeLearningIntakeManifest(
+                material_id=identity.material_id,
+                material_revision_id=identity.material_revision_id,
+                requested_by=command.actor_id,
+                request_sha256=request_sha,
+                upload=command.upload,
+                sources=command.sources,
+                rights_attestation=rights_member,
+                native_bundle=command.native_bundle,
+            )
+        else:
+            intake = MaterialLearningIntakeManifest(
+                material_id=identity.material_id,
+                material_revision_id=identity.material_revision_id,
+                requested_by=command.actor_id,
+                request_sha256=request_sha,
+                upload=command.upload,
+                sources=command.sources,
+                rights_attestation=rights_member,
+            )
         with self.sessions() as session:
             authorize_material_learning(session, command.actor_id)
         manifest = self._publish_metadata(
             intake,
             member_path="material/intake.json",
-            schema_ref="eom://schemas/material-learning/intake/1.0",
+            schema_ref=(
+                MATERIAL_NATIVE_INTAKE_REF
+                if isinstance(intake, MaterialNativeLearningIntakeManifest)
+                else "eom://schemas/material-learning/intake/1.0"
+            ),
             idempotency_key="material-intake:" + identity.material_revision_id,
         )
         with self.sessions.begin() as session:

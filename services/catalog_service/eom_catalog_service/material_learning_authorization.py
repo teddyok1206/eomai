@@ -11,7 +11,6 @@ from eom_catalog_contracts.material_learning_authorization import (
     MaterialLearningAuthorizationReply,
     MaterialLearningAuthorizationRequest,
 )
-from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentRevision,
 )
@@ -36,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.educational_document_service import EducationalDocumentService
+from eom_catalog_service.material_intake_read import material_intake_pointer, read_material_intake
 from eom_catalog_service.material_knowledge_source import reauthorize_material_document_source
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_models import (
@@ -88,24 +88,16 @@ class CatalogMaterialLearningSourceAuthorizer:
             or task.input_artifact_revision_id is None
         ):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_AUTHORIZATION_FAILED")
-        artifact = session.get(ArtifactRevisionRecord, revision.manifest_artifact_revision_id)
-        if artifact is None:
-            raise MaterialLearningSourceError("MATERIAL_LEARNING_INTAKE_MISSING")
-        intake_pointer = MaterialArtifactMember(
+        intake_pointer = material_intake_pointer(
+            session,
             artifact_id=revision.manifest_artifact_id,
-            artifact_revision_id=revision.manifest_artifact_revision_id,
-            member_path=revision.manifest_member_path,
-            schema_ref="eom://schemas/material-learning/intake/1.0",
-            media_type="application/json",
+            revision_id=revision.manifest_artifact_revision_id,
             sha256=revision.manifest_sha256,
-            bytes=artifact.content_bytes,
         )
-        intake = read_material_metadata(
+        intake = read_material_intake(
             self.artifacts,
             intake_pointer,
-            MaterialLearningIntakeManifest,
-            schema_ref=intake_pointer.schema_ref,
-            member_path=intake_pointer.member_path,
+            authorize=lambda: authorize_material_learning(session, operator_id),
         )
         if (
             intake.requested_by != operator_id

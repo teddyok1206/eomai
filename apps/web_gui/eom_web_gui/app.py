@@ -89,6 +89,7 @@ from eom_web_gui.material_learning_contracts import (
     MaterialLearningSubmission,
 )
 from eom_web_gui.request_limits import (
+    MAX_NATIVE_EXAM_BODY_BYTES,
     MAX_PDF_REVIEW_BODY_BYTES,
     RequestBodyLimitMiddleware,
     request_body_limit,
@@ -561,6 +562,26 @@ def create_app(
             original_filename=original_filename,
             content_length=content_length,
             media_type=media_type,
+            content=request.stream(),
+            idempotency_key=idempotency_key,
+        )
+        return reply.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/material-learning/native-exams", status_code=202)
+    async def prepare_native_material_exam(
+        request: Request,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+        content_length: int = Header(ge=10, le=MAX_NATIVE_EXAM_BODY_BYTES),
+        idempotency_key: str = Header(
+            alias="Idempotency-Key", pattern=r"^[A-Za-z0-9_.:-]{16,128}$"
+        ),
+    ) -> dict[str, Any]:
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type != "application/vnd.eom.native-exam":
+            raise GatewayError(status=415, code="MATERIAL_NATIVE_EXAM_MEDIA_TYPE_INVALID")
+        reply = await actual.prepare_native_material_exam(
+            session,
+            content_length=content_length,
             content=request.stream(),
             idempotency_key=idempotency_key,
         )
@@ -1125,6 +1146,28 @@ def create_app(
             session, revision_id, manifest_sha256
         )
         return value.model_dump(mode="json") if value else None
+
+    @app.get(f"{API_PREFIX}/item-db/registrations/{{revision_id}}/native-document")
+    async def material_native_item_document_download(
+        session: Annotated[WebSession, Depends(require_session)],
+        revision_id: str = Path(pattern=r"^itemrev_[0-9a-f]{32}$"),
+        manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+        source_role: Literal["MAIN", "SOLUTIONS"] = Query(),
+    ) -> Response:
+        value = await actual.gateway.material_native_item_document_download(
+            session, revision_id, manifest_sha256, source_role
+        )
+        return download_response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Content-Disposition": value.content_disposition,
+                "Content-Length": str(len(value.content)),
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": value.etag,
+            },
+        )
 
     @app.post(f"{API_PREFIX}/item-db/registered/search")
     async def registered_item_db_search(

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-exam-bundle/1.0",
+  "title": "Native exam file pairs and shared workbook binding",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-native-exam-bundle/1.0"
+    },
+    "uploaded_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "source_namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+    },
+    "exam_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "main_original": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "solutions_original": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "workbook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workbook": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "parsed_workbook": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "worksheet_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "workbook",
+        "parsed_workbook",
+        "worksheet_name"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "printed_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "question": {
+            "$ref": "eom://schemas/material-learning/native-item-binding/1.0#/properties/question"
+          },
+          "solution": {
+            "$ref": "eom://schemas/material-learning/native-item-binding/1.0#/properties/solution"
+          },
+          "row_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1048576
+          },
+          "row_sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "source_metadata": {
+            "$ref": "eom://schemas/material-learning/native-item-binding/1.0#/properties/source_metadata"
+          }
+        },
+        "required": [
+          "item_number",
+          "printed_label",
+          "question",
+          "solution",
+          "row_number",
+          "row_sha256",
+          "source_metadata"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 10000
+    },
+    "bundle_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "uploaded_by",
+    "source_namespace",
+    "exam_key",
+    "main_original",
+    "solutions_original",
+    "workbook",
+    "items",
+    "bundle_sha256"
+  ]
+}

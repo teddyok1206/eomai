@@ -50,6 +50,7 @@ class MaterialLearningRuntimePins(BaseModel):
     risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
     content_pack_release_id: str = Field(min_length=1, max_length=128)
+    native_content_pack_release_id: str | None = Field(default=None, min_length=1, max_length=128)
     definition_id: str = Field(min_length=1, max_length=128)
 
     @classmethod
@@ -173,6 +174,7 @@ def build_material_learning_runtime(
         registration=MaterialItemRegistrationService(
             engine,
             content_pack_release_id=pins.content_pack_release_id,
+            native_content_pack_release_id=pins.native_content_pack_release_id,
             publisher=publisher,
             source_commit=platform.runtime_source_commit,
             settings=catalog,

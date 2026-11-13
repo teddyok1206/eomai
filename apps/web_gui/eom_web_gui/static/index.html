@@ -498,6 +498,7 @@
                 <label class="material-wide">출처 설명<input id="material-description" name="description" maxlength="2000" required placeholder="출판사·교재명이나 자료의 출처를 적어 주세요"></label>
                 <label>본문·문제 파일<input id="material-main" name="main" type="file" accept=".pdf,.hwp,.hwpx" required></label>
                 <label><span>별도 해설 파일 <span class="muted-label">선택</span></span><input id="material-solutions" name="solutions" type="file" accept=".pdf,.hwp,.hwpx"></label>
+                <label class="material-wide"><span>문항 정보 엑셀 <span class="muted-label">선택 · 모의고사 한 회차</span></span><input id="material-workbook" name="workbook" type="file" accept=".xlsx" aria-describedby="material-workbook-help"><span id="material-workbook-help" class="muted-label">문제·해설 한글 파일과 문항 번호·단원이 담긴 엑셀을 함께 올리면, 문항별 편집 가능한 한글 파일로 등록합니다. 한글 파일은 각각 50MB, 엑셀은 8MB까지이며, 없는 고유번호는 비워 둡니다.</span></label>
                 <label class="material-wide"><span>추가로 참고할 설명 <span class="muted-label">선택</span></span><textarea id="material-instructions" name="instructions" rows="3" maxlength="8000" placeholder="예: 해설 파일의 장별 번호를 문제집과 맞춰 주세요"></textarea></label>
                 <label class="checkbox-row material-wide"><input id="material-rights" name="rights" type="checkbox" required><span>이 자료를 내부 학습·문항 등록·검색에 사용할 권한이 있습니다.</span></label>
                 <div class="material-wide material-learning-actions"><button id="material-learning-start" class="button primary" type="submit">학습 시작</button><span id="material-learning-upload-status" role="status" aria-live="polite"></span></div>

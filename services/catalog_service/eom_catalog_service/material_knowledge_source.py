@@ -19,15 +19,14 @@ from eom_catalog_contracts.material_learning import (
     MaterialLearningRights,
     MaterialSourceRegion,
 )
-from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
     material_document_source_class,
 )
-from eom_orchestrator.models import ArtifactRevisionRecord
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
 from eom_catalog_service.educational_material_registration import read_material_document_revision
+from eom_catalog_service.material_intake_read import material_intake_pointer, read_material_intake
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRecord,
@@ -134,24 +133,36 @@ def resolve_material_document_source(
         or document.source_page_count < last_physical_page
     ):
         raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_INPUT_MISMATCH")
-    intake_artifact = session.get(ArtifactRevisionRecord, revision.manifest_artifact_revision_id)
-    if intake_artifact is None:
-        raise MaterialLearningSourceError("MATERIAL_LEARNING_INTAKE_MISSING")
-    intake_pointer = MaterialArtifactMember(
+    intake_pointer = material_intake_pointer(
+        session,
         artifact_id=revision.manifest_artifact_id,
-        artifact_revision_id=revision.manifest_artifact_revision_id,
-        member_path=revision.manifest_member_path,
-        schema_ref="eom://schemas/material-learning/intake/1.0",
-        media_type="application/json",
+        revision_id=revision.manifest_artifact_revision_id,
         sha256=revision.manifest_sha256,
-        bytes=intake_artifact.content_bytes,
     )
-    intake = read_material_metadata(
+
+    def require_source_lifecycle() -> None:
+        # Fact resolution has no actor grant. Its caller owns actual-user RAG policy;
+        # this callback rechecks only the same canonical source's lifecycle, never
+        # impersonating the uploader as permission to read another user's source.
+        current = session.get(
+            EducationalDocumentRecord, document.document_id, populate_existing=True
+        )
+        current_material = session.get(
+            LearningMaterialRecord, document.material_id, populate_existing=True
+        )
+        if (
+            current is None
+            or current.lifecycle_state != "ACTIVE"
+            or current.current_revision_id != document_revision_id
+            or current_material is None
+            or current_material.lifecycle_state != "ACTIVE"
+        ):
+            raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
+
+    intake = read_material_intake(
         artifacts,
         intake_pointer,
-        MaterialLearningIntakeManifest,
-        schema_ref=intake_pointer.schema_ref,
-        member_path=intake_pointer.member_path,
+        authorize=require_source_lifecycle,
     )
     rights = read_material_metadata(
         artifacts,

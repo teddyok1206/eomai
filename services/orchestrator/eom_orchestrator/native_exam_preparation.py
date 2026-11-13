@@ -70,6 +70,11 @@ def _installed_python(path: Path) -> Path:
     return path
 
 
+def require_native_exam_runtime_python(path: Path) -> Path:
+    """Validate operator-installed CPU Python without discarding its venv identity."""
+    return _installed_python(path)
+
+
 def prepare_native_exam_file(
     source_bytes: bytes,
     *,

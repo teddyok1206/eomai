@@ -190,7 +190,6 @@ from eom_catalog_contracts.curated_document_delivery_application import (
 )
 from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
-    CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
     GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
@@ -205,13 +204,26 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialSourceUploadReceipt,
     RetryMaterialLearningRunCommand,
 )
+from eom_catalog_contracts.material_native_intake import (
+    MaterialLearningCreate,
+    parse_material_learning_create,
+)
+from eom_catalog_contracts.material_native_item_read import (
+    MaterialNativeItemReadRequest,
+    MaterialNativeItemReadResponse,
+    MaterialNativeItemSource,
+)
+from eom_catalog_contracts.material_native_prepare import PrepareNativeMaterialExamCommand
 from eom_item_registry import RegistryError, RegistryErrorCode
 from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ValidationError
 
-from eom_api.services.content_workbook_upload import send_workbook_upload
+from eom_api.services.content_workbook_upload import (
+    send_native_exam_workbook_upload,
+    send_workbook_upload,
+)
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
@@ -236,6 +248,7 @@ DOCUMENT_REVIEW_PROCESSING_LEASE_FLOOR_SECONDS = int(
     + 60
 )
 EXTERNAL_ITEM_PREVIEW_PREPARE_TIMEOUT_SECONDS = 300.0
+MATERIAL_NATIVE_PREPARATION_TIMEOUT_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -330,9 +343,38 @@ class CatalogApplicationClient:
         return reply
 
     def create_material_learning(
-        self, command: CreateMaterialLearningCommand
+        self, command: MaterialLearningCreate
     ) -> MaterialLearningAcceptance:
-        return self._material_learning_read(command, MaterialLearningAcceptance)
+        parsed = parse_material_learning_create(command.model_dump(mode="json"))
+        return self._material_learning_read(parsed, MaterialLearningAcceptance)
+
+    def prepare_native_material_exam(
+        self, command: PrepareNativeMaterialExamCommand, *, content: bytes
+    ) -> MaterialLearningAcceptance:
+        """Upload once to the existing authorized Catalog owner; never parse native files here."""
+        try:
+            parsed = PrepareNativeMaterialExamCommand.model_validate(
+                command.model_dump(mode="json")
+            )
+            value = send_native_exam_workbook_upload(
+                parsed,
+                content,
+                socket_path=self.socket_path,
+                validate_socket=self._validate_socket,
+                read_response=self._read_response,
+                connect_timeout=CONNECT_TIMEOUT_SECONDS,
+                response_timeout=MATERIAL_NATIVE_PREPARATION_TIMEOUT_SECONDS,
+            )
+            if value.get("schema_version") == "material-learning-error/1.0":
+                error = MaterialLearningErrorResponse.model_validate(value)
+                raise CatalogApplicationClientError(
+                    error.error_code, "Native material preparation failed"
+                )
+            return MaterialLearningAcceptance.model_validate(value)
+        except (OSError, ValueError, JsonSchemaValidationError) as exc:
+            raise CatalogApplicationClientError(
+                "MATERIAL_LEARNING_UNAVAILABLE", "Native material preparation is unavailable"
+            ) from exc
 
     def list_material_learning_runs(
         self, query: ListMaterialLearningRunsQuery
@@ -346,7 +388,7 @@ class CatalogApplicationClient:
 
     def _material_learning_read[Reply: BaseModel](
         self,
-        request: CreateMaterialLearningCommand
+        request: MaterialLearningCreate
         | ControlMaterialLearningRunCommand
         | ListMaterialLearningRunsQuery
         | GetMaterialLearningRunQuery
@@ -1056,6 +1098,80 @@ class CatalogApplicationClient:
     def download_item_media(self, item_revision_id: str, block_id: str) -> ProxiedItemMedia:
         command = ItemMediaQuery(item_revision_id=item_revision_id, block_id=block_id)
         return self._download_item_media(command)
+
+    def read_native_material_item_source(
+        self, query: MaterialNativeItemReadRequest
+    ) -> MaterialNativeItemSource:
+        try:
+            parsed = MaterialNativeItemReadRequest.model_validate(query.model_dump(mode="json"))
+            if parsed.operation != "GET_NATIVE_MATERIAL_ITEM_SOURCE":
+                raise ValueError("Native source read operation differs")
+            value = self._raw_request(
+                parsed.model_dump(mode="json"), timeout_seconds=RESPONSE_TIMEOUT_SECONDS
+            )
+            reply = MaterialNativeItemReadResponse.model_validate(value)
+            if reply.operation != parsed.operation:
+                raise ValueError("Native source response operation differs")
+            if reply.status == "ERROR":
+                raise CatalogApplicationClientError(
+                    reply.error_code or "MATERIAL_NATIVE_READ_UNAVAILABLE",
+                    "Native material source read failed",
+                )
+            assert reply.source is not None
+            return reply.source
+        except (OSError, ValueError, JsonSchemaValidationError) as exc:
+            raise CatalogApplicationClientError(
+                "MATERIAL_NATIVE_READ_UNAVAILABLE", "Native material source is unavailable"
+            ) from exc
+
+    def download_native_material_item_document(
+        self, query: MaterialNativeItemReadRequest
+    ) -> ProxiedExternalItemDocument:
+        connection: socket.socket | None = None
+        try:
+            parsed = MaterialNativeItemReadRequest.model_validate(query.model_dump(mode="json"))
+            if parsed.operation != "GET_NATIVE_MATERIAL_ITEM_DOCUMENT":
+                raise ValueError("Native document read operation differs")
+            self._validate_socket()
+            connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            payload = json.dumps(
+                parsed.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+            connection.sendall(payload + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            reply = MaterialNativeItemReadResponse.model_validate_json(
+                self._read_media_header(connection)
+            )
+            if reply.operation != parsed.operation:
+                raise ValueError("Native document response operation differs")
+            if reply.status == "ERROR":
+                raise CatalogApplicationClientError(
+                    reply.error_code or "MATERIAL_NATIVE_READ_UNAVAILABLE",
+                    "Native material document read failed",
+                )
+            assert reply.media_type is not None
+            assert reply.content_length is not None
+            assert reply.sha256 is not None
+            assert reply.filename is not None
+            return ProxiedExternalItemDocument(
+                connection=connection,
+                media_type=reply.media_type,
+                content_length=reply.content_length,
+                sha256=reply.sha256,
+                filename=reply.filename,
+            )
+        except CatalogApplicationClientError:
+            if connection is not None:
+                connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError) as exc:
+            if connection is not None:
+                connection.close()
+            raise CatalogApplicationClientError(
+                "MATERIAL_NATIVE_READ_UNAVAILABLE", "Native material document is unavailable"
+            ) from exc
 
     def download_external_item_document(
         self, source_id: str, source_revision_id: str, edition: int

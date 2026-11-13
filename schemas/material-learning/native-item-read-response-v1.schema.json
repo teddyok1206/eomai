@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-item-read-response/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "status", "source", "filename", "media_type", "content_length", "sha256", "error_code"],
+  "properties": {
+    "operation": {"enum": ["GET_NATIVE_MATERIAL_ITEM_SOURCE", "GET_NATIVE_MATERIAL_ITEM_DOCUMENT"]},
+    "status": {"enum": ["OK", "ERROR"]},
+    "source": {"anyOf": [{"$ref": "#/$defs/source"}, {"type": "null"}]},
+    "filename": {"type": ["string", "null"], "minLength": 1, "maxLength": 255, "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$"},
+    "media_type": {"enum": ["application/vnd.hancom.hwpx", "application/hwp+zip", null]},
+    "content_length": {"type": ["integer", "null"], "minimum": 1, "maximum": 52428800},
+    "sha256": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "error_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "ERROR"}}}, "then": {"properties": {"error_code": {"type": "string"}, "source": {"type": "null"}, "filename": {"type": "null"}, "media_type": {"type": "null"}, "content_length": {"type": "null"}, "sha256": {"type": "null"}}}},
+    {"if": {"properties": {"status": {"const": "OK"}}}, "then": {"properties": {"error_code": {"type": "null"}}}},
+    {"if": {"properties": {"status": {"const": "OK"}, "operation": {"const": "GET_NATIVE_MATERIAL_ITEM_SOURCE"}}}, "then": {"properties": {"source": {"$ref": "#/$defs/source"}, "filename": {"type": "null"}, "media_type": {"type": "null"}, "content_length": {"type": "null"}, "sha256": {"type": "null"}}}},
+    {"if": {"properties": {"status": {"const": "OK"}, "operation": {"const": "GET_NATIVE_MATERIAL_ITEM_DOCUMENT"}}}, "then": {"properties": {"source": {"type": "null"}, "filename": {"type": "string"}, "media_type": {"type": "string"}, "content_length": {"type": "integer"}, "sha256": {"type": "string"}}}}
+  ],
+  "$defs": {
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["material_title", "metadata", "question", "solution", "workbook"],
+      "properties": {
+        "material_title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "metadata": {"$ref": "eom://schemas/material-learning/item-metadata/2.0"},
+        "question": {"$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"},
+        "solution": {"$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"},
+        "workbook": {"$ref": "eom://schemas/material-learning/native-item-binding/1.0#/properties/workbook"}
+      }
+    }
+  }
+}

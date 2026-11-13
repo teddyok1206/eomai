@@ -4266,6 +4266,7 @@ def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: E
     )
     from eom_catalog_service.material_learning_models import LearningMaterialRecord
     from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
+    from eom_orchestrator.general_chat_model_settings_store import ChatModelSettingsRecord
 
     assert ItemDbSimilaritySearchRecord.__table__.metadata is Base.metadata
     assert content_delivery_models.Base.metadata is Base.metadata
@@ -4274,6 +4275,7 @@ def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: E
     assert curated_document_slot_models.Base.metadata is Base.metadata
     assert LearningMaterialRecord.__table__.metadata is Base.metadata
     assert HwpxCuratedBuildRecord.__table__.metadata is Base.metadata
+    assert ChatModelSettingsRecord.__table__.metadata is Base.metadata
     with integration_engine.connect() as connection:
         context = MigrationContext.configure(connection)
         differences = compare_metadata(context, Base.metadata)

@@ -9,6 +9,10 @@ import time
 from datetime import UTC, datetime
 
 from eom_catalog_contracts.content_workbook_import import CONTENT_WORKBOOK_MAX_BYTES
+from eom_catalog_contracts.material_native_prepare import (
+    MATERIAL_NATIVE_UPLOAD_MAX_BYTES,
+    MATERIAL_NATIVE_UPLOAD_MEDIA_TYPE,
+)
 from fastapi import Request
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
@@ -104,7 +108,15 @@ class RequestBoundaryMiddleware:
         is_workbook_upload = (
             method == "PUT" and scope.get("path") == "/api/v1/content-planning/imports"
         )
-        is_binary_upload = is_pdf_review_upload or is_material_upload or is_workbook_upload
+        is_native_exam_upload = (
+            method == "POST" and scope.get("path") == "/api/v1/material-learning/native-exams"
+        )
+        is_binary_upload = (
+            is_pdf_review_upload
+            or is_material_upload
+            or is_workbook_upload
+            or is_native_exam_upload
+        )
         content_length = headers.get("content-length")
         has_body = bool(
             (content_length and content_length.isdigit() and int(content_length) > 0)
@@ -118,7 +130,9 @@ class RequestBoundaryMiddleware:
             ):
                 await self._send_problem(scope, receive, secured_send, 400, "API_REQUEST_INVALID")
                 return
-            if is_workbook_upload:
+            if is_native_exam_upload:
+                allowed_media = frozenset({MATERIAL_NATIVE_UPLOAD_MEDIA_TYPE})
+            elif is_workbook_upload:
                 allowed_media = frozenset({CONTENT_WORKBOOK_UPLOAD_MEDIA_TYPE})
             elif is_material_upload:
                 allowed_media = DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES | {"application/octet-stream"}
@@ -144,6 +158,8 @@ class RequestBoundaryMiddleware:
         effective_limit = self.pdf_review_upload_limit if is_binary_upload else self.body_limit
         if is_workbook_upload:
             effective_limit = CONTENT_WORKBOOK_MAX_BYTES
+        if is_native_exam_upload:
+            effective_limit = MATERIAL_NATIVE_UPLOAD_MAX_BYTES
         if method == "POST" and scope.get("path") == "/api/v1/content-planning/commands":
             # Final ordered pointer arrays may exceed the normal small command budget.
             effective_limit = 4 * 1024 * 1024

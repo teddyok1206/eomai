@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from urllib.parse import quote
 
 import httpx
@@ -170,6 +170,8 @@ from eom_web_gui.material_learning_contracts import (
     MaterialLearningSourceReceipt,
     MaterialLearningSubmission,
     MaterialLearningTaskDetail,
+    MaterialNativeItemDbEntry,
+    MaterialNativeItemMetadata,
 )
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.reference_item_contracts import parse_reference_item_start_reply
@@ -471,7 +473,9 @@ class GraphItemDbPage:
 
 @dataclass(frozen=True)
 class RegisteredItemDbPage:
-    values: tuple[CreativeItemDbEntry | AiItemDbEntry | MaterialItemDbEntry, ...]
+    values: tuple[
+        CreativeItemDbEntry | AiItemDbEntry | MaterialItemDbEntry | MaterialNativeItemDbEntry, ...
+    ]
     next_cursor: str | None
     has_more: bool
 
@@ -532,6 +536,15 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, value: MaterialLearningSubmission
     ) -> MaterialLearningAcceptance: ...
 
+    async def prepare_native_material_exam(
+        self,
+        session: WebSession,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningAcceptance: ...
+
     async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns: ...
 
     async def control_material_learning(
@@ -575,7 +588,7 @@ class ApplicationGateway(Protocol):
 
     async def item_db_registration_source(
         self, session: WebSession, revision_id: str, manifest_sha256: str
-    ) -> ExternalItemDbEntry | None: ...
+    ) -> ExternalItemDbEntry | MaterialNativeItemMetadata | None: ...
 
     async def registered_item_db_entries(
         self,
@@ -964,6 +977,14 @@ class ApplicationGateway(Protocol):
 
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemDocumentDownload: ...
+
+    async def material_native_item_document_download(
+        self,
+        session: WebSession,
+        revision_id: str,
+        manifest_sha256: str,
+        source_role: Literal["MAIN", "SOLUTIONS"],
     ) -> ExternalItemDocumentDownload: ...
 
     async def external_item_db_preview_download(
@@ -1556,6 +1577,33 @@ class HttpApplicationGateway:
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
 
+    async def prepare_native_material_exam(
+        self,
+        session: WebSession,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningAcceptance:
+        # Stream the closed native-exam envelope to its existing API owner. The
+        # API binds the actor and validates workbook bytes; BFF never unpacks it.
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/material-learning/native-exams",
+            content=content,
+            headers={
+                "Content-Type": "application/vnd.eom.native-exam",
+                "Content-Length": str(content_length),
+                "Idempotency-Key": idempotency_key,
+            },
+            timeout=300.0,
+        )
+        try:
+            return MaterialLearningAcceptance.model_validate(self._data(response))
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns:
         response = await self._authorized(session, "GET", "/api/v1/material-learning")
         try:
@@ -2047,7 +2095,7 @@ class HttpApplicationGateway:
 
     async def item_db_registration_source(
         self, session: WebSession, revision_id: str, manifest_sha256: str
-    ) -> ExternalItemDbEntry | None:
+    ) -> ExternalItemDbEntry | MaterialNativeItemMetadata | None:
         response = await self._authorized(
             session,
             "GET",
@@ -2056,7 +2104,14 @@ class HttpApplicationGateway:
         )
         try:
             value = self._document(response)["data"]
-            return ExternalItemDbEntry.model_validate(value) if value is not None else None
+            if value is None:
+                return None
+            if (
+                isinstance(value, dict)
+                and value.get("schema_version") == "material-imported-native-item-metadata/2.0"
+            ):
+                return MaterialNativeItemMetadata.model_validate(value)
+            return ExternalItemDbEntry.model_validate(value)
         except (KeyError, TypeError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
@@ -2116,14 +2171,24 @@ class HttpApplicationGateway:
                 )
             ):
                 raise ValueError("invalid page shape")
-            values: tuple[CreativeItemDbEntry | AiItemDbEntry | MaterialItemDbEntry, ...]
+            values: tuple[
+                CreativeItemDbEntry
+                | AiItemDbEntry
+                | MaterialItemDbEntry
+                | MaterialNativeItemDbEntry,
+                ...,
+            ]
             if kind == "CREATIVE":
                 values = tuple(
                     CreativeItemDbEntry.model_validate(value) for value in document["data"]
                 )
             elif kind == "EXTERNAL":
                 values = tuple(
-                    MaterialItemDbEntry.model_validate(value) for value in document["data"]
+                    MaterialNativeItemDbEntry.model_validate(value)
+                    if isinstance(value, dict)
+                    and value.get("schema_version") == "material-item-db-entry/2.0"
+                    else MaterialItemDbEntry.model_validate(value)
+                    for value in document["data"]
                 )
             else:
                 values = tuple(AiItemDbEntry.model_validate(value) for value in document["data"])
@@ -2493,6 +2558,38 @@ class HttpApplicationGateway:
                 expected_sha256=etag[1:-1],
             )
             return ExternalItemDocumentDownload(body, content_type, disposition, etag)
+
+    async def material_native_item_document_download(
+        self,
+        session: WebSession,
+        revision_id: str,
+        manifest_sha256: str,
+        source_role: Literal["MAIN", "SOLUTIONS"],
+    ) -> ExternalItemDocumentDownload:
+        async with self._download(
+            session,
+            f"/api/v1/item-db/registrations/{revision_id}/native-document",
+            params={"manifest_sha256": manifest_sha256, "source_role": source_role},
+            headers={"Accept": "application/vnd.hancom.hwpx, application/hwp+zip"},
+        ) as response:
+            content_type = response.headers.get("content-type", "").split(";", 1)[0]
+            disposition = response.headers.get("content-disposition", "")
+            etag = response.headers.get("etag", "")
+            expected = f'attachment; filename="eom-item-{source_role.lower()}.hwpx"'
+            if (
+                content_type not in {"application/vnd.hancom.hwpx", "application/hwp+zip"}
+                or not disposition.startswith(expected)
+                or any(char in disposition for char in "\r\n")
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="MATERIAL_NATIVE_DOCUMENT_RESPONSE_INVALID")
+            content = await self._verified_download_body(
+                response,
+                error_code="MATERIAL_NATIVE_DOCUMENT_RESPONSE_INVALID",
+                maximum_bytes=50 * 1024 * 1024,
+                expected_sha256=etag[1:-1],
+            )
+            return ExternalItemDocumentDownload(content, content_type, disposition, etag)
 
     async def external_item_db_preview_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Literal
+from urllib.parse import quote
 
 from eom_api_contracts import (
     ItemBankEntryView,
@@ -16,10 +17,16 @@ from eom_api_contracts.item_db_registration import (
     AiItemDbEntryView,
     ApprovalState,
     CreativeItemDbEntryView,
-    MaterialItemDbEntryView,
+    MaterialDbEntryView,
+)
+from eom_catalog_contracts.material_native_files import MaterialImportedNativeItemMetadata
+from eom_catalog_contracts.material_native_item_read import (
+    MaterialNativeItemReadRequest,
+    MaterialNativeItemSource,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi.responses import StreamingResponse
 
 from eom_api.dependencies import Auth, require_permission
 from eom_api.errors import ApiError
@@ -87,7 +94,7 @@ def ai_item_db_entries(
 @router.get(
     "/item-db/materials",
     operation_id="item_db_material_list",
-    response_model=ListResponse[MaterialItemDbEntryView],
+    response_model=ListResponse[MaterialDbEntryView],
     dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
     openapi_extra={
         "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
@@ -100,7 +107,7 @@ def material_item_db_entries(
     approval_state: Annotated[ApprovalState | None, Query()] = None,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
-) -> ListResponse[MaterialItemDbEntryView]:
+) -> ListResponse[MaterialDbEntryView]:
     if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
         raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
     page = request.app.state.services.queries.material_item_db_entries(
@@ -209,7 +216,9 @@ def production_item_candidates(
 @router.get(
     "/item-db/registrations/{revision_id}/source",
     operation_id="item_db_registration_source",
-    response_model=SingleResponse[ExternalItemDbEntryView | None],
+    response_model=SingleResponse[
+        ExternalItemDbEntryView | MaterialImportedNativeItemMetadata | None
+    ],
     dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
     openapi_extra={
         "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
@@ -220,7 +229,7 @@ def registration_source(
     authentication: Auth,
     revision_id: Annotated[str, Path(pattern=r"^itemrev_[0-9a-f]{32}$")],
     manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
-) -> SingleResponse[ExternalItemDbEntryView | None]:
+) -> SingleResponse[ExternalItemDbEntryView | MaterialImportedNativeItemMetadata | None]:
     if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
         raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
     return one(
@@ -228,6 +237,87 @@ def registration_source(
         request.app.state.services.external_item_db_reads.registration_source(
             revision_id, manifest_sha256
         ),
+    )
+
+
+@router.get(
+    "/item-db/registrations/{revision_id}/native-source",
+    operation_id="item_db_registration_native_source",
+    response_model=SingleResponse[MaterialNativeItemSource],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+    openapi_extra={
+        "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
+    },
+)
+def registration_native_source(
+    request: Request,
+    authentication: Auth,
+    revision_id: Annotated[str, Path(pattern=r"^itemrev_[0-9a-f]{32}$")],
+    manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+) -> SingleResponse[MaterialNativeItemSource]:
+    if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
+        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
+    query = MaterialNativeItemReadRequest(
+        operation="GET_NATIVE_MATERIAL_ITEM_SOURCE",
+        actor_id=authentication.operator.operator_id,
+        item_revision_id=revision_id,
+        item_manifest_sha256=manifest_sha256,
+    )
+    return one(
+        request,
+        request.app.state.services.catalog_application.read_native_material_item_source(query),
+    )
+
+
+@router.get(
+    "/item-db/registrations/{revision_id}/native-document",
+    operation_id="item_db_registration_native_document",
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+    openapi_extra={
+        "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
+    },
+)
+def registration_native_document(
+    request: Request,
+    authentication: Auth,
+    revision_id: Annotated[str, Path(pattern=r"^itemrev_[0-9a-f]{32}$")],
+    source_role: Literal["MAIN", "SOLUTIONS"] = Query(),
+    manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+) -> StreamingResponse:
+    if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
+        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
+    query = MaterialNativeItemReadRequest(
+        operation="GET_NATIVE_MATERIAL_ITEM_DOCUMENT",
+        actor_id=authentication.operator.operator_id,
+        item_revision_id=revision_id,
+        item_manifest_sha256=manifest_sha256,
+        source_role=source_role,
+    )
+    value = request.app.state.services.catalog_application.download_native_material_item_document(
+        query
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="MATERIAL_NATIVE_ITEM_DOCUMENT_READ_AUTHORIZED",
+        operation_id="item_db_registration_native_document",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="item_revision",
+        target_id=revision_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type=value.media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="eom-item-{source_role.lower()}.hwpx"; '
+                f"filename*=UTF-8''{quote(value.filename)}"
+            ),
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
     )
 
 

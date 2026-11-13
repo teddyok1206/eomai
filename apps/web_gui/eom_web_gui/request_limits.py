@@ -9,6 +9,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 MAX_BODY_BYTES = 262_144
 MAX_PDF_REVIEW_BODY_BYTES = 256 * 1024 * 1024
+MAX_NATIVE_EXAM_BODY_BYTES = 8 * 1024 * 1024 + 64 * 1024 + 1
 PDF_REVIEW_CONTENT_PATH = re.compile(
     r"^/studio/api/v1/pdf-document-reviews/(?:"
     r"upload-intents/pdfreviewintent_[0-9a-f]{32}/content|"
@@ -18,6 +19,8 @@ PDF_REVIEW_CONTENT_PATH = re.compile(
 
 
 def request_body_limit(method: str, path: str) -> int:
+    if method == "POST" and path == "/studio/api/v1/material-learning/native-exams":
+        return MAX_NATIVE_EXAM_BODY_BYTES
     if method == "PUT" and path == "/studio/api/v1/content-planning/imports":
         return 8 * 1024 * 1024
     if method == "POST" and path == "/studio/api/v1/content-planning/commands":

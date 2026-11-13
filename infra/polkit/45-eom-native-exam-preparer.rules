@@ -1,0 +1,10 @@
+// Only a fixed native exam file job, never transient units, properties or arbitrary commands.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units"
+        && subject.user === "eom-catalog-manager"
+        && action.lookup("verb") === "start"
+        && /^eom-native-exam-preparer@nativeexam_[0-9a-f]{32}\.service$/.test(action.lookup("unit") || "")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

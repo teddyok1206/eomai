@@ -93,6 +93,20 @@ registration key를 재사용하며 새 DB/index는 실제 조회 경로 부족�
    포인터를 받아 기존 학습 경로에서 진행한다. PDF는 필요할 때 관찰용으로만 쓰며 출력
    한글 파일을 PDF 캡처로 대신하지 않는다.
 
+V2의 모델 discovery가 끝나면 기존 coordinator는 QUESTION task를 만들기 전에 native
+bundle의 기대 문항 번호와 MAIN 문제/SOLUTIONS 해설의 실제 발견 번호를 대조한다.
+번호의 누락·중복·다른 역할은 명시적인 오류이며, 24개만 발견하고 완료로
+표시하거나 없던 문항을 자동 보충하지 않는다. bundle/Excel은 이 검사의 정본이고 모델의
+페이지 anchor·본문 해석은 기존 discovery owner가 계속 담당한다. 검사는 명시적 최종화
+경계 및 재시작 후 첫 plan 조회에서 한 번 metadata를 읽고 dict/set으로 O(발견 unit +
+기대 문항)에 수행한다. 검증된 한 회차의 MAIN/SOLUTIONS가 각각 기대 번호를 정확히 한 번
+갖는 경우에만 원래 native pair로 문제→해설 key를 고정한다. `1.`/`1번`이나 서로 다른
+문제·해설 목차 제목 때문에 일반 자료의 matching이 실패했어도 이 원본 pair를 사용한다.
+anchor·번호 원문·본문 해석은 바꾸지 않고 해소된 원본 해설 연결 경고 두 종류만 제거한다.
+일반 V1 자료의 발견·연결 의미는 바꾸지 않는다. 이 명시적 source-quality 실패는 해당 run만
+FAILED로 기록하고 완료 discovery 영수증을 보존한다. source pointer/hash·권한 불일치와
+알 수 없는 오류를 이 처리에 섞어 숨기지 않는다.
+
 17회 원본의 `Scripts/headerScripts`와 `Scripts/sourceScripts`는 검토한 한글 기본
 editor template의 정확한 두 바이트열인 경우에만 `NATIVE_SPLIT_V1`에서 읽고 파생
 fragment에서는 제외한다. JavaScript를 실행·파싱·문자 정규화하지 않고 member의 SHA와
@@ -104,10 +118,48 @@ fallback이 아니며 기존 STRICT parser/merge는 이 template도 계속 거�
 
 ## 트랜잭션과 복구
 
+### 후속 Excel의 중복 등록 차단
+
+초기 native 등록은 실제 operator와 `material_native_source_identity`로 만든 registration
+key를 기존 Registry의 UNIQUE index/advisory lock에 사용한다. 이 source hash는 권한이나
+사용자 위임이 아니라 동일 원본 문제·해설/회차/문항을 찾는 값이다. 권한은 원래 source
+receipt와 현재 actor에서 다시 검증한다. V1 자료의 revision-local key는 바꾸지 않는다.
+
+같은 source key가 다른 material revision 또는 unit metadata에서 다시 들어오면 기존 Item을
+새 결과로 돌려주거나 CREATE_ITEM 하지 않고 `MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED`로
+명시한다. 같은 intake/task의 재전송만 원래 여섯 component와 lineage 검증 후 재사용한다.
+후속 Excel을 기존 Item의 metadata successor로 반영하는 사용자 기능은 별도 후속 작업이다.
+현재 구현은 native 원문 재사용과 중복 Item/풀이 방지까지이며 metadata 갱신 완료를 뜻하지
+않는다. 새 테이블·queue·JSON 전체 스캔 없이 기존 등록 key lookup을 사용한다.
+
+### 실제 Catalog 계정의 파일 도구 실행
+
+원문 parser는 CPU 전용 보호 설치본을 사용한다. root인 기존 자료 학습 coordinator가 쓰는
+transient `systemd-run`을 비권한 Catalog API 계정에서도 실행할 수 있다고 가정하지 않는다.
+API 준비 서비스에는 기존 Office converter와 같은 **고정 systemd template adapter**를
+주입한다. Catalog는 정규식으로 제한된 instance의 StartUnit만 사용할 수 있고, 임의 실행
+명령·root·sudo·arbitrary transient unit 권한을 얻지 않는다.
+
+이 adapter는 새 작업 queue나 영속 registry가 아니다. 기존 native file preparation의
+닫힌 request/result와 현재 actor의 원본 인가를 그대로 사용한다. 새로운 local instance는
+일시적인 도구 실행 위치이며 원문·Item·Artifact identity가 아니다. 고정 workspace에 한 번
+materialize한 request/원문을 sandbox가 읽고 bounded ZIP을 쓰며, Catalog는 번호·역할·hash·
+member closure 검증 뒤 기존 Artifact owner로 commit한다. worker는 NAS·DB·Codex 인증·
+secrets·repository에 접근하지 않는다. root 소유 설치본과 systemd 설정만 executable을
+결정하고 사용자 payload는 executable/path/config를 고를 수 없다.
+
+비용은 source와 출력 크기에 선형이고 변환 중 DB lock을 잡지 않는다. 실패/timeout은 기존
+실행을 성공으로 바꾸지 않으며 정본 publication/intake의 동일 key를 재사용한다. root로만
+통과하는 도구 검사는 Catalog 계정의 운영 실행 증거가 아니다. 배포 전 실제 Catalog UID의
+고정 unit 실행과 sandbox 부정 검사를 별도로 통과해야 한다.
+
 파일 변환·분리 중 DB lock을 잡지 않는다. Artifact는 기존 commit owner가 멱등 key와
 expected hash로 저장한다. 접수/문항/등록 identity는 source revision·범위·profile·actor에
 묶는다. timeout 뒤 같은 요청의 commit/registration을 조회하고 새 key로 우회하지 않는다.
 파일 성공 뒤 중단하면 검증된 파일을 재사용하고 모델 풀이·Graph를 중복 생성하지 않는다.
+메타데이터 갱신이 필요한 원문 재접수는 기존 task EXCEPTION owner에서
+`MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED`로 남긴다. 이 한 건 때문에 resident 처리를
+종료하지 않으며 Item/새 분석을 만들지 않는다. hash·권한·pointer 오류는 이 목록에 넣지 않는다.
 기존 FAILED는 보존하며 supported successor/reconcile만 사용한다. 독립 문항의 예외는
 명시적으로 보류하고 원문을 고쳐 성공 처리하지 않는다.
 

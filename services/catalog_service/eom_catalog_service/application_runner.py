@@ -92,6 +92,10 @@ from eom_catalog_service.material_learning_authorization import (
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_read import MaterialLearningReadService
 from eom_catalog_service.material_learning_source import MaterialLearningSourceService
+from eom_catalog_service.material_native_item_read import MaterialNativeItemReadService
+from eom_catalog_service.material_native_preparation_runtime import (
+    build_material_native_preparation,
+)
 from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationService,
@@ -350,6 +354,10 @@ def serve() -> int:
             material_learning_sources=MaterialLearningSourceService(engine),
             material_learning_intake=MaterialLearningIntakeService(engine),
             material_learning_reads=MaterialLearningReadService(engine),
+            material_native_preparation=build_material_native_preparation(
+                engine, CatalogSettings.from_environment(), environment=os.environ
+            ),
+            material_native_item_reads=MaterialNativeItemReadService(engine),
             material_learning_authorizations=CatalogMaterialLearningAuthorizationService(
                 engine, CatalogSettings.from_environment()
             ),

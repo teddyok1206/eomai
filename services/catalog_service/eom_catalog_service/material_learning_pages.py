@@ -10,7 +10,6 @@ from pathlib import Path
 
 from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialPreparedSource
 from eom_catalog_contracts.material_learning_intake import (
-    MaterialLearningIntakeManifest,
     MaterialLearningSourceSelection,
 )
 from eom_catalog_contracts.material_learning_preparation import (
@@ -25,6 +24,18 @@ from eom_catalog_contracts.material_learning_preparation import (
     MaterialPreparedPage,
     material_document_kind,
     material_document_source_class,
+)
+from eom_catalog_contracts.material_native_intake import (
+    MATERIAL_NATIVE_PREPARED_REF,
+    MaterialIntake,
+    MaterialNativeExamBundle,
+    MaterialNativeLearningIntakeManifest,
+    MaterialNativePreparationInput,
+    MaterialNativePreparedArtifact,
+    MaterialPreparation,
+    MaterialPrepared,
+    require_native_exam_bundle_sources,
+    require_native_material_checkpoint_chain,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.database import build_session_factory
@@ -43,6 +54,7 @@ from eom_catalog_service.educational_material_registration import (
     material_document_identity,
     material_document_registration_hash,
 )
+from eom_catalog_service.material_intake_read import read_material_intake, read_material_prepared
 from eom_catalog_service.material_learning_artifacts import (
     find_material_publication,
     pin_material_primary,
@@ -63,7 +75,7 @@ _PREPARED_REF = "eom://schemas/material-learning/prepared/1.0"
 
 @dataclass(frozen=True, slots=True)
 class MaterialPreparationOutcome:
-    prepared: MaterialPreparedArtifact
+    prepared: MaterialPrepared
     pointer: MaterialArtifactMember
 
 
@@ -85,9 +97,12 @@ class MaterialPagePreparationService:
         self.documents = EducationalDocumentService(engine, settings)
 
     def prepare(
-        self, work: MaterialPreparationInput, *, operator_id: str, authorize: Callable[[], None]
+        self, work: MaterialPreparation, *, operator_id: str, authorize: Callable[[], None]
     ) -> MaterialPreparationOutcome:
-        work = MaterialPreparationInput.model_validate(work.model_dump(mode="json"))
+        if isinstance(work, MaterialNativePreparationInput):
+            work = MaterialNativePreparationInput.model_validate(work.model_dump(mode="json"))
+        else:
+            work = MaterialPreparationInput.model_validate(work.model_dump(mode="json"))
         actual_extractor = MaterialExtractorIdentity(
             implementation=self.extractor.implementation,
             version=self.extractor.version,
@@ -100,12 +115,13 @@ class MaterialPagePreparationService:
         ):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_PREPARATION_PROFILE_STALE")
         authorize()
-        intake = read_material_metadata(
+        intake = read_material_intake(
             self.artifacts,
             work.intake_manifest,
-            MaterialLearningIntakeManifest,
-            schema_ref="eom://schemas/material-learning/intake/1.0",
-            member_path="material/intake.json",
+            authorize=authorize,
+        )
+        require_native_material_checkpoint_chain(
+            intake, preparation=work, intake_pointer=work.intake_manifest
         )
         if intake.requested_by != operator_id or (
             intake.material_id,
@@ -115,6 +131,20 @@ class MaterialPagePreparationService:
             work.material_revision_id,
         ):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_PREPARATION_INTAKE_INVALID")
+        if isinstance(intake, MaterialNativeLearningIntakeManifest):
+            # Explicit preparation is the bounded metadata read boundary, not every poll.
+            # The registered native files are resolved by their own registration owner.
+            authorize()
+            bundle = read_material_metadata(
+                self.artifacts,
+                intake.native_bundle,
+                MaterialNativeExamBundle,
+                schema_ref=intake.native_bundle.schema_ref,
+                member_path=intake.native_bundle.member_path,
+                maximum_bytes=4 * 1024 * 1024,
+            )
+            require_native_exam_bundle_sources(bundle, intake.sources, operator_id=operator_id)
+            authorize()
         key = "material-prepared:" + work.input_sha256[7:]
         existing = find_material_publication(
             self.publisher, idempotency_key=key, artifact_type="control_material_learning_prepared"
@@ -122,12 +152,13 @@ class MaterialPagePreparationService:
         if existing is not None:
             with self.sessions() as session:
                 pointer = pin_material_primary(session, existing).pointer
-            prepared = read_material_metadata(
+            prepared = read_material_prepared(
                 self.artifacts,
                 pointer,
-                MaterialPreparedArtifact,
-                schema_ref=_PREPARED_REF,
-                member_path="material/prepared.json",
+                authorize=authorize,
+            )
+            require_native_material_checkpoint_chain(
+                intake, preparation=work, prepared=prepared, intake_pointer=work.intake_manifest
             )
             if (
                 prepared.intake_manifest != work.intake_manifest
@@ -172,14 +203,30 @@ class MaterialPagePreparationService:
             "profile_sha256": work.profile.profile_sha256,
             "sources": [source.model_dump(mode="json") for source in sources],
         }
-        prepared = MaterialPreparedArtifact.model_validate(
-            {**body, "prepared_sha256": content_sha256(body)}
+        if isinstance(work, MaterialNativePreparationInput):
+            body.update(
+                schema_version="material-learning-prepared/2.0",
+                native_bundle=work.native_bundle.model_dump(mode="json"),
+            )
+            prepared = MaterialNativePreparedArtifact.model_validate(
+                {**body, "prepared_sha256": content_sha256(body)}
+            )
+        else:
+            prepared = MaterialPreparedArtifact.model_validate(
+                {**body, "prepared_sha256": content_sha256(body)}
+            )
+        require_native_material_checkpoint_chain(
+            intake, preparation=work, prepared=prepared, intake_pointer=work.intake_manifest
         )
         authorize()
         pointer = self._publish_metadata(
             prepared,
             member_path="material/prepared.json",
-            schema_ref=_PREPARED_REF,
+            schema_ref=(
+                MATERIAL_NATIVE_PREPARED_REF
+                if isinstance(prepared, MaterialNativePreparedArtifact)
+                else _PREPARED_REF
+            ),
             artifact_type="control_material_learning_prepared",
             key=key,
             source_commit=work.profile.source_commit,
@@ -189,8 +236,8 @@ class MaterialPagePreparationService:
 
     def _prepare_source(
         self,
-        work: MaterialPreparationInput,
-        intake: MaterialLearningIntakeManifest,
+        work: MaterialPreparation,
+        intake: MaterialIntake,
         selection: MaterialLearningSourceSelection,
         *,
         operator_id: str,
@@ -312,7 +359,7 @@ class MaterialPagePreparationService:
 
     def _page_chunk(
         self,
-        work: MaterialPreparationInput,
+        work: MaterialPreparation,
         selection: MaterialLearningSourceSelection,
         source: LocalMaterialSource,
         *,
@@ -469,7 +516,7 @@ class MaterialPagePreparationService:
     @staticmethod
     def _require_chunk_identity(
         chunk: MaterialPageChunk,
-        work: MaterialPreparationInput,
+        work: MaterialPreparation,
         selection: MaterialLearningSourceSelection,
         source: LocalMaterialSource,
         document_id: str,

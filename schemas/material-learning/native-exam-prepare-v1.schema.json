@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-exam-prepare/1.0",
+  "title": "Prepare an authorized native exam with its original workbook",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "material-native-exam-prepare/1.0"},
+    "operation": {"const": "PREPARE_NATIVE_MATERIAL_EXAM"},
+    "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "idempotency_key": {"type": "string", "pattern": "^[!-~]{16,128}$"},
+    "upload": {"$ref": "eom://schemas/material-learning/upload/1.0"},
+    "sources": {
+      "type": "array",
+      "items": {"$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/selectedSource"},
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "source_namespace": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "exam_key": {"type": "string", "minLength": 1, "maxLength": 256},
+    "workbook_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+    "workbook_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "workbook_bytes": {"type": "integer", "minimum": 8, "maximum": 8388608}
+  },
+  "required": [
+    "schema_version", "operation", "actor_id", "idempotency_key", "upload", "sources",
+    "source_namespace", "exam_key", "workbook_filename", "workbook_sha256", "workbook_bytes"
+  ]
+}

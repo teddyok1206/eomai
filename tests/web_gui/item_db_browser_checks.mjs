@@ -30,6 +30,13 @@ function detail(number) {
     editions: [1, 2, 3].map(edition => ({edition, available: true, match_status: 'MATCHED',
       filename: edition === 3 ? value.selected_filename : number + '_' + edition + '교.hwp', media_type: 'application/vnd.hancom.hwp'}))};
 }
+function nativeMetadata() {
+  return {schema_version: 'material-imported-native-item-metadata/2.0', source_kind: 'EXTERNAL',
+    title: '외부 한글 원문 문항', source_filename: '원본 시험지.hwp', printed_label: '12', item_number: 12,
+    section_path: ['검토팀최종 목차'], physical_pages: [7, 8], external_number: null,
+    original_unit: '화학 변화와 에너지', original_classification: '통합과학 - 창작',
+    source_name: '<img src=x onerror=window.untrustedExecuted=true>'};
+}
 const graph = {source_class: 'PAST_EXAM', source_display_label: '합성 시험 17번',
   item_id: 'item_' + 'b'.repeat(32), item_revision_id: 'itemrev_' + 'c'.repeat(32),
   item_manifest_sha256: 'sha256:' + 'd'.repeat(64), graph_snapshot_revision_id: 'graphrev_' + 'e'.repeat(32),
@@ -80,6 +87,8 @@ async function api(path, options = {}) {
       item_manifest_sha256: 'sha256:' + '3'.repeat(64), approval_state: 'APPROVED',
       difficulty_band: '상', item_type_key: 'external-creative-multiple-choice'};
     if (params.get('kind') === 'AI') return {values: [{registration: {...registration, approval_state: 'IN_REVIEW'}, title: 'AI 생성 문항'}], has_more: false, next_cursor: null};
+    if (params.get('kind') === 'EXTERNAL' && fixture.nativeMaterial) return {values: [{schema_version: 'material-item-db-entry/2.0', registration,
+      material_title: '외부 한글 모의고사', metadata: nativeMetadata()}], has_more: false, next_cursor: null};
     if (params.get('kind') === 'EXTERNAL') return {values: [{schema_version: 'material-item-db-entry/1.0', registration,
       material_title: '외부 문제집', metadata: {source_kind: 'EXTERNAL', title: '외부 자료 문항',
         source_filename: '문제.hwpx', printed_label: '12', section_path: ['2장', '실전'], physical_pages: [7, 8]}}], has_more: false, next_cursor: null};
@@ -91,6 +100,7 @@ async function api(path, options = {}) {
   }
   if (path.startsWith('/item-db/registrations/') && path.includes('/source?')) {
     if (fixture.sourceReadFailed) throw new Error('합성 원본 조회 오류');
+    if (fixture.nativeOriginalUnits) return nativeMetadata();
     return fixture.noOriginalUnits ? null : entry('10310');
   }
   if (path.startsWith('/item-db/registrations/')) return fixture.enableRegisteredGraph ? {
@@ -339,6 +349,22 @@ try {
   assert.match(await page.locator('#item-db-detail').innerText(), /문항 종류[\s\S]*외부[\s\S]*외부 문제집[\s\S]*문제.hwpx[\s\S]*12[\s\S]*2장 → 실전[\s\S]*7, 8/);
   assert.equal(await page.getByRole('button', {name: '등록 문항 미리보기', exact: true}).isVisible(), true);
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /materialrev_|itemrev_|고유번호 12/);
+  await page.evaluate(() => {window.dbFixture.nativeMaterial = true;});
+  await page.locator('#item-db-search').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('외부 한글 원문 문항'));
+  await rows.first().getByRole('button').click();
+  assert.match(await page.locator('#item-db-results').innerText(), /화학 변화와 에너지[\s\S]*편집 가능한 원본 한글/);
+  assert.match(await page.locator('#item-db-detail').innerText(), /고유번호[\s\S]*미입력[\s\S]*소속 단원[\s\S]*화학 변화와 에너지/);
+  assert.match(await page.locator('#item-db-detail').innerText(), /원본 분류[\s\S]*통합과학 - 창작[\s\S]*AI가 다시 만든 파일이 아닙니다/);
+  assert.equal(await page.locator('#item-db-detail img').count(), 0, 'native source name became markup');
+  for (const [label, role] of [['원본 문항 HWPX', 'MAIN'], ['원본 해설 HWPX', 'SOLUTIONS']]) {
+    const href = new URL(await page.getByRole('link', {name: label, exact: true}).getAttribute('href'), 'https://fixture');
+    assert.equal(href.pathname, '/studio/api/v1/item-db/registrations/itemrev_' + '2'.repeat(32) + '/native-document');
+    assert.equal(href.searchParams.get('manifest_sha256'), 'sha256:' + '3'.repeat(64));
+    assert.equal(href.searchParams.get('source_role'), role);
+    assert.deepEqual([...href.searchParams.keys()].sort(), ['manifest_sha256', 'source_role']);
+  }
+  await page.evaluate(() => {window.dbFixture.nativeMaterial = false;});
   await page.locator('#item-db-source').selectOption('AI');
   await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('AI 생성 문항'));
   await rows.first().getByRole('button').click();
@@ -607,6 +633,13 @@ try {
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /물질의 규칙성/u);
   const originalRead = await page.evaluate(() => window.dbFixture.calls.findLast(call => call.path.includes('/source?')).path);
   assert.match(originalRead, /itemrev_c{32}\/source\?manifest_sha256=sha256%3Ad{64}$/u);
+  await page.evaluate(() => {window.dbFixture.nativeOriginalUnits = true;});
+  await openRegistered();
+  await page.waitForFunction(() => document.querySelector('.item-db-original-unit')?.textContent.includes('화학 변화와 에너지'));
+  assert.match(await page.locator('.item-db-original-unit').innerText(), /고유번호[\s\S]*미입력/);
+  assert.equal(await page.getByRole('link', {name: '원본 문항 HWPX', exact: true}).count(), 1);
+  assert.equal(await page.getByRole('link', {name: '원본 해설 HWPX', exact: true}).count(), 1);
+  await page.evaluate(() => {window.dbFixture.nativeOriginalUnits = false;});
   await page.evaluate(() => {window.dbFixture.noOriginalUnits = true;});
   await openRegistered();
   await page.waitForFunction(() => document.querySelector('.item-db-original-unit')?.textContent.includes('소속 단원 정보 없음'));

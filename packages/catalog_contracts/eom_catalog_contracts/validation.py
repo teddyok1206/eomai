@@ -34,6 +34,84 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-db-entry-v2": CatalogSchemaResource(
+            "schemas/material-learning/db-entry-v2.schema.json",
+            "resources/material-learning/db-entry-v2.schema.json",
+            "2.0",
+            "sha256:3dd82d3b33c99bfc0309d2ab866c57a53dcd09a129f58a08698c00e79e0faa15",
+        ),
+        "material-native-item-read-request-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-item-read-request-v1.schema.json",
+            "resources/material-learning/native-item-read-request-v1.schema.json",
+            "1.0",
+            "sha256:28263119096697bb0c875df7ec12e9544ca7c781fc670776fa240a2404dc8290",
+        ),
+        "material-native-item-read-response-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-item-read-response-v1.schema.json",
+            "resources/material-learning/native-item-read-response-v1.schema.json",
+            "1.0",
+            "sha256:d0a080c16cdd949d63506703cf2177c25e64c471b1db00a12adb8d977d5e1af8",
+        ),
+        "material-native-exam-prepare-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-exam-prepare-v1.schema.json",
+            "resources/material-learning/native-exam-prepare-v1.schema.json",
+            "1.0",
+            "sha256:63664ceda40e6f6b1576180ac0a1176cf580ed47b89d46b88b3cf9209aaf424c",
+        ),
+        "material-native-exam-upload-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-exam-upload-v1.schema.json",
+            "resources/material-learning/native-exam-upload-v1.schema.json",
+            "1.0",
+            "sha256:faa8a61739d44e7af3bdef97c67e13a2f9d632e5b88e1e633199ee716fe06f90",
+        ),
+        "material-native-exam-bundle-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-exam-bundle-v1.schema.json",
+            "resources/material-learning/native-exam-bundle-v1.schema.json",
+            "1.0",
+            "sha256:544599f2208f590470c7a1bf46ec0a99137fa3f5a30d0f676c88dd6976e7bb4a",
+        ),
+        "material-learning-create-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-create-v2.schema.json",
+            "resources/material-learning/material-learning-create-v2.schema.json",
+            "2.0",
+            "sha256:410f3d1f6b770d418c82c7e79a2423566bd967e306d44a3e783da6938e85ff94",
+        ),
+        "material-learning-intake-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-intake-v2.schema.json",
+            "resources/material-learning/material-learning-intake-v2.schema.json",
+            "2.0",
+            "sha256:91686af5cdf2feaccbe65b30b656b839984194593bbc28867fac1820b129b1e0",
+        ),
+        "material-learning-preparation-input-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-preparation-input-v2.schema.json",
+            "resources/material-learning/material-learning-preparation-input-v2.schema.json",
+            "2.0",
+            "sha256:9618699adbe9756b7ec1db317806be633c365767d4b49a22a4c6a9ab1f9213b7",
+        ),
+        "material-learning-prepared-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-prepared-v2.schema.json",
+            "resources/material-learning/material-learning-prepared-v2.schema.json",
+            "2.0",
+            "sha256:926808ff406e4aadd31ae03b59d4fda9c623645de72f3615e6c5cb2d8d38d06f",
+        ),
+        "material-native-item-binding-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-item-binding-v1.schema.json",
+            "resources/material-learning/native-item-binding-v1.schema.json",
+            "1.0",
+            "sha256:b793d18c7cab6b5c5ac73267aa82065c29c0170d498c150fda7a56359eb0cddf",
+        ),
+        "material-learning-item-metadata-v2": CatalogSchemaResource(
+            "schemas/material-learning/item-metadata-v2.schema.json",
+            "resources/material-learning/item-metadata-v2.schema.json",
+            "2.0",
+            "sha256:372ecb9e212e410364f30ec321115d6dce18bebd1ff34fdf7fe4bb2095c4efcf",
+        ),
+        "material-native-exam-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-exam-v1.schema.json",
+            "resources/material-learning/material-native-exam-v1.schema.json",
+            "1.0",
+            "sha256:b23f0649c464da71166053a90720cd4316fa34932ba5a05d3afbed06e228d70b",
+        ),
         "content-workbook-document-v1": CatalogSchemaResource(
             "schemas/content-planning/content-workbook-document-v1.schema.json",
             "resources/content-planning/content-workbook-document-v1.schema.json",

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-exam-upload/1.0",
+  "title": "Actor-free native exam metadata followed by one bounded XLSX body",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-native-exam-upload/1.0"
+    },
+    "upload": {
+      "$ref": "eom://schemas/material-learning/upload/1.0"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/selectedSource"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "source_namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+    },
+    "exam_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "workbook_filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    }
+  },
+  "required": [
+    "schema_version",
+    "upload",
+    "sources",
+    "source_namespace",
+    "exam_key",
+    "workbook_filename"
+  ]
+}

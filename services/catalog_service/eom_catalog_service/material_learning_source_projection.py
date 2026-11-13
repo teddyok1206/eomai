@@ -16,8 +16,8 @@ from eom_catalog_contracts.material_learning import MaterialArtifactMember
 from eom_catalog_contracts.material_learning_intake import MaterialLearningSourceSelection
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialPdfProjection,
-    MaterialPreparationInput,
 )
+from eom_catalog_contracts.material_native_intake import MaterialPreparation
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import (
@@ -107,7 +107,7 @@ class MaterialSourceProjectionService:
     @contextmanager
     def stage(
         self,
-        work: MaterialPreparationInput,
+        work: MaterialPreparation,
         selection: MaterialLearningSourceSelection,
         *,
         operator_id: str,
@@ -160,7 +160,7 @@ class MaterialSourceProjectionService:
 
     def _office(
         self,
-        work: MaterialPreparationInput,
+        work: MaterialPreparation,
         selection: MaterialLearningSourceSelection,
         *,
         authorize: Callable[[], None],

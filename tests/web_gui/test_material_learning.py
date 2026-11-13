@@ -8,6 +8,7 @@ import pytest
 from eom_identifiers import sha256_bytes
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 from eom_web_gui.material_learning_contracts import (
+    MaterialLearningAcceptance,
     MaterialLearningControlReply,
     MaterialLearningRetry,
     MaterialLearningRetryReply,
@@ -92,6 +93,159 @@ class LearningGateway(FakeGateway):
         receipt["original"]["bytes"] = len(data)
         receipt["original"]["sha256"] = sha256_bytes(data)
         return MaterialLearningSourceReceipt.model_validate(receipt)
+
+    async def prepare_native_material_exam(self, session, **kwargs):
+        data = b"".join([chunk async for chunk in kwargs.pop("content")])
+        self.learning_calls.append(("native", kwargs, data))
+        return MaterialLearningAcceptance.model_validate(_native_acceptance())
+
+
+def _native_acceptance():
+    return dict(
+        schema_version="material-learning-acceptance/1.0",
+        material_id="material_" + "1" * 32,
+        material_revision_id="materialrev_" + "2" * 32,
+        run_id="materialrun_" + "3" * 32,
+        request_sha256="sha256:" + "4" * 64,
+        replayed=False,
+    )
+
+
+def test_native_exam_envelope_stream_keeps_exact_bytes_and_request_key():
+    gateway = LearningGateway()
+    client, _ = make_client(gateway=gateway)
+    # Only the API owner decodes metadata and XLSX. This tests a bounded streaming
+    # transport, not a claim that these synthetic bytes form a valid workbook.
+    body = b'{"schema_version":"material-native-exam-upload/1.0"}\nPK' + b"x" * 300_000
+    with client:
+        session = login(client)
+        response = client.post(
+            "/studio/api/v1/material-learning/native-exams",
+            content=body,
+            headers={
+                "Content-Type": "application/vnd.eom.native-exam",
+                "Idempotency-Key": "native-material-test-12345",
+                "X-CSRF-Token": session["csrf_token"],
+            },
+        )
+        assert response.status_code == 202, response.text
+        assert response.json() == _native_acceptance()
+        assert gateway.learning_calls == [
+            (
+                "native",
+                dict(content_length=len(body), idempotency_key="native-material-test-12345"),
+                body,
+            )
+        ]
+
+
+@pytest.mark.parametrize("roles,csrf,status", [(["VIEWER"], True, 403), (["ADMIN"], False, 403)])
+def test_native_exam_preserves_admin_and_csrf_before_stream(roles, csrf, status):
+    gateway = LearningGateway(roles=roles)
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        headers = {
+            "Content-Type": "application/vnd.eom.native-exam",
+            "Idempotency-Key": "native-material-test-12345",
+        }
+        if csrf:
+            headers["X-CSRF-Token"] = session["csrf_token"]
+        response = client.post(
+            "/studio/api/v1/material-learning/native-exams",
+            content=b"metadata\nPK00",
+            headers=headers,
+        )
+        assert response.status_code == status
+        assert not gateway.learning_calls
+
+
+@pytest.mark.parametrize(
+    "media_type,length,status",
+    [
+        ("application/octet-stream", None, 415),
+        ("application/vnd.eom.native-exam", 8 * 1024 * 1024 + 64 * 1024 + 2, 413),
+    ],
+)
+def test_native_exam_rejects_wrong_transport_before_gateway(media_type, length, status):
+    gateway = LearningGateway()
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        headers = {
+            "Content-Type": media_type,
+            "Idempotency-Key": "native-material-test-12345",
+            "X-CSRF-Token": session["csrf_token"],
+        }
+        if length is not None:
+            headers["Content-Length"] = str(length)
+        response = client.post(
+            "/studio/api/v1/material-learning/native-exams",
+            content=b"metadata\nPK00",
+            headers=headers,
+        )
+        assert response.status_code == status
+        assert not gateway.learning_calls
+
+
+def test_native_exam_actual_stream_limit_rejects_false_content_length():
+    gateway = LearningGateway()
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        response = client.post(
+            "/studio/api/v1/material-learning/native-exams",
+            content=b"x" * (8 * 1024 * 1024 + 64 * 1024 + 2),
+            headers={
+                "Content-Type": "application/vnd.eom.native-exam",
+                "Content-Length": "100",
+                "Idempotency-Key": "native-material-test-12345",
+                "X-CSRF-Token": session["csrf_token"],
+            },
+        )
+        assert response.status_code == 413, response.text
+        assert not gateway.learning_calls
+
+
+@pytest.mark.anyio
+async def test_native_exam_actual_gateway_stream_and_dedicated_timeout():
+    body = b'{"schema_version":"material-native-exam-upload/1.0"}\nPK\x00original'
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        assert request.url.path == "/api/v1/material-learning/native-exams"
+        assert request.headers["Content-Type"] == "application/vnd.eom.native-exam"
+        assert request.headers["Content-Length"] == str(len(body))
+        assert request.headers["Idempotency-Key"] == "native-material-test-12345"
+        assert request.content == body
+        assert request.extensions["timeout"]["read"] == 300.0
+        return httpx.Response(202, json=_single(_native_acceptance()))
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://api.invalid",
+        observability_url="http://observe.invalid",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(respond),
+        observability_transport=httpx.MockTransport(respond),
+    )
+
+    async def stream():
+        yield body[:20]
+        yield body[20:]
+
+    try:
+        reply = await gateway.prepare_native_material_exam(
+            _session(),
+            content_length=len(body),
+            content=stream(),
+            idempotency_key="native-material-test-12345",
+        )
+        assert reply.run_id == _native_acceptance()["run_id"]
+        assert len(calls) == 1
+    finally:
+        await gateway.close()
 
 
 def test_new_learning_list_preserves_admin_only_boundary():
