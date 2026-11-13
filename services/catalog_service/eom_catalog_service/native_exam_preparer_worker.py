@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -23,7 +24,7 @@ from eom_catalog_service.native_exam_preparer import (
     NATIVE_EXAM_WORKER_ROOT,
     native_exam_workspace_principals,
     read_native_exam_workspace_file,
-    require_native_exam_workspace,
+    require_native_exam_worker_workspace,
 )
 
 
@@ -37,12 +38,10 @@ def prepare_workspace(
     principals = native_exam_workspace_principals()
     if os.geteuid() != principals.worker_uid or os.getegid() != principals.group_gid:
         raise ValueError("NATIVE_EXAM_PREPARER_IDENTITY_INVALID")
-    workspace = require_native_exam_workspace(
+    workspace = require_native_exam_worker_workspace(
         root,
         instance,
-        root_owner_uid=principals.worker_uid,
-        workspace_owner_uid=principals.manager_uid,
-        group_gid=principals.group_gid,
+        principals=principals,
     )
     executable = require_native_exam_runtime_python(python)
 
@@ -118,9 +117,17 @@ def main(argv: list[str] | None = None) -> int:
         os.umask(0o077)
         prepare_workspace(arguments[0], python=Path(tool))
         return 0
-    except Exception:
+    except Exception as error:
         # Original content, converter diagnostics and credentials never enter journald.
-        print("native_exam_preparer=FAILED code=NATIVE_EXAM_PREPARER_FAILED", file=sys.stderr)
+        code = (
+            error.args[0]
+            if type(error) is ValueError
+            and len(error.args) == 1
+            and isinstance(error.args[0], str)
+            and re.fullmatch(r"NATIVE_[A-Z0-9_]{3,119}", error.args[0])
+            else "NATIVE_EXAM_PREPARER_FAILED"
+        )
+        print(f"native_exam_preparer=FAILED code={code}", file=sys.stderr)
         return 1
 
 

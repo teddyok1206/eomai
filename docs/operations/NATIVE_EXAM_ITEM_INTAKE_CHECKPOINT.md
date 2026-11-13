@@ -179,6 +179,29 @@ template·polkit start allowlist·별도 `eom-image` UID/정확한 작업 폴더
 기존 풀이/Graph/INDEX 연결 확인이다. native 원본 Q/S 다운로드는 지원 후보지만 native
 pair를 기존 개인 조립 출력에 합치는 successor는 이번 원문 등록과 구분된 후속 범위다.
 
+### 첫 실제 Catalog UID 사전검증
+
+통합 후보 `ea4fda8bafaea8547379e7e0fd1cc0000be20037`은 커밋·push와 API/Web wheel
+검증을 통과했고, 별도 immutable owner prefix만 준비했다. 기존 운영 API/Web은 아직
+`c8a851fe` 그대로이며 source 0079·인증·정본·모델·벡터는 변경하지 않았다.
+
+고정 파일 도구 unit을 준비한 뒤 첫 실제 Catalog UID 검사에서 검증 fixture와 실제 systemd
+directory 생성 규칙의 차이를 발견했다. `RuntimeDirectory=eom-native-exam/%i`의 중간 부모는
+실제로 `root:root 0755`인데, worker가 `eom-image:eom-api 0700`으로 잘못 검사했다.
+이 실패는 후보 사전검증이며 사용자 문항 등록 실패가 아니다. unit
+`nativeexam_ea8b7d218cbe4dc8b39958c8e75e6ae8`과 그 local 입력·journal은 보존한다.
+
+Catalog private staging 검증과 systemd runtime 검증을 별도 함수로 나누어 정확한 owner/
+group/mode를 유지했다. 허용 범위를 넓히거나 root 권한을 주지 않았다. 새로운 실제-layout
+회귀와 application 집중 **55 PASS**, 두 source mypy/Ruff PASS다. worker 로그는 검증된
+`NATIVE_*` 코드만 출력하며 원문·예외 메시지·경로·credential은 기록하지 않는다.
+이 수정은 새 commit/owner prefix에서 실제 UID 검사를 다시 통과해야 한다. 이전 candidate
+prefix를 덮어쓰거나 실패를 성공으로 바꾸지 않는다.
+
+검사기 자체도 systemd의 짧은 `(sd-exec)` 자격 전환 단계와 실제 실행된 Python을 구분하도록
+수정했다. 실제 실행 후 잘못된 UID/GID는 계속 거부한다. namespace probe는 보호 경로를
+열 수 있는지만 확인하고 어떤 보호 데이터도 읽지 않는다.
+
 Native 초기 core/기존 merge·converter 회귀 90 PASS, material unit+reader 370 PASS를 확인했다.
 테스트가 진행 중인 worktree에서 실행됐으므로 최종 변경 전체의 gate는 다시 실행해야 한다.
 

@@ -71,31 +71,49 @@ def _stable_file_identity(value: os.stat_result) -> tuple[int, ...]:
     )
 
 
-def require_native_exam_workspace(
-    root: Path,
-    instance: str,
-    *,
-    root_owner_uid: int,
-    workspace_owner_uid: int,
-    group_gid: int,
-) -> Path:
+def _require_native_exam_directory(path: Path, *, uid: int, gid: int, mode: int) -> None:
+    metadata = path.lstat()
+    if (
+        path.is_symlink()
+        or path.resolve() != path
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != uid
+        or metadata.st_gid != gid
+        or stat.S_IMODE(metadata.st_mode) != mode
+    ):
+        raise ValueError("NATIVE_EXAM_PREPARER_WORKSPACE_INVALID")
+
+
+def _native_exam_workspace_path(root: Path, instance: str) -> Path:
     if not root.is_absolute() or NATIVE_EXAM_INSTANCE.fullmatch(instance) is None:
         raise ValueError("NATIVE_EXAM_PREPARER_WORKSPACE_INVALID")
-    for path, owner, mode in (
-        (root, root_owner_uid, 0o700),
-        (root / instance, workspace_owner_uid, 0o770),
-    ):
-        metadata = path.lstat()
-        if (
-            path.is_symlink()
-            or path.resolve() != path
-            or not stat.S_ISDIR(metadata.st_mode)
-            or metadata.st_uid != owner
-            or metadata.st_gid != group_gid
-            or stat.S_IMODE(metadata.st_mode) != mode
-        ):
-            raise ValueError("NATIVE_EXAM_PREPARER_WORKSPACE_INVALID")
     return root / instance
+
+
+def require_native_exam_workspace(
+    root: Path, instance: str, *, principals: NativeExamWorkspacePrincipals
+) -> Path:
+    """Catalog staging is private to the manager; only the one leaf is shared."""
+    workspace = _native_exam_workspace_path(root, instance)
+    _require_native_exam_directory(
+        root, uid=principals.manager_uid, gid=principals.group_gid, mode=0o700
+    )
+    _require_native_exam_directory(
+        workspace, uid=principals.manager_uid, gid=principals.group_gid, mode=0o770
+    )
+    return workspace
+
+
+def require_native_exam_worker_workspace(
+    root: Path, instance: str, *, principals: NativeExamWorkspacePrincipals
+) -> Path:
+    """systemd owns the nested runtime parent; the exact leaf is the manager's bind mount."""
+    workspace = _native_exam_workspace_path(root, instance)
+    _require_native_exam_directory(root, uid=0, gid=0, mode=0o755)
+    _require_native_exam_directory(
+        workspace, uid=principals.manager_uid, gid=principals.group_gid, mode=0o770
+    )
+    return workspace
 
 
 def read_native_exam_workspace_file(
@@ -212,9 +230,7 @@ class SystemdNativeExamFilePreparer:
         require_native_exam_workspace(
             self.root,
             instance,
-            root_owner_uid=principals.manager_uid,
-            workspace_owner_uid=principals.manager_uid,
-            group_gid=principals.group_gid,
+            principals=principals,
         )
         _write_input(job / "request.json", encoded)
         _write_input(job / "input.native", source_bytes)
@@ -235,9 +251,7 @@ class SystemdNativeExamFilePreparer:
         require_native_exam_workspace(
             self.root,
             instance,
-            root_owner_uid=principals.manager_uid,
-            workspace_owner_uid=principals.manager_uid,
-            group_gid=principals.group_gid,
+            principals=principals,
         )
 
         def read_input(name: str, maximum: int) -> bytes:

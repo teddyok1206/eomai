@@ -135,9 +135,23 @@ def test_untrusted_or_changed_input_is_rejected_before_unit_start(tmp_path, monk
     run.assert_not_called()
 
 
-def staged_worker(tmp_path, request, data):
+def staged_worker(tmp_path, request, data, monkeypatch):
     root = tmp_path / "jobs"
-    root.mkdir(mode=0o700)
+    root.mkdir(mode=0o755)
+    root.chmod(0o755)
+    real_lstat = Path.lstat
+
+    def runtime_metadata(path):
+        observed = real_lstat(path)
+        if path == root:
+            # Real systemd nested RuntimeDirectory parent is root:root0755,
+            # not the leaf's User/Group/0700. No root chown is needed in tests.
+            fields = list(observed)
+            fields[4] = fields[5] = 0
+            return os.stat_result(fields)
+        return observed
+
+    monkeypatch.setattr(Path, "lstat", runtime_metadata)
     job = root / INSTANCE
     job.mkdir(mode=0o770)
     job.chmod(0o770)
@@ -154,7 +168,7 @@ def test_fixed_worker_executes_protected_parser_with_clean_cpu_only_environment(
     tmp_path, monkeypatch
 ):
     data, request, _, payload = case(tmp_path, monkeypatch)
-    root, job = staged_worker(tmp_path, request, data)
+    root, job = staged_worker(tmp_path, request, data, monkeypatch)
     captured = []
 
     def run(arguments, **kwargs):
@@ -187,7 +201,7 @@ def test_fixed_worker_executes_protected_parser_with_clean_cpu_only_environment(
 )
 def test_worker_invalid_local_inputs_never_invoke_parser(tmp_path, monkeypatch, kind):
     data, request, _, _ = case(tmp_path, monkeypatch)
-    root, job = staged_worker(tmp_path, request, data)
+    root, job = staged_worker(tmp_path, request, data, monkeypatch)
     if kind == "hash":
         (job / "input.native").write_bytes(data + b"changed")
     elif kind == "symlink":
@@ -250,3 +264,77 @@ def test_worker_failure_log_is_stable_and_does_not_expose_source_or_diagnostics(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "native_exam_preparer=FAILED code=NATIVE_EXAM_PREPARER_FAILED\n"
+
+
+@pytest.mark.parametrize(
+    "code", ["NATIVE_EXAM_PREPARER_WORKSPACE_INVALID", "NATIVE_EXAM_PREPARATION_SOURCE_CHANGED"]
+)
+def test_worker_reports_only_bounded_native_error_code(monkeypatch, capsys, code):
+    monkeypatch.setenv("EOM_NATIVE_EXAM_TOOL_PYTHON", str(PYTHON))
+    monkeypatch.setattr(worker, "prepare_workspace", Mock(side_effect=ValueError(code)))
+    assert worker.main([INSTANCE]) == 1
+    assert capsys.readouterr().err == f"native_exam_preparer=FAILED code={code}\n"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "NATIVE_/private/path",
+        "NATIVE_X\nsecret",
+        "NATIVE_" + "X" * 120,
+        "OTHER_ERROR",
+        "NATIVE_name",
+    ],
+)
+def test_native_looking_untrusted_diagnostics_are_not_logged(monkeypatch, capsys, value):
+    monkeypatch.setenv("EOM_NATIVE_EXAM_TOOL_PYTHON", str(PYTHON))
+    monkeypatch.setattr(worker, "prepare_workspace", Mock(side_effect=ValueError(value)))
+    assert worker.main([INSTANCE]) == 1
+    assert (
+        capsys.readouterr().err == "native_exam_preparer=FAILED code=NATIVE_EXAM_PREPARER_FAILED\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "change", ["parent_owner", "parent_group", "parent_mode", "leaf_owner", "leaf_mode"]
+)
+def test_runtime_parent_and_bind_leaf_have_different_closed_identities(
+    tmp_path, monkeypatch, change
+):
+    data, request, _, _ = case(tmp_path, monkeypatch)
+    root, job = staged_worker(tmp_path, request, data, monkeypatch)
+    real_lstat = Path.lstat
+
+    def invalid_metadata(path):
+        observed = real_lstat(path)
+        fields = list(observed)
+        if path == root:
+            if change == "parent_owner":
+                fields[4] = 123456
+            elif change == "parent_group":
+                fields[5] = 123456
+            elif change == "parent_mode":
+                fields[0] = (fields[0] & ~0o777) | 0o700
+        elif path == job:
+            if change == "leaf_owner":
+                fields[4] = 123456
+            elif change == "leaf_mode":
+                fields[0] = (fields[0] & ~0o777) | 0o755
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(Path, "lstat", invalid_metadata)
+    run = Mock()
+    with pytest.raises(ValueError, match="WORKSPACE_INVALID"):
+        worker.prepare_workspace(INSTANCE, root=root, python=PYTHON, run=run)
+    run.assert_not_called()
+
+
+def test_catalog_staging_does_not_accept_the_root_owned_runtime_parent_layout(
+    tmp_path, monkeypatch
+):
+    data, request, _, _ = case(tmp_path, monkeypatch)
+    root, _ = staged_worker(tmp_path, request, data, monkeypatch)
+    with pytest.raises(ValueError, match="WORKSPACE_INVALID"):
+        adapter.require_native_exam_workspace(
+            root, INSTANCE, principals=adapter.native_exam_workspace_principals()
+        )
