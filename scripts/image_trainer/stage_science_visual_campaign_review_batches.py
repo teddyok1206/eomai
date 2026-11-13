@@ -24,9 +24,7 @@ from eom_image_contracts import (
 from eom_orchestrator.science_visual_campaign_resolution import (
     ResolvedScienceVisualCampaign,
     ScienceVisualCampaignResolutionError,
-    parse_science_visual_campaign_object,
     resolve_science_visual_campaign,
-    safe_read_science_visual_campaign_member,
 )
 
 WORKSPACE_PARENT = Path("/srv/eom/image-training-workspaces")
@@ -45,14 +43,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--created-by", required=True)
     parser.add_argument("--batch-size", type=int, default=24)
     return parser
-
-
-def _safe_read(path: Path) -> bytes:
-    return safe_read_science_visual_campaign_member(path)
-
-
-def _object(payload: bytes) -> dict[str, object]:
-    return parse_science_visual_campaign_object(payload)
 
 
 def _load_campaign(

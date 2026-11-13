@@ -160,6 +160,11 @@ V2 경로가 담당한다. 호출이 끊긴 V1 private writer는 제거했지만
 schema·공개 모델·조회 검증기는 보존한다. 신규 작성 검사는 V2를, historical 읽기 검사는
 V1 fixture를 직접 검증한다. 버전 이름이 오래됐다는 이유만으로 reader를 삭제하지 않는다.
 
+과학 그림 campaign의 staging은 `resolve_science_visual_campaign` Orchestrator 입력 해석을
+사용한다. stager 안의 호출 없는 파일 읽기/JSON wrapper는 제거했지만, publisher가 실제
+사용하는 reader와 공통 owner의 파일 보호·검증은 유지한다. 두 CLI의 isolated import를
+`test_science_corpus_visual_contracts.py`에서 함께 검증한다.
+
 README는 제품 소개와 핵심 흐름만 유지한다. 기능별 설계·운영 탐색은 `docs/README.md`,
 이전 상세 상태표는 날짜가 붙은 `docs/status/README_CHECKPOINT_2026-11-10.md`로 분리했다.
 각 배포 수치와 진행 상황을 다시 README에 누적하지 않는다.

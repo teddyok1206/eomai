@@ -1900,7 +1900,16 @@ def test_campaign_review_batch_publisher_preflights_exact_command(
     assert json.loads(capsys.readouterr().out)["preflight"] == "PASS"
 
 
-def test_campaign_review_batch_publisher_imports_under_isolated_python() -> None:
+@pytest.mark.parametrize(
+    ("script_name", "expected_option"),
+    (
+        ("publish_science_visual_campaign_review_batch.py", "--preflight-only"),
+        ("stage_science_visual_campaign_review_batches.py", "--batch-size"),
+    ),
+)
+def test_campaign_review_batch_cli_imports_under_isolated_python(
+    script_name: str, expected_option: str
+) -> None:
     bootstrap = (
         "import runpy,sys;"
         "service_root,script=sys.argv[1:3];"
@@ -1915,14 +1924,14 @@ def test_campaign_review_batch_publisher_imports_under_isolated_python() -> None
             "-c",
             bootstrap,
             str(ROOT / "services/orchestrator"),
-            str(ROOT / "scripts/image_trainer/publish_science_visual_campaign_review_batch.py"),
+            str(ROOT / "scripts/image_trainer" / script_name),
         ],
         check=False,
         capture_output=True,
         text=True,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "--preflight-only" in completed.stdout
+    assert expected_option in completed.stdout
 
 
 def test_campaign_review_batch_publisher_preflights_exact_result(
