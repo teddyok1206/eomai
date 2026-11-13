@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-item-split/1.0",
+  "title": "Pinned native exam item ranges and preservation receipt",
+  "oneOf": [{"$ref": "#/$defs/plan"}, {"$ref": "#/$defs/result"}],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "number": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["section_member", "start_paragraph", "end_paragraph", "subtree_sha256"],
+      "properties": {
+        "section_member": {"type": "string", "pattern": "^Contents/section[0-9]+\\.xml$"},
+        "start_paragraph": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "end_paragraph": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "subtree_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_number", "ranges"],
+      "properties": {
+        "item_number": {"$ref": "#/$defs/number"},
+        "ranges": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/range"}}
+      }
+    },
+    "plan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "profile", "source_sha256", "source_role", "items", "plan_sha256"],
+      "properties": {
+        "schema_version": {"const": "native-item-split-plan/1.0"},
+        "profile": {"const": "DIRECT_NATIVE_PARAGRAPHS_V1"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "source_role": {"enum": ["MAIN", "SOLUTIONS"]},
+        "items": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/item"}},
+        "plan_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["paragraphs", "tables", "equations", "pictures"],
+      "properties": {
+        "paragraphs": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "tables": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "equations": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "pictures": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "excludedPart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["member_path", "sha256", "bytes", "reason"],
+      "properties": {
+        "member_path": {"enum": ["Scripts/headerScripts", "Scripts/sourceScripts"]},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 150},
+        "reason": {"const": "EXACT_EMPTY_HANCOM_SCRIPT_TEMPLATE_V1"}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "profile", "source_sha256", "plan_sha256", "source_role", "item_number", "ranges", "paragraph_sha256", "context_sha256", "binary_sha256", "counts", "output_sha256", "output_size_bytes"],
+      "properties": {
+        "schema_version": {"const": "native-item-split-result/1.0"},
+        "profile": {"const": "DIRECT_NATIVE_PARAGRAPHS_V1"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "source_role": {"enum": ["MAIN", "SOLUTIONS"]},
+        "item_number": {"$ref": "#/$defs/number"},
+        "ranges": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/range"}},
+        "paragraph_sha256": {"type": "array", "minItems": 1, "maxItems": 100000, "items": {"$ref": "#/$defs/sha256"}},
+        "context_sha256": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/sha256"}},
+        "binary_sha256": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/sha256"}},
+        "excluded_source_parts": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/excludedPart"}},
+        "counts": {"$ref": "#/$defs/counts"},
+        "output_sha256": {"$ref": "#/$defs/sha256"},
+        "output_size_bytes": {"type": "integer", "minimum": 1, "maximum": 268435456}
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-exam-file-preparation/1.0",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/result"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "numbers": {"type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 10000}},
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "source_commit", "bundle_sha256"],
+      "properties": {
+        "profile": {"const": "HWP2HWPX_NATIVE_V2"},
+        "source_commit": {"const": "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d"},
+        "bundle_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "expected_source_sha256", "source_format", "source_role", "expected_numbers", "converter"],
+      "properties": {
+        "schema_version": {"const": "native-exam-file-preparation-request/1.0"},
+        "expected_source_sha256": {"$ref": "#/$defs/hash"},
+        "source_format": {"enum": ["HWP", "HWPX"]},
+        "source_role": {"enum": ["MAIN", "SOLUTIONS"]},
+        "expected_numbers": {"$ref": "#/$defs/numbers"},
+        "converter": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]}
+      },
+      "allOf": [{"if": {"properties": {"source_format": {"const": "HWP"}}}, "then": {"properties": {"converter": {"$ref": "#/$defs/snapshot"}}}, "else": {"properties": {"converter": {"type": "null"}}}}]
+    },
+    "member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["member_path", "sha256", "bytes", "media_type"],
+      "properties": {
+        "member_path": {"type": "string", "pattern": "^(items/[0-9]{3,5}\\.hwpx|splits/[0-9]{3,5}\\.json|conversion\\.json)$"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "media_type": {"enum": ["application/vnd.hancom.hwpx", "application/json"]}
+      }
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_number", "document", "split_evidence"],
+      "properties": {
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "document": {"$ref": "#/$defs/member"},
+        "split_evidence": {"$ref": "#/$defs/member"}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "profile", "request_sha256", "original_source_sha256", "native_source_sha256", "source_format", "source_role", "expected_numbers", "plan_sha256", "items", "conversion", "materialized_bytes"],
+      "properties": {
+        "schema_version": {"const": "native-exam-file-preparation-result/1.0"},
+        "profile": {"const": "HANCOM_NATIVE_EXAM_FILES_V1"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "original_source_sha256": {"$ref": "#/$defs/hash"},
+        "native_source_sha256": {"$ref": "#/$defs/hash"},
+        "source_format": {"enum": ["HWP", "HWPX"]},
+        "source_role": {"enum": ["MAIN", "SOLUTIONS"]},
+        "expected_numbers": {"$ref": "#/$defs/numbers"},
+        "plan_sha256": {"$ref": "#/$defs/hash"},
+        "items": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/item"}},
+        "conversion": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/member"}]},
+        "materialized_bytes": {"type": "integer", "minimum": 1, "maximum": 524288000}
+      }
+    }
+  }
+}

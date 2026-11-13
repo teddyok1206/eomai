@@ -9,6 +9,7 @@ from pathlib import Path
 
 from eom_hwpx_builder.util import read_stable_local_file, sha256_bytes, sha256_file
 from eom_hwpx_contracts.native_conversion import NativeHwpConverterBundle
+from eom_hwpx_contracts.native_conversion_v2 import NativeHwpConverterBundleV2
 from eom_hwpx_contracts.validation import parse_json_object, validate_contract
 
 ROOT = Path("/srv/eom/vendor/hwp2hwpx")
@@ -20,8 +21,13 @@ def install(source: Path, expected_sha256: str) -> Path:
         raise ValueError("installation requires root and an explicit regular source directory")
     payload = read_stable_local_file(source / "manifest.json", max_bytes=16 * 1024)
     value = parse_json_object(payload)
-    validate_contract("native-hwp-bundle", value)
-    bundle = NativeHwpConverterBundle.model_validate(value)
+    bundle: NativeHwpConverterBundle | NativeHwpConverterBundleV2
+    if value.get("schema_version") == "native-hwp-converter-bundle/2.0":
+        validate_contract("native-hwp-bundle-v2", value)
+        bundle = NativeHwpConverterBundleV2.model_validate(value)
+    else:
+        validate_contract("native-hwp-bundle", value)
+        bundle = NativeHwpConverterBundle.model_validate(value)
     if bundle.bundle_sha256 != expected_sha256 or sha256_file(JAVA) != bundle.java_sha256:
         raise ValueError("installation bundle or Java identity differs")
     ROOT.mkdir(mode=0o755, exist_ok=True)

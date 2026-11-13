@@ -7,16 +7,19 @@ import os
 import re
 import tempfile
 import zipfile
+from collections import Counter
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
 from eom_hwpx_contracts.curated_document import CuratedHwpxWarning
+from eom_hwpx_contracts.native_item_split import NativeItemExcludedSourcePart
 from eom_hwpx_contracts.native_resource_rules import OBJECTS
 from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.analyzer import analyze_package, resolve_part
-from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, SafePackage, read_package
+from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, PackageEntry, SafePackage, read_package
 from eom_hwpx_builder.curated_resources import (
     NativeMergeProfile,
     ObjectRelocation,
@@ -37,6 +40,7 @@ from eom_hwpx_builder.xmlsafe import local_name, parse_xml
 HEADER = "Contents/header.xml"
 CONTENT = "Contents/content.hpf"
 SECTION = re.compile(r"^Contents/section[0-9]+\.xml$")
+MASTERPAGE = re.compile(r"^Contents/masterpage[0-9]+\.xml$")
 GLOBAL_PARTS = frozenset(
     (
         "mimetype",
@@ -68,6 +72,40 @@ class NativeDocument:
     header: etree._Element
     sections: tuple[tuple[str, etree._Element], ...]
     binaries: dict[str, tuple[str, str]]
+    masterpages: tuple[tuple[str, etree._Element], ...] = ()
+    excluded_parts: tuple[NativeItemExcludedSourcePart, ...] = ()
+
+
+class NativeDocumentReadProfile(StrEnum):
+    """Read capability only; the existing merger never opts into split-only source parts."""
+
+    STRICT = "STRICT"
+    NATIVE_SPLIT_V1 = "NATIVE_SPLIT_V1"
+
+
+def _excluded_empty_script_template(
+    entries: dict[str, PackageEntry], profile: NativeDocumentReadProfile
+) -> tuple[NativeItemExcludedSourcePart, ...]:
+    """No JavaScript parsing, normalization or execution: only two reviewed exact byte hashes."""
+    present = {name for name in entries if name.startswith("Scripts/")}
+    expected = ("Scripts/headerScripts", "Scripts/sourceScripts")
+    if not present:
+        return ()
+    if profile != NativeDocumentReadProfile.NATIVE_SPLIT_V1 or present != set(expected):
+        fail("curated package contains an unsupported part")
+    try:
+        return tuple(
+            NativeItemExcludedSourcePart.model_validate(
+                {
+                    "member_path": name,
+                    "sha256": sha256_bytes(entries[name].data),
+                    "bytes": len(entries[name].data),
+                }
+            )
+            for name in expected
+        )
+    except ValueError:
+        fail("native source script is not the exact reviewed empty editor template")
 
 
 @dataclass(frozen=True)
@@ -86,12 +124,23 @@ def _xml(root: etree._Element) -> bytes:
 
 
 def parse_native_document(
-    package: SafePackage, limits: PackageLimits | None = None
+    package: SafePackage,
+    limits: PackageLimits | None = None,
+    *,
+    profile: NativeDocumentReadProfile = NativeDocumentReadProfile.STRICT,
 ) -> NativeDocument:
+    if not isinstance(profile, NativeDocumentReadProfile):
+        fail("native document read profile is unsupported")
     entries = package.by_name()
+    excluded_parts = _excluded_empty_script_template(entries, profile)
+    excluded_members = {part.member_path for part in excluded_parts}
     for name in entries:
         if name not in GLOBAL_PARTS and not (
-            SECTION.fullmatch(name) or name.startswith("BinData/") or name.startswith("Preview/")
+            SECTION.fullmatch(name)
+            or name.startswith("BinData/")
+            or name.startswith("Preview/")
+            or (profile == NativeDocumentReadProfile.NATIVE_SPLIT_V1 and MASTERPAGE.fullmatch(name))
+            or name in excluded_members
         ):
             fail("curated package contains an unsupported part")
     if HEADER not in entries or CONTENT not in entries:
@@ -104,6 +153,7 @@ def parse_native_document(
     manifest, spine = manifests[0], spines[0]
     members: dict[str, str] = {}
     binaries: dict[str, tuple[str, str]] = {}
+    masterpages: dict[str, etree._Element] = {}
     for node in manifest:
         identifier, href = attribute(node, "id"), attribute(node, "href")
         if local_name(node.tag) != "item" or not identifier or not href or identifier in members:
@@ -112,6 +162,19 @@ def parse_native_document(
         if member not in entries:
             fail("curated manifest target is missing")
         members[identifier] = member
+        if member in excluded_members and (
+            attribute(node, "media-type") != "application/x-javascript ;charset=utf-16"
+        ):
+            fail("native empty script template manifest identity is invalid")
+        if MASTERPAGE.fullmatch(member):
+            if profile != NativeDocumentReadProfile.NATIVE_SPLIT_V1:
+                fail("curated manifest contains an unsupported target")
+            if member in masterpages or attribute(node, "media-type") != "application/xml":
+                fail("native master page manifest identity is invalid")
+            root = parse_xml(entries[member].data, member, limits).root
+            if local_name(root.tag) != "masterPage" or attribute(root, "id") != identifier:
+                fail("native master page root identity differs from its manifest")
+            masterpages[member] = root
         if member.startswith("BinData/"):
             media = attribute(node, "media-type")
             if not media or not media.startswith(("image/", "font/", "application/x-font")):
@@ -128,7 +191,7 @@ def parse_native_document(
                 fail("curated spine repeats a section")
             names.add(target)
             sections.append((target, parse_xml(entries[target].data, target, limits).root))
-        elif target != HEADER:
+        elif target != HEADER and target not in excluded_members:
             fail("curated spine contains an unsupported target")
     if not sections:
         fail("curated document has no ordered sections")
@@ -138,8 +201,13 @@ def parse_native_document(
         member for member, _media in binaries.values()
     }:
         fail("curated document has unlisted binary members")
-    if list(members.values()).count(HEADER) != 1:
+    member_counts = Counter(members.values())
+    if member_counts[HEADER] != 1:
         fail("curated manifest must contain exactly one header")
+    if {name for name in entries if MASTERPAGE.fullmatch(name)} != set(masterpages):
+        fail("native document has unlisted master pages")
+    if any(member_counts[name] != 1 for name in excluded_members):
+        fail("native empty script template is not explicitly listed")
     return NativeDocument(
         package,
         content,
@@ -148,6 +216,8 @@ def parse_native_document(
         parse_xml(entries[HEADER].data, HEADER, limits).root,
         tuple(sections),
         binaries,
+        tuple(masterpages.items()),
+        excluded_parts,
     )
 
 

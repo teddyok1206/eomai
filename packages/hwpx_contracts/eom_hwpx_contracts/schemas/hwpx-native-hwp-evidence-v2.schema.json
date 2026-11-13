@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-hwp-evidence/2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_sha256",
+    "candidate_sha256",
+    "section_count",
+    "paragraph_sha256",
+    "table_sha256",
+    "equation_sha256",
+    "binary_sha256",
+    "shape_counts",
+    "masterpage_count",
+    "memo_count",
+    "auxiliary_master_pages",
+    "warnings",
+    "auxiliary_exceptions",
+    "whole_paper_layout"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "native-hwp-conversion-evidence/2.0"
+    },
+    "source_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "candidate_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "section_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "paragraph_sha256": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "$ref": "#/$defs/hash"
+      }
+    },
+    "table_sha256": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/hash"
+      }
+    },
+    "equation_sha256": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/hash"
+      }
+    },
+    "binary_sha256": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/hash"
+      }
+    },
+    "unbound_binary_members": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["member_path", "raw_sha256", "size_bytes"],
+        "properties": {
+          "member_path": {"type": "string", "pattern": "^BinData/BIN[0-9A-Fa-f]{4}\\.[A-Za-z0-9]{1,12}$"},
+          "raw_sha256": {"$ref": "#/$defs/hash"},
+          "size_bytes": {"type": "integer", "minimum": 0, "maximum": 67108864}
+        }
+      }
+    },
+    "shape_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pic",
+        "container",
+        "rect",
+        "ellipse",
+        "arc",
+        "polygon",
+        "curve",
+        "line",
+        "connectLine"
+      ],
+      "properties": {
+        "pic": {
+          "$ref": "#/$defs/count"
+        },
+        "container": {
+          "$ref": "#/$defs/count"
+        },
+        "rect": {
+          "$ref": "#/$defs/count"
+        },
+        "ellipse": {
+          "$ref": "#/$defs/count"
+        },
+        "arc": {
+          "$ref": "#/$defs/count"
+        },
+        "polygon": {
+          "$ref": "#/$defs/count"
+        },
+        "curve": {
+          "$ref": "#/$defs/count"
+        },
+        "line": {
+          "$ref": "#/$defs/count"
+        },
+        "connectLine": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "masterpage_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "memo_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "auxiliary_master_pages": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "member_path",
+          "source_section",
+          "kind",
+          "ordinal",
+          "flags",
+          "width",
+          "height",
+          "raw_record_sha256",
+          "source_start",
+          "source_end"
+        ],
+        "properties": {
+          "member_path": {
+            "type": "string",
+            "pattern": "^Contents/masterpage[0-9]+\\.xml$"
+          },
+          "source_section": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "kind": {
+            "enum": [
+              "LAST",
+              "ANY",
+              "TRAILING"
+            ]
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "flags": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "raw_record_sha256": {
+            "$ref": "#/$defs/hash"
+          },
+          "source_start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 67108864
+          },
+          "source_end": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 67108864
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "AUXILIARY_MASTERPAGE_APPLICATION_UNRESOLVED",
+          "AUXILIARY_MASTERPAGE_FIELD_INVALID",
+          "UNBOUND_BINARY_MEMBERS_RETAINED_IN_SOURCE"
+        ]
+      }
+    },
+    "auxiliary_exceptions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_section",
+          "kind",
+          "ordinal",
+          "flags",
+          "width",
+          "height",
+          "raw_record_sha256",
+          "source_start",
+          "source_end",
+          "code",
+          "paragraph_sha256",
+          "table_sha256",
+          "equation_sha256",
+          "shape_counts"
+        ],
+        "properties": {
+          "source_section": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "kind": {
+            "enum": [
+              "LAST",
+              "ANY",
+              "TRAILING"
+            ]
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "flags": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "raw_record_sha256": {
+            "$ref": "#/$defs/hash"
+          },
+          "source_start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 67108864
+          },
+          "source_end": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 67108864
+          },
+          "code": {
+            "const": "AUXILIARY_MASTERPAGE_FIELD_INVALID"
+          },
+          "paragraph_sha256": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100000,
+            "items": {
+              "$ref": "#/$defs/hash"
+            }
+          },
+          "table_sha256": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "$ref": "#/$defs/hash"
+            }
+          },
+          "equation_sha256": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "$ref": "#/$defs/hash"
+            }
+          },
+          "shape_counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pic",
+              "container",
+              "rect",
+              "ellipse",
+              "arc",
+              "polygon",
+              "curve",
+              "line",
+              "connectLine"
+            ],
+            "properties": {
+              "pic": {
+                "$ref": "#/$defs/count"
+              },
+              "container": {
+                "$ref": "#/$defs/count"
+              },
+              "rect": {
+                "$ref": "#/$defs/count"
+              },
+              "ellipse": {
+                "$ref": "#/$defs/count"
+              },
+              "arc": {
+                "$ref": "#/$defs/count"
+              },
+              "polygon": {
+                "$ref": "#/$defs/count"
+              },
+              "curve": {
+                "$ref": "#/$defs/count"
+              },
+              "line": {
+                "$ref": "#/$defs/count"
+              },
+              "connectLine": {
+                "$ref": "#/$defs/count"
+              }
+            }
+          }
+        }
+      }
+    },
+    "whole_paper_layout": {
+      "const": "NOT_VERIFIED"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    }
+  }
+}

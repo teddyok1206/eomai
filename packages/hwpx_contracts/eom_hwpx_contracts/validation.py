@@ -10,6 +10,8 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 SCHEMA_FILES = {
+    "native-item-split": "hwpx-native-item-split-v1.schema.json",
+    "native-exam-file-preparation": "hwpx-native-exam-file-preparation-v1.schema.json",
     "curated-build-input-v2": "hwpx-curated-build-input-v2.schema.json",
     "curated-render-request-v4": "hwpx-curated-render-v4.schema.json",
     "curated-render-result-v4": "hwpx-curated-render-result-v4.schema.json",
@@ -23,6 +25,9 @@ SCHEMA_FILES = {
     "curated-render-result-v3": "hwpx-curated-render-result-v3.schema.json",
     "native-hwp-evidence": "hwpx-native-hwp-evidence-v1.schema.json",
     "native-hwp-bundle": "hwpx-native-hwp-bundle-v1.schema.json",
+    "native-hwp-evidence-v2": "hwpx-native-hwp-evidence-v2.schema.json",
+    "native-hwp-bundle-v2": "hwpx-native-hwp-bundle-v2.schema.json",
+    "native-hwp-qualified-conversion-v2": "hwpx-native-hwp-qualified-conversion-v2.schema.json",
     "native-item-render-request": "hwpx-native-item-render-request-v1.schema.json",
     "native-item-render-result": "hwpx-native-item-render-result-v1.schema.json",
     "content-team-editorial-question": "hwpx-content-team-editorial-question-v1.schema.json",

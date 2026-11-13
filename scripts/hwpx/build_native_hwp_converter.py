@@ -16,6 +16,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from eom_hwpx_contracts.native_conversion import NativeHwpConverterBundle
+from eom_hwpx_contracts.native_conversion_v2 import NativeHwpConverterBundleV2
 from eom_hwpx_contracts.validation import validate_contract
 
 COMMIT = "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d"
@@ -53,7 +54,11 @@ def download(target: Path, url: str, expected: str, *, max_bytes: int = 16 * 102
         raise ValueError("converter dependency checksum differs")
 
 
-def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
+def build(
+    output: Path, repository: Path, *, profile: str = "V1"
+) -> NativeHwpConverterBundle | NativeHwpConverterBundleV2:
+    if profile not in {"V1", "V2"}:
+        raise ValueError("unsupported native converter build profile")
     if not output.is_absolute() or output.exists() or output.is_symlink():
         raise ValueError("converter build needs a fresh absolute output directory")
     output.mkdir(mode=0o700)
@@ -83,7 +88,18 @@ def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
         raise ValueError("converter Java source set is invalid")
     classes = workspace / "classes"
     classes.mkdir(mode=0o700)
-    wrapper = repository / "services/hwpx_builder/native_hwp/NativeHwpConverter.java"
+    adapter_root = repository / "services/hwpx_builder/native_hwp"
+    adapters = tuple(
+        adapter_root / name
+        for name in (
+            "NativeHwpConverter.java",
+            "NativeHwpReaderV2.java",
+            "NativeHwpConverterV2.java",
+            "NativeHwpWriterV2.java",
+        )
+    )
+    if any(not path.is_file() or path.is_symlink() for path in adapters):
+        raise ValueError("native converter adapter source differs")
     classpath = ":".join(str(output / name) for name in DEPENDENCIES)
     completed = subprocess.run(
         [
@@ -98,7 +114,7 @@ def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
             "UTF-8",
             "-d",
             str(classes),
-            str(wrapper),
+            *(str(path) for path in adapters),
             *(str(path) for path in sources),
         ],
         capture_output=True,
@@ -122,7 +138,9 @@ def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
             info.compress_type = zipfile.ZIP_DEFLATED
             jar.writestr(info, data)
     value = {
-        "schema_version": "native-hwp-converter-bundle/1.0",
+        "schema_version": "native-hwp-converter-bundle/2.0"
+        if profile == "V2"
+        else "native-hwp-converter-bundle/1.0",
         "source_commit": COMMIT,
         "java_sha256": digest(JAVA),
         "files": [
@@ -134,14 +152,34 @@ def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
             for name in ("converter.jar", *DEPENDENCIES)
         ],
     }
+    if profile == "V2":
+        value.update(
+            {
+                "profile": "HWP2HWPX_NATIVE_V2",
+                "entrypoint": "eom.hwpx.NativeHwpConverterV2",
+                "adapter_source_sha256": "sha256:"
+                + hashlib.sha256(
+                    json.dumps(
+                        [(path.name, digest(path)) for path in adapters],
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode()
+                ).hexdigest(),
+            }
+        )
     value["bundle_sha256"] = (
         "sha256:"
         + hashlib.sha256(
             json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
     )
-    validate_contract("native-hwp-bundle", value)
-    bundle = NativeHwpConverterBundle.model_validate(value)
+    validate_contract("native-hwp-bundle-v2" if profile == "V2" else "native-hwp-bundle", value)
+    bundle = (
+        NativeHwpConverterBundleV2.model_validate(value)
+        if profile == "V2"
+        else NativeHwpConverterBundle.model_validate(value)
+    )
     with (output / "manifest.json").open("x", encoding="utf-8") as stream:
         stream.write(
             json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False, sort_keys=True) + "\n"
@@ -153,9 +191,10 @@ def build(output: Path, repository: Path) -> NativeHwpConverterBundle:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--profile", choices=("V1", "V2"), default="V1")
     args = parser.parse_args()
     repository = Path(__file__).resolve().parents[2]
-    bundle = build(args.output, repository)
+    bundle = build(args.output, repository, profile=args.profile)
     print(json.dumps({"status": "BUILT_NOT_INSTALLED", "bundle_sha256": bundle.bundle_sha256}))
 
 
