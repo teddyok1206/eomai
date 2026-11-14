@@ -129,8 +129,11 @@ DELETE/TRUNCATE나 원본 파일 접근 권한을 추가하지 않는다. 접수
 Catalog/application 소유자에 그대로 둔다. 원본 한글 다운로드는 실제 reader의 권한을 확인하는
 기존 Catalog RPC를 쓰며 API가 NAS 파일을 직접 여는 경로를 만들지 않는다.
 
-권한 정책의 변경은 공식 runtime-role reconciler로 반영하고, disposable DB의 실제 제한
-역할로 목록 SQL·metadata lookup과 쓰기 거부를 함께 검증한다. owner DB 역할로만 통과한
+정상 bootstrap은 기존 공식 runtime-role reconciler와 같은 정책을 사용한다. 이미 가동 중인
+설치의 보완은 검증한 SELECT-only 정책 차이만 한 트랜잭션으로 적용하고, 전체 ACL 차이와
+인증 파일 보존을 확인한다. 이를 위해 비밀번호·환경 파일을 다시 만들거나 서비스를
+재설치할 필요는 없다. disposable DB의 실제 제한 역할로 목록 SQL·metadata lookup과
+쓰기 거부를 함께 검증한다. owner DB 역할로만 통과한
 테스트나 READY를 이 증거로 대신하지 않는다. 사용자 인증과 DB service 역할 권한은 다르다.
 목록을 읽지 않거나 오류를 빈 목록으로 숨기는 우회는 선택하지 않는다. 기존 read model을
 새 RPC/registry로 대체하는 것보다 이 작은 SELECT-only 정책 보완이 단순하며, 원래 API의

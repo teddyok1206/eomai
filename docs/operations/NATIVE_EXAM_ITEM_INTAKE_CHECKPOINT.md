@@ -277,3 +277,44 @@ DB 원본 metadata·공개 풀이·공통 Graph를 검증한 뒤 같은 세션�
 처리·임베딩을 완료로 표시하지 않는다. Hancom 자체 육안 검토는 NOT_RECORDED다.
 
 배포 milestone Slack: `devreport_f475d2978462408fb73324545366424f` HTTP200/SAVED.
+
+## 첫 실제 로그인 이후 발견한 API 읽기 권한 누락
+
+2026-11-14 UTC. 첫 입력은 잘못된 비밀번호로 종료됐으며 source 업로드는 없었다. 다음
+실제 `guiadmin` 로그인은 성공했고 기존 actor와 archive에 묶인 18회 checkpoint를 만들었다.
+고유번호 사전 조회의 legacy 32 batch 뒤 `/item-db/materials`에서
+`learning_material_revisions` SELECT 권한 누락으로 API_INTERNAL_ERROR가 발생했다.
+이때도 source 업로드·material run·Item·풀이·Graph 생성은 0이다. 로그인 실패와 구분한다.
+
+기존 API read model의 SQL은 맞지만 runtime privilege 정책이 두 learning material 테이블과
+`item_metadata_snapshots`를 빠뜨렸다. `0c7fa55e99259c83205a034092fab67a9bfffc7a`에 세 테이블의
+SELECT-only 정책과 실제 제한 역할의 회귀를 커밋·push했다. 원본 읽기를 피하거나 빈 목록을
+성공으로 표시하는 우회, 새 Registry/RPC/framework는 추가하지 않았다.
+
+- source 권한/운영 도구 검사 **39 PASS**. 기존 검사에 빠져 있던 실제 testdb mode 네 개는
+  expectation에 반영했다. Ruff/format·관련 source mypy PASS.
+- 새 disposable DB를 공식 준비·0079 migration 왕복·role reconcile 도구로 검증했다.
+  실제 제한 API 역할에서 원래 QueryAdapter 전체 join과 native metadata lookup이 성공하고,
+  세 테이블의 INSERT/UPDATE/DELETE가 실제 거절되며 TRUNCATE 권한도 없음을 확인했다.
+  집중 회귀는 **1 PASS / 133 deselected**이며 전체 suite PASS를 뜻하지 않는다.
+  `staging/native-material-role-db-regression-20261114.log`.
+- 함께 시도한 넓은 기존 suite는 **99 PASS / 34 FAIL / 1 SKIP**였다. 실패는 기존 슬롯/능력
+  snapshot fixture의 준비·관측·고정 버전 기대 등이며 이번 SELECT 정책의 수치로 감추지 않는다.
+  후속 전체 role 파일은 이전 suite의 synthetic 슬롯이 남아 11개/기대 6개인 fixture 1 FAIL,
+  나머지 3 PASS였다. 이 이력은 각각 `...-tests-20261114.log`, `...-focused-20261114.log`에
+  보존했다. 이번 정책의 회귀만 분리해 통과했으며 무관한 슬롯 실행 규칙은 수정하지 않았다.
+- 운영에는 공식 `READ_TABLES`의 정확한 차이인 세 SELECT만 단일 트랜잭션으로 적용했다.
+  전체 table/column ACL과 effective privilege를 대조했고 다른 권한 차이는 없다. 실제 API
+  DB 역할의 read-only join도 PASS다. API/PostgreSQL secret의 bytes·inode·owner·mode·mtime은
+  변경하지 않았으며 비밀번호·schema·패키지·service restart도 변경하지 않았다.
+  보호된 `/var/lib/eom-native-material-read-policy-20261114/completed.json` 및
+  `staging/native-material-api-read-policy-20261114.log`가 증거다. 정책 source는 `0c7fa55e`,
+  설치 API/platform/Web은 기존 `7084bbc4` 그대로다. DB 정책 반영과 wheel 설치를 구분한다.
+- 사용한 임시 DB `/tmp/eom-api-testdb-20261114022029_57ecf85a`는 공식 cleanup으로 제거했다.
+  `staging/native-material-role-db-cleanup-20261114.log`.
+
+인증을 불필요하게 반복하지 않도록 one-off 입력 driver의 read-only 500/502/503/504에 한해
+같은 메모리 세션에서 명시적 `retry-read`를 기다린다. source 업로드/등록의 처리 여부 불명은
+자동 재시도하지 않으며 원래 key/checkpoint를 보존한다. 401도 재로그인 loop로 숨기지 않는다.
+오프라인 4개 검사는 이 경계와 동일 key 재개를 확인했다. 앞서 실패한 실제 입력 프로세스는
+이미 로그아웃했으므로 운영 재검증용 로그인 창을 기존 pane에 새로 준비했다.
