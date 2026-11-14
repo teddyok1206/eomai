@@ -958,3 +958,48 @@ PREPARE(쓰기0)와 RECORD를 수행했다. 원 no-grant/root 실패를 보존�
 보고하지 않는다. b532 묶음 개선과 이 수정이 포함된 명시적 successor SDK를 설치하고
 INDEX 전용 controller delegation과 private Material만 전환한다. 공용 API/Web/Runner51,
 QUERY11d·공통 bootstrap·수치 runtime·기존 receipt·vector는 유지한다.
+
+### 15:12–15:19 UTC: private Material와 INDEX controller 실제 전환
+
+수정 source `0f282cfce4b662e1a03bd030ec7c5eb5750878ba`를 커밋·푸시하고 별도
+wheel/RECORD/import/설치 simulation을 통과했다. 추가 physical-owner 회귀447개와
+context13개·Ruff·mypy가 PASS다. 앞서 기록한 Material disposable89개와 중복 합산하지
+않는다. SDK는 기존 공식 owner installer로 비활성 설치한 뒤 다음 순서로 전환했다.
+
+1. INDEX는 원 실패 invocation/PID0와 공식 Unbound 종료를 대조한 상태에서 기존
+   controller selection의 `prepare → select → verify`를 수행했다. typed
+   `controller_release`와 paired INDEX delegation의 두 환경 pin만0f282로 바꿨다.
+   공통 e042 bootstrap·QUERY·수치 설치는 그대로이며 daemon-reload/DB 쓰기/모델 호출0이다.
+   전환 전 cutoff의 기존 encoding5686개 전체 fingerprint가 전후 일치했다. 이 전역
+   수치는 새 service에 실제 등록된16개와 다른 분모다.
+2. 그 pair를 snapshot한 뒤 private Material의 `prepare → ADMIT → activate → postdeploy`
+   를 수행했다. context1.24 실제 ADMIT과 migration0079 read-only VERIFY만 사용했다.
+   DB migration·공용 API/Web/Runner 배포·Pack/프리셋/인증 변경은 없다.
+3. Material postdeploy PASS 뒤에만 INDEX e99를 별도 정상 시작했다. 수치 SDK와 기존
+   service Identity는 유지한다. 실패한 parent를 성공으로 바꾸거나 재제출하지 않았다.
+
+실제 Material는 source0f282/PID3457862/invocation
+`342a47be204b406598e76e761ebba6ee`다.15:16 관측은 등록 Item6/accepted base6/
+accepted public5/Graph5/완료 QUESTION5이며6번째 public report의 실제 WorkerLease1이다.
+최대25개 publication의 source·DB 검증은 끝났지만, 실제 첫 묶음 publication 완료는
+아직 검증하지 않았으므로 별도로 남긴다.
+
+INDEX는 e99/PID3459297/invocation `7ed210e1e680496989eda44b7e162f4e`다.15:19 관측의
+새 parent `job_de716eb2f5ef41d68452083fa03b30c3`는 수정 controller selection을 사용한
+별도 request `sha256:a2dde33a2ed896925ee30f8bdfd2c7e700dd42666d49c9d535af147120450177`로
+CUDA route/RUNNING까지 진행했다. 원 source snapshot은 같고 원 실패 parent는 FAILED로
+남는다. 이 시점 새 child BOUND/encoding 저장은 아직 완료되지 않았으며16개 기존
+등록을 유지한다. 현재 부모 RUNNING을 계산·저장 PASS로 확대하지 않는다.
+
+release ROOT는 `/var/lib/eom-native-index-fd-budget-release-20261114`와
+`/var/lib/eom-native-question-batch-material-release-20261114`다. 증거는
+`staging/native-pid1-controller-{prepare,select,verify}-20261114.log`,
+`staging/native-question-batch-material-{prepare,admit,activate,postdeploy}-20261114.log`,
+`staging/native-material-after-batch-release-20261114.json`,
+`staging/native-index-after-pid1-release-r2-20261114.json`이다.
+
+전환 직후 첫 INDEX 관측은 구 observer의 controller 기대값e042 때문에 거절됐다.
+서비스 실패로 해석하거나 재시작하지 않고 exact controller0f282/현재 invocation만
+명시한 관측 successor로 확인했다. 기존 service/e99·각 조회 한도·canonical 검사와
+실패 로그를 유지했다.17회차 접수와 실제 인증 사용자 원본 조회는 기존 tmux2번
+`native-exam`의 최초 로그인 입력 대기이며, 전체450 목표는 계속 ACTIVE다.
