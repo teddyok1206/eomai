@@ -21,6 +21,11 @@ from eom_catalog_contracts.material_native_intake import (
     MaterialPreparation,
     MaterialPrepared,
 )
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MATERIAL_NATIVE_VISUAL_PREPARED_REF,
+    MaterialNativeVisualPreparedArtifact,
+    require_native_visual_prepared_base,
+)
 from eom_identifiers import content_sha256
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from sqlalchemy.orm import Session
@@ -127,7 +132,9 @@ def material_prepared_pointer(
         revision_id=revision_id,
         sha256=sha256,
         member="material/prepared.json",
-        permitted_schemas=frozenset({_PREPARED_V1, MATERIAL_NATIVE_PREPARED_REF}),
+        permitted_schemas=frozenset(
+            {_PREPARED_V1, MATERIAL_NATIVE_PREPARED_REF, MATERIAL_NATIVE_VISUAL_PREPARED_REF}
+        ),
     )
 
 
@@ -215,7 +222,38 @@ def read_material_prepared(
             schema_ref=MATERIAL_NATIVE_PREPARED_REF,
             member_path="material/prepared.json",
         )
+    elif pointer.schema_ref == MATERIAL_NATIVE_VISUAL_PREPARED_REF:
+        result = read_material_metadata(
+            artifacts,
+            pointer,
+            MaterialNativeVisualPreparedArtifact,
+            schema_ref=MATERIAL_NATIVE_VISUAL_PREPARED_REF,
+            member_path="material/prepared.json",
+            maximum_bytes=4 * 1024 * 1024,
+        )
+        read_native_visual_prepared_base(artifacts, result, authorize=authorize)
     else:
         raise ValueError("MATERIAL_LEARNING_PREPARED_SCHEMA_UNSUPPORTED")
     authorize()
     return result
+
+
+def read_native_visual_prepared_base(
+    artifacts: CatalogArtifactReader,
+    prepared: MaterialNativeVisualPreparedArtifact,
+    *,
+    authorize: Callable[[], None],
+) -> MaterialNativePreparedArtifact:
+    """Resolve only this exact V2 base, never a recursive visual chain or latest revision."""
+    authorize()
+    base = read_material_metadata(
+        artifacts,
+        prepared.base_prepared,
+        MaterialNativePreparedArtifact,
+        schema_ref=MATERIAL_NATIVE_PREPARED_REF,
+        member_path="material/prepared.json",
+        maximum_bytes=4 * 1024 * 1024,
+    )
+    require_native_visual_prepared_base(prepared, base=base, base_pointer=prepared.base_prepared)
+    authorize()
+    return base

@@ -25,6 +25,7 @@ from eom_workflow_runner.models import WorkflowDefinitionRecord
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine
 
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.material_graph_learning import (
     MaterialAnalysisControls,
     MaterialGraphLearningService,
@@ -34,6 +35,9 @@ from eom_catalog_service.material_learning_coordinator import MaterialLearningCo
 from eom_catalog_service.material_learning_pages import MaterialPagePreparationService
 from eom_catalog_service.material_learning_processing import MaterialLearningProcessingService
 from eom_catalog_service.material_learning_source_projection import MaterialSourceProjectionService
+from eom_catalog_service.material_native_visual_preparation import (
+    MaterialNativeVisualPreparationService,
+)
 from eom_catalog_service.material_office_conversion import CatalogOwnerMaterialOfficeConverter
 from eom_catalog_service.material_pdf_isolation import MaterialPdfSandboxRunner
 from eom_catalog_service.settings import CatalogSettings
@@ -146,6 +150,13 @@ def build_material_learning_runtime(
         {**body, "profile_sha256": content_sha256(body)}
     )
     publisher = ControlFileSetPublisher(engine, platform)
+    native_visuals = MaterialNativeVisualPreparationService(
+        artifacts=CatalogArtifactService(engine, catalog),
+        publisher=publisher,
+        settings=catalog,
+        tool_root=platform.office_image_tool_root,
+        source_commit=platform.runtime_source_commit,
+    )
     preparation = MaterialPagePreparationService(
         engine,
         settings=catalog,
@@ -168,6 +179,7 @@ def build_material_learning_runtime(
         preset=presets[0],
         definition_id=pins.definition_id,
         owner_id="material-owner-" + uuid4().hex,
+        native_visuals=native_visuals,
     )
     processing = MaterialLearningProcessingService(
         coordinator,
@@ -178,6 +190,7 @@ def build_material_learning_runtime(
             publisher=publisher,
             source_commit=platform.runtime_source_commit,
             settings=catalog,
+            native_visuals=native_visuals,
         ),
         graph=MaterialGraphLearningService(
             engine,

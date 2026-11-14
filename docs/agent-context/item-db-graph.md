@@ -323,6 +323,21 @@ Web은 bytes의 media/length/SHA를 검증해 전달하며, 이 원본 다운로
 다른 사용 경로다. GUI/stream 회귀는 `tests/web_gui/test_material_native_items.py`와 기존
 `item_db_browser_checks.mjs`를 본다.
 
+Native 그림 보완의 [prepared3 계약](../../packages/catalog_contracts/eom_catalog_contracts/material_native_visual_preparation.py)은
+exact base prepared2와 원본·PDF·페이지 포인터를 보존하며 Work의 office catalog만 검증한
+V1 후속 revision으로 바꾼다. [그림 범위 계산](../../packages/catalog_contracts/eom_catalog_contracts/material_native_visual_selection.py)은
+문항의 실제 BODY picture use를 whole pixel·view SHA/크기로 유일하게 대응시키며 ZIP의
+전체 binary 목록이나 같은 binary의 모든 use를 허용하지 않는다. 안내 suffix는 권한이
+아니며 SourceAuthorizer는 실제 native bundle/checkpoint와 base 페이지를 재검증한다.
+[Native visual owner](../../services/catalog_service/eom_catalog_service/material_native_visual_preparation.py)는
+등록 시에도 실제 native 문항 파일로 범위를 독립 재계산한다. 공개 worker wire는 그대로다.
+visual recovery는 accepted 결과·Item·분석·Graph pin이 없는 실패 QUESTION을 가진 terminal
+run에 한정하며 성공 task의 기존 pins를 상속한다. 설계는
+[문항별 그림 범위와 geometry 보완](../architecture/NATIVE_EXAM_ITEM_INTAKE.md#문항별-원그림-범위와-정확한-geometry-보완),
+읽기·입력·권한 회귀는 `test_material_native_visual_prepared_read.py`,
+`test_material_native_visual_work.py`, `test_material_native_visual_authorization.py`를 본다.
+이 문맥은 코드 탐색용이며 운영 활성화나 실제 그림 검수의 증거가 아니다.
+
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`

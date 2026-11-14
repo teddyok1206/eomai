@@ -371,3 +371,109 @@ publication하고, 읽기 후 최종 검증 전 source 철회 시 publication/cu
     worker 수를 늘리면 요청한 단일 model lane/사용량을 바꾼다. 반대로 task를 먼저
     완료 처리하거나 임의 SQL로 Graph를 연결하면 실제 membership/claim을 잃는다.
     기존25개 publisher와 기존 대기 상태를 연결하는 것이 필요한 최소 확장이다.
+
+## 내장 EMF 직접 처리 — 진단 실험과 현재 범위에서의 제외
+
+**추가 원본 대조로 아래 실험의 문제 분류를 수정했다.** 실제9번이 선택한 EMF는
+`제4교시` 제목 장식이며, 문항 파일이 참조하는 원그림은 JPEG다. 전체450개 MAIN의
+실제 본문 참조는 raster309개이며 EMF/WMF 참조는0개다. ZIP에 남은 미참조 member를
+본문 그림으로 간주하지 않는다.5개 EMF×2회 직접 PNG 출력은 기술적으로 성공했으나
+요청300dpi가 적용되지 않았으므로 출판 품질 PASS가 아니다. 이번 목표의 선행조건으로
+EMF renderer나 LibreOffice Draw를 추가하지 않는다. 아래는 조사한 후속 경계이며
+현재 구현할 수정은 다음 절의 **문항별 그림 범위와 signed-scale 처리**다.
+
+실제01회9번 추출 실패는 일반 JSON/schema/identity/문항 영역 검사가 아니라
+`OFFICE_VISUAL_USE_UNRESOLVED`다. 해당 실제 use는 존재하고 geometry도 있지만
+`UNSUPPORTED_IMAGE`이며 PNG view가 없다. 원본 한글과 native EMF는 보존돼 있다.
+이를 허용으로 바꾸거나 PDF crop으로 대체하지 않는다. 먼저 이미 설치된 LibreOffice의
+Java UNO GraphicProvider로 **내장 metafile 자체**를 PNG로 내보내는 유한 CPU 실험을 한다.
+실험 성공 전에는 지원·품질·운영 활성화를 주장하지 않는다.
+
+1. 책임/경계: 기존 eom-image Office 추출/격리 도구에 필요한 rasterizer adapter를 붙인다.
+   Orchestrator가 local 결과를 검증·commit한다. AI/worker 간 통신, NAS/DB 접근,
+   외부 API·GPU·새 검색 엔진은 없다. 새 의존성 설치보다 기존 Java/UNO를 먼저 검증한다.
+2. 정본: 승인된 원본 HWP/HWPX와 내장 member bytes다. 원문 문항/해설·metadata·기존
+   Item/report/Graph는 바꾸지 않는다. PDF는 비교/읽기 보조이며 그림의 원본이 아니다.
+3. identity/revision: 구 raster-only V1 bytes/profile/reader는 보존한다. `picture-use-catalog/2.0`은
+   원 catalog1의 exact Artifact pointer와 새 metafile/view만 담는 명시적 보완 계약이다.
+   새 prepared는 base prepared2와 역할별 보완 catalog만 pin한다. ImageSet/Projection/문서/PDF/
+   page bundle을 모두 새 버전으로 만드는 대신 기존 정본을 재사용한다. V1 EMF를 PNG 원본이라고
+   표시하거나 구 catalog의 unsupported 배열을 덮어쓰지 않는다.
+4. pointers: 원 document SHA, 원 storage member SHA와 압축 해제한 EMF SHA를 구분한다.
+   원 형식/byte 길이, renderer/tool/font/DPI profile, whole-derived PNG SHA/dimensions/RGBA
+   pixel SHA를 고정한다. use ID·locator·원 geometry/viewport/flip/rotation·순서는 유지한다.
+5. access: source member의 bounded ordered iteration, hash별 whole render 한 번, use ID의
+   map lookup과 기존 geometry 적용이다. 같은 member의 본문/참고 use를 서로 구별한다.
+   페이지 반쪽·중간점·추정 bbox·그림 재생성으로 원 구성을 바꾸지 않는다.
+6. 구조/규모: 기존 최대512 member/2048 use·개별64MiB·이미지20Mpx/전체100Mpx 한도를
+   유지한다. 보완 descriptor는 원 EMF와 derived PNG를 분리하고, 내부 frozen 해석값에서만
+   원 raster/derived image 및 실제 Artifact pointer의 view를 map으로 결합한다.
+   이미지/보고서 bytes를 DB에 넣지 않고 Artifact pointer/hash와 작은 상태만 저장한다.
+7. 비용: whole-member decode/render는 총 입력/출력 크기에 선형이며 member마다1회다.
+   각각의 실제 use에는 기존 native viewport 변환만 수행한다. V1 raster source의 정확한
+   기존 pixel/PNG 바이트 재사용을 유지하고, 자격 없는 process-wide 권한 cache는 만들지 않는다.
+8. 동시성/격리: 최초에는 member별 fresh private LibreOffice profile/process로 분리한다.
+   기존 sandbox의 network/GPU/NAS/인증 차단과 유한 CPU/메모리/태스크/시간/출력 제한을 쓴다.
+   알려진 GraphicProvider export crash도 해당 작업만 실패하며 live converter를 재사용하지 않는다.
+9. 계층: pure schema/value object에는 subprocess/파일/DB import가 없다. parser/renderer는
+   image infrastructure, source 허가/검증/Artifact commit은 기존 application/Orchestrator 소유다.
+   Python UNO/Draw를 설치하거나 새 서비스부터 만들지 않고 기존 도구 경계를 재사용한다.
+10. 실패/복구: 원 use의 사유가 정확히 `UNSUPPORTED_IMAGE`이고 geometry가 있으며 실제
+    보완 member/view가 일치할 때만 해결한다. 불명확한 geometry/effect/group은 경고로 남기며 빈 PNG나
+    invented geometry를 승격하지 않는다. 원 실패 task/old catalog/prepared Artifact는 안 덮는다.
+    기존 ordinary retry가 구 prepared pointer를 재사용한다는 사실을 반영해, V2를 적용하려면
+    원 source/metadata/discovery/native 파일이 같은 명시적 prepared successor와 기존 성공 task
+    상속 경계가 필요하다. 실패9번만 새 검증된 입력으로 처리하고 성공 문항을 다시 풀지 않는다.
+11. 검증/단순 대안: 첫01-MAIN의5개 EMF를 두 번씩 격리 export해 format/header/상한·pixel
+    결정성·원본 그림의 축/수치/선/글자·native viewport를 비교한다. 요청 DPI가 적용됐다고
+    가정하지 않고 실제 PNG 크기를 검사한다. 작은 native raster의 기술적 성공만으로 출판용
+    선명도를 승인하지 않는다. 성공 뒤 실제 영향 use로
+    범위를 넓힌다. 구 contracts의 단순 enum 확장/이름 변경·unresolved 무시는 출처를 속이며,
+    PDF 캡처는 요청과 다르다. 직접 metafile render+기존 geometry가 필요한 최소 추가 경로다.
+
+JSON Schema2020-12와 Pydantic successor를 production worker 행동보다 먼저 정의한다.
+실험 결과가 부정적이면 원본과 명시적 미지원 상태를 보존하고 대안을 보고하며, 전체450 목표를
+지원되는 일부만으로 조용히 축소하지 않는다. 실험·예상 설계는 운영 활성화 증거가 아니다.
+
+## 문항별 원그림 범위와 정확한 geometry 보완
+
+원01회9번과13번은 해당 문항의 JPEG가 있는데 worker가 전역 catalog의 제목 장식을
+선택해 실패했다. 실제 JPEG의 추가 경계는 양수로만 제한한 diagonal scale 해석이다.
+Q9는 Y 음수, Q13은 X 음수이며 rotation은 identity, 명시 flip은 모두 false다.
+절댓값만 취해 방향을 버리거나 다른 그림으로 대체하지 않는다.
+
+1. 책임/정본: 기존 image parser와 Catalog Native intake/등록 owner가 고친다. 원본 HWP,
+   검증된 문항별 HWPX, split evidence, XLSX와 기존 accepted Item/report/Graph는 유지한다.
+2. revision: geometry는 기존 V1 값의 flip으로 표현할 수 있다. 새 parser로 새 catalog1
+   Artifact를 만들고 기존 catalog/실패 입력은 보존한다. EMF2/ImageSet2/Projection2/Doc2/
+   새 worker wire는 필요 없다. Native prepared3만 base prepared2와 보완 catalog를 연결한다.
+3. pointers: prepared3는 exact base prepared/native bundle/intake와 역할별 base/new catalog,
+   실제 parser/tool profile을 pin한다. source SHA, use ID/locator/native SHA, 원 raster
+   member/pixel SHA·순서를 대조한다. base PDF·페이지·원본·metadata는 바꾸지 않는다.
+4. access/구조: 원 catalog의 `(pixel SHA,width,height)→use` map과 문항별 실제 body picture
+   use의 set을 대조한다. ZIP 전체 member 목록을 허용 집합으로 사용하지 않는다.
+   동일 binary의 여러 use는 전부 허용하지 않고 명시적 모호함으로 남긴다.
+5. 비용/규모: 원 exam은 한 번, 각 문항은 한 번의 bounded metadata/pixel 비교다.
+   기존 최대512 member/2048 use·pixel/byte 상한과 Artifact publication indexed key를
+   재사용한다. 이미지 bytes/허용 목록을 DB 새 열에 복사하지 않고 immutable proof를 참조한다.
+6. geometry: 유한·비영 diagonal S와 quarter-turn R에서 signed scale의 반사를 원 viewport
+   crop 뒤, 기존 회전 전에 적용한다. 양수 scale의 기존 명시 flip 동작은 유지한다.
+   음수 scale과 명시 flip이 함께 있는 모호한 경우, shear·비직교 회전·다중 matrix는 계속 거절한다.
+7. use-case: 새 Native 작업의 안내에는 실제 문항의 허용 use만 deterministic하게 추가한다.
+   이 안내는 권한이 아니다. 등록 owner가 원본/문항 파일과 대조한 동일 범위를 독립 검증하고
+   제목·해설·다른 문항 그림을 거절한다. 기존 저장된 원문 지침 replay는 보존한다.
+8. 계층: Work의 office pointer는 검증한 새 catalog1, page resolver에는 base source를 쓴다.
+   Source authorizer가 task→run→prepared3→base/catalog의 exact 연결과 실제 operator 권한을
+   검증한다. 기존 page-bundle/catalog equality를 전역 완화하지 않는다.
+9. 복구/동시성: 기존 run이 terminal이고 관련 workflow/claim/lease가 없을 때 공식 recovery
+   owner가 revision→run lock 순서로 후속 run을 만든다. 성공 task와 Item/풀이/Graph pins는
+   상속하며 실패 task만 새 입력으로 재시도한다. 같은 command replay/concurrency는 하나의
+   successor이며 old FAILED는 바꾸지 않는다. 실행 중인 첫 회차와 INDEX는 계속 둔다.
+10. 검증: HWP/HWPX 양쪽 Q9/Q13 signed-scale 합성 회귀, corner pixels/viewport/회전,
+    모호한 flag·잘못된 use·빠진 source·hash·source권한·과거 replay를 검사한다. 실제25문항
+    source 대응과 기존 성공 결과도 감사한다. recovery는 disposable DB에서 중단/재전송/
+    동시성을 확인하고 실제 그림 읽기·등록·Graph·임베딩은 별도 운영 증거로 남긴다.
+11. 단순 대안: prompt만 고치면 잘못된 raster 선택을 저장할 수 있고, parser만 고치면
+    제목 장식 선택은 남는다. 반대로 전체 문서/900개 Native 파일을 재생성하거나 여러
+    서비스 schema를 새로 만들 필요는 없다. 기존 geometry·그림 선택·prepared 연결 세 경계를
+    필요한 만큼만 보완한다. 예상 설계와 실제 구현/활성화를 구분한다.

@@ -133,13 +133,10 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     # guessed quarter turn. Admit only diagonal scaling and orthogonal rotation.
     if count != 1:
         return None
-    for index in range(count):
-        scale = matrices[6 + index * 12 : 12 + index * 12]
-        rotate = matrices[12 + index * 12 : 18 + index * 12]
-        if abs(scale[1]) > 1e-7 or abs(scale[3]) > 1e-7 or scale[0] <= 0 or scale[4] <= 0:
-            return None
-        if _rotation_quarter_turn(rotate) != (angle // 90) % 4:
-            return None
+    scale, rotate = matrices[6:12], matrices[12:18]
+    flips = _diagonal_scale_flips(scale, horizontal=bool(flags & 1), vertical=bool(flags & 2))
+    if flips is None or _rotation_quarter_turn(rotate) != (angle // 90) % 4:
+        return None
     points = struct.unpack_from("<8i", picture, 12)
     rectangle_width, rectangle_height = points[2], points[5]
     if points != (0, 0, rectangle_width, 0, rectangle_width, rectangle_height, 0, rectangle_height):
@@ -163,11 +160,28 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
             original_extent=(width, height),
             viewport=viewport,
             clockwise_quarter_turns=(angle // 90) % 4,
-            flip_horizontal=bool(flags & 1),
-            flip_vertical=bool(flags & 2),
+            flip_horizontal=flips[0],
+            flip_vertical=flips[1],
         )
     except ValueError:
         return None
+
+
+def _diagonal_scale_flips(
+    scale: tuple[float, ...], *, horizontal: bool, vertical: bool
+) -> tuple[bool, bool] | None:
+    """Resolve only unambiguous local reflections from an already finite scale.
+
+    R * S applies scale/reflection before rotation. Negative scale with declared
+    flip flags has ambiguous double-reflection semantics, so it remains unresolved
+    rather than guessing XOR. Positive scale keeps the predecessor flags unchanged.
+    """
+    if abs(scale[1]) > 1e-7 or abs(scale[3]) > 1e-7 or scale[0] == 0 or scale[4] == 0:
+        return None
+    negative_x, negative_y = scale[0] < 0, scale[4] < 0
+    if (negative_x or negative_y) and (horizontal or vertical):
+        return None
+    return horizontal or negative_x, vertical or negative_y
 
 
 def _rotation_quarter_turn(matrix: tuple[float, ...]) -> int | None:

@@ -22,7 +22,7 @@ from eom_image_contracts.office_picture_uses import (
 )
 
 from eom_image_provider.office_embedded_images import OfficeEmbeddedImageError
-from eom_image_provider.office_picture_records import _rotation_quarter_turn
+from eom_image_provider.office_picture_records import _diagonal_scale_flips, _rotation_quarter_turn
 
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
 HC = "{http://www.hancom.co.kr/hwpml/2011/core}"
@@ -142,10 +142,6 @@ def _geometry(node: ET.Element) -> OfficePictureGeometry | None:
                 math.isfinite(value) and abs(value) <= 1_000_000_000
                 for value in (*scale, *rotate, *translate)
             )
-            or abs(scale[1]) > 1e-7
-            or abs(scale[3]) > 1e-7
-            or scale[0] <= 0
-            or scale[4] <= 0
             or _rotation_quarter_turn(rotate) != (angle // 90) % 4
             or any(
                 abs(translate[index] - value) > 1e-7
@@ -153,12 +149,19 @@ def _geometry(node: ET.Element) -> OfficePictureGeometry | None:
             )
         ):
             return None
+        orientation = _diagonal_scale_flips(
+            scale,
+            horizontal=_boolean(flips, "horizontal"),
+            vertical=_boolean(flips, "vertical"),
+        )
+        if orientation is None:
+            return None
         return OfficePictureGeometry(
             original_extent=(width, height),
             viewport=viewport,
             clockwise_quarter_turns=(angle // 90) % 4,
-            flip_horizontal=_boolean(flips, "horizontal"),
-            flip_vertical=_boolean(flips, "vertical"),
+            flip_horizontal=orientation[0],
+            flip_vertical=orientation[1],
         )
     except (ValueError, KeyError, OverflowError):
         return None

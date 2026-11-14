@@ -1119,3 +1119,51 @@ ACTIVATE는 네 exact predecessor를 CAS로 전환하고 daemon-reload 뒤 Catal
 모든 task가 terminal일 때 FAILED/COMPLETED_WITH_EXCEPTIONS에서만 허용한다. 따라서 나머지
 문항을 계속 처리한 뒤 공식 successor retry로 실패9번만 다시 처리하며, 성공 문항의 모델/
 Item/Graph를 재생성하거나 PROCESSING row를 직접 고치지 않는다. 전체450 목표는 ACTIVE다.
+## 2026-11-14 18:08 UTC — 문항별 그림 범위 후보, 아직 운영 미반영
+
+이 항목은 후속 **source 후보와 검증 결과**다. 아래 후보를 운영 완료로 읽지 않는다.
+기존 첫 회차/INDEX는 계속 실행했고 API/Web·Material·GPU 수치 runtime을 교체하지 않았다.
+
+### 실제 실패 원인 정정
+
+-01회9번의 `OFFICE_VISUAL_USE_UNRESOLVED`는 필요한 그림의 EMF 미지원으로 확정할 수 없었다.
+  실제 선택은 전역 catalog의 제목 장식이다. 문항별 원본이 참조하는 그림은 `image9.jpg`이며
+  원 HWP `BIN0009.jpg`와 decoded bytes/SHA가 같다.
+- 실제9·13번 그림은 명시 flip=false/rotation0인 signed diagonal scale이다. 기존 parser는
+  음수 배율을 거절했다. 모호한 명시 flip 조합은 계속 거절하며, 표현 가능한 반사만
+  HWP/HWPX 공통 규칙과 기존 GeometryV1의 flip 값으로 해석하는 후보를 추가했다.
+-450개 MAIN fragment의 크기/SHA와 원본18개를 기존 qualification receipt에 대조했다.
+  실제 본문 참조309개는 PNG220/BMP51/JPG38이며 EMF/WMF는0개다. ZIP에 남은 미참조 EMF를
+  문항 그림으로 세지 않는다. `native-main-picture-reference-audit.json`은 ignored staging에 있다.
+- 앞선5개 EMF×2회 native PNG 실험은 결정적으로 출력됐지만 요청300dpi가 적용되지 않았다.
+  이미지 품질 또는 운영 지원 PASS가 아니다. 이번 수정을 위해 Draw/새 renderer를 설치하지 않았다.
+
+### 후보의 제한된 변경
+
+- 한글 원본·900개 native 파일·metadata·문서/PDF/page bundle·성공 Item/풀이/Graph를 보존한다.
+  새 prepared3는 exact base prepared2, 검증된 catalog1 후속 pointer와 문항별 그림 범위를 고정한다.
+  ImageSet2/Projection2/Doc2/worker wire/DB migration을 추가하지 않았다.
+- Native 실제 BODY picture use를 whole pixel·rendered view SHA/크기로 원 source에 유일하게
+  연결한다. 제목/타 문항 그림을 고를 수 없게 안내하고, 등록 직전 실제 native 파일을 다시 읽어
+  독립 검증한다. 안내 문구 자체는 권한이나 검증 근거가 아니다.
+- source authorizer는 실제 task/run의 prepared/base/native bundle과 operator 권한을 대조하고,
+  페이지는 기존 base source로 읽는다. page-bundle/catalog equality를 전역 완화하지 않았다.
+- 원 run이 terminal이고 유효 claim/lease 및 nonterminal history가 없을 때만 공식 복구 owner가
+  후속 run을 만든다. accepted output/Item/분석/Graph가 없는 실패 QUESTION만 새 입력으로
+  처리하고, 완료 task의 exact pins와 원 FAILED 이력은 유지한다.
+
+### 실제 실행한 개발 gate
+
+- Source Material/관련 Office·dependency·개발문맥 unit: **846 PASS**.
+- HWP/HWPX 그림·원본 raster 집중 suite: **125 PASS**.
+- 영향 core15파일 mypy와 Ruff/format, wire schema/mirror/reference audit PASS.
+- Disposable PostgreSQL migration 왕복 및 Material 전체: **93 PASS**. 운영 DB pytest 없음.
+  첫 실행의 실패는 기존 합성 Registry fixture가 새 source 검증 port를 선언하지 않은 것이었다.
+  해당 합성 service instance에만 port를 보완해 재검증했으며 production missing-task/run 거절은
+  유지하고 별도19개 회귀로 검사했다. 첫 실패 로그와 r2 결과는 각각 보존했다.
+- `/tmp/eom-api-testdb-20261114174840_87ed5681`의 guarded DB/역할/비밀 상태 파일을 제거했다.
+  운영 DB·원본·실패 이력·진행 중 작업은 삭제하지 않았다.
+
+남은 gate는 새 CPU 설치본의 실제 원본/25문항 그림 대응, 기존 accepted 결과의 그림 선택 감사,
+Catalog/Material 호환 반영, terminal 뒤9·13번 후속 재시도와 실제 등록/Graph/임베딩 검증이다.
+남은17회차 수락·인증 HTTP 조회도 아직 완료로 선언하지 않는다.

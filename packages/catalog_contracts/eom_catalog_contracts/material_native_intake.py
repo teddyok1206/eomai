@@ -37,6 +37,9 @@ from eom_catalog_contracts.material_native_files import (
     require_material_native_workbook_members,
     require_material_native_workbook_selections,
 )
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeVisualPreparedArtifact,
+)
 from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
 from eom_catalog_contracts.native_exam_intake import NativeExamWorkbookDocument
 from eom_catalog_contracts.validation import validate_contract
@@ -326,7 +329,9 @@ class MaterialNativePreparedArtifact(FrozenModel):
 type MaterialLearningCreate = CreateMaterialLearningCommand | CreateNativeMaterialLearningCommand
 type MaterialIntake = MaterialLearningIntakeManifest | MaterialNativeLearningIntakeManifest
 type MaterialPreparation = MaterialPreparationInput | MaterialNativePreparationInput
-type MaterialPrepared = MaterialPreparedArtifact | MaterialNativePreparedArtifact
+type MaterialPrepared = (
+    MaterialPreparedArtifact | MaterialNativePreparedArtifact | MaterialNativeVisualPreparedArtifact
+)
 
 
 def parse_material_learning_create(value: Mapping[str, object]) -> MaterialLearningCreate:
@@ -361,7 +366,12 @@ def require_native_material_checkpoint_chain(
     expected_pointer = intake_pointer or (checkpoints[0].intake_manifest if checkpoints else None)
     for checkpoint in checkpoints:
         checkpoint_native = isinstance(
-            checkpoint, (MaterialNativePreparationInput, MaterialNativePreparedArtifact)
+            checkpoint,
+            (
+                MaterialNativePreparationInput,
+                MaterialNativePreparedArtifact,
+                MaterialNativeVisualPreparedArtifact,
+            ),
         )
         if (
             checkpoint_native != native
@@ -374,7 +384,12 @@ def require_native_material_checkpoint_chain(
         if (
             isinstance(intake, MaterialNativeLearningIntakeManifest)
             and isinstance(
-                checkpoint, (MaterialNativePreparationInput, MaterialNativePreparedArtifact)
+                checkpoint,
+                (
+                    MaterialNativePreparationInput,
+                    MaterialNativePreparedArtifact,
+                    MaterialNativeVisualPreparedArtifact,
+                ),
             )
             and checkpoint.native_bundle != intake.native_bundle
         ):

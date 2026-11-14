@@ -1,12 +1,24 @@
 """Explicit failed-unit successor over the original immutable source revision."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, uuid5
 
+from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialLearningRights
 from eom_catalog_contracts.material_learning_intake import (
     MaterialLearningRetryResult,
     RetryMaterialLearningRunCommand,
 )
+from eom_catalog_contracts.material_native_intake import (
+    MaterialNativeLearningIntakeManifest,
+    MaterialNativePreparedArtifact,
+    require_native_material_checkpoint_chain,
+)
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeVisualPreparedArtifact,
+    require_native_visual_prepared_base,
+)
+from eom_catalog_contracts.material_native_visual_work import require_material_native_visual_bundle
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import WorkerLeaseRecord
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
@@ -14,6 +26,14 @@ from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.material_intake_read import (
+    material_intake_pointer,
+    material_prepared_pointer,
+    read_material_intake,
+    read_material_prepared,
+)
+from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRecord,
     LearningMaterialRevisionRecord,
@@ -22,9 +42,11 @@ from eom_catalog_service.material_learning_models import (
 )
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceError,
+    MaterialLearningSourceService,
     authorize_material_learning,
 )
 from eom_catalog_service.material_learning_store import append_material_event
+from eom_catalog_service.material_native_resolution import read_material_native_bundle
 from eom_catalog_service.material_task_history import (
     MAX_MATERIAL_ATTEMPTS,
     read_material_task_histories,
@@ -41,17 +63,65 @@ _ARTIFACT_FIELDS = (
     "item_revision_id",
     "graph_snapshot_revision_id",
 )
+_VISUAL_FAILED_OUTPUT_FIELDS = (
+    "output_artifact_id",
+    "output_artifact_revision_id",
+    "output_sha256",
+    "item_revision_id",
+    "analysis_run_id",
+    "solution_analysis_run_id",
+    "graph_snapshot_revision_id",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _NativeVisualPreparedTarget:
+    prepared: MaterialArtifactMember
+    artifacts: CatalogArtifactService
 
 
 def retry_material_learning_run(
     sessions: sessionmaker[Session], command: RetryMaterialLearningRunCommand
 ) -> MaterialLearningRetryResult:
+    return _retry_material_learning_run(sessions, command, target=None)
+
+
+def recover_native_material_visuals(
+    sessions: sessionmaker[Session],
+    command: RetryMaterialLearningRunCommand,
+    *,
+    prepared: MaterialArtifactMember,
+    artifacts: CatalogArtifactService,
+) -> MaterialLearningRetryResult:
+    """Explicitly inherit a qualified visual checkpoint, never ordinary retry's base.
+
+    This internal application action uses the existing retry wire and indexed run
+    history; callers must publish the immutable prepared3 with its owning adapter.
+    """
+    target = _NativeVisualPreparedTarget(
+        MaterialArtifactMember.model_validate(prepared.model_dump(mode="json")), artifacts
+    )
+    return _retry_material_learning_run(sessions, command, target=target)
+
+
+def _retry_material_learning_run(
+    sessions: sessionmaker[Session],
+    command: RetryMaterialLearningRunCommand,
+    *,
+    target: _NativeVisualPreparedTarget | None,
+) -> MaterialLearningRetryResult:
     command = RetryMaterialLearningRunCommand.model_validate(command.model_dump(mode="json"))
+    identity_input = command.model_dump(mode="json")
+    identity_namespace = "eom:material-retry:"
+    if target is not None:
+        identity_namespace = "eom:material-native-visual-retry:"
+        identity_input = {
+            "command": identity_input,
+            "prepared": target.prepared.model_dump(mode="json"),
+        }
     identity = (
         "materialrun_"
-        + uuid5(
-            NAMESPACE_URL, "eom:material-retry:" + content_sha256(command.model_dump(mode="json"))
-        ).hex
+        + uuid5(NAMESPACE_URL, identity_namespace + content_sha256(identity_input)).hex
     )
     with sessions.begin() as session:
         authorize_material_learning(session, command.actor_id)
@@ -91,6 +161,10 @@ def retry_material_learning_run(
             raise MaterialLearningSourceError("MATERIAL_LEARNING_RETRY_PHASE_INVALID")
         if source.prepared_artifact_revision_id is None:
             raise MaterialLearningSourceError("MATERIAL_LEARNING_PREPARATION_RECOVERY_REQUIRED")
+        if target is not None and (
+            source.lease_expires_at is not None and source.lease_expires_at > datetime.now(UTC)
+        ):
+            raise MaterialLearningSourceError("MATERIAL_LEARNING_RECONCILIATION_REQUIRED")
         tasks = tuple(
             session.scalars(
                 select(MaterialLearningTaskRecord)
@@ -99,13 +173,43 @@ def retry_material_learning_run(
             )
         )
         failed = tuple(row for row in tasks if row.state == "FAILED")
+        if target is not None and any(
+            row.task_kind != "QUESTION"
+            or any(getattr(row, field) is not None for field in _VISUAL_FAILED_OUTPUT_FIELDS)
+            for row in failed
+        ):
+            # A changed visual input cannot improve an already accepted result.
+            # Ordinary retry owns partial-result/Item/analysis reuse unchanged.
+            raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_RECOVERY_PHASE_INVALID")
         if not failed or any(row.task_kind == "PREPARE" for row in failed):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_NO_RETRYABLE_TASKS")
         if any(row.state not in _TERMINAL_TASKS for row in tasks):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_RECONCILIATION_REQUIRED")
+        visual = (
+            _native_visual_checkpoint(session, source, revision, command.actor_id, target)
+            if target is not None
+            else None
+        )
         existing = session.get(MaterialLearningRunRecord, identity)
         if existing is not None:
-            if existing.predecessor_run_id != source.run_id:
+            if existing.predecessor_run_id != source.run_id or (
+                target is not None
+                and (
+                    existing.material_revision_id != source.material_revision_id
+                    or existing.created_by != command.actor_id
+                    or existing.attempt != source.attempt + 1
+                    or (
+                        existing.prepared_artifact_id,
+                        existing.prepared_artifact_revision_id,
+                        existing.prepared_sha256,
+                    )
+                    != (
+                        target.prepared.artifact_id,
+                        target.prepared.artifact_revision_id,
+                        target.prepared.sha256,
+                    )
+                )
+            ):
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_RETRY_IDENTITY_INVALID")
             return _result(source, existing, tasks, replayed=True)
         if source.attempt >= MAX_MATERIAL_ATTEMPTS or session.scalar(
@@ -123,15 +227,26 @@ def retry_material_learning_run(
         resumable = tuple(
             row for row in failed if row.task_kind == "QUESTION" and row.output_artifact_revision_id
         )
-        histories = read_material_task_histories(session, resumable)
-        result_owners = {key: history.result_task() for key, history in histories.items()}
+        histories = read_material_task_histories(
+            session, tasks if target is not None else resumable
+        )
+        result_owners = {row.task_id: histories[row.task_id].result_task() for row in resumable}
+        quiescent_tasks = (
+            tuple(row for history in histories.values() for row in history.tasks)
+            if target is not None
+            else failed
+        )
         workflows = _quiescent_failed_workflows(
             session,
-            failed,
+            quiescent_tasks,
             extra_workflows=tuple(
                 row.workflow_id for row in result_owners.values() if row.workflow_id
             ),
         )
+        if target is not None and any(
+            workflow.created_actor_id != command.actor_id for workflow in workflows.values()
+        ):
+            raise MaterialLearningSourceError("MATERIAL_LEARNING_RECONCILIATION_REQUIRED")
         if any(
             row.workflow_id is None
             or workflows.get(row.workflow_id) is None
@@ -157,9 +272,15 @@ def retry_material_learning_run(
             else "DISCOVERING",
             next_event_sequence=1,
             created_by=source.created_by,
-            prepared_artifact_id=source.prepared_artifact_id,
-            prepared_artifact_revision_id=source.prepared_artifact_revision_id,
-            prepared_sha256=source.prepared_sha256,
+            prepared_artifact_id=target.prepared.artifact_id
+            if target is not None
+            else source.prepared_artifact_id,
+            prepared_artifact_revision_id=target.prepared.artifact_revision_id
+            if target is not None
+            else source.prepared_artifact_revision_id,
+            prepared_sha256=target.prepared.sha256
+            if target is not None
+            else source.prepared_sha256,
             created_at=now,
             updated_at=now,
         )
@@ -210,7 +331,110 @@ def retry_material_learning_run(
                 task=row,
             )
         authorize_material_learning(session, command.actor_id)
+        # Reauthorize small checkpoint/source metadata, never re-extract or
+        # republish accepted history. Ordinary retry retains its old boundary.
+        if target is not None and (
+            _native_visual_checkpoint(session, source, revision, command.actor_id, target) != visual
+        ):
+            raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_PREPARED_CHANGED")
         return _result(source, successor, tasks, replayed=False)
+
+
+def _native_visual_checkpoint(
+    session: Session,
+    source: MaterialLearningRunRecord,
+    revision: LearningMaterialRevisionRecord,
+    actor_id: str,
+    target: _NativeVisualPreparedTarget,
+) -> MaterialNativeVisualPreparedArtifact:
+    artifacts = target.artifacts
+    if session.get_bind() is not artifacts.engine:
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_STORAGE_SCOPE_INVALID")
+    material = session.get(LearningMaterialRecord, revision.material_id, populate_existing=True)
+    if (
+        material is None
+        or material.created_by != actor_id
+        or material.lifecycle_state != "ACTIVE"
+        or material.current_revision_id != revision.material_revision_id
+    ):
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_RUN_NOT_FOUND")
+    if (
+        source.prepared_artifact_id is None
+        or source.prepared_artifact_revision_id is None
+        or source.prepared_sha256 is None
+    ):
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_BASE_REQUIRED")
+    base_pointer = material_prepared_pointer(
+        session,
+        artifact_id=source.prepared_artifact_id,
+        revision_id=source.prepared_artifact_revision_id,
+        sha256=source.prepared_sha256,
+    )
+    pointer = material_prepared_pointer(
+        session,
+        artifact_id=target.prepared.artifact_id,
+        revision_id=target.prepared.artifact_revision_id,
+        sha256=target.prepared.sha256,
+    )
+    if pointer != target.prepared:
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_PREPARED_POINTER_INVALID")
+
+    def authorize() -> None:
+        authorize_material_learning(session, actor_id)
+
+    base = read_material_prepared(artifacts, base_pointer, authorize=authorize)
+    prepared = read_material_prepared(artifacts, pointer, authorize=authorize)
+    if not isinstance(base, MaterialNativePreparedArtifact) or not isinstance(
+        prepared, MaterialNativeVisualPreparedArtifact
+    ):
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_BASE_REQUIRED")
+    require_native_visual_prepared_base(prepared, base=base, base_pointer=base_pointer)
+    intake_pointer = material_intake_pointer(
+        session,
+        artifact_id=revision.manifest_artifact_id,
+        revision_id=revision.manifest_artifact_revision_id,
+        sha256=revision.manifest_sha256,
+    )
+    intake = read_material_intake(artifacts, intake_pointer, authorize=authorize)
+    if (
+        not isinstance(intake, MaterialNativeLearningIntakeManifest)
+        or intake.requested_by != actor_id
+        or intake.material_id != revision.material_id
+        or intake.material_revision_id != source.material_revision_id
+    ):
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_INTAKE_REQUIRED")
+    require_native_material_checkpoint_chain(intake, prepared=base, intake_pointer=intake_pointer)
+    bundle = read_material_native_bundle(
+        artifacts,
+        intake.native_bundle,
+        sources=intake.sources,
+        operator_id=actor_id,
+        authorize=authorize,
+    )
+    require_material_native_visual_bundle(prepared, bundle)
+    selected = {entry.source_role: entry.source_upload for entry in intake.sources}
+    if any(entry.original != selected[entry.source_role].original for entry in base.sources):
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_SOURCE_MISMATCH")
+    sources = MaterialLearningSourceService(artifacts.engine, artifacts.settings)
+    for selected_source in intake.sources:
+        sources.resolve(selected_source.source_upload, operator_id=actor_id)
+    rights = read_material_metadata(
+        artifacts,
+        intake.rights_attestation,
+        MaterialLearningRights,
+        schema_ref="eom://schemas/material-learning/rights/1.0",
+        member_path="rights/attestation.json",
+    )
+    if (rights.material_id, rights.material_revision_id, rights.attested_by) != (
+        intake.material_id,
+        intake.material_revision_id,
+        actor_id,
+    ) or rights.source_hashes != tuple(
+        entry.source_upload.original.sha256 for entry in intake.sources
+    ):
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_RIGHTS_MISMATCH")
+    authorize()
+    return prepared
 
 
 def _quiescent_failed_workflows(

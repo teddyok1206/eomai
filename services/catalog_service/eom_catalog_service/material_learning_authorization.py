@@ -3,6 +3,7 @@
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
+    MaterialExtractionWork,
     MaterialLearningRights,
     MaterialLearningWork,
     material_work_schema_ref,
@@ -13,6 +14,16 @@ from eom_catalog_contracts.material_learning_authorization import (
 )
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentRevision,
+)
+from eom_catalog_contracts.material_native_intake import (
+    MaterialNativeLearningIntakeManifest,
+    require_native_material_checkpoint_chain,
+)
+from eom_catalog_contracts.material_native_visual_work import (
+    material_native_question_visual_scope,
+    material_visual_work_instructions,
+    material_visual_work_sources,
+    require_material_native_visual_bundle,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
@@ -49,6 +60,8 @@ from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceService,
     authorize_material_learning,
 )
+from eom_catalog_service.material_native_resolution import read_material_native_bundle
+from eom_catalog_service.material_native_visual_context import read_native_visual_prepared_for_run
 from eom_catalog_service.material_page_source_read import read_material_source_pages
 from eom_catalog_service.settings import CatalogSettings
 
@@ -99,12 +112,45 @@ class CatalogMaterialLearningSourceAuthorizer:
             intake_pointer,
             authorize=lambda: authorize_material_learning(session, operator_id),
         )
+        visual_prepared = read_native_visual_prepared_for_run(
+            session,
+            self.artifacts,
+            run,
+            authorize=lambda: authorize_material_learning(session, operator_id),
+        )
+        expected_instructions = intake.upload.additional_instructions
+        base_sources = {}
+        if visual_prepared is not None:
+            if not isinstance(intake, MaterialNativeLearningIntakeManifest):
+                raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_WORK_SOURCE_MISMATCH")
+            require_native_material_checkpoint_chain(
+                intake, prepared=visual_prepared, intake_pointer=intake_pointer
+            )
+            if work.sources != material_visual_work_sources(visual_prepared):
+                raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_WORK_SOURCE_MISMATCH")
+            bundle = read_material_native_bundle(
+                self.artifacts,
+                visual_prepared.native_bundle,
+                sources=intake.sources,
+                operator_id=operator_id,
+                authorize=lambda: authorize_material_learning(session, operator_id),
+            )
+            require_material_native_visual_bundle(visual_prepared, bundle)
+            base_sources = {source.source_role: source for source in visual_prepared.sources}
+            expected_instructions = material_visual_work_instructions(
+                source_instructions=expected_instructions,
+                scope=material_native_question_visual_scope(
+                    visual_prepared, printed_label=work.question.printed_label
+                )
+                if isinstance(work, MaterialExtractionWork)
+                else None,
+            )
         if (
             intake.requested_by != operator_id
             or intake.material_id != work.material_id
             or intake.material_revision_id != work.material_revision_id
             or intake.rights_attestation != work.rights_attestation
-            or intake.upload.additional_instructions != work.additional_instructions
+            or expected_instructions != work.additional_instructions
         ):
             raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_INPUT_MISMATCH")
         rights = read_material_metadata(
@@ -178,7 +224,7 @@ class CatalogMaterialLearningSourceAuthorizer:
             )
             selected_pages = read_material_source_pages(
                 self.artifacts,
-                source,
+                base_sources.get(source.source_role, source),
                 tuple(sorted(page.physical_page for page in requested_pages)),
             )
             by_page = {resolved.page.physical_page: resolved for resolved in selected_pages.pages}

@@ -134,6 +134,10 @@ def native_registration_case(creative_engine, registration_case, tmp_path, monke
     def factory():
         selected = create()
         selected.native_pack_release_id = pack.content_pack_release_id
+        # The parent fixture substitutes completed AI/source admission and has no
+        # Material run/task rows. This port is synthetic here too: these cases
+        # test Registry commit/replay/metadata, not native visual qualification.
+        monkeypatch.setattr(selected, "_verify_native_visual_scope", lambda *_a, **_k: None)
         return selected
 
     return factory, resolved, binding

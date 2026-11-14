@@ -13,6 +13,14 @@ from eom_catalog_contracts.material_learning import (
     material_work_schema_ref,
 )
 from eom_catalog_contracts.material_native_intake import MaterialIntake, MaterialPrepared
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeQuestionVisualScope,
+)
+from eom_catalog_contracts.material_native_visual_work import (
+    material_native_question_visual_scope,
+    material_visual_work_instructions,
+    material_visual_work_sources,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.material_learning_plan import MaterialDiscoveryWindow, PlannedMaterialUnit
 
@@ -73,7 +81,15 @@ class MaterialLearningWorkService:
             )
         )
         body = {
-            **self._common(task_id, prepared, intake, positions),
+            **self._common(
+                task_id,
+                prepared,
+                intake,
+                positions,
+                native_visual_scope=material_native_question_visual_scope(
+                    prepared, printed_label=question.unit.printed_label
+                ),
+            ),
             "schema_version": "material-learning-extraction-work/1.0",
             "task_kind": "EXTRACT_ITEM",
             "unit_key": question.unit_key,
@@ -88,6 +104,8 @@ class MaterialLearningWorkService:
         prepared: MaterialPrepared,
         intake: MaterialIntake,
         positions: tuple[MaterialPageAddress, ...],
+        *,
+        native_visual_scope: MaterialNativeQuestionVisualScope | None = None,
     ) -> dict[str, object]:
         if (
             not 1 <= len(positions) <= 32
@@ -99,10 +117,15 @@ class MaterialLearningWorkService:
             "material_id": prepared.material_id,
             "material_revision_id": prepared.material_revision_id,
             "task_id": task_id,
-            "sources": [source.model_dump(mode="json") for source in prepared.sources],
+            "sources": [
+                source.model_dump(mode="json") for source in material_visual_work_sources(prepared)
+            ],
             "rights_attestation": intake.rights_attestation.model_dump(mode="json"),
             "pages": [page.model_dump(mode="json") for page in self.pages(prepared, positions)],
-            "additional_instructions": intake.upload.additional_instructions,
+            "additional_instructions": material_visual_work_instructions(
+                source_instructions=intake.upload.additional_instructions,
+                scope=native_visual_scope,
+            ),
         }
 
     def pages(

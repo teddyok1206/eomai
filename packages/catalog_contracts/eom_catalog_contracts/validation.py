@@ -94,6 +94,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:926808ff406e4aadd31ae03b59d4fda9c623645de72f3615e6c5cb2d8d38d06f",
         ),
+        "material-learning-prepared-v3": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-prepared-v3.schema.json",
+            "resources/material-learning/material-learning-prepared-v3.schema.json",
+            "3.0",
+            "sha256:f4cc10d9f600078c505720e71d8a44500c1c01390b175889fa2e18db868c9c40",
+        ),
         "material-native-item-binding-v1": CatalogSchemaResource(
             "schemas/material-learning/native-item-binding-v1.schema.json",
             "resources/material-learning/native-item-binding-v1.schema.json",

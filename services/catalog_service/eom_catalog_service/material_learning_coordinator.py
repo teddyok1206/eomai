@@ -32,6 +32,7 @@ from eom_catalog_contracts.material_native_intake import (
     MaterialNativeExamBundle,
     MaterialNativeLearningIntakeManifest,
     MaterialNativePreparationInput,
+    MaterialNativePreparedArtifact,
     MaterialPreparation,
     MaterialPrepared,
     require_native_material_checkpoint_chain,
@@ -94,6 +95,9 @@ from eom_catalog_service.material_learning_store import (
 )
 from eom_catalog_service.material_learning_work import MaterialLearningWorkService
 from eom_catalog_service.material_native_resolution import read_material_native_bundle
+from eom_catalog_service.material_native_visual_preparation import (
+    MaterialNativeVisualPreparationService,
+)
 from eom_catalog_service.material_task_results import resolve_completed_material_task
 from eom_catalog_service.settings import CatalogSettings
 
@@ -277,6 +281,7 @@ class MaterialLearningCoordinator:
         preset: ExecutionPresetRevision,
         definition_id: str,
         owner_id: str,
+        native_visuals: MaterialNativeVisualPreparationService | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.settings, self.preparation, self.profile = settings, preparation, profile
@@ -284,6 +289,7 @@ class MaterialLearningCoordinator:
         self.artifacts = CatalogArtifactService(engine, settings)
         self.authorizer = CatalogMaterialLearningSourceAuthorizer(engine, settings)
         self.work = MaterialLearningWorkService(self.artifacts, settings)
+        self.native_visuals = native_visuals
         self._plan: MaterialDiscoveryPlan | None = None
         self._windows: tuple[str, Mapping[str, MaterialDiscoveryWindow]] | None = None
 
@@ -469,6 +475,19 @@ class MaterialLearningCoordinator:
             operator_id=intake.requested_by,
             authorize=lambda: self.authorize(claim),
         )
+        if (
+            isinstance(intake, MaterialNativeLearningIntakeManifest)
+            and isinstance(outcome.prepared, MaterialNativePreparedArtifact)
+            and self.native_visuals is not None
+        ):
+            with self.maintain_claim(claim):
+                outcome = self.native_visuals.enrich(
+                    outcome.prepared,
+                    outcome.pointer,
+                    intake=intake,
+                    operator_id=intake.requested_by,
+                    authorize=lambda: self.authorize(claim),
+                )
         require_native_material_checkpoint_chain(
             intake, preparation=work, prepared=outcome.prepared, intake_pointer=intake_pointer
         )

@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/prepared/3.0",
+  "title": "Native material visual preparation over immutable base sources",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-prepared/3.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "intake_manifest": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/material-learning/intake/2.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "bytes": {
+              "maximum": 4194304
+            },
+            "member_path": {
+              "const": "material/intake.json"
+            }
+          }
+        }
+      ]
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sources": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/material-learning/types/1.0#/$defs/preparedSource"
+            },
+            {
+              "properties": {
+                "source_role": {
+                  "const": "MAIN"
+                },
+                "actual_format": {
+                  "enum": [
+                    "HWP",
+                    "HWPX"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/material-learning/types/1.0#/$defs/preparedSource"
+            },
+            {
+              "properties": {
+                "source_role": {
+                  "const": "SOLUTIONS"
+                },
+                "actual_format": {
+                  "enum": [
+                    "HWP",
+                    "HWPX"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "native_bundle": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/material-learning/native-exam-bundle/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "bytes": {
+              "maximum": 4194304
+            }
+          }
+        }
+      ]
+    },
+    "base_prepared": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/material-learning/prepared/2.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "bytes": {
+              "maximum": 4194304
+            },
+            "member_path": {
+              "const": "material/prepared.json"
+            }
+          }
+        }
+      ]
+    },
+    "visual_profile": {
+      "$ref": "#/$defs/visualProfile"
+    },
+    "catalog_supplements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/catalogSupplement"
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "question_visual_scopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/questionScope"
+      },
+      "minItems": 1,
+      "maxItems": 10000
+    },
+    "prepared_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "intake_manifest",
+    "profile_sha256",
+    "sources",
+    "native_bundle",
+    "base_prepared",
+    "visual_profile",
+    "catalog_supplements",
+    "question_visual_scopes",
+    "prepared_sha256"
+  ],
+  "$defs": {
+    "catalogPointer": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/office-picture-use-catalog/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "bytes": {
+              "maximum": 8388608
+            },
+            "member_path": {
+              "const": "picture-use-catalog.json"
+            }
+          }
+        }
+      ]
+    },
+    "catalogSupplement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "base_catalog": {
+          "$ref": "#/$defs/catalogPointer"
+        },
+        "catalog": {
+          "$ref": "#/$defs/catalogPointer"
+        }
+      },
+      "required": [
+        "source_role",
+        "base_catalog",
+        "catalog"
+      ]
+    },
+    "questionDocument": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/material-learning/native-item-document/1.0"
+            },
+            "media_type": {
+              "enum": [
+                "application/vnd.hancom.hwpx",
+                "application/hwp+zip"
+              ]
+            },
+            "bytes": {
+              "maximum": 268435456
+            }
+          }
+        }
+      ]
+    },
+    "splitEvidence": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/hwpx/native-item-split/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "bytes": {
+              "maximum": 4194304
+            }
+          }
+        }
+      ]
+    },
+    "questionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "question_document": {
+          "$ref": "#/$defs/questionDocument"
+        },
+        "split_evidence": {
+          "$ref": "#/$defs/splitEvidence"
+        },
+        "source_catalog_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "allowed_picture_use_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^officeobj_[0-9a-f]{32}$"
+          },
+          "uniqueItems": true,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "item_number",
+        "question_document",
+        "split_evidence",
+        "source_catalog_sha256",
+        "allowed_picture_use_ids"
+      ]
+    },
+    "visualProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "office_tool_source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "parser_implementation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "options_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "profile_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "source_commit",
+        "office_tool_source_commit",
+        "parser_implementation_sha256",
+        "options_sha256",
+        "profile_sha256"
+      ]
+    }
+  }
+}

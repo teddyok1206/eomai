@@ -1,6 +1,7 @@
 """Source-bound uploaded questions registered by the existing Item Registry."""
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,6 +29,10 @@ from eom_catalog_contracts.material_native_files import (
     MaterialNativeItemBinding,
     material_native_registration_key,
 )
+from eom_catalog_contracts.material_native_visual_selection import (
+    validate_material_native_visual_bindings,
+)
+from eom_catalog_contracts.material_native_visual_work import material_native_question_visual_scope
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
 from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog
@@ -50,6 +55,10 @@ from eom_catalog_service.material_learning_artifacts import publish_material_met
 from eom_catalog_service.material_learning_authorization import (
     CatalogMaterialLearningSourceAuthorizer,
 )
+from eom_catalog_service.material_learning_models import (
+    MaterialLearningRunRecord,
+    MaterialLearningTaskRecord,
+)
 from eom_catalog_service.material_native_item_registration import (
     NATIVE_BINDING_MEMBER,
     NATIVE_ITEM_PACK_METADATA_REF,
@@ -59,6 +68,10 @@ from eom_catalog_service.material_native_item_registration import (
     verify_registered_native_material,
 )
 from eom_catalog_service.material_native_resolution import verify_material_native_item_files
+from eom_catalog_service.material_native_visual_context import read_native_visual_prepared_for_run
+from eom_catalog_service.material_native_visual_preparation import (
+    MaterialNativeVisualPreparationService,
+)
 from eom_catalog_service.material_page_source_read import read_material_source_pages
 from eom_catalog_service.material_task_results import (
     ResolvedMaterialTask,
@@ -98,6 +111,7 @@ class MaterialItemRegistrationService:
         publisher: ControlFileSetPublisher,
         source_commit: str,
         settings: CatalogSettings | None = None,
+        native_visuals: MaterialNativeVisualPreparationService | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.settings = settings or CatalogSettings.from_environment()
@@ -108,6 +122,7 @@ class MaterialItemRegistrationService:
         self.registry = RegistryService(engine, self.settings)
         self.sources = CatalogMaterialLearningSourceAuthorizer(engine, self.settings)
         self.pack_resources = PackResourceResolver()
+        self.native_visuals = native_visuals
 
     def _authorize(
         self,
@@ -184,6 +199,7 @@ class MaterialItemRegistrationService:
                     self._authorize(session, resolved, native)
 
             verify_material_native_item_files(self.artifacts, native, authorize=authorize_native)
+            self._verify_native_visual_scope(resolved, native, authorize=authorize_native)
         key = (
             material_native_registration_key(operator_id, native)
             if native is not None
@@ -370,6 +386,49 @@ class MaterialItemRegistrationService:
             media_type=pointer.media_type,
             max_bytes=pointer.bytes,
         )
+
+    def _verify_native_visual_scope(
+        self,
+        resolved: ResolvedMaterialTask,
+        native: MaterialNativeItemBinding,
+        *,
+        authorize: Callable[[], None],
+    ) -> None:
+        """Reject another question/header even if its global picture is otherwise readable."""
+        with self.sessions() as session:
+            task = session.get(MaterialLearningTaskRecord, resolved.task_id)
+            run = session.get(MaterialLearningRunRecord, task.run_id) if task else None
+            if run is None:
+                raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_MISMATCH")
+            prepared = read_native_visual_prepared_for_run(
+                session, self.artifacts, run, authorize=authorize
+            )
+        if prepared is None:
+            return  # Historical V1/V2 inputs are not retrospectively reinterpreted.
+        if self.native_visuals is None or prepared.visual_profile != self.native_visuals.profile:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_PROFILE_STALE")
+        assert isinstance(resolved.work, MaterialExtractionWork)
+        scope = material_native_question_visual_scope(
+            prepared, printed_label=resolved.work.question.printed_label
+        )
+        assert scope is not None
+        source = resolved.work.sources[0]
+        if source.source_role != "MAIN" or source.office_catalog is None:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_MAIN_SOURCE_REQUIRED")
+        catalog = OfficePictureUseCatalog.model_validate_json(self._read(source.office_catalog))
+        actual = self.native_visuals.question_scope(
+            native.question,
+            item_number=native.item_number,
+            catalog=catalog,
+            catalog_pointer=source.office_catalog,
+            authorize=authorize,
+        )
+        if actual != scope:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_QUESTION_SCOPE_MISMATCH")
+        result = resolved.role.output.learning_result
+        assert isinstance(result, MaterialExtractionResult)
+        if result.office_bindings is not None:
+            validate_material_native_visual_bindings(result.office_bindings, scope=scope)
 
     def _prepare_content(self, resolved: ResolvedMaterialTask) -> CreativeSourceContent:
         work, result = resolved.work, resolved.role.output.learning_result

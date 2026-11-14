@@ -24,6 +24,7 @@ from eom_catalog_service.material_intake_read import (
 from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_models import (
+    LearningMaterialRevisionRecord,
     MaterialLearningRunRecord,
     MaterialLearningTaskRecord,
 )
@@ -53,6 +54,15 @@ from tests.integration.test_material_learning_intake_storage import (
     material_intake as material_intake,
 )
 from tests.integration.test_material_learning_page_preparation import InterruptibleExtractor
+from tests.integration.test_material_native_registration_storage import (
+    native_read_case as native_read_case,
+)
+from tests.integration.test_material_native_registration_storage import (
+    native_registration_case as native_registration_case,
+)
+from tests.integration.test_material_native_registration_storage import (
+    registration_case as registration_case,
+)
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
@@ -483,3 +493,318 @@ def test_unprocessable_source_is_terminal_without_blocking_next_material(
     assert advanced.run_id == next_material.run_id and advanced.phase == "PREPARED"
     with Session(creative_engine) as session:
         assert session.get(MaterialLearningRunRecord, accepted.run_id).error_code == code
+
+
+@pytest.fixture
+def native_visual_retry_case(creative_engine, native_read_case):
+    """Real source/rights/Artifacts/Item; preparation and completed AI admission are synthetic."""
+    from eom_catalog_contracts.material_native_intake import MaterialNativePreparedArtifact
+    from eom_catalog_contracts.material_native_visual_preparation import (
+        MaterialNativeVisualPreparedArtifact,
+    )
+    from eom_catalog_service.material_intake_read import (
+        material_intake_pointer,
+        read_material_intake,
+    )
+
+    from tests.unit.test_material_learning_contracts import rehash
+    from tests.unit.test_material_native_visual_preparation import base_prepared, visual_profile
+
+    create, resolved, binding = native_read_case
+    registration = create()
+    artifacts, settings = registration.artifacts, registration.settings
+    item = registration.register_completed(
+        task_id=resolved.task_id, operator_id=resolved.operator_id
+    )
+    with Session(creative_engine) as session:
+        revision = session.get(LearningMaterialRevisionRecord, binding.material_revision_id)
+        intake_pointer = material_intake_pointer(
+            session,
+            artifact_id=revision.manifest_artifact_id,
+            revision_id=revision.manifest_artifact_revision_id,
+            sha256=revision.manifest_sha256,
+        )
+    intake = read_material_intake(artifacts, intake_pointer, authorize=lambda: None)
+    body = base_prepared().model_dump(mode="json")
+    body.update(
+        material_id=binding.material_id,
+        material_revision_id=binding.material_revision_id,
+        intake_manifest=intake_pointer.model_dump(mode="json"),
+        native_bundle=intake.native_bundle.model_dump(mode="json"),
+    )
+    for source, selected in zip(body["sources"], intake.sources, strict=True):
+        source.update(
+            original=selected.source_upload.original.model_dump(mode="json"),
+            actual_format=selected.source_upload.source_format,
+            original_filename=selected.source_upload.original_filename,
+        )
+    # The frozen preparation adapter is explicitly synthetic, as in the existing
+    # native finalization fixture. No live renderer, model or NAS production tree.
+    base = MaterialNativePreparedArtifact.model_validate(rehash(body, "prepared_sha256"))
+    base_pointer = publish_material_metadata(
+        artifacts,
+        settings,
+        base,
+        member_path="material/prepared.json",
+        schema_ref="eom://schemas/material-learning/prepared/2.0",
+        artifact_type="material-learning-prepared",
+        idempotency_key="native-visual-base:" + uuid4().hex,
+    )
+
+    def publish_visual(*, options="3"):
+        profile = visual_profile()
+        profile["options_sha256"] = "sha256:" + options * 64
+        profile = rehash(profile, "profile_sha256")
+        value = base.model_dump(mode="json")
+        catalog = value["sources"][0]["office_catalog"]
+        value.update(
+            schema_version="material-learning-prepared/3.0",
+            base_prepared=base_pointer.model_dump(mode="json"),
+            visual_profile=profile,
+            catalog_supplements=[dict(source_role="MAIN", base_catalog=catalog, catalog=catalog)],
+            question_visual_scopes=[
+                dict(
+                    item_number=binding.item_number,
+                    question_document=binding.question.document.model_dump(mode="json"),
+                    split_evidence=binding.question.split_evidence.model_dump(mode="json"),
+                    source_catalog_sha256=catalog["sha256"],
+                    allowed_picture_use_ids=[],
+                )
+            ],
+        )
+        prepared = MaterialNativeVisualPreparedArtifact.model_validate(
+            rehash(value, "prepared_sha256")
+        )
+        return publish_material_metadata(
+            artifacts,
+            settings,
+            prepared,
+            member_path="material/prepared.json",
+            schema_ref="eom://schemas/material-learning/prepared/3.0",
+            artifact_type="material-learning-prepared",
+            idempotency_key="native-visual-target:" + uuid4().hex,
+        )
+
+    pointer = publish_visual()
+    run_id, prepare_id, failed_id = (
+        "materialrun_" + uuid4().hex,
+        "materialtask_" + uuid4().hex,
+        "materialtask_" + uuid4().hex,
+    )
+    now = datetime.now(UTC)
+    with Session(creative_engine) as session, session.begin():
+        session.add(
+            MaterialLearningRunRecord(
+                run_id=run_id,
+                material_revision_id=binding.material_revision_id,
+                attempt=1,
+                state="COMPLETED_WITH_EXCEPTIONS",
+                next_event_sequence=1,
+                created_by=resolved.operator_id,
+                prepared_artifact_id=base_pointer.artifact_id,
+                prepared_artifact_revision_id=base_pointer.artifact_revision_id,
+                prepared_sha256=base_pointer.sha256,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.flush()
+        session.add_all(
+            [
+                MaterialLearningTaskRecord(
+                    task_id=prepare_id,
+                    run_id=run_id,
+                    task_kind="PREPARE",
+                    unit_key="source-preparation",
+                    ordinal=1,
+                    attempt=1,
+                    state="COMPLETED",
+                    execution_lane="MATERIAL_LEARNING",
+                    output_artifact_id=base_pointer.artifact_id,
+                    output_artifact_revision_id=base_pointer.artifact_revision_id,
+                    output_sha256=base_pointer.sha256,
+                ),
+                MaterialLearningTaskRecord(
+                    task_id=resolved.task_id,
+                    run_id=run_id,
+                    task_kind="QUESTION",
+                    unit_key=resolved.unit_key,
+                    ordinal=2,
+                    attempt=1,
+                    state="COMPLETED",
+                    execution_lane="MATERIAL_LEARNING",
+                    workflow_id=resolved.selection.workflow_id,
+                    input_artifact_id=resolved.work_pointer.artifact_id,
+                    input_artifact_revision_id=resolved.work_pointer.artifact_revision_id,
+                    input_sha256=resolved.work_pointer.sha256,
+                    output_artifact_id=resolved.result_pointer.artifact_id,
+                    output_artifact_revision_id=resolved.result_pointer.artifact_revision_id,
+                    output_sha256=resolved.result_pointer.sha256,
+                    item_revision_id=item.item_revision_id,
+                ),
+                MaterialLearningTaskRecord(
+                    task_id=failed_id,
+                    run_id=run_id,
+                    task_kind="QUESTION",
+                    unit_key="failed-visual-unit",
+                    ordinal=3,
+                    attempt=1,
+                    state="FAILED",
+                    execution_lane="MATERIAL_LEARNING",
+                    error_code="OFFICE_VISUAL_USE_UNRESOLVED",
+                ),
+            ]
+        )
+    command = RetryMaterialLearningRunCommand(
+        actor_id=resolved.operator_id, run_id=run_id, expected_updated_at=now
+    )
+    return SimpleNamespace(
+        artifacts=artifacts,
+        settings=settings,
+        command=command,
+        pointer=pointer,
+        base=base_pointer,
+        source_task=resolved.task_id,
+        failed_task=failed_id,
+        item=item,
+        publish_visual=publish_visual,
+        sessions=artifacts.sessions,
+    )
+
+
+def test_native_visual_recovery_concurrent_replay_preserves_real_item_and_failed_history(
+    creative_engine, native_visual_retry_case
+):
+    case = native_visual_retry_case
+    barrier = Barrier(2)
+
+    def recover(_):
+        barrier.wait(timeout=10)
+        return owner.recover_native_material_visuals(
+            case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(recover, range(2)))
+    assert len({value.run_id for value in results}) == 1
+    assert sum(not value.replayed for value in results) == 1
+    with Session(creative_engine) as session:
+        old = session.get(MaterialLearningRunRecord, case.command.run_id)
+        new = session.get(MaterialLearningRunRecord, results[0].run_id)
+        assert old.prepared_sha256 == case.base.sha256
+        assert old.updated_at == case.command.expected_updated_at
+        assert new.prepared_sha256 == case.pointer.sha256 and new.attempt == 2
+        tasks = tuple(
+            session.scalars(
+                select(MaterialLearningTaskRecord)
+                .where(MaterialLearningTaskRecord.run_id == new.run_id)
+                .order_by(MaterialLearningTaskRecord.ordinal)
+            )
+        )
+        assert [task.state for task in tasks] == ["COMPLETED", "COMPLETED", "PENDING"]
+        assert tasks[1].item_revision_id == case.item.item_revision_id
+        assert tasks[1].predecessor_task_id == case.source_task
+        assert session.get(MaterialLearningTaskRecord, case.failed_task).state == "FAILED"
+        assert (
+            read_material_task_histories(session, tasks)[tasks[1].task_id].result_task().task_id
+            == case.source_task
+        )
+    replay = owner.recover_native_material_visuals(
+        case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+    )
+    assert replay.replayed and replay.run_id == results[0].run_id
+
+
+def test_native_visual_and_ordinary_retry_share_one_revision_capacity(
+    creative_engine, native_visual_retry_case
+):
+    case = native_visual_retry_case
+    barrier = Barrier(2)
+
+    def submit(visual):
+        barrier.wait(timeout=10)
+        try:
+            return (
+                owner.recover_native_material_visuals(
+                    case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+                )
+                if visual
+                else owner.retry_material_learning_run(case.sessions, case.command)
+            )
+        except MaterialLearningSourceError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(submit, (False, True)))
+    assert sum(not isinstance(value, str) for value in results) == 1
+    assert "MATERIAL_LEARNING_RETRY_SUPERSEDED" in results
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.predecessor_run_id == case.command.run_id)
+            )
+            == 1
+        )
+
+
+def test_native_visual_recovery_interruption_rolls_back_and_changed_target_cannot_fork(
+    creative_engine, native_visual_retry_case, monkeypatch
+):
+    case = native_visual_retry_case
+    append = owner.append_material_event
+
+    def interrupt(*args, **kwargs):
+        append(*args, **kwargs)
+        if kwargs["event_type"] == "MATERIAL_TASK_RETRY_CREATED":
+            raise RuntimeError("synthetic visual retry interruption")
+
+    with monkeypatch.context() as context:
+        context.setattr(owner, "append_material_event", interrupt)
+        with pytest.raises(RuntimeError, match="visual retry interruption"):
+            owner.recover_native_material_visuals(
+                case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+            )
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.predecessor_run_id == case.command.run_id)
+            )
+            == 0
+        )
+    result = owner.recover_native_material_visuals(
+        case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+    )
+    changed = case.publish_visual(options="4")
+    with pytest.raises(MaterialLearningSourceError, match="RETRY_SUPERSEDED"):
+        owner.recover_native_material_visuals(
+            case.sessions, case.command, prepared=changed, artifacts=case.artifacts
+        )
+    assert (
+        owner.recover_native_material_visuals(
+            case.sessions, case.command, prepared=case.pointer, artifacts=case.artifacts
+        ).run_id
+        == result.run_id
+    )
+
+
+def test_native_visual_recovery_rejects_old_prepared_as_target_without_successor(
+    creative_engine, native_visual_retry_case
+):
+    case = native_visual_retry_case
+    with pytest.raises(MaterialLearningSourceError, match="VISUAL_BASE_REQUIRED"):
+        owner.recover_native_material_visuals(
+            case.sessions, case.command, prepared=case.base, artifacts=case.artifacts
+        )
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.predecessor_run_id == case.command.run_id)
+            )
+            == 0
+        )
