@@ -1,7 +1,10 @@
 """Explicit failed-unit successor over the original immutable source revision."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import NAMESPACE_URL, uuid5
 
 from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialLearningRights
@@ -52,6 +55,11 @@ from eom_catalog_service.material_task_history import (
     read_material_task_histories,
 )
 
+if TYPE_CHECKING:
+    from eom_catalog_service.material_registered_base_recovery import (
+        MaterialRegisteredBaseRecoveryProof,
+    )
+
 _TERMINAL_TASKS = frozenset({"COMPLETED", "FAILED", "EXCEPTION", "CANCELLED"})
 _ARTIFACT_FIELDS = (
     "input_artifact_id",
@@ -80,6 +88,15 @@ class _NativeVisualPreparedTarget:
     artifacts: CatalogArtifactService
 
 
+@dataclass(frozen=True, slots=True)
+class _NativeReferencePreparedTarget:
+    prepared: MaterialArtifactMember
+    artifacts: CatalogArtifactService
+
+
+type _NativePreparedTarget = _NativeVisualPreparedTarget | _NativeReferencePreparedTarget
+
+
 def retry_material_learning_run(
     sessions: sessionmaker[Session], command: RetryMaterialLearningRunCommand
 ) -> MaterialLearningRetryResult:
@@ -104,17 +121,39 @@ def recover_native_material_visuals(
     return _retry_material_learning_run(sessions, command, target=target)
 
 
+def recover_native_material_references(
+    sessions: sessionmaker[Session],
+    command: RetryMaterialLearningRunCommand,
+    *,
+    prepared: MaterialArtifactMember,
+    artifacts: CatalogArtifactService,
+) -> MaterialLearningRetryResult:
+    """One native successor for visual failures and owner-proven invalid accepted bases.
+
+    Existing extraction/Item pins are inherited, never re-extracted or rewritten.
+    The new task's later Graph owner alone creates its repaired base analysis.
+    """
+    target = _NativeReferencePreparedTarget(
+        MaterialArtifactMember.model_validate(prepared.model_dump(mode="json")), artifacts
+    )
+    return _retry_material_learning_run(sessions, command, target=target)
+
+
 def _retry_material_learning_run(
     sessions: sessionmaker[Session],
     command: RetryMaterialLearningRunCommand,
     *,
-    target: _NativeVisualPreparedTarget | None,
+    target: _NativePreparedTarget | None,
 ) -> MaterialLearningRetryResult:
     command = RetryMaterialLearningRunCommand.model_validate(command.model_dump(mode="json"))
     identity_input = command.model_dump(mode="json")
     identity_namespace = "eom:material-retry:"
     if target is not None:
-        identity_namespace = "eom:material-native-visual-retry:"
+        identity_namespace = (
+            "eom:material-native-reference-retry:"
+            if isinstance(target, _NativeReferencePreparedTarget)
+            else "eom:material-native-visual-retry:"
+        )
         identity_input = {
             "command": identity_input,
             "prepared": target.prepared.model_dump(mode="json"),
@@ -173,7 +212,20 @@ def _retry_material_learning_run(
             )
         )
         failed = tuple(row for row in tasks if row.state == "FAILED")
-        if target is not None and any(
+        reference_tasks = (
+            tuple(
+                row
+                for row in failed
+                if any(getattr(row, field) is not None for field in _VISUAL_FAILED_OUTPUT_FIELDS)
+            )
+            if isinstance(target, _NativeReferencePreparedTarget)
+            else ()
+        )
+        if isinstance(target, _NativeReferencePreparedTarget) and (
+            not reference_tasks or any(row.task_kind != "QUESTION" for row in failed)
+        ):
+            raise MaterialLearningSourceError("MATERIAL_NATIVE_REFERENCE_RECOVERY_PHASE_INVALID")
+        if isinstance(target, _NativeVisualPreparedTarget) and any(
             row.task_kind != "QUESTION"
             or any(getattr(row, field) is not None for field in _VISUAL_FAILED_OUTPUT_FIELDS)
             for row in failed
@@ -189,6 +241,11 @@ def _retry_material_learning_run(
             _native_visual_checkpoint(session, source, revision, command.actor_id, target)
             if target is not None
             else None
+        )
+        references = (
+            _native_reference_proofs(session, reference_tasks, command.actor_id, target.artifacts)
+            if isinstance(target, _NativeReferencePreparedTarget)
+            else ()
         )
         existing = session.get(MaterialLearningRunRecord, identity)
         if existing is not None:
@@ -211,6 +268,13 @@ def _retry_material_learning_run(
                 )
             ):
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_RETRY_IDENTITY_INVALID")
+            if isinstance(target, _NativeReferencePreparedTarget) and (
+                _native_reference_proofs(
+                    session, reference_tasks, command.actor_id, target.artifacts
+                )
+                != references
+            ):
+                raise MaterialLearningSourceError("MATERIAL_NATIVE_REFERENCE_RECOVERY_CHANGED")
             return _result(source, existing, tasks, replayed=True)
         if source.attempt >= MAX_MATERIAL_ATTEMPTS or session.scalar(
             select(MaterialLearningRunRecord.run_id)
@@ -287,7 +351,12 @@ def _retry_material_learning_run(
         session.add(successor)
         session.flush()
         append_material_event(
-            session, successor, event_type="MATERIAL_RETRY_STARTED", prior_state=None
+            session,
+            successor,
+            event_type="MATERIAL_NATIVE_REFERENCE_RETRY_STARTED"
+            if isinstance(target, _NativeReferencePreparedTarget)
+            else "MATERIAL_RETRY_STARTED",
+            prior_state=None,
         )
         copies = []
         for row in tasks:
@@ -337,6 +406,11 @@ def _retry_material_learning_run(
             _native_visual_checkpoint(session, source, revision, command.actor_id, target) != visual
         ):
             raise MaterialLearningSourceError("MATERIAL_NATIVE_VISUAL_PREPARED_CHANGED")
+        if isinstance(target, _NativeReferencePreparedTarget) and (
+            _native_reference_proofs(session, reference_tasks, command.actor_id, target.artifacts)
+            != references
+        ):
+            raise MaterialLearningSourceError("MATERIAL_NATIVE_REFERENCE_RECOVERY_CHANGED")
         return _result(source, successor, tasks, replayed=False)
 
 
@@ -345,7 +419,7 @@ def _native_visual_checkpoint(
     source: MaterialLearningRunRecord,
     revision: LearningMaterialRevisionRecord,
     actor_id: str,
-    target: _NativeVisualPreparedTarget,
+    target: _NativePreparedTarget,
 ) -> MaterialNativeVisualPreparedArtifact:
     artifacts = target.artifacts
     if session.get_bind() is not artifacts.engine:
@@ -435,6 +509,28 @@ def _native_visual_checkpoint(
         raise MaterialLearningSourceError("MATERIAL_LEARNING_RIGHTS_MISMATCH")
     authorize()
     return prepared
+
+
+def _native_reference_proofs(
+    session: Session,
+    tasks: tuple[MaterialLearningTaskRecord, ...],
+    actor_id: str,
+    artifacts: CatalogArtifactService,
+) -> tuple[MaterialRegisteredBaseRecoveryProof, ...]:
+    from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
+
+    analyses = KnowledgeAnalysisApplicationService(artifacts.engine, artifacts.settings)
+    proofs = tuple(
+        analyses.validate_material_base_recovery(session, task_id=row.task_id, operator_id=actor_id)
+        for row in tasks
+    )
+    if any(
+        (proof.task_id, proof.item_revision_id) != (row.task_id, row.item_revision_id)
+        or (row.analysis_run_id is not None and proof.base_analysis_run_id != row.analysis_run_id)
+        for row, proof in zip(tasks, proofs, strict=True)
+    ):
+        raise MaterialLearningSourceError("MATERIAL_NATIVE_REFERENCE_RECOVERY_POINTER_INVALID")
+    return proofs
 
 
 def _quiescent_failed_workflows(

@@ -59,8 +59,15 @@ from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalAp
 from eom_catalog_service.material_learning_authorization import (
     CatalogMaterialLearningSourceAuthorizer,
 )
-from eom_catalog_service.material_learning_models import MaterialLearningTaskRecord
+from eom_catalog_service.material_learning_models import (
+    MaterialLearningEventRecord,
+    MaterialLearningTaskRecord,
+)
 from eom_catalog_service.material_learning_source import authorize_material_learning
+from eom_catalog_service.material_registered_base_recovery import (
+    REGISTERED_BASE_RECOVERY_CODES,
+    CreateMaterialBaseRecoveryCommand,
+)
 from eom_catalog_service.material_task_history import read_material_task_histories
 from eom_catalog_service.material_task_results import resolve_completed_material_task
 from eom_catalog_service.settings import CatalogSettings
@@ -149,6 +156,7 @@ class MaterialGraphLearningService:
                 else None
             )
             predecessor = None
+            base_recovery = None
             if prior is not None:
                 assert previous is not None
                 if (
@@ -157,12 +165,38 @@ class MaterialGraphLearningService:
                 ):
                     raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
                 if (
+                    prior.state == "ACCEPTED"
+                    and previous.task_id != task.task_id
+                    and previous.state == "FAILED"
+                    and previous.error_code in REGISTERED_BASE_RECOVERY_CODES
+                    and session.scalar(
+                        select(MaterialLearningEventRecord.event_id).where(
+                            MaterialLearningEventRecord.run_id == task.run_id,
+                            MaterialLearningEventRecord.sequence == 1,
+                            MaterialLearningEventRecord.event_type
+                            == "MATERIAL_NATIVE_REFERENCE_RETRY_STARTED",
+                        )
+                    )
+                    is not None
+                ):
+                    base_recovery = CreateMaterialBaseRecoveryCommand(
+                        task.task_id, prior.analysis_run_id, operator_id
+                    )
+                elif (
                     prior.state not in {"FAILED", "REJECTED", "CANCELLED"}
                     or previous.task_id == task.task_id
                 ):
                     return self._reconcile(prior.analysis_run_id, operator_id)
                 predecessor = prior.analysis_run_id
-            preset = current_model_preset(session, self.controls.item)
+            if base_recovery is not None:
+                preset = None
+            else:
+                preset = current_model_preset(session, self.controls.item)
+        if base_recovery is not None:
+            return self._advance(
+                self.analyses.create_material_base_recovery(base_recovery), operator_id
+            )
+        assert preset is not None
         run = self.analyses.create_with_pinned_preset(
             CreateKnowledgeAnalysisCommand(
                 source=ApprovedItemKnowledgeAnalysisSelection(

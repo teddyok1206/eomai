@@ -56,6 +56,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisResultV11,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisRiskPolicy,
+    KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV7,
     KnowledgeArtifactMemberPointer,
     KnowledgeProposalArtifactMember,
@@ -87,6 +88,7 @@ from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerLeaseRecord,
 )
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
@@ -136,12 +138,26 @@ from eom_catalog_service.material_knowledge_source import (
     reauthorize_material_document_source,
     resolve_material_document_source,
 )
-from eom_catalog_service.material_learning_models import LearningMaterialRevisionRecord
+from eom_catalog_service.material_learning_models import (
+    LearningMaterialRevisionRecord,
+    MaterialLearningRunRecord,
+    MaterialLearningTaskRecord,
+)
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceError,
     authorize_material_learning,
 )
-from eom_catalog_service.registered_item_solution_base import resolve_registered_item_solution_base
+from eom_catalog_service.material_registered_base_recovery import (
+    REGISTERED_BASE_RECOVERY_CODES,
+    CreateMaterialBaseRecoveryCommand,
+    MaterialRegisteredBaseRecoveryProof,
+    lock_material_base_recovery_target,
+)
+from eom_catalog_service.registered_item_solution_base import (
+    RegisteredItemSolutionReferenceError,
+    resolve_registered_item_solution_base,
+    validate_registered_item_solution_proposal,
+)
 from eom_catalog_service.settings import CatalogSettings
 
 KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION = "1.0.0"
@@ -737,6 +753,201 @@ class KnowledgeAnalysisApplicationService:
         return self._create(
             command,
             pinned_preset=(preset_id, preset_revision_id),
+        )
+
+    def validate_material_base_recovery(
+        self, session: Session, *, task_id: str, operator_id: str
+    ) -> MaterialRegisteredBaseRecoveryProof:
+        """Reproduce only a model-reference defect over intact accepted evidence."""
+        from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
+        from eom_catalog_service.material_learning_authorization import (
+            CatalogMaterialLearningSourceAuthorizer,
+        )
+        from eom_catalog_service.material_task_history import read_material_task_histories
+        from eom_catalog_service.material_task_results import resolve_completed_material_task
+
+        authorize_material_learning(session, operator_id)
+        if session.get_bind() is not self.artifacts.engine:
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_STORAGE_INVALID")
+        task = session.get(MaterialLearningTaskRecord, task_id, populate_existing=True)
+        parent = session.get(MaterialLearningRunRecord, task.run_id) if task else None
+        if (
+            task is None
+            or parent is None
+            or parent.created_by != operator_id
+            or parent.state not in {"FAILED", "COMPLETED_WITH_EXCEPTIONS"}
+            or (parent.lease_expires_at is not None and parent.lease_expires_at > datetime.now(UTC))
+            or task.state != "FAILED"
+            or task.task_kind != "QUESTION"
+            or task.error_code not in REGISTERED_BASE_RECOVERY_CODES
+            or task.item_revision_id is None
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_PHASE_INVALID")
+        history = read_material_task_histories(session, (task,))[task_id]
+        base_owner = history.analysis_owner()
+        if (
+            base_owner is None
+            or base_owner.analysis_run_id is None
+            or any(
+                row.solution_analysis_run_id is not None
+                or row.graph_snapshot_revision_id is not None
+                for row in history.tasks
+            )
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_PUBLISHED")
+        base = session.get(KnowledgeAnalysisRunRecord, base_owner.analysis_run_id)
+        if (
+            base is None
+            or base.state != "ACCEPTED"
+            or base.created_by_operator_id != operator_id
+            or base.item_revision_id != task.item_revision_id
+            or base.accepted_result_artifact_id is None
+            or base.accepted_result_artifact_revision_id is None
+            or base.accepted_result_sha256 is None
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_BASE_INVALID")
+        request = KnowledgeAnalysisRequestV2.model_validate(base.canonical_request)
+        if (
+            request.request_sha256 != base.request_sha256
+            or request.source.source_class != "APPROVED_ITEM"
+            or request.source.item_revision_id != task.item_revision_id
+            or request.execution_preset_id != base.preset_id
+            or request.execution_preset_revision_id != base.preset_revision_id
+            or request.risk_policy_revision_id != base.risk_policy_revision_id
+            or resolve_approved_item_source(
+                session,
+                artifacts=self.artifacts,
+                item_revision_id=task.item_revision_id,
+                source_class="APPROVED_ITEM",
+            )
+            != request.source
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_SOURCE_CHANGED")
+        _logical, preset = self.pinned_preset(
+            session,
+            preset_key="material-item-analysis",
+            preset_id=base.preset_id,
+            preset_revision_id=base.preset_revision_id,
+        )
+        if (
+            preset.content_sha256 != request.execution_preset_sha256
+            or self.risk_policy(session, base.risk_policy_revision_id).content_sha256
+            != base.risk_policy_sha256
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_POLICY_CHANGED")
+        resolved = resolve_completed_material_task(
+            session, self.artifacts, task_id=task_id, operator_id=operator_id
+        )
+        CatalogMaterialLearningSourceAuthorizer(self.artifacts.engine, self.settings).reauthorize(
+            session, operator_id=operator_id, work=resolved.work
+        )
+        workflow_ids = {
+            base.workflow_id,
+            *(row.workflow_id for row in history.tasks if row.workflow_id),
+        }
+        workflows = tuple(
+            session.scalars(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.workflow_id.in_(workflow_ids)
+                )
+            )
+        )
+        if (
+            {row.workflow_id for row in workflows} != workflow_ids
+            or any(
+                row.state != "COMPLETED" or row.created_actor_id != operator_id for row in workflows
+            )
+            or session.scalar(
+                select(WorkerLeaseRecord.lease_id)
+                .where(
+                    WorkerLeaseRecord.workflow_id.in_(workflow_ids),
+                    WorkerLeaseRecord.state.in_({"ACTIVE", "RECONCILING"}),
+                )
+                .limit(1)
+            )
+            is not None
+            or session.scalar(
+                select(KnowledgeSnapshotAnalysisRecord.snapshot_analysis_id)
+                .where(
+                    KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeSnapshotAnalysisRecord.source_revision_id == task.item_revision_id,
+                    KnowledgeSnapshotAnalysisRecord.analysis_run_id == base.analysis_run_id,
+                )
+                .limit(1)
+            )
+            is not None
+            or session.scalar(
+                select(KnowledgeAnalysisRunRecord.analysis_run_id)
+                .where(
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id == base.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.canonical_request["schema_version"].as_string()
+                    == "knowledge-analysis-request/11.0",
+                    KnowledgeAnalysisRunRecord.state.not_in({"FAILED", "REJECTED", "CANCELLED"}),
+                )
+                .limit(1)
+            )
+            is not None
+        ):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_NOT_QUIESCENT")
+        receipt = self._stored_receipt(session, base)
+        if not isinstance(receipt, KnowledgeAnalysisProposalReceipt):
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_RECEIPT_INVALID")
+        pointer = self._proposal_receipt_pointer(session, base)
+        try:
+            resolve_registered_item_solution_base(
+                session,
+                self.artifacts,
+                run=base,
+                request=request,
+                receipt=receipt,
+                receipt_pointer=pointer,
+            )
+        except RegisteredItemSolutionReferenceError as error:
+            if error.code != task.error_code:
+                raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_DIAGNOSIS_CHANGED") from error
+        else:
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_NOT_REQUIRED")
+        authorize_material_learning(session, operator_id)
+        return MaterialRegisteredBaseRecoveryProof(
+            task.task_id,
+            task.item_revision_id,
+            base.analysis_run_id,
+            request,
+            base.accepted_result_artifact_id,
+            base.accepted_result_artifact_revision_id,
+            base.accepted_result_sha256,
+            pointer,
+            task.error_code,
+        )
+
+    def create_material_base_recovery(
+        self, command: CreateMaterialBaseRecoveryCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Only an explicit linked Material task can replace an unusable accepted base."""
+        with self.sessions() as session:
+            _task, _run, previous = lock_material_base_recovery_target(session, command)
+            proof = self.validate_material_base_recovery(
+                session, task_id=previous.task_id, operator_id=command.operator_id
+            )
+        if proof.base_analysis_run_id != command.predecessor_analysis_run_id:
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_PREDECESSOR_CHANGED")
+        return self._create(
+            CreateKnowledgeAnalysisCommand(
+                source=ApprovedItemKnowledgeAnalysisSelection(
+                    source_class="APPROVED_ITEM", item_revision_id=proof.item_revision_id
+                ),
+                preset_key="material-item-analysis",
+                general_knowledge_mode=proof.request.general_knowledge_mode,
+                risk_policy_revision_id=proof.request.risk_policy_revision_id,
+                predecessor_analysis_run_id=proof.base_analysis_run_id,
+                requested_by=command.operator_id,
+                idempotency_key="material-base-recovery:" + command.task_id,
+            ),
+            pinned_preset=(
+                proof.request.execution_preset_id,
+                proof.request.execution_preset_revision_id,
+            ),
+            material_recovery=command,
         )
 
     def resolve_retry(
@@ -1342,11 +1553,47 @@ class KnowledgeAnalysisApplicationService:
         command: CreateKnowledgeAnalysisCommand | CreateMaterialKnowledgeAnalysisCommand,
         *,
         pinned_preset: tuple[str, str] | None,
+        material_recovery: CreateMaterialBaseRecoveryCommand | None = None,
     ) -> KnowledgeAnalysisApplicationResult:
         submission = command.model_dump(mode="json", exclude={"operation", "idempotency_key"})
         submission_sha256 = content_sha256(submission)
         try:
             with transaction(self.sessions) as session:
+                recovery_task = None
+                recovery_parent = None
+                recovery_proof = None
+                if material_recovery is not None:
+                    recovery_task, recovery_parent, previous_task = (
+                        lock_material_base_recovery_target(session, material_recovery)
+                    )
+                    recovery_proof = self.validate_material_base_recovery(
+                        session,
+                        task_id=previous_task.task_id,
+                        operator_id=material_recovery.operator_id,
+                    )
+                    if (
+                        command.requested_by != material_recovery.operator_id
+                        or command.predecessor_analysis_run_id
+                        != recovery_proof.base_analysis_run_id
+                        or material_recovery.predecessor_analysis_run_id
+                        != recovery_proof.base_analysis_run_id
+                        or not isinstance(command.source, ApprovedItemKnowledgeAnalysisSelection)
+                        or command.source.item_revision_id != recovery_proof.item_revision_id
+                        or command.source.source_class != "APPROVED_ITEM"
+                        or command.preset_key != "material-item-analysis"
+                        or command.general_knowledge_mode
+                        != recovery_proof.request.general_knowledge_mode
+                        or command.risk_policy_revision_id
+                        != recovery_proof.request.risk_policy_revision_id
+                        or pinned_preset
+                        != (
+                            recovery_proof.request.execution_preset_id,
+                            recovery_proof.request.execution_preset_revision_id,
+                        )
+                        or command.idempotency_key
+                        != "material-base-recovery:" + recovery_task.task_id
+                    ):
+                        raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_COMMAND_CHANGED")
                 uploaded_source = None
                 if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
                     authorize_material_learning(session, command.requested_by)
@@ -1377,6 +1624,11 @@ class KnowledgeAnalysisApplicationService:
                             "KNOWLEDGE_ANALYSIS_IDEMPOTENCY_CONFLICT",
                             "knowledge analysis idempotency key has different input",
                         )
+                    if (
+                        recovery_task is not None
+                        and recovery_task.analysis_run_id != existing.analysis_run_id
+                    ):
+                        raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_BINDING_CHANGED")
                     if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
                         from eom_catalog_service.material_knowledge_task_binding import (
                             bind_material_knowledge_analysis,
@@ -1393,7 +1645,18 @@ class KnowledgeAnalysisApplicationService:
                     return self._projection(existing)
 
                 source = uploaded_source or self._resolve_source(session, command)
-                predecessor = self.retry_predecessor(session, command, source)
+                if recovery_proof is None:
+                    predecessor = self.retry_predecessor(session, command, source)
+                else:
+                    predecessor = session.get(
+                        KnowledgeAnalysisRunRecord, recovery_proof.base_analysis_run_id
+                    )
+                    if (
+                        recovery_task is None
+                        or recovery_task.analysis_run_id is not None
+                        or source != recovery_proof.request.source
+                    ):
+                        raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_BINDING_CHANGED")
                 policy = self.risk_policy(session, command.risk_policy_revision_id)
                 if pinned_preset is not None:
                     preset_logical, preset_revision = self.pinned_preset(
@@ -1736,6 +1999,28 @@ class KnowledgeAnalysisApplicationService:
                 )
                 session.add(run)
                 session.flush()
+                if recovery_task is not None:
+                    from eom_catalog_service.material_learning_store import append_material_event
+
+                    assert recovery_parent is not None and recovery_proof is not None
+                    if (
+                        self.validate_material_base_recovery(
+                            session,
+                            task_id=recovery_proof.task_id,
+                            operator_id=command.requested_by,
+                        )
+                        != recovery_proof
+                    ):
+                        raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_PROOF_CHANGED")
+                    recovery_task.analysis_run_id = run.analysis_run_id
+                    append_material_event(
+                        session,
+                        recovery_parent,
+                        task=recovery_task,
+                        event_type="MATERIAL_REGISTERED_BASE_RECOVERY_CREATED",
+                        prior_state=recovery_task.state,
+                        error_code=recovery_proof.failure_code,
+                    )
                 if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
                     from eom_catalog_service.material_knowledge_task_binding import (
                         bind_material_knowledge_analysis,
@@ -1761,6 +2046,17 @@ class KnowledgeAnalysisApplicationService:
                         payload={
                             "request_sha256": request.request_sha256,
                             "predecessor_analysis_run_id": command.predecessor_analysis_run_id,
+                            **(
+                                {
+                                    "material_base_recovery_task_id": recovery_task.task_id,
+                                    "accepted_base_result_sha256": (
+                                        recovery_proof.accepted_result_sha256
+                                    ),
+                                    "reference_failure_code": recovery_proof.failure_code,
+                                }
+                                if recovery_task is not None and recovery_proof is not None
+                                else {}
+                            ),
                         },
                     )
                 )
@@ -2218,6 +2514,7 @@ class KnowledgeAnalysisApplicationService:
         actor_id: str,
         auto_policy_review_override: bool = False,
     ) -> KnowledgeAnalysisApplicationResult:
+        reference_failure: RegisteredItemSolutionReferenceError | None = None
         with self.sessions() as session:
             run = session.get(KnowledgeAnalysisRunRecord, run_id)
             if run is None:
@@ -2241,6 +2538,28 @@ class KnowledgeAnalysisApplicationService:
             request = _analysis_request(run.canonical_request)
             receipt = self._stored_receipt(session, run)
             proposal_receipt_pointer = self._proposal_receipt_pointer(session, run)
+            if (
+                isinstance(request, KnowledgeAnalysisRequestV2)
+                and request.source.source_class == "APPROVED_ITEM"
+            ):
+                if not isinstance(receipt, KnowledgeAnalysisProposalReceipt):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_POINTER_INVALID",
+                        "registered Item base proposal receipt family differs",
+                    )
+                proposal = resolve_knowledge_analysis_proposal(self.artifacts, receipt)
+                if not isinstance(proposal, KnowledgeAnalysisWorkerProposal):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_PROPOSAL_INVALID",
+                        "registered Item base proposal family differs",
+                    )
+                try:
+                    validate_registered_item_solution_proposal(
+                        self.artifacts, request=request, proposal=proposal
+                    )
+                except RegisteredItemSolutionReferenceError as error:
+                    reference_failure = error
+                reference_version = run.lock_version
             if isinstance(request, KnowledgeAnalysisRequestV12):
                 self._reauthorize_material_source(session, request, run.created_by_operator_id)
             policy = self.risk_policy(session, run.risk_policy_revision_id)
@@ -2275,6 +2594,20 @@ class KnowledgeAnalysisApplicationService:
                         "knowledge analysis approval pointer is inconsistent",
                     )
                 accepted_at = review.decided_at
+        if reference_failure is not None:
+            with transaction(self.sessions) as session:
+                current = self._locked_run(session, run_id)
+                if (
+                    current.state not in allowed_states
+                    or current.lock_version != reference_version
+                    or current.request_sha256 != run.request_sha256
+                    or current.proposal_content_set_sha256 != receipt.content_set_sha256
+                ):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_CONCURRENCY_CONFLICT",
+                        "registered Item pre-acceptance validation state changed",
+                    )
+                return self._fail(session, current, reference_failure.code, actor_id)
         stable_result_seed = content_sha256(
             {
                 "analysis_request_id": request.analysis_request_id,

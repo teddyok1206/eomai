@@ -64,6 +64,15 @@ class RegisteredItemSolutionReferenceError(ValueError):
         super().__init__(self.code)
 
 
+class RegisteredItemSolutionAnchorError(RegisteredItemSolutionReferenceError):
+    """Model-written locator/excerpt data is unusable, not corrupt Artifact bytes."""
+
+    code = "REGISTERED_ITEM_SOLUTION_ANCHOR_INVALID"
+
+    def __init__(self, message: str) -> None:
+        ValueError.__init__(self, message)
+
+
 @lru_cache(maxsize=1)
 def _reference_node_validator() -> Draft202012Validator:
     # Cache only the existing hash-pinned schema, not a validation result or authority.
@@ -153,17 +162,28 @@ def registered_item_solution_reference_index(
             or anchor.member_path != source.artifact_member.member_path
         ):
             raise ValueError("registered solution anchor does not pin the source member")
-        field, excerpt = _json_pointer(source_value, anchor.locator)
+        try:
+            field, excerpt = _json_pointer(source_value, anchor.locator)
+        except ValueError as error:
+            raise RegisteredItemSolutionAnchorError(
+                "registered solution anchor locator is invalid"
+            ) from error
         if excerpt is None or (isinstance(excerpt, str | list | dict) and not excerpt):
-            raise ValueError("registered solution anchor has no source content")
+            raise RegisteredItemSolutionAnchorError(
+                "registered solution anchor has no source content"
+            )
         if content_sha256(excerpt) != anchor.excerpt_sha256:
-            raise ValueError("registered solution anchor excerpt hash differs")
+            raise RegisteredItemSolutionAnchorError(
+                "registered solution anchor excerpt hash differs"
+            )
         if field in fields[0]:
             problem.add(anchor.anchor_id)
         elif field in fields[1]:
             answer.add(anchor.anchor_id)
         else:
-            raise ValueError("registered solution anchor has no source-defined content role")
+            raise RegisteredItemSolutionAnchorError(
+                "registered solution anchor has no source-defined content role"
+            )
     nodes = _compatible_reference_nodes(proposal)
     value = dict(
         anchor_ids=tuple(sorted(anchor.anchor_id for anchor in proposal.anchors)),
@@ -197,6 +217,27 @@ def _read_json(
     if not isinstance(value, dict):
         raise ValueError("registered solution member is not an object")
     return value
+
+
+def validate_registered_item_solution_proposal(
+    artifacts: CatalogArtifactReader,
+    *,
+    request: KnowledgeAnalysisRequestV2,
+    proposal: KnowledgeAnalysisWorkerProposal,
+) -> KnowledgeAnalysisBaseReferenceIndex:
+    """Check canonical Item bytes before acceptance using the same report-base rule.
+
+    Reader, schema and source-member errors deliberately remain distinct from
+    model-written locator/excerpt failures; callers must not suppress authority
+    or Artifact integrity failures as a correctable model result.
+    """
+
+    source = request.source.artifact_member
+    if source.schema_ref is None:
+        raise ValueError("registered solution canonical Item schema is absent")
+    source_value = _read_json(artifacts, source)
+    read_item_content(source.schema_ref, source_value)
+    return registered_item_solution_reference_index(request, proposal, source_value)
 
 
 def resolve_registered_item_solution_base(
@@ -263,12 +304,9 @@ def resolve_registered_item_solution_base(
     proposal = resolve_knowledge_analysis_proposal(artifacts, receipt)
     if not isinstance(proposal, KnowledgeAnalysisWorkerProposal):
         raise KnowledgeProposalResolutionError("CONTENT_INVALID", "registered base family differs")
-    source = request.source.artifact_member
-    if source.schema_ref is None:
-        raise ValueError("registered solution canonical Item schema is absent")
-    source_value = _read_json(artifacts, source)
-    read_item_content(source.schema_ref, source_value)
-    reference_index = registered_item_solution_reference_index(request, proposal, source_value)
+    reference_index = validate_registered_item_solution_proposal(
+        artifacts, request=request, proposal=proposal
+    )
     return RegisteredItemSolutionBasePointer(
         analysis_run_id=run.analysis_run_id,
         analysis_result_id=accepted.analysis_result_id,

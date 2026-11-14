@@ -5,6 +5,26 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 19:18 UTC — 그림 검증 완료, 근거 복구 후보 검증
+
+`2e5e585d`의 별도 CPU 설치본은 실제 첫25개 BODY 그림 범위 대응을 통과했다.
+9번·13번 최종 PNG를 직접 열어 원본의 글자·축·방향이 뒤집히지 않았음을 확인했다.
+source와 Native 두 decoder의 일치뿐 아니라 원 embedded PNG와 실제 출력의 방향을
+대조했으며, 기존 승인14개의 그림·내용·lineage 감사도 모두 PASS다. 한글에서 직접
+열어 본 사용자 육안 검수나 전체450개 등록·임베딩 완료를 뜻하지 않는다.
+
+승인 전 locator/excerpt 검증, 같은 Item의 accepted-invalid base 전용 후속 분석과
+visual/reference 복합 successor를 기존 Catalog/Material owner에 추가했다. 기존 accepted
+결과·task pin·일반 retry는 그대로다. 새 schema/HTTP/worker protocol/migration은 없다.
+source 관련925 PASS, 별도 그림237 PASS, 공식 disposable PostgreSQL의 Material 저장·
+동시성·재전송103 PASS, core5개 mypy·Ruff/format·wire mirror 검사가 PASS다.
+DB 검사는 운영 DB에서 하지 않았고, 실제 모델/등록/Graph 실행의 증거로 대체하지 않는다.
+
+아직 이 후보의 Catalog/Material 운영 활성화와 기존 run4 재개는 하지 않았다.
+현재 Material은 앞선 오류 반복을 멈춘 상태이며 API/Web/INDEX/QUERY는 보존 중이다.
+다음은 호환 설치·실제 기존 작업 재개 후 새 보고서/Graph와 명시적 후속 run을 검증하는 것이다.
+전체450개 목표는 ACTIVE다.
+
 ## 2026-11-14 18:48 UTC — Native 원본 검증과 현재 처리 중단 원인
 
 목표는 계속 ACTIVE이며 전체450문항 완료를 주장하지 않는다. 첫 회차에서 등록14개,

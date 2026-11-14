@@ -84,8 +84,14 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 
 등록 문항의 공개 풀이는 `registered_item_solution_base.py`에서 원 accepted proposal과
 모든 anchor/member를 보존하고, 기존 typed-reference schema로 표현 가능한 노드만
-후속 reference index에 투영한다. 필수 역할 부족 전용 오류만 Material의 해당 task를
-실패 처리하며, 출처·권한·hash 오류는 이 경계에서 숨기지 않는다. 상세 판단은
+후속 reference index에 투영한다. 새 registered base는 같은 owner의 pointer/excerpt
+검증을 통과해야 승인된다. 필수 역할 부족과 모델이 쓴 locator/excerpt 오류만 Material의
+해당 task를 실패 처리하며, 출처·권한·Artifact hash 오류는 이 경계에서 숨기지 않는다.
+이미 승인된 invalid base는 `material_registered_base_recovery.py`의 명시적 linked-task
+scope와 Knowledge application의 복구 전용 생성으로만 후속 분석을 만든다. 기존 task pin과
+accepted members는 바꾸지 않고, ordinary retry에 ACCEPTED predecessor를 허용하지 않는다.
+후보 구현/활성 범위와 복구 검증은
+`docs/architecture/REGISTERED_ITEM_BASE_REFERENCE_RECOVERY.md`를 확인한다. 기존 전체 설계는
 `docs/architecture/CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md`를 확인한다.
 
 분석의 최초 멱등 key가 FAILED를 가리켜도 `KnowledgeAnalysisApplicationService.resolve_retry`

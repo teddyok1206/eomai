@@ -8,7 +8,10 @@ import pytest
 from eom_catalog_service import material_learning_processing as owner
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisServiceError
 from eom_catalog_service.material_learning_source import MaterialLearningSourceError
-from eom_catalog_service.registered_item_solution_base import RegisteredItemSolutionReferenceError
+from eom_catalog_service.registered_item_solution_base import (
+    RegisteredItemSolutionAnchorError,
+    RegisteredItemSolutionReferenceError,
+)
 
 
 def case(monkeypatch, error):
@@ -62,17 +65,21 @@ def base_error(cause):
     return error
 
 
+@pytest.mark.parametrize(
+    "cause",
+    (
+        RegisteredItemSolutionReferenceError(),
+        RegisteredItemSolutionAnchorError("registered solution anchor excerpt hash differs"),
+    ),
+)
 def test_known_reference_limitation_marks_only_current_task_failed_and_next_task_progresses(
     monkeypatch,
+    cause,
 ):
-    service, claim, tasks, bases = case(
-        monkeypatch, base_error(RegisteredItemSolutionReferenceError())
-    )
+    service, claim, tasks, bases = case(monkeypatch, base_error(cause))
     first = service.advance_once()
     assert first.phase == "FAILED" and first.task_id == tasks[0].task_id
-    service.coordinator.fail_task.assert_called_once_with(
-        claim, tasks[0].task_id, RegisteredItemSolutionReferenceError.code
-    )
+    service.coordinator.fail_task.assert_called_once_with(claim, tasks[0].task_id, cause.code)
     assert tasks[0].item_revision_id == "synthetic-item-0"
     assert bases[0].state == "ACCEPTED"
     assert tasks[1].state == "ANALYZING"
