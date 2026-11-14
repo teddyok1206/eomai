@@ -521,3 +521,32 @@ linked run만 만든다. actualactor·current revision·권리·native chain·�
 것이다. API/Web은 현재 `7084bbc4`, Material은 `6a824aa4`이며 아직 Item/Graph 등록 0이다.
 INDEX/QUERY의 host requalification 및 실제 신규 embedding 저장도 별도로 남아 있다.
 전체 18회·450문항의 목표는 계속 ACTIVE이며 조기 완료로 축소하지 않는다.
+
+### 09:25 UTC: 최종화 복구·Material 전용 배포 완료
+
+후속 source `f42d82ea11e1f0b1a247e82bfe4a1cdc0149c6b1`은 커밋·푸시했고,
+정식 API/Web build의 wheel/RECORD/설치 시뮬레이션과 보호된 owner 설치를 통과했다.
+실제 운영 교체는 Material coordinator로만 제한했다. API/Web·Catalog receiver·global
+Workflow runner는 `7084bbc4`, native preparer/capsule·Pack1.1·그림 도구3587 및
+INDEX/QUERY 설정·기존 InvocationID·인증 파일은 유지했다. DB migration은 없다.
+
+- 기존 release context1.24의 실제 `ADMIT_PASS` 후 idle Material을 중지하고, 새 설치본의
+  공식 최종화 recovery를 사용했다. attempt3 FAILED와 모든 완료 input/output/prepared는
+  그대로이며 같은 command 재전송이 같은 successor를 반환했다. 복구 모델 실행은 0회다.
+- 새 attempt4는 `materialrun_0bc8cd2f29b55c20a1faaeaaa07d8e6b`다. 문제/해설25쌍의
+  최종 연결을 지나 **PROCESSING → READY → RUNNING**으로 진행했고 첫 EXTRACT의
+  Workflow는 `workflow_914c2cef0391482fba942336ebc34253`이다. 이 시점에는 실제
+  첫 Item·공개 풀이·Graph·원문 다운로드 검증이 아직 끝나지 않았다.
+- Material-only activate/postdeploy PASS, 새 PID2501194,
+  InvocationID `f1c3933e25544cb68aa309fdbab44ef5`다. 재사용한 7개 completed checkpoint와
+  실패 이력 보존 증거는 `staging/native-finalization-recover-20261114.json` 및 보호된
+  `/var/lib/eom-native-finalization-release-20261114`에 있다. 임시 DB는 공식 cleanup 완료.
+- 새 CLI observer는 명시적인 preparation→retry→finalization 결과 체인만 따라가며
+  원래 checkpoint를 고치거나 최신 run을 추측하지 않는다. 새 설치 owner 대상 오프라인
+  recovery fixture 12개 PASS다. 실제 HTTP 검증과 나머지17회 접수는 첫 등록 확인 뒤다.
+
+독립 임베딩은 여전히 host requalification 중이며 실행 중이라고 보고하지 않는다.
+추가 관측에서 libc-bin8.12의 `ldconfig.real`도 별도 CUDA cache publication pin과
+달라졌음을 확인했다. 기존 tool/receipt를 덮어쓰지 않고 새 baseline에만 대응하는
+명시적 successor를 검토한다. Slack milestone `devreport_4dff38f6c60a4188b52e84cda9df8f51`
+HTTP200/SAVED. 전체 목표는 계속 ACTIVE다.

@@ -42,6 +42,11 @@ _TOOL = (
     1051280,
     "d879c9a8a41240aeb7fd0f3221116fc4cf41cc6c64c24e10541d1bafbe537ab1",
 )
+_UBUNTU_GLIBC_20261114_TOOL = (
+    Path("/usr/sbin/ldconfig.real"),
+    1051280,
+    "f11a9ee2864823f6a973a789c9736573cc6075e4549683a5e5fcb34762b744a0",
+)
 # Independent reviewed source recipe; paths are locations, SHA/size identify bytes.
 _SOURCES = MappingProxyType(
     {
@@ -88,6 +93,13 @@ class CudaHostPublicationError(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def _cache_builder_tool(base: base_capture.CapturedHostConfiguration) -> tuple[Path, int, str]:
+    # Both callers resolve the closed baseline first; tool bytes cannot select a host.
+    if base.baseline_host_seed_sha256 == host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256:
+        return _UBUNTU_GLIBC_20261114_TOOL
+    return _TOOL
 
 
 def _require(condition: bool, code: str) -> None:
@@ -617,7 +629,7 @@ def _capture_retained_publication(
     }
     for path in placeholders:
         files.read(path, sha256=_hash(b""), size=0, maximum=1)
-    _tool, size, sha = _TOOL
+    _tool, size, sha = _cache_builder_tool(base)
     files.verify(
         workspace / "ldconfig.real", sha256="sha256:" + sha, size=size, maximum=8 * 1024**2
     )
@@ -756,7 +768,7 @@ def publish_cuda_host_extension(
             libraries.append(
                 {"role": role, "member_name": name, "byte_count": size, "sha256": "sha256:" + sha}
             )
-        tool, size, sha = _TOOL
+        tool, size, sha = _cache_builder_tool(base)
         _materialize(
             tool,
             workspace / "ldconfig.real",

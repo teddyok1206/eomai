@@ -24,11 +24,23 @@ from tests.unit.test_embedding_host_requalification import successor
 from tests.unit.test_embedding_runtime_host_closure import _cache
 
 
-def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF, reviewed=False):
+def fixture(
+    tmp_path,
+    monkeypatch,
+    *,
+    schema_ref=capture.CUDA_HOST_SCHEMA_REF,
+    reviewed=False,
+    baseline=None,
+):
     recipe = capture.cuda_host_library_recipe(schema_ref)
     base = _fixture(tmp_path / "base", monkeypatch)
-    if reviewed:
-        base = successor(base)
+    if reviewed or baseline is not None:
+        base = successor(
+            base,
+            baseline=(
+                host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256 if baseline is None else baseline
+            ),
+        )
     root = tmp_path / "published"
     source = tmp_path / "source"
     source.mkdir(mode=0o700)
@@ -39,7 +51,8 @@ def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF, r
         _write(path, raw)
         specs[role] = (path.name, len(raw), hashlib.sha256(raw).hexdigest())
     tool = source / "inert-tool"
-    _write(tool, b"inert, never executed")
+    old_tool, new_tool = b"inert, never executed", b"newer, never executed"
+    _write(tool, new_tool if baseline == host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256 else old_tool)
     monkeypatch.setattr(publication, "_ROOT_UID", os.geteuid())
     monkeypatch.setattr(publication, "_ROOT", root)
     monkeypatch.setattr(publication, "_LOCK", tmp_path / "publication.lock")
@@ -49,7 +62,12 @@ def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF, r
     monkeypatch.setattr(
         publication,
         "_TOOL",
-        (tool, tool.stat().st_size, hashlib.sha256(tool.read_bytes()).hexdigest()),
+        (tool, len(old_tool), hashlib.sha256(old_tool).hexdigest()),
+    )
+    monkeypatch.setattr(
+        publication,
+        "_UBUNTU_GLIBC_20261114_TOOL",
+        (tool, len(new_tool), hashlib.sha256(new_tool).hexdigest()),
     )
     monkeypatch.setattr(capture, "_ROOT", root)
     monkeypatch.setattr(
@@ -86,6 +104,88 @@ def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF, r
         schema_ref,
     )
     return request, root, source, generated
+
+
+def test_cache_builder_tool_predecessor_and_reviewed_successor_are_exact_closed_tuples():
+    predecessor = (
+        Path("/usr/sbin/ldconfig.real"),
+        1051280,
+        "d879c9a8a41240aeb7fd0f3221116fc4cf41cc6c64c24e10541d1bafbe537ab1",
+    )
+    november = (
+        Path("/usr/sbin/ldconfig.real"),
+        1051280,
+        "f11a9ee2864823f6a973a789c9736573cc6075e4549683a5e5fcb34762b744a0",
+    )
+    assert predecessor == publication._TOOL
+    assert november == publication._UBUNTU_GLIBC_20261114_TOOL
+
+
+@pytest.mark.parametrize(
+    "baseline",
+    (
+        host.FIXED_EMBEDDING_HOST_SEED_SHA256,
+        host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+        host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256,
+        host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256,
+    ),
+)
+@pytest.mark.parametrize("cross_paired", (False, True))
+def test_publication_selects_only_exact_resolved_baseline_tool(
+    tmp_path, monkeypatch, baseline, cross_paired
+):
+    request, root, source, generated = fixture(tmp_path, monkeypatch, baseline=baseline)
+    base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
+    november = baseline == host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256
+    assert publication._cache_builder_tool(base) == (
+        publication._UBUNTU_GLIBC_20261114_TOOL if november else publication._TOOL
+    )
+    if cross_paired:
+        _write(
+            source / "inert-tool",
+            b"inert, never executed" if november else b"newer, never executed",
+        )
+        with pytest.raises(publication.CudaHostPublicationError, match="SOURCE_HASH_MISMATCH"):
+            publication.publish_cuda_host_extension(request)
+        assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+        assert generated == []
+    else:
+        assert publication.publish_cuda_host_extension(request).disposition == "CREATED"
+        assert len(generated) == 1
+
+
+def test_unknown_base_is_rejected_before_tool_selection_or_source_copy(tmp_path, monkeypatch):
+    request, root, _source, generated = fixture(
+        tmp_path, monkeypatch, baseline=host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256
+    )
+    base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
+    body = json.loads(base.snapshot_raw)
+    body["baseline_host_seed_sha256"] = "sha256:" + "f" * 64
+    body["snapshot_sha256"] = publication._hash(
+        publication._canonical(
+            {key: value for key, value in body.items() if key != "snapshot_sha256"}
+        )
+    )
+    raw = publication._canonical(body)
+    _write(base.cache_path.parent / "snapshot.json", raw)
+    request = replace(
+        request,
+        base_configuration=replace(
+            request.base_configuration,
+            manifest_byte_count=len(raw),
+            manifest_raw_sha256=publication._hash(raw),
+            snapshot_sha256=body["snapshot_sha256"],
+        ),
+    )
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("unknown baseline must not select a tool or materialize source bytes")
+
+    monkeypatch.setattr(publication, "_cache_builder_tool", forbidden)
+    monkeypatch.setattr(publication, "_materialize", forbidden)
+    with pytest.raises(base_capture.HostConfigurationSnapshotError, match="SEED_PIN_INVALID"):
+        publication.publish_cuda_host_extension(request)
+    assert generated == [] and not (root / ".publication").exists()
 
 
 def test_atomic_eight_member_publication_and_exact_idempotent_reuse(tmp_path, monkeypatch):
@@ -465,9 +565,11 @@ def test_late_base_snapshot_drift_preserves_workspace_without_publishing(tmp_pat
     ).is_dir()
 
 
-def retained_fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_NVML_SCHEMA_REF):
+def retained_fixture(
+    tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_NVML_SCHEMA_REF, baseline=None
+):
     request, root, source, generated = fixture(
-        tmp_path, monkeypatch, schema_ref=schema_ref, reviewed=True
+        tmp_path, monkeypatch, schema_ref=schema_ref, reviewed=True, baseline=baseline
     )
     generate = publication._generate_cache
 
@@ -523,6 +625,37 @@ def retained_fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_NVML
 def rewrite_retained(path, raw, mode):
     _write(path, raw)
     path.chmod(mode)
+
+
+@pytest.mark.parametrize(
+    "baseline",
+    (host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256, host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256),
+)
+@pytest.mark.parametrize("cross_paired", (False, True))
+def test_retained_completion_verifies_the_same_exact_baseline_tool(
+    tmp_path, monkeypatch, baseline, cross_paired
+):
+    request, pointer, workspace, root, _source, generated = retained_fixture(
+        tmp_path, monkeypatch, baseline=baseline
+    )
+    final = root / request.configuration_id / request.configuration_revision_id
+    if cross_paired:
+        november = baseline == host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256
+        rewrite_retained(
+            workspace / "ldconfig.real",
+            b"inert, never executed" if november else b"newer, never executed",
+            0o500,
+        )
+        with pytest.raises(ValueError, match="HASH_MISMATCH"):
+            publication.complete_cuda_host_extension_publication(request, pointer)
+        assert not final.exists() and (workspace / "revision").is_dir()
+    else:
+        assert (
+            publication.complete_cuda_host_extension_publication(request, pointer).pointer
+            == pointer
+        )
+        assert final.is_dir() and not (workspace / "revision").exists()
+    assert len(generated) == 1
 
 
 @pytest.mark.parametrize(

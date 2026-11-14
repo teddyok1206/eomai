@@ -66,3 +66,22 @@ CPU/CUDA host/configuration successors through existing owners; obtain actual no
 admission; inspect and recover original pending INDEX work through supported ownership;
 select compatible INDEX/QUERY controls; verify real new embedding storage and retrieval.
 This document does not claim those operational steps have already completed.
+
+## CUDA cache-builder tool closure
+
+The same OS update also changed `libc-bin` at 06:06:33 UTC. Its protected
+`/usr/sbin/ldconfig.real` remains 1,051,280 bytes but now has SHA-256
+`f11a9ee2864823f6a973a789c9736573cc6075e4549683a5e5fcb34762b744a0`;
+`dpkg -V libc-bin` reports no package-file integrity difference. This tool is a
+separate publication input, not one of the 23 fixed host members or a numerical
+implementation. The existing CUDA publication owner keeps its predecessor tool
+tuple immutable and selects this one reviewed successor only for a resolved
+`UBUNTU_GLIBC_20261114_HOST_SEED_SHA256` base snapshot. Other accepted baselines
+retain the predecessor tool; unknown baselines still fail snapshot resolution.
+
+Fresh publication and exact retained-stage verification share the same O(1)
+selector and existing bounded hash/size/protection checks. No caller-supplied
+tool hash, new wire format, dependency, namespace bypass or automatic retry is
+introduced. Cross-paired old/new tool bytes must fail before cache execution or
+retained commit. New tool/source tests do not constitute host publication, native
+admission, numerical equality, runtime activation or vector-storage acceptance.
