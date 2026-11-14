@@ -550,3 +550,75 @@ INDEX/QUERY 설정·기존 InvocationID·인증 파일은 유지했다. DB migra
 달라졌음을 확인했다. 기존 tool/receipt를 덮어쓰지 않고 새 baseline에만 대응하는
 명시적 successor를 검토한다. Slack milestone `devreport_4dff38f6c60a4188b52e84cda9df8f51`
 HTTP200/SAVED. 전체 목표는 계속 ACTIVE다.
+
+### 09:49 UTC: 첫 실제 등록·원본 조회 성공, Graph 게시 진행 중
+
+첫 문항은 `item_23785fb08e02487d95be6dc831673103` /
+`itemrev_6d95ad6c0910478ab4b8d564920b7c5e`로 APPROVED 등록됐다.
+원본 고유번호 `78552`, 문항번호1, Excel 원본 단원·분류·worksheet/row hash와
+문제/해설 HWPX pointer를 공식 native read application에서 같은 실제 actor로 대조했다.
+
+- 실제 두 문서의 stream/hash/length/header와 편집 가능한 ZIP/XML core PASS.
+  문제723,389bytes에는 문단22·표2·수식1·그림1, 해설14,246bytes에는 문단8·수식2가
+  native 요소로 남아 있다. 파일 재생성·PDF 캡처·DB 변경·모델 호출은 없다.
+- 증거 `staging/native-finalization-native-read-canary-20261114.json`.
+  **HTTP/HTTPS는 이 application 검증과 다르며 아직 미검증**, 한글 육안 NOT_RECORDED다.
+- 실제 base analysis1과 공개 solution successor1이 모두 ACCEPTED이며 첫 QUESTION은
+  PUBLISHING이다. Graph pointer는 최종 snapshot commit 뒤 연결되므로 아직0이다.
+  나머지24문항은 PENDING. 원래7개 완료 checkpoint와 세 실패 run은 보존한다.
+- 이 단계는 기존 전체 공통 Graph와 신규1을 새 immutable snapshot으로 다시 검증한다.
+  현재 CPU 사용이 계속 증가하며 기존 기출 source/receipt/proposal의 재읽기 비용이 있다.
+  첫 publication은 중지·재시작하지 않고 실제 완료 시간을 관측한다. 단순히 native 문서를
+  다시 분리하는 작업으로 설명하거나, 느리다는 이유로 검증을 생략하지 않는다.
+
+나머지17회 접수와 실제 사용자 권한 HTTP native 다운로드를 위한 새 driver는
+tmux `EOM → 2번 native-exam`에서 로그인 입력을 기다린다. 새 설치본 대상
+오프라인 두 fixture 전체16개 PASS 후 준비했고, 인증·source keys·원 접수 checkpoint를
+바꾸지 않는다. 이전 driver는 본인 테스트 세션만 정상 종료했다.
+
+독립 임베딩 복구: `e04228c0f70068d5537573bc2e04a678bb44b034`의 고정된 CUDA cache tool
+successor를 커밋·푸시/보호 설치했고, CPU host snapshot `be7e4691`과 CUDA host snapshot
+`0b0a8632`를 실제 publication했다. **ROOTLOCAL_AVAILABLE / NOT_NATIVE_ADMITTED**이며
+전역 selected-cache·기존 config·INDEX/QUERY·벡터를 아직 바꾸지 않았다.
+새 CPU owner input16392bytes (`867c5acc…`)의 준비에서 기존 숫자 구현3개 byte identity와
+기존 Conda/public archive/helper 불변을 확인했다. 공식 private-prefix installer의 유한
+새 cache namespace 검증을 진행하며, 완료/admission/새 vector 저장을 선행 주장하지 않는다.
+
+### 10:08–10:25 UTC: 첫 공통 Graph 게시 완료·실행환경 byte audit 통과
+
+첫 QUESTION이 실제 COMPLETED가 됐고 두 번째 QUESTION의 추출·DB 등록과 풀이 분석이
+계속된다. 첫 exact Graph는 `graphrev_34281f9b17c95298281e7fcb4c07db44`, snapshot hash
+`916ee75a924172be811039a722a90da1f6a3ed422752f40b684479c5163fa40b`다.
+base `analysisrun_3658854c221a4237a1291588c5c15121`와 공개 풀이
+`analysisrun_e5343be6af904f82a5c208ce59aa9fee`가 ACCEPTED이며 명시적인 predecessor로
+연결된다. `staging/native-finalization-observe-first-complete-20261114.json`은 실제
+APPROVED Item1 / accepted base1 / accepted public solution1 / published Graph1과
+다음 문항의 유효 worker lease를 기록한다. 첫 native 입력의 원본 보존→등록→보고서→공통
+Graph 경로를 통과한 것이며 전체450 완료나 HTTP/한글 육안 PASS는 아니다.
+Slack `devreport_d656877f2a094de8b3e22b1011913707` HTTP200/SAVED.
+
+독립 host 복구에서는 기존 공식 installer와 새 snapshot의 private read-only mount를
+사용해 CPU·CUDA **BYTE_AUDITED_NOT_ADMITTED**를 실제로 통과했다. 모델/수치 실행0,
+두 기존 failed owner의 InvocationID·전역 cache 선택과 기존 벡터는 보존했다.
+
+- CPU: `/opt/eom/.embedding-index-install-RoEmCqXm`, input SHA `867c5acc…`,
+  원 prefix 백업 `.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-RoEmCqXm`.
+- CUDA: `/opt/eom/.embedding-index-install-VqbZIAfk`, input SHA `d59742c5…`,
+  원 prefix 백업 `.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-VqbZIAfk`.
+- 새 CPU config `embeddingnativeconfigrev_c8acdc23c13c577689d142f0712aa05d`의 준비도
+  통과했다. numerical runtime `f02cfc2b…`와 bundle/proof·숫자 구현3개는 그대로다.
+  새 no-forward probe 입력은 준비만 했고 실제 native admission은 아직 미완료다.
+- 첫 CPU installer 시도는 일반 build parent의 권한을 거절해 prefix 교체 전에 멈췄다.
+  입력 bytes를 동일 hash의 root0700 전용 입력 경계에 준비해 다음 명시적 operation으로
+  진행했다. 빈 archive reservation은 `.incomplete-32c7d6d1-20261114`로 이동 보존했고
+  실패 operation `PqUfL8tM`·실패 unit/log는 그대로다. 검증을 완화하거나 덮어쓰지 않았다.
+- 후속 cache CAS의 구 운영 helper는 전체 stat 비교에 접근시간(atime)까지 포함해
+  정상 파일 읽기를 FILE_HASH 오류로 거절했다. 실제 config SHA는 예상값과 일치하며,
+  CAS 전이라 전역 cache는7604 그대로이고 native probe도 시작하지 않았다. 기존의
+  FD·hash·보호 경계와 atime 제외 epoch를 쓰는 검증된 reader를 연결하는 operator successor로
+  바로잡는다. core schema/hash·원 config·과거 실패 결과를 바꿀 이유가 아니다.
+
+현재 첫 Graph 게시의 비용은 기존 전체 accepted 분석/source를 재검증하는 공통 경로에서
+발생했다. 향후 자료 학습 개선은 기존 per-publication source cache/readset의 재사용을
+먼저 검토한다. 새로운 cache/queue나 지연 Graph framework부터 만들지 않는다. 원문·보고서·
+승인·권한·hash·최종 corpus CAS 검사는 유지하고 실제 측정/동등 projection 검증을 붙인다.
