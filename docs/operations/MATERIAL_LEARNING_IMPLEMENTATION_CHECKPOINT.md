@@ -5,6 +5,35 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 19:38 UTC — 좁은 호환 배포와 실제 처리 재개
+
+Catalog private receiver와 Material owner를 `9c5b4bb790eae9db472357217b0d5afb9a4b37dc`
+(tree `b7f4e3a748e0a3c7e1c44fbcb24d309ec3f04e5b`)로 반영했다. CPU 그림 도구는 별도
+고정 설치 `2e5e585db7bbf5ac9572d4aed993637e32c89661`이며, signed resize-box의 부호와
+명시 bitmap flip을 구분한다. context1.24 ADMIT와 migration0079 VERIFY는 실제 PASS다.
+패키지 검사는 immutable0444 설치 파일을 변경하지 않고 private0600 검증 입력으로만
+일시 materialize했다. 첫 사전 검사 실패와 GPU batch 경계 대기는 보존했으며, 그때는
+운영 파일 교체 전이었다. 실제 반영은 자연스러운 수치 작업 공백에서 수행했다.
+
+API/Web·global runner, INDEX/QUERY 설정과 프로세스는 보존했다. 반영 후 실제
+INDEX PID3532049/Invocation1d8e6e31400940d6b09dae42fdf94236 및 QUERY
+PID3528016/Invocationd8261930e63649f0bcf1c4e35c2f8fba가 동일함을 확인했다.
+Material은 active이며 원래 run4의 다음 QUESTION 추출 workflow가 실제 RUNNING이다.
+문제의 기존 accepted base는 수정하지 않고 typed 근거 오류로 해당 task만 FAILED가 됐다.
+
+19:38 관측: QUESTION COMPLETED5/PUBLISHING8/RUNNING1/PENDING8/FAILED3,
+등록14/accepted base14/공개 풀이13/Graph5다. 실패3에는 원래 그림 실패2와 근거 오류1이
+포함된다. PREPARE/DISCOVER 완료7을 문항 완료 수에 더하지 않는다. 다음은 run4의
+자연스러운 terminal 상태 후 공식 Prepared3/reference successor로 실패3만 복구하는 것이다.
+전체450개 처리·임베딩 완료나 첫25개 완주를 아직 주장하지 않는다. 권한/수식/편집 가능한
+원본 보존과 실제 DB/native 읽기 검증은 계속한다. disposable DB103개 검증 후 임시 DB와
+그 전용 계정을 공식 guarded cleanup으로 제거했으며 운영 데이터는 삭제하지 않았다.
+
+근거: staging의 `native-reference-recovery-release-{prepare-r2,admit,activate-r4,postdeploy}`
+로그 및 `native-reference-recovery-progress-20261114T1940.json`(실제 관측19:38 UTC).
+최종 동결 배포 helper SHA는 `32d4eedb736e415181a875a019e03ea4508b6aba993198d420872f8afe1087e8`다.
+이 파일들은 로컬 검증 산출물이며 Git에는 넣지 않는다.
+
 ## 2026-11-14 19:18 UTC — 그림 검증 완료, 근거 복구 후보 검증
 
 `2e5e585d`의 별도 CPU 설치본은 실제 첫25개 BODY 그림 범위 대응을 통과했다.
