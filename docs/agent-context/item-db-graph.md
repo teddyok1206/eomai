@@ -12,6 +12,12 @@ Material owner의 private SDK나 Pack만 갱신해도 이 전역 executor의 이
 안내문이 바뀌는 것은 아니다. 프롬프트 수정의 운영 반영은 실제 실행자 설치/재시작과
 새 worker 입력 provenance로 확인하고, 과거 입력은 바꾸지 않는다.
 
+등록 base의 node-type/ID 제약도 같은 실제 ROLE Runner 안의
+`eom_workflow.schemas.constrained_result_schema`와 request-aware 결과 수신 검증이 소유한다.
+Catalog/Material private SDK만 바꿔 이 제약까지 활성화됐다고 보고하지 않는다. 실제
+Runner의 immutable import 경로·source 환경과 모델에 보낸 schema를 확인하며, historical
+generic 결과 validator는 좁히지 않는다. 설계는 `REGISTERED_ITEM_BASE_REFERENCE_RECOVERY.md`다.
+
 Native 시험지의 QUESTION은 기존 one-AI lane을 유지하면서 최대25개 ordinal 구간의
 accepted base/공개 풀이를 준비한 뒤 공통 Graph를 한 번 게시할 수 있다.
 `material_question_processing_window`는 terminal 행도 구간에 포함하고 EXPLANATION에서

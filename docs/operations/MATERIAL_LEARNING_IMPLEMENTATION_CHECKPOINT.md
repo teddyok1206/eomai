@@ -5,6 +5,42 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 22:10 UTC — private 실행 모듈 반영·자료 학습 재개
+
+`70bebfb3`의 Catalog/Material과 ROLE Runner4개를 실제로 반영했다. 최종 postdeploy와
+resume는 PASS다. Runner별 실제 PID의 source/PYTHONPATH와 immutable import 경로, 정확한
+EnvFile 순서 및 설치 파일을 확인했다. 공유 API/Web51과 QUERY pin851·PID3528016은 그대로다.
+Catalog PID4082139, Runner PID4082309/4082308/4082307/4082310, 재개한 Material PID4085873이다.
+기존 풀이 worker는 강제 중단하지 않았고, 수치 자식 unit의 자연 종료 이후에만 파일을 바꿨다.
+
+도중 GPU busy guard는 파일 교체 전에 기존 서비스를 복구했고, 재시도에서는 수치 공백을
+먼저 기다렸다. 빌드 이후 추가된 정확한 문서-only commit3feffe80만 별도로 검증했으며,
+runtime source를 최신 HEAD로 대체하지 않았다. systemctl의 EnvFile 값은 실제 줄바꿈 형식으로
+검증하도록 도구를 바로잡았다. 실패 로그는 보존했다. 실제 반영은 release_r5.py, 후속 확인·
+재개는 release_r6.py(SHA `9c6ad7e38c7da44db64bfa6620bb0a07ea8c794c9066db6e7e55f1a924d3ea76`)다.
+
+22:10 run4는 등록23/base ACCEPTED19/공개 풀이18/Graph5,
+QUESTION COMPLETED5/PUBLISHING13/ANALYZING1/FAILED6이다. 새 source의 분석 worker도 실제로
+실행 중이다. 22번의 기존 실패는 원 receipt를 해석해 ITEM_ELEMENT13개가 모두
+`knode_item_...` alias여서 typed reference에서 제외된 경우임을 확인했다. 새 후보의
+타입별 prefix 제약이 정확히 다루는 문제이며, 기존 결과를 rename/성공 처리하지 않았다.
+남은 한 문항의 분석·공개 풀이와 batch Graph 게시, 이후 실패6개 공식 복구가 남는다.
+
+INDEX는22:09:57에 다시 종료돼 **현재 GPU 인덱싱 복구가 추가로 필요하다.** 이번 원인은
+앞선 systemctl timeout과 달리 `EMBEDDING_BENCHMARK_CHANNEL_EOF`다. 원 CUDA parent19a8의
+planning SUCCEEDED를 수치 완료로 읽지 않는다. canonical completion receipt는 없고,
+연결된 encoding4개가 RUNNING이며 실제 input-grant 파일도 존재한다. 따라서 숫자 unit이
+현재 fresh/inactive라는 사실만으로 NOT_GRANTED/미실행을 단정하지 않는다. 기존 공식
+grant·handoff/retirement 경계로 판정한 뒤 복구해야 하며, 무조건 재시작하거나 FAILED/성공을
+위조하지 않는다. 앞선 CPU encoding4개는 재계산 없이 저장 단계가 복구되어 해당 head가
+1292→1296으로 증가했다. 저장 벡터와 기존 모든 실패 이력은 유지한다.
+
+이 상태는 전체450개 목표 완료가 아니다. 자료 학습을 계속 진행하면서 GPU의 정확한
+중단 경계를 별도로 확인한다. 증거는 staging의 `native-picture-completion-release-*r5*`,
+`*postdeploy-r6*`, `*resume-r6*`, `native-reference-recovery-progress-installed70-20261114.json`,
+`native-new-base-node-diagnostic-r2-20261114.json` 및
+`native-index-post-release-invocation-diagnostic-20261114.json`이다.
+
 ## 2026-11-14 21:59 UTC — 450문항 그림 전수 검사와 실행 모듈 인계
 
 후보 `70bebfb36738db365a0dcad60c5ca0b8c5f771f9`(tree
