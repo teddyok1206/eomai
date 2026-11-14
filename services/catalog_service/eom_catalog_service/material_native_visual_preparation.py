@@ -26,7 +26,9 @@ from eom_catalog_contracts.material_native_visual_preparation import (
     require_native_visual_prepared_base,
 )
 from eom_catalog_contracts.material_native_visual_selection import (
-    build_material_native_question_visual_scope,
+    NativeSourceVisualIndex,
+    build_material_native_question_visual_scope_from_index,
+    build_native_source_visual_index,
 )
 from eom_catalog_contracts.material_native_visual_work import require_material_native_visual_bundle
 from eom_hwpx_contracts.native_item_split import NativeItemSplitResult
@@ -152,6 +154,7 @@ class MaterialNativeVisualPreparationService:
         catalog: OfficePictureUseCatalog,
         catalog_pointer: MaterialArtifactMember,
         authorize: Callable[[], None],
+        source_index: NativeSourceVisualIndex | None = None,
     ) -> MaterialNativeQuestionVisualScope:
         """Recompute from the actual native body at preparation and registration boundaries."""
         authorize()
@@ -166,11 +169,16 @@ class MaterialNativeVisualPreparationService:
                 tool_root=self.tool_root,
                 workspace=Path(temporary) / "question",
             )
-            scope = build_material_native_question_visual_scope(
+            scope = build_material_native_question_visual_scope_from_index(
                 file,
                 item_number=item_number,
                 source_catalog=catalog,
                 source_catalog_sha256=catalog_pointer.sha256,
+                source_index=source_index
+                if source_index is not None
+                else build_native_source_visual_index(
+                    catalog, source_catalog_sha256=catalog_pointer.sha256
+                ),
                 question_catalog=native.catalog,
             )
         authorize()
@@ -280,6 +288,9 @@ class MaterialNativeVisualPreparationService:
                     sha256=committed.sha256,
                     bytes=len(canonical_json_bytes(catalog.model_dump(mode="json"))),
                 )
+        source_index = build_native_source_visual_index(
+            catalog, source_catalog_sha256=catalog_pointer.sha256
+        )
         scopes = tuple(
             self.question_scope(
                 item.question,
@@ -287,6 +298,7 @@ class MaterialNativeVisualPreparationService:
                 catalog=catalog,
                 catalog_pointer=catalog_pointer,
                 authorize=reauthorize,
+                source_index=source_index,
             )
             for item in bundle.items
         )

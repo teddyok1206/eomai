@@ -456,6 +456,12 @@ Q9는 Y 음수, Q13은 X 음수이며 rotation은 identity, 명시 flip은 모�
 5. 비용/규모: 원 exam은 한 번, 각 문항은 한 번의 bounded metadata/pixel 비교다.
    기존 최대512 member/2048 use·pixel/byte 상한과 Artifact publication indexed key를
    재사용한다. 이미지 bytes/허용 목록을 DB 새 열에 복사하지 않고 immutable proof를 참조한다.
+   한 번의 준비 호출에서 frozen `NativeSourceVisualIndex`를 만들어 원 catalog의 hash·검증·
+   lookup을 한 번만 수행한다. 비용은 O(원 use + 전체 문항 use), 메모리는 O(원 use)이며
+   각 문항 파일·split evidence·권한은 계속 독립 검증한다. index는 해당 parsed catalog의
+   동일성·source/catalog SHA를 확인하는 호출 내 파생값이고 전역 권한 cache가 아니다.
+   단독 등록은 기존 wrapper에서 fresh index를 만든다. 1·25개 synthetic 비교에서
+   source 검증 N→1, source lookup 2N→2이며 scope canonical bytes는 동일해야 한다.
 6. geometry: 유한·비영 diagonal S와 quarter-turn R에서 signed scale의 반사를 원 viewport
    crop 뒤, 기존 회전 전에 적용한다. 양수 scale의 기존 명시 flip 동작은 유지한다.
    음수 scale과 명시 flip이 함께 있는 모호한 경우, shear·비직교 회전·다중 matrix는 계속 거절한다.

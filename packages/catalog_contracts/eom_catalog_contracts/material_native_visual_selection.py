@@ -8,6 +8,10 @@ nor this small scope is permission to register an image.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from types import MappingProxyType
+
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImage
 from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog, OfficePictureView
@@ -53,25 +57,61 @@ def _require_catalog(catalog: OfficePictureUseCatalog, *, question: bool) -> Non
         raise ValueError("MATERIAL_NATIVE_VISUAL_CATALOG_INVALID") from error
 
 
-def build_material_native_question_visual_scope(
+@dataclass(frozen=True, slots=True)
+class NativeSourceVisualIndex:
+    """One book/call's immutable derived lookup, never permission or a global cache."""
+
+    _catalog: OfficePictureUseCatalog = field(repr=False)
+    source_sha256: str = field(init=False)
+    source_catalog_sha256: str = field(init=False)
+    candidates: Mapping[_ViewIdentity, tuple[str, ...]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        catalog = self._catalog
+        digest = sha256_bytes(canonical_json_bytes(catalog.model_dump(mode="json")))
+        _require_catalog(catalog, question=False)
+        images = {image.source_member: image for image in catalog.embedded_images.images}
+        views = {view.use_id: view for view in catalog.rendered_uses}
+        candidates: dict[_ViewIdentity, list[str]] = {}
+        for use in catalog.picture_uses:
+            if not use.unresolved_reasons:
+                assert use.source_member is not None
+                key = _view_identity(images[use.source_member], views[use.use_id])
+                candidates.setdefault(key, []).append(use.use_id)
+        object.__setattr__(self, "source_sha256", catalog.embedded_images.source_sha256)
+        object.__setattr__(self, "source_catalog_sha256", digest)
+        object.__setattr__(
+            self,
+            "candidates",
+            MappingProxyType({key: tuple(ids) for key, ids in candidates.items()}),
+        )
+
+
+def build_native_source_visual_index(
+    catalog: OfficePictureUseCatalog, *, source_catalog_sha256: str
+) -> NativeSourceVisualIndex:
+    index = NativeSourceVisualIndex(catalog)
+    if index.source_catalog_sha256 != source_catalog_sha256:
+        raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_CATALOG_MISMATCH")
+    return index
+
+
+def build_material_native_question_visual_scope_from_index(
     file: MaterialNativeFileBinding,
     *,
     item_number: int,
     source_catalog: OfficePictureUseCatalog,
     source_catalog_sha256: str,
+    source_index: NativeSourceVisualIndex,
     question_catalog: OfficePictureUseCatalog,
 ) -> MaterialNativeQuestionVisualScope:
-    """Match each actual fragment BODY use to one original-source use, or fail.
-
-    This bounded map is O(source uses + question uses), not a service/global cache.
-    Unreferenced embedded members never create candidates or allowed uses.
-    """
+    """Validate each body in O(question uses), sharing only one verified source lookup."""
     if file.source_role != "MAIN":
         raise ValueError("MATERIAL_NATIVE_VISUAL_QUESTION_FILE_REQUIRED")
     if (
-        source_catalog.embedded_images.source_sha256 != file.original_source_sha256
-        or sha256_bytes(canonical_json_bytes(source_catalog.model_dump(mode="json")))
-        != source_catalog_sha256
+        source_index._catalog is not source_catalog
+        or source_index.source_sha256 != file.original_source_sha256
+        or source_index.source_catalog_sha256 != source_catalog_sha256
     ):
         raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_CATALOG_MISMATCH")
     if (
@@ -79,18 +119,7 @@ def build_material_native_question_visual_scope(
         or question_catalog.embedded_images.source_format != "HWPX"
     ):
         raise ValueError("MATERIAL_NATIVE_VISUAL_QUESTION_CATALOG_MISMATCH")
-    _require_catalog(source_catalog, question=False)
     _require_catalog(question_catalog, question=True)
-    source_images = {image.source_member: image for image in source_catalog.embedded_images.images}
-    source_views = {view.use_id: view for view in source_catalog.rendered_uses}
-    candidates: dict[_ViewIdentity, list[str]] = {}
-    for use in source_catalog.picture_uses:
-        if use.unresolved_reasons:
-            continue
-        # A validated resolved catalog closes these two lookups over the use.
-        assert use.source_member is not None
-        key = _view_identity(source_images[use.source_member], source_views[use.use_id])
-        candidates.setdefault(key, []).append(use.use_id)
     question_images = {
         image.source_member: image for image in question_catalog.embedded_images.images
     }
@@ -99,7 +128,7 @@ def build_material_native_question_visual_scope(
     for use in question_catalog.picture_uses:
         assert use.source_member is not None
         key = _view_identity(question_images[use.source_member], question_views[use.use_id])
-        matches = candidates.get(key, ())
+        matches = source_index.candidates.get(key, ())
         if not matches:
             raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_USE_NOT_FOUND")
         if len(matches) != 1:
@@ -113,6 +142,27 @@ def build_material_native_question_visual_scope(
         split_evidence=file.split_evidence,
         source_catalog_sha256=source_catalog_sha256,
         allowed_picture_use_ids=tuple(sorted(allowed)),
+    )
+
+
+def build_material_native_question_visual_scope(
+    file: MaterialNativeFileBinding,
+    *,
+    item_number: int,
+    source_catalog: OfficePictureUseCatalog,
+    source_catalog_sha256: str,
+    question_catalog: OfficePictureUseCatalog,
+) -> MaterialNativeQuestionVisualScope:
+    """Standalone registration wrapper; batch preparation owns one index per book/call."""
+    return build_material_native_question_visual_scope_from_index(
+        file,
+        item_number=item_number,
+        source_catalog=source_catalog,
+        source_catalog_sha256=source_catalog_sha256,
+        source_index=build_native_source_visual_index(
+            source_catalog, source_catalog_sha256=source_catalog_sha256
+        ),
+        question_catalog=question_catalog,
     )
 
 

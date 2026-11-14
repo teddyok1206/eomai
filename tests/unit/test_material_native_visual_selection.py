@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
+from eom_catalog_contracts import material_native_visual_selection as selection_owner
 from eom_catalog_contracts.material_learning import MaterialArtifactMember
 from eom_catalog_contracts.material_native_files import MaterialNativeFileBinding
 from eom_catalog_contracts.material_native_visual_selection import (
+    NativeSourceVisualIndex,
     build_material_native_question_visual_scope,
+    build_material_native_question_visual_scope_from_index,
+    build_native_source_visual_index,
     material_native_visual_guidance,
     validate_material_native_visual_bindings,
 )
@@ -441,6 +447,106 @@ def test_guidance_is_bounded_including_64_allowed_uses_and_contains_only_pinned_
     assert "모두 포함하라는 뜻은 아닙니다" in guidance
     assert "권한이나 검증 완료를 뜻하지 않습니다" in guidance
     assert guidance == material_native_visual_guidance(scope)
+
+
+def test_source_index_is_frozen_and_owns_only_immutable_derived_candidates():
+    source = _catalog(SOURCE, (FIGURE, LOGO))
+    index = build_native_source_visual_index(source, source_catalog_sha256=_sha(source))
+    assert index.source_sha256 == SOURCE
+    assert index.source_catalog_sha256 == _sha(source)
+    assert isinstance(index.candidates, MappingProxyType)
+    assert all(isinstance(ids, tuple) for ids in index.candidates.values())
+    with pytest.raises(FrozenInstanceError):
+        index.source_sha256 = "sha256:" + "0" * 64
+    with pytest.raises(TypeError):
+        index.candidates[next(iter(index.candidates))] = ()
+    with pytest.raises(TypeError):
+        NativeSourceVisualIndex(source, source_sha256="sha256:" + "0" * 64)
+
+
+@pytest.mark.parametrize("field", ["source-pin", "catalog-pin", "catalog-lineage"])
+def test_index_cannot_be_reused_for_a_different_source_pin_or_catalog_object(field):
+    source = _catalog(SOURCE, (FIGURE, LOGO))
+    index = build_native_source_visual_index(source, source_catalog_sha256=_sha(source))
+    file, catalog_sha = _file(), _sha(source)
+    if field == "source-pin":
+        file = file.model_copy(update={"original_source_sha256": "sha256:" + "0" * 64})
+    elif field == "catalog-pin":
+        catalog_sha = "sha256:" + "0" * 64
+    else:
+        # Equal bytes are not this per-call index's exact parsed-catalog lineage.
+        source = OfficePictureUseCatalog.model_validate(source.model_dump(mode="json"))
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_VISUAL_SOURCE_CATALOG_MISMATCH"):
+        build_material_native_question_visual_scope_from_index(
+            file,
+            item_number=9,
+            source_catalog=source,
+            source_catalog_sha256=catalog_sha,
+            source_index=index,
+            question_catalog=_catalog(FRAGMENT, (NATIVE_FIGURE,), native=True),
+        )
+
+
+@pytest.mark.parametrize("count", [1, 25])
+def test_per_book_source_hash_validation_and_index_cost_is_once_with_bitwise_equal_scopes(
+    monkeypatch, count
+):
+    source = _catalog(SOURCE, (FIGURE, LOGO))
+    question = _catalog(FRAGMENT, (NATIVE_FIGURE,), native=True)
+    catalog_sha = _sha(source)
+    counts = dict(source=0, question=0, hash=0, source_lookup=0)
+    require_catalog = selection_owner._require_catalog
+    encode = selection_owner.canonical_json_bytes
+    identity = selection_owner._view_identity
+
+    def require(catalog, *, question):
+        counts["question" if question else "source"] += 1
+        return require_catalog(catalog, question=question)
+
+    def canonical(value):
+        counts["hash"] += 1
+        return encode(value)
+
+    def view_identity(image, view):
+        if image.source_member in {FIGURE[0], LOGO[0]}:
+            counts["source_lookup"] += 1
+        return identity(image, view)
+
+    monkeypatch.setattr(selection_owner, "_require_catalog", require)
+    monkeypatch.setattr(selection_owner, "canonical_json_bytes", canonical)
+    monkeypatch.setattr(selection_owner, "_view_identity", view_identity)
+    ordinary = tuple(
+        build_material_native_question_visual_scope(
+            _file(),
+            item_number=number,
+            source_catalog=source,
+            source_catalog_sha256=catalog_sha,
+            question_catalog=question,
+        )
+        for number in range(1, count + 1)
+    )
+    assert counts == dict(source=count, question=count, hash=count, source_lookup=2 * count)
+    counts.update(source=0, question=0, hash=0, source_lookup=0)
+    index = build_native_source_visual_index(source, source_catalog_sha256=catalog_sha)
+    indexed = tuple(
+        build_material_native_question_visual_scope_from_index(
+            _file(),
+            item_number=number,
+            source_catalog=source,
+            source_catalog_sha256=catalog_sha,
+            source_index=index,
+            question_catalog=question,
+        )
+        for number in range(1, count + 1)
+    )
+    assert counts == dict(source=1, question=count, hash=1, source_lookup=2)
+    assert indexed == ordinary
+    assert canonical_json_bytes([scope.model_dump(mode="json") for scope in indexed]) == (
+        canonical_json_bytes([scope.model_dump(mode="json") for scope in ordinary])
+    )
+    # A later call/book builds its own index; nothing persists globally.
+    assert build_native_source_visual_index(source, source_catalog_sha256=catalog_sha) is not index
+    assert counts == dict(source=2, question=count, hash=2, source_lookup=4)
 
 
 def test_contract_helper_has_no_infrastructure_import_or_io_calls():
