@@ -13,6 +13,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialKind
 from eom_workflow.material_learning_state import (
+    TERMINAL_MATERIAL_TASK_STATES,
     MaterialLearningState,
     MaterialTaskKind,
     MaterialTaskState,
@@ -485,10 +486,40 @@ def next_material_task(session: Session, run_id: str) -> MaterialLearningTaskRec
         select(MaterialLearningTaskRecord)
         .where(
             MaterialLearningTaskRecord.run_id == run_id,
-            MaterialLearningTaskRecord.state.not_in(
-                {"COMPLETED", "EXCEPTION", "FAILED", "CANCELLED"}
-            ),
+            MaterialLearningTaskRecord.state.not_in(TERMINAL_MATERIAL_TASK_STATES),
         )
         .order_by(MaterialLearningTaskRecord.ordinal, MaterialLearningTaskRecord.attempt.desc())
         .limit(1)
     )
+
+
+def material_question_processing_window(
+    session: Session, first: MaterialLearningTaskRecord, *, limit: int
+) -> tuple[MaterialLearningTaskRecord, ...]:
+    """Bound an original ordinal span, including terminal rows and kind barriers.
+
+    The application supplies its publisher's existing batch limit. Filtering out
+    terminal/non-question rows in SQL would accidentally cross a publication
+    boundary; the run/ordinal unique index already bounds this range lookup.
+    """
+    if first.task_kind != "QUESTION" or type(limit) is not int or limit < 1:
+        raise MaterialLearningStorageError("MATERIAL_LEARNING_TASK_WINDOW_INVALID")
+    rows = tuple(
+        session.scalars(
+            select(MaterialLearningTaskRecord)
+            .where(
+                MaterialLearningTaskRecord.run_id == first.run_id,
+                MaterialLearningTaskRecord.ordinal >= first.ordinal,
+            )
+            .order_by(MaterialLearningTaskRecord.ordinal)
+            .limit(limit)
+        )
+    )
+    if not rows or rows[0].task_id != first.task_id:
+        raise MaterialLearningStorageError("MATERIAL_LEARNING_TASK_WINDOW_CHANGED")
+    questions = []
+    for row in rows:
+        if row.task_kind != "QUESTION":
+            break
+        questions.append(row)
+    return tuple(questions)

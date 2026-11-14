@@ -1,5 +1,6 @@
 """Connect uploaded material tasks to the existing analysis and shared Graph owners."""
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,12 +33,13 @@ from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.preset_model_selection import current_model_preset
 from eom_workflow.control_plane import ExecutionPresetRevision
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.automatic_item_graph_publication_service import (
     INTEGRATED_SCIENCE_CORPUS_KEY,
+    MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
     AutomaticItemGraphCandidate,
     AutomaticItemGraphPublicationService,
 )
@@ -84,6 +86,24 @@ class MaterialAnalysisControls:
     solution: ExecutionPresetRevision
     risk_policy_revision_id: str
     access_policy_revision_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialItemGraphPublicationTarget:
+    task_id: str
+    analysis_run_id: str
+    item_revision_id: str
+
+    def __post_init__(self) -> None:
+        if any(
+            type(value) is not str or re.fullmatch(prefix + r"[0-9a-f]{32}", value) is None
+            for prefix, value in (
+                ("materialtask_", self.task_id),
+                ("analysisrun_", self.analysis_run_id),
+                ("itemrev_", self.item_revision_id),
+            )
+        ):
+            raise ValueError("MATERIAL_GRAPH_ITEM_TARGET_INVALID")
 
 
 class MaterialGraphLearningService:
@@ -268,44 +288,116 @@ class MaterialGraphLearningService:
     def publish_item(
         self, *, task_id: str, analysis_run_id: str, item_revision_id: str, operator_id: str
     ) -> str:
-        def validate(session: Session, analyses: tuple[AcceptedAnalysisProposal, ...]) -> None:
-            self._authorize_publication(session, operator_id)
-            resolved = resolve_completed_material_task(
-                session, self.artifacts, task_id=task_id, operator_id=operator_id
+        return self.publish_items(
+            targets=(
+                MaterialItemGraphPublicationTarget(task_id, analysis_run_id, item_revision_id),
+            ),
+            operator_id=operator_id,
+        )
+
+    def publish_items(
+        self, *, targets: tuple[MaterialItemGraphPublicationTarget, ...], operator_id: str
+    ) -> str:
+        """Append one bounded exact set, retaining every task/source fence on replay."""
+        if (
+            type(targets) is not tuple
+            or not 1 <= len(targets) <= MAX_AUTOMATIC_GRAPH_BATCH_SIZE
+            or any(type(target) is not MaterialItemGraphPublicationTarget for target in targets)
+            or any(
+                len({getattr(target, attribute) for target in targets}) != len(targets)
+                for attribute in ("task_id", "analysis_run_id", "item_revision_id")
             )
-            self.sources.reauthorize(session, operator_id=operator_id, work=resolved.work)
-            if (
-                len(analyses) != 1
-                or analyses[0].analysis_run_id != analysis_run_id
-                or not isinstance(analyses[0].source, ApprovedItemKnowledgeSourceV2)
-                or analyses[0].source.item_revision_id != item_revision_id
-                or analyses[0].source.source_class != "APPROVED_ITEM"
-            ):
+        ):
+            raise ValueError("MATERIAL_GRAPH_ITEM_TARGETS_INVALID")
+        analysis_ids = tuple(target.analysis_run_id for target in targets)
+
+        def validate(
+            session: Session,
+            analyses: tuple[AcceptedAnalysisProposal, ...],
+            expected: tuple[MaterialItemGraphPublicationTarget, ...],
+        ) -> None:
+            self._authorize_publication(session, operator_id)
+            task_ids = tuple(target.task_id for target in targets)
+            tasks_by_id = {
+                task.task_id: task
+                for task in session.scalars(
+                    select(MaterialLearningTaskRecord)
+                    .where(MaterialLearningTaskRecord.task_id.in_(task_ids))
+                    .execution_options(populate_existing=True)
+                )
+            }
+            if set(tasks_by_id) != set(task_ids):
                 raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+            tasks = tuple(tasks_by_id[task_id] for task_id in task_ids)
+            histories = read_material_task_histories(session, tasks)
+            for target, task in zip(targets, tasks, strict=True):
+                owner = histories[target.task_id].analysis_owner()
+                if (
+                    task.item_revision_id != target.item_revision_id
+                    or owner is None
+                    or owner.analysis_run_id != target.analysis_run_id
+                ):
+                    raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+                resolved = resolve_completed_material_task(
+                    session, self.artifacts, task_id=target.task_id, operator_id=operator_id
+                )
+                self.sources.reauthorize(session, operator_id=operator_id, work=resolved.work)
+            by_id = {analysis.analysis_run_id: analysis for analysis in analyses}
+            if len(by_id) != len(analyses) or set(by_id) != {
+                target.analysis_run_id for target in expected
+            }:
+                raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+            for target in expected:
+                source = by_id[target.analysis_run_id].source
+                if (
+                    not isinstance(source, ApprovedItemKnowledgeSourceV2)
+                    or source.item_revision_id != target.item_revision_id
+                    or source.source_class != "APPROVED_ITEM"
+                ):
+                    raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
 
         for _ in range(3):
             context = self.publication.current_structure_context(INTEGRATED_SCIENCE_CORPUS_KEY)
             with self.sessions() as session:
-                exact = (
-                    self.publication.resolve_accepted_analyses(session, (analysis_run_id,))[
-                        analysis_run_id
-                    ].analysis,
-                )
-                validate(session, exact)
-            if analysis_run_id in context.accepted_analysis_run_ids:
+                accepted = {}
+                # Preserve the public accepted-reader's released three-ID bound.
+                for offset in range(0, len(analysis_ids), 3):
+                    accepted.update(
+                        self.publication.resolve_accepted_analyses(
+                            session, analysis_ids[offset : offset + 3]
+                        )
+                    )
+                exact = tuple(accepted[identity].analysis for identity in analysis_ids)
+                validate(session, exact, targets)
+            included = set(context.accepted_analysis_run_ids)
+            pending = tuple(target for target in targets if target.analysis_run_id not in included)
+            if not pending:
                 return context.graph_snapshot_revision_id
+
+            def validate_pending(
+                session: Session,
+                analyses: tuple[AcceptedAnalysisProposal, ...],
+                expected: tuple[MaterialItemGraphPublicationTarget, ...] = pending,
+            ) -> None:
+                # The publisher passes only new candidates; existing members still
+                # retain the original Material authority and checkpoint checks.
+                validate(session, analyses, expected)
+
             try:
                 receipt = self.automatic.publish(
-                    (
+                    tuple(
                         AutomaticItemGraphCandidate(
-                            analysis_run_id, operator_id, context.graph_snapshot_revision_id
-                        ),
+                            target.analysis_run_id,
+                            operator_id,
+                            context.graph_snapshot_revision_id,
+                        )
+                        for target in pending
                     ),
                     required_source_class="APPROVED_ITEM",
                     retrieval_idempotency_namespace="material-item-align",
                     publication_idempotency_namespace="material-item-graph",
                     publisher_version=CURRENT_ITEM_GRAPH_PUBLISHER_VERSION,
-                    analysis_validator=validate,
+                    analysis_validator=validate_pending,
                 )
                 return receipt.graph_publication.graph_snapshot.graph_snapshot_revision_id
             except KnowledgeGraphPublicationError as error:

@@ -90,6 +90,10 @@ TASK_TRANSITIONS = MappingProxyType(
     }
 )
 
+TERMINAL_MATERIAL_TASK_STATES = frozenset(
+    state.value for state, targets in TASK_TRANSITIONS.items() if not targets
+)
+
 
 # Conversion/rendering is durable CPU work, never a disguised Codex job.
 PREPARATION_TASK_TRANSITIONS = MappingProxyType(

@@ -24,7 +24,7 @@ def case(monkeypatch, error):
     bases = [NS(analysis_run_id=f"synthetic-base-{i}", state="ACCEPTED") for i in range(2)]
     run = NS(run_id="synthetic-run", state="PROCESSING")
     claim = NS(run_id=run.run_id)
-    context = NS(operator_id="synthetic-operator")
+    context = NS(run_id=run.run_id, operator_id="synthetic-operator", intake=None)
     session = NS(get=lambda *_: run, expunge=Mock())
     service = object.__new__(owner.MaterialLearningProcessingService)
     service.sessions = lambda: nullcontext(session)

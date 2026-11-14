@@ -1,5 +1,6 @@
 """One material AI lane, durable question/knowledge checkpoints and official Graph handoff."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from eom_catalog_contracts import KnowledgeAnalysisApplicationResult
@@ -11,13 +12,25 @@ from eom_catalog_contracts.material_learning_preparation import (
     material_document_kind,
     material_document_source_class,
 )
+from eom_catalog_contracts.material_native_intake import MaterialNativeLearningIntakeManifest
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_workflow.material_learning_state import MaterialLearningState, MaterialTaskState
+from eom_workflow.material_learning_state import (
+    TERMINAL_MATERIAL_TASK_STATES,
+    MaterialLearningState,
+    MaterialTaskState,
+)
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from eom_catalog_service.automatic_item_graph_publication_service import (
+    MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
+)
 from eom_catalog_service.curriculum_graph_structure import integrated_science_curriculum_units
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisServiceError
-from eom_catalog_service.material_graph_learning import MaterialGraphLearningService
+from eom_catalog_service.material_graph_learning import (
+    MaterialGraphLearningService,
+    MaterialItemGraphPublicationTarget,
+)
 from eom_catalog_service.material_item_registration import MaterialItemRegistrationService
 from eom_catalog_service.material_learning_artifacts import (
     publish_material_metadata,
@@ -37,6 +50,7 @@ from eom_catalog_service.material_learning_source import MaterialLearningSourceE
 from eom_catalog_service.material_learning_store import (
     MaterialRunClaim,
     lock_material_run,
+    material_question_processing_window,
     next_material_task,
     transition_material_run,
     transition_material_task,
@@ -56,6 +70,18 @@ _TERMINAL_SOURCE_LIMITS = frozenset(
         "MATERIAL_LEARNING_SOURCE_RENDER_LIMIT",
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialQuestionGraphCheckpoint:
+    """Small accepted-analysis pins retained only across one publication call."""
+
+    task_id: str
+    item_revision_id: str
+    analysis_run_id: str
+    solution_analysis_run_id: str
+    analysis_result_sha256: str
+    solution_result_sha256: str
 
 
 class MaterialLearningProcessingService:
@@ -130,7 +156,7 @@ class MaterialLearningProcessingService:
                     return MaterialCoordinatorProgress(claim.run_id, None, "PAUSED")
             else:
                 with self.sessions() as session:
-                    task = next_material_task(session, claim.run_id)
+                    task = self._processing_task(session, context)
                     if task is not None:
                         session.expunge(task)
             if task is None:
@@ -145,6 +171,31 @@ class MaterialLearningProcessingService:
             raise ValueError("MATERIAL_LEARNING_PROCESSING_TASK_INVALID")
         finally:
             self.coordinator.release(claim)
+
+    def _processing_task(
+        self, session: Session, context: MaterialProcessingContext
+    ) -> MaterialLearningTaskRecord | None:
+        first = next_material_task(session, context.run_id)
+        if (
+            first is None
+            or first.task_kind != "QUESTION"
+            or first.state != "PUBLISHING"
+            or not isinstance(context.intake, MaterialNativeLearningIntakeManifest)
+        ):
+            return first
+        window = material_question_processing_window(
+            session, first, limit=MAX_AUTOMATIC_GRAPH_BATCH_SIZE
+        )
+        # PUBLISHING is accepted work waiting for the same bounded snapshot,
+        # not an active model. The original one-AI constraint remains untouched.
+        return next(
+            (
+                task
+                for task in window
+                if task.state not in TERMINAL_MATERIAL_TASK_STATES and task.state != "PUBLISHING"
+            ),
+            first,
+        )
 
     def _finish(self, claim: MaterialRunClaim) -> MaterialCoordinatorProgress:
         with self.sessions.begin() as session:
@@ -282,6 +333,8 @@ class MaterialLearningProcessingService:
             self._set_state(claim, task.task_id, MaterialTaskState.PUBLISHING)
             return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PUBLISHING")
         if task.state == "PUBLISHING":
+            if isinstance(context.intake, MaterialNativeLearningIntakeManifest):
+                return self._publish_native_questions(claim, context, task)
             base_id, _solution_id = self._analysis_pins(task.task_id)
             assert task.item_revision_id is not None and base_id is not None
             with self.coordinator.maintain_claim(claim):
@@ -299,6 +352,133 @@ class MaterialLearningProcessingService:
             self._set_state(claim, task.task_id, MaterialTaskState.COMPLETED)
             return MaterialCoordinatorProgress(claim.run_id, task.task_id, "COMPLETED")
         raise ValueError("MATERIAL_LEARNING_QUESTION_PHASE_INVALID")
+
+    def _question_graph_checkpoints(
+        self, session: Session, tasks: tuple[MaterialLearningTaskRecord, ...]
+    ) -> tuple[MaterialQuestionGraphCheckpoint, ...]:
+        if not tasks or len(tasks) > MAX_AUTOMATIC_GRAPH_BATCH_SIZE:
+            raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_INVALID")
+        if len({task.task_id for task in tasks}) != len(tasks):
+            raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_INVALID")
+        histories = read_material_task_histories(session, tasks)
+        pins: dict[str, tuple[str, str]] = {}
+        for task in tasks:
+            history = histories[task.task_id]
+            base, public = history.analysis_owner(), history.analysis_owner(solution=True)
+            if (
+                task.task_kind != "QUESTION"
+                or task.run_id != tasks[0].run_id
+                or task.item_revision_id is None
+                or base is None
+                or base.analysis_run_id is None
+                or public is None
+                or public.solution_analysis_run_id is None
+            ):
+                raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_PIN_CHANGED")
+            pins[task.task_id] = (base.analysis_run_id, public.solution_analysis_run_id)
+        analysis_ids = {identity for pair in pins.values() for identity in pair}
+        analyses = {
+            row.analysis_run_id: row
+            for row in session.scalars(
+                select(KnowledgeAnalysisRunRecord).where(
+                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(analysis_ids)
+                )
+            )
+        }
+        checkpoints = []
+        for task in tasks:
+            base_id, public_id = pins[task.task_id]
+            base_run, public_run = analyses.get(base_id), analyses.get(public_id)
+            if (
+                base_run is None
+                or public_run is None
+                or base_run.state != "ACCEPTED"
+                or public_run.state != "ACCEPTED"
+                or base_run.item_revision_id != task.item_revision_id
+                or public_run.item_revision_id != task.item_revision_id
+                or public_run.predecessor_analysis_run_id != base_id
+                or base_run.accepted_result_sha256 is None
+                or public_run.accepted_result_sha256 is None
+            ):
+                raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_ANALYSIS_NOT_ACCEPTED")
+            assert task.item_revision_id is not None
+            checkpoints.append(
+                MaterialQuestionGraphCheckpoint(
+                    task.task_id,
+                    task.item_revision_id,
+                    base_id,
+                    public_id,
+                    base_run.accepted_result_sha256,
+                    public_run.accepted_result_sha256,
+                )
+            )
+        return tuple(checkpoints)
+
+    def _pin_question_graph_batch(
+        self,
+        claim: MaterialRunClaim,
+        checkpoints: tuple[MaterialQuestionGraphCheckpoint, ...],
+        graph_revision: str,
+    ) -> None:
+        if (
+            not checkpoints
+            or len(checkpoints) > MAX_AUTOMATIC_GRAPH_BATCH_SIZE
+            or len({checkpoint.task_id for checkpoint in checkpoints}) != len(checkpoints)
+        ):
+            raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_INVALID")
+        self.coordinator.authorize(claim)
+        with self.sessions.begin() as session:
+            run = lock_material_run(session, claim, now=datetime.now(UTC))
+            by_id = {
+                task.task_id: task
+                for task in session.scalars(
+                    select(MaterialLearningTaskRecord)
+                    .where(
+                        MaterialLearningTaskRecord.task_id.in_(
+                            tuple(checkpoint.task_id for checkpoint in checkpoints)
+                        )
+                    )
+                    .order_by(MaterialLearningTaskRecord.task_id)
+                    .with_for_update()
+                )
+            }
+            if len(by_id) != len(checkpoints) or any(
+                task.run_id != run.run_id or task.state != "PUBLISHING" for task in by_id.values()
+            ):
+                raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_PIN_CHANGED")
+            tasks = tuple(by_id[checkpoint.task_id] for checkpoint in checkpoints)
+            if self._question_graph_checkpoints(session, tasks) != checkpoints:
+                raise ValueError("MATERIAL_LEARNING_GRAPH_BATCH_PIN_CHANGED")
+            for task in tasks:
+                if task.graph_snapshot_revision_id not in {None, graph_revision}:
+                    raise ValueError("MATERIAL_LEARNING_GRAPH_PIN_CHANGED")
+                task.graph_snapshot_revision_id = graph_revision
+                transition_material_task(
+                    session, run, task, MaterialTaskState.GRAPH_READY, now=datetime.now(UTC)
+                )
+
+    def _publish_native_questions(
+        self,
+        claim: MaterialRunClaim,
+        context: MaterialProcessingContext,
+        first: MaterialLearningTaskRecord,
+    ) -> MaterialCoordinatorProgress:
+        with self.sessions() as session:
+            window = material_question_processing_window(
+                session, first, limit=MAX_AUTOMATIC_GRAPH_BATCH_SIZE
+            )
+            pending = tuple(task for task in window if task.state == "PUBLISHING")
+            checkpoints = self._question_graph_checkpoints(session, pending)
+        targets = tuple(
+            MaterialItemGraphPublicationTarget(
+                checkpoint.task_id, checkpoint.analysis_run_id, checkpoint.item_revision_id
+            )
+            for checkpoint in checkpoints
+        )
+        with self.coordinator.maintain_claim(claim):
+            revision = self.graph.publish_items(targets=targets, operator_id=context.operator_id)
+            self._pin_question_graph_batch(claim, checkpoints, revision)
+        return MaterialCoordinatorProgress(claim.run_id, first.task_id, "GRAPH_READY")
 
     def _pin_analysis(
         self,

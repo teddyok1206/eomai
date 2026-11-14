@@ -12,6 +12,15 @@ Material owner의 private SDK나 Pack만 갱신해도 이 전역 executor의 이
 안내문이 바뀌는 것은 아니다. 프롬프트 수정의 운영 반영은 실제 실행자 설치/재시작과
 새 worker 입력 provenance로 확인하고, 과거 입력은 바꾸지 않는다.
 
+Native 시험지의 QUESTION은 기존 one-AI lane을 유지하면서 최대25개 ordinal 구간의
+accepted base/공개 풀이를 준비한 뒤 공통 Graph를 한 번 게시할 수 있다.
+`material_question_processing_window`는 terminal 행도 구간에 포함하고 EXPLANATION에서
+멈춘다. processing의 checkpoint는 공개 풀이·Item/base·hash를 pin하며, 실제 publication
+뒤 동일 claim의 한 transaction에서만 GRAPH_READY를 연결한다. `publish_items`는 기존
+automatic publisher와 exact-member replay를 재사용한다. non-native/설명/발견 경로는
+기존 순서다. 설계·후보 검증과 실제 SDK 활성화는 `NATIVE_EXAM_ITEM_INTAKE.md` 및 운영
+checkpoint에서 구분한다. 새 worker schema/DB queue를 만드는 기능이 아니다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,

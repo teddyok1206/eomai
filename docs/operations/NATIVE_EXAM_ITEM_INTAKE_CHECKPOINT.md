@@ -892,3 +892,34 @@ r2 marker 검사는 서비스 교체 전에 거절됐고 실패 로그/빈 r2 RO
 450문항 목표는 ACTIVE이며 완료로 바꾸지 않았다. 나머지17회차 접수와 실제 HTTPS
 native 다운로드는 기존 tmux2번 `native-exam`의 최초 Studio 로그인 입력을 기다린다.
 새 로그인 창·새 idempotency key·중복 검색/모델 실행은 만들지 않았다.
+
+### Native 25문항 Graph 묶음 연결 — 소스 검증, 아직 운영 미활성화
+
+문항별 full publication 비용을 줄이기 위해 기존 automatic publisher의1..25개
+candidate 기능을 Native Material processing에 연결했다. 단일 모델 lane·기존 task
+상태·worker schema·DB는 그대로이고, non-native/설명/발견 순서는 바꾸지 않는다.
+원 ordinal의 최대25행(terminal 포함)과 EXPLANATION barrier 안에서만 다음 분석을
+진행한다. source/task/base/Item·현재 권한 검사는 replay/부분 membership/최종 publication
+에서도 전체 target에 수행하며, Task lookup은 기존 PK의 한 IN query로 묶었다.
+
+실제 Graph를 반환받은 뒤 run claim과 task 잠금의 한 transaction에서 accepted
+base/public·Item·predecessor·두 결과 SHA와 원 checkpoint를 다시 대조해 GRAPH_READY를
+연결한다. 부분 실패는 모든 task/event 변경이 rollback한다. Graph 성공 후 link 전
+중단은 기존 membership replay로 복구하고 paid model·Item·기존 Graph를 재생성하지 않는다.
+accepted-analysis public reader의3개 한도도 기존 bounded chunk로 유지한다.
+
+- 집중 source unit210개, mypy4개 source, Ruff/format PASS.
+- 실제 disposable PostgreSQL에서 migration79 왕복·runtime role reconcile과 Material
+  persistence89개 PASS. 운영 DB/NAS/모델을 테스트에 사용하지 않았다.
+- 새 atomic/concurrency/window22개도 위89개에 포함된다. 처음 세 fixture는 canonical
+  task의 base/public/run을 직접 바꾸려다 기존 immutable-history trigger가 거절했다.
+  trigger를 끄지 않고 잘못된 expected checkpoint/별도 실제 run을 입력하는 검증으로
+  고쳤으며, 원 실패 로그도 보존했다. 중복 집계로89+22라고 보고하지 않는다.
+- 증거: `staging/native-batch-{mypy,unit}-final-20261114.log`,
+  `staging/native-question-batch-testdb-{migrate,reconcile,suite-final,cleanup}-20261114.log`.
+  실제900개 fragment 재변환·live 모델 재실행은0이다.
+
+설계와 별도 독립 검토는 `NATIVE_EXAM_ITEM_INTAKE.md`의 Native25 절을 따른다.
+기존51 runtime은 아직 이 묶음 코드를 사용하지 않는다. 현재 publication을 정상 완료한
+뒤 private Material SDK만 새 후보로 인계하고 실제 task/Graph 진행을 확인해야 한다.
+GPU의 현재 numerical 실행·수치 설치·벡터는 보존한다. 전체450 목표는 미완료다.

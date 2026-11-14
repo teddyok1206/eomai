@@ -316,3 +316,58 @@ DB 검증은 명시적으로 승인된 격리 integration 환경에서만 한다
 유지한다. 기출 확장 검증은 같은 provenance를 공유하는 서로 다른 승인 Item 두 개를
 publication하고, 읽기 후 최종 검증 전 source 철회 시 publication/current-corpus가
 바뀌지 않는지 검사한다. source-only 검증을 이 DB 통합 검사의 실행으로 간주하지 않는다.
+
+## Native 시험지의 기존 25문항 Graph publication 재사용
+
+2026-11-14 설계. 운영에서 첫 네 문항을 각각 게시했고 한 번의 full publication에
+약10분이 관측됐다. 그 시간 전체를 특정 cache 원인으로 단정하지 않는다. 실제450건에
+문항별 full publication을 반복하는 대신, 이미 있는
+`AutomaticItemGraphPublicationService.publish`의 최대25개 candidate 기능을 연결한다.
+이 설계는 아직 운영 활성화 증거가 아니며 이전 네 Graph를 삭제·합치거나 다시 만들지 않는다.
+
+1. 경계: `MaterialNativeLearningIntakeManifest`의 QUESTION 처리만 개선한다.
+   기존 Material processing/store가 순서·claim·checkpoint를 소유하고 Material Graph
+   adapter가 기존 automatic publisher를 호출한다. 설명/교과서·DISCOVER와 non-native
+   입력의 순서·worker 계약은 바꾸지 않는다. 별도 queue/cohort/Graph framework는 없다.
+2. 정본: 원본 intake/native bundle/XLSX, 기존 task output, 등록 Item Revision 및
+   ACCEPTED base·공개 풀이의 exact identity/hash다. worker를 재실행하거나 문항을 다시
+   등록해 묶음을 만들지 않는다. 공개 풀이가 승인되기 전에는 publication 후보가 아니다.
+3. ID/포인터: 같은 run의 연속 QUESTION 구간에서 최대25개의 task/base/Item Revision
+   target tuple을 만든다. 새 영속 batch ID는 필요 없다. 기존 publisher가 현재 Graph를
+   명시적으로 CAS하며 기존 accepted/member/schema/hash/source 권한 검사를 유지한다.
+   결과는 실제 반환된 하나의 immutable Graph revision이고 포함된 task만 참조한다.
+4. 연산: 기존 indexed next-task lookup, run/ordinal의 bounded ordered window,
+   task/analysis/item ID의 map/set 검증과 하나의 publication이다. 완성·실패 task를
+   되살리지 않고 다른 task kind 경계나25개 window를 넘어서 묶지 않는다.
+5. 구조/index: 기존 `(run_id, ordinal)` unique B-tree와 run/state/ordinal index를
+   재사용한다. 원본 자료·문항·보고서는 복사하지 않고 작은 frozen target tuple만 전달한다.
+   새 DB 열/index/schema/worker message를 만들지 않는다. 기존 JSON Schema2020-12와
+   Pydantic 및 PUBLISHING→GRAPH_READY→COMPLETED 의미를 그대로 유지한다.
+6. 비용: window·candidate 검사는 K≤25에 선형이다. 같은 그룹에서 K회의 full snapshot
+   작업을1회로 줄이되 개별 분석/근거 정렬·현재 권한/source 검사는 생략하지 않는다.
+   첫 네 Graph를 보존하면 남은446개는 이상적인25개 구간에서 추가18회 publication이다.
+   약10분×450 같은 단순 곱은 병목의 크기를 설명할 뿐 완료시간·개선율 보장이 아니다.
+7. 동시성: 모델 작업의 전역 one-AI unique/advisory lane은 유지한다. PUBLISHING은
+   이미 accepted 결과의 대기 상태이므로, 같은 bounded QUESTION 구간의 다음 분석을
+   진행할 수 있다. 같은 run claim을 유지하며 실제 Graph 성공 후 짧은 한 transaction에서
+   후보 task의 상태·run·Item/base/public pins·lease token을 재검증해 모두 GRAPH_READY로
+   연결한다. claim 상실·취소·pin 변경이면 link transaction 전체가 rollback한다.
+8. 소유: store는 indexed metadata 선택, processing은 기존 상태 전이, Graph adapter는
+   각 source/accepted analysis 재승인과 기존 automatic publisher 호출을 맡는다.
+   domain/schema가 SQL·NAS·systemd를 import하지 않는다. Creative/Notion 전용 source
+   validator를 가져오지 않는다. 같은 shared Graph를 기존 Material 출처 검증으로 확장한다.
+9. 재시도: 현재 Graph에 일부 후보만 이미 있으면 exact accepted/source를 모두 검증하고
+   미포함 후보만 기존 publisher에 전달한다. 전부 있으면 검증한 실제 Graph 참조만
+   반환한다. Graph 성공 후 link 전 중단은 이 membership replay로 복구하며 paid report,
+   native 파일·Item·기존 FAILED·과거 Graph를 다시 만들거나 성공으로 바꾸지 않는다.
+   기존 current-Graph CAS 재관측 최대3회와 permission/hash/revocation 오류를 유지한다.
+10. 검증/배포: 1·25·26문항 경계, 기존 완료/실패·EXPLANATION barrier, single-AI 유지,
+    중복 ID·다른 source/run·hash/권한 철회·부분 membership·CAS 충돌·Graph 성공 후
+    link 중단·stale claim·atomic linkage를 unit/disposable PostgreSQL에서 검사한다.
+    합성 다문항 사례는 full publication 호출 수와 정확한 included set을 검사한다.
+    live model/기존450재변환/운영 pytest는 하지 않는다. 배포는 실행 중인51을 건드리지
+    않고 새 private Material SDK를 검증한 뒤 정상 drain 지점에서만 인계한다.
+11. 단순 대안: 현재처럼 매 문항을 full publication하면450건의 반복 비용이 남고,
+    worker 수를 늘리면 요청한 단일 model lane/사용량을 바꾼다. 반대로 task를 먼저
+    완료 처리하거나 임의 SQL로 Graph를 연결하면 실제 membership/claim을 잃는다.
+    기존25개 publisher와 기존 대기 상태를 연결하는 것이 필요한 최소 확장이다.
