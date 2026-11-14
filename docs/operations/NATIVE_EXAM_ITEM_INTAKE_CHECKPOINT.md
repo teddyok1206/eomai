@@ -345,7 +345,7 @@ wire/profile/기존 checkpoint를 수정하는 기능은 아니다. renderer의 
 
 첫 picture-use 추출 실패의 원인은 원문 JPEG 7개의 **CMYK** mode였다. 기존 decoder는
 픽셀을 읽었지만 PNG 저장 단계가 `cannot write mode CMYK as PNG`로 거절됐다. source
-`3587bc6ddf110ea2f949567c92e5e7fdce57bb59`는 이미 decode한 CMYK 픽셀을 RGB로 바꿔
+`3587bc6ddf110ea2f949567c92e5e7fdce57bb59`는 이미 decode한 CMYK 픽셀을 RGBA로 바꿔
 저장하도록 수정하며, 오류를 숨기거나 원문 그림을 PDF crop으로 대체하지 않는다.
 
 - 수정된 별도 CPU 도구를 `/opt/eom/office-image-tools/3587bc6ddf110ea2f949567c92e5e7fdce57bb59`

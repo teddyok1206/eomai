@@ -227,7 +227,7 @@ document Artifact job이 먼저 생긴 경우도 거절한다. 같은 material r
 가진 predecessor-linked PREPARE attempt를 만들고 기존 input·FAILED 이벤트를 보존한다.
 `material_learning_store.material_preparation_task`가 이 task를 원래 coordinator에 연결한다.
 동시성·중단·재전송 검증은 `test_material_learning_recovery_storage.py`와 native 등록 DB
-suite를 함께 본다. 원문 JPEG의 CMYK→RGB PNG 정규화는 기존 image adapter의 책임이며,
+suite를 함께 본다. 원문 JPEG의 CMYK→RGBA PNG 정규화는 기존 image adapter의 책임이며,
 unsupported EMF를 성공한 raster로 간주하지 않는다. 실제 설치·복구 상태는
 `docs/operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md`에서 따로 확인한다.
 
