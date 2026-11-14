@@ -160,15 +160,20 @@ def _normalize_raster(payload: bytes) -> tuple[bytes, str, str, int, int] | None
                 if not 0 < width <= 10000 or not 0 < height <= 10000 or width * height > 20_000_000:
                     raise OfficeEmbeddedImageError("OFFICE_EMBEDDED_PIXEL_LIMIT")
                 source.load()
-                pixel_sha256 = _sha(
-                    struct.pack("<II", width, height) + source.convert("RGBA").tobytes()
-                )
-                if source_format == "PNG":
-                    result = payload
-                else:
-                    output = io.BytesIO()
-                    source.save(output, format="PNG", compress_level=9)
-                    result = output.getvalue()
+                with source.convert("RGBA") as decoded_pixels:
+                    pixel_sha256 = _sha(
+                        struct.pack("<II", width, height) + decoded_pixels.tobytes()
+                    )
+                    if source_format == "PNG":
+                        result = payload
+                    else:
+                        output = io.BytesIO()
+                        # PNG cannot encode CMYK. Use the exact decoded pixels
+                        # already checked by this contract, not a new color/style
+                        # transform. Preserve predecessor bytes for other modes.
+                        png_source = decoded_pixels if source.mode == "CMYK" else source
+                        png_source.save(output, format="PNG", compress_level=9)
+                        result = output.getvalue()
             # Require the normalized PNG to retain every decoded source pixel.
             with Image.open(io.BytesIO(result)) as normalized:
                 if (

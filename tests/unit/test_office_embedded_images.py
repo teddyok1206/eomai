@@ -83,6 +83,89 @@ def test_duplicate_rasters_have_one_output_but_separate_source_members(tmp_path:
     assert result.images[0].sha256 == result.images[1].sha256
 
 
+@pytest.mark.parametrize("format", ["JPEG", "TIFF"])
+def test_cmyk_images_preserve_every_decoded_pixel_when_saved_as_png(
+    tmp_path: Path, format: str
+) -> None:
+    with Image.open(io.BytesIO(raster())) as original, original.convert("CMYK") as cmyk:
+        encoded = io.BytesIO()
+        cmyk.save(encoded, format=format)
+    raw = encoded.getvalue()
+    source = hwpx(tmp_path, ((f"BinData/image.{format.lower()}", raw),))
+    result = extract_office_embedded_images(
+        source, expected_sha256=sha(source), workspace=tmp_path / "output"
+    )
+    assert len(result.images) == 1 and result.unsupported_members == ()
+    image = result.images[0]
+    assert image.source_format == format
+    assert image.source_member_sha256 == "sha256:" + hashlib.sha256(raw).hexdigest()
+    with (
+        Image.open(io.BytesIO(raw)) as before,
+        Image.open(tmp_path / "output" / image.member_path) as after,
+    ):
+        assert before.mode == "CMYK" and after.mode == "RGBA"
+        assert before.size == after.size == (19, 13)
+        assert before.convert("RGBA").tobytes() == after.tobytes()
+        pixel_bytes = struct.pack("<II", *before.size) + before.convert("RGBA").tobytes()
+        assert image.pixel_sha256 == "sha256:" + hashlib.sha256(pixel_bytes).hexdigest()
+
+
+@pytest.mark.parametrize("mode", ["RGB", "L", "P", "RGBA"])
+def test_png_modes_keep_original_bytes_including_palette_and_alpha(
+    tmp_path: Path, mode: str
+) -> None:
+    with Image.open(io.BytesIO(raster())) as original, original.convert(mode) as pixels:
+        if mode == "RGBA":
+            pixels.putpixel((0, 0), (23, 45, 67, 89))
+        encoded = io.BytesIO()
+        pixels.save(encoded, format="PNG")
+    raw = encoded.getvalue()
+    source = hwpx(tmp_path, (("BinData/original.png", raw),))
+    result = extract_office_embedded_images(
+        source, expected_sha256=sha(source), workspace=tmp_path / "output"
+    )
+    assert (tmp_path / "output" / result.images[0].member_path).read_bytes() == raw
+
+
+def test_rgb_jpeg_keeps_predecessor_png_encoding(tmp_path: Path) -> None:
+    raw = raster("JPEG")
+    with Image.open(io.BytesIO(raw)) as original:
+        original.load()
+        predecessor = io.BytesIO()
+        original.save(predecessor, format="PNG", compress_level=9)
+    source = hwpx(tmp_path, (("BinData/image.jpg", raw),))
+    result = extract_office_embedded_images(
+        source, expected_sha256=sha(source), workspace=tmp_path / "output"
+    )
+    assert (
+        tmp_path / "output" / result.images[0].member_path
+    ).read_bytes() == predecessor.getvalue()
+
+
+def test_truncated_cmyk_jpeg_is_not_silently_repaired(tmp_path: Path) -> None:
+    encoded = io.BytesIO()
+    Image.new("CMYK", (19, 13), (17, 128, 192, 33)).save(encoded, format="JPEG")
+    raw = encoded.getvalue()[:-20]
+    source = hwpx(tmp_path, (("BinData/broken.jpg", raw),))
+    with pytest.raises(OfficeEmbeddedImageError, match="RASTER_INVALID"):
+        extract_office_embedded_images(
+            source, expected_sha256=sha(source), workspace=tmp_path / "output"
+        )
+
+
+def test_cmyk_decompression_bomb_still_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    encoded = io.BytesIO()
+    Image.new("CMYK", (19, 13), (17, 128, 192, 33)).save(encoded, format="JPEG")
+    source = hwpx(tmp_path, (("BinData/image.jpg", encoded.getvalue()),))
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 200)
+    with pytest.raises(OfficeEmbeddedImageError, match="RASTER_INVALID"):
+        extract_office_embedded_images(
+            source, expected_sha256=sha(source), workspace=tmp_path / "output"
+        )
+
+
 def test_reference_images_are_not_implicitly_approved_for_the_item(tmp_path: Path) -> None:
     source = hwpx(
         tmp_path, (("BinData/question.png", raster()), ("BinData/reference.png", raster("BMP")))
