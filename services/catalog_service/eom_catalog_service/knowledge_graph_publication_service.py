@@ -168,6 +168,7 @@ from eom_catalog_service.past_exam_origin_resolution import (
     past_exam_origin_inputs,
     resolve_past_exam_origins,
 )
+from eom_catalog_service.past_exam_source_provenance import PastExamSourceResolutionCache
 from eom_catalog_service.settings import CatalogSettings
 
 KNOWLEDGE_GRAPH_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.0"
@@ -926,11 +927,13 @@ class KnowledgeGraphPublicationService:
                 previous_snapshot_revision_id = current_snapshot.graph_snapshot_revision_id
 
             document_source_cache = EducationalDocumentSourceResolutionCache()
+            past_exam_cache = PastExamSourceResolutionCache()
             analyses = tuple(
                 self._load_accepted_analysis(
                     session,
                     run_id,
                     document_source_cache=document_source_cache,
+                    past_exam_cache=past_exam_cache,
                 )
                 for run_id in command.accepted_analysis_run_ids
             )
@@ -1230,6 +1233,7 @@ class KnowledgeGraphPublicationService:
         run_id: str,
         *,
         document_source_cache: EducationalDocumentSourceResolutionCache | None = None,
+        past_exam_cache: PastExamSourceResolutionCache | None = None,
     ) -> AcceptedAnalysisProposal:
         run = session.get(KnowledgeAnalysisRunRecord, run_id)
         if (
@@ -1273,6 +1277,7 @@ class KnowledgeGraphPublicationService:
                 session,
                 request,
                 document_source_cache=document_source_cache,
+                past_exam_cache=past_exam_cache,
             )
         except (ValidationError, KnowledgeAnalysisSourceError) as exc:
             raise KnowledgeGraphPublicationError(
@@ -1649,6 +1654,7 @@ class KnowledgeGraphPublicationService:
         request: KnowledgeAnalysisRequestContract,
         *,
         document_source_cache: EducationalDocumentSourceResolutionCache | None = None,
+        past_exam_cache: PastExamSourceResolutionCache | None = None,
     ) -> (
         ContentIntakeKnowledgeSourceV2
         | ApprovedItemKnowledgeSourceV2
@@ -1682,6 +1688,7 @@ class KnowledgeGraphPublicationService:
                 artifacts=self.artifacts,
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,
+                past_exam_cache=past_exam_cache,
             )
         return resolve_educational_document_source(
             session,

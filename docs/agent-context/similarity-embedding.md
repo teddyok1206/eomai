@@ -207,6 +207,11 @@ systemd 읽기 timeout만 2/3초로 한 번 재시도하며, 잘못된 응답·�
 그대로 거부한다. 로그인·session capture·검색 submit을 재시도하거나 권한을 캐시하지 않는다.
 QUERY driver 진단은 제한된 authority 오류 코드와 위치만 남기며 원문/인증값은 남기지 않는다.
 
+`inference_transfer_cpu_systemd.inspect_fixed_unit`의 유한 재관측은 같은 read-only
+`systemctl show`의 `TimeoutExpired`만 한 번 더 읽는다. 두 번 실패하면 원래 상태 조회
+불가 오류로 종료하며, 성공 응답도 전체 unit/peer 검사를 통과해야 한다. start·dispatch·
+claim·계산을 재실행하는 권한이나 실패한 allocation의 자동 복구가 아니다.
+
 `reference_query_routed_execution`은 원 CUDA allocation이 BOUND 전에 마감되면
 기존 FAILED 읽기 결과를 반환한다. PENDING 재조회가 원 GPU channel을 다시 시작하지
 않는 규칙은 유지한다. BOUND/완료 결과는 이 준비 마감 판정에서 제외한다. 이 projection은

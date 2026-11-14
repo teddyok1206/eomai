@@ -272,3 +272,47 @@ reader가 거절했다. 모델 응답·원문을 고쳐 쓰거나 여섯 분석�
 검증은 명확한 해설 머리말/종전 숫자/모호한 그룹·설명 거절, 25쌍 대응, immutable
 predecessor/output, 동시 동일 복구와 stale/권한/lease/부분 등록 거절을 포함한다.
 설치 전 소스 검증과 실제 운영의 최종화·문항 등록 성공을 분리한다.
+
+## 공통 Graph publication의 기존 기출 출처 재해석 비용
+
+2026-11-14. Native 문항을 공통 Graph에 추가할 때 기존 accepted 기출 출처도 다시
+검증한다. 다음 변경은 publication 읽기 단계의 기존 해석기 재사용이며, 실행·배포·권한
+확대나 분석 결과 재작성은 아니다.
+
+1. 소유자는 `KnowledgeGraphPublicationService.publish`의 단일 읽기 session이다.
+   기존 `PastExamSourceResolutionCache`만 연결하며 관계 preload는 추가하지 않는다.
+2. 정본은 고정 Item/분석/Artifact revision, SHA와 현재 승인·수명주기·출처 관계다.
+   cache에는 불변 BATCH/ACCEPTANCE/RESULT/LAYOUT 해석과 keyed index만 보관한다.
+3. 논리 ID/revision/hash를 바꾸지 않는다. 정확한 Artifact/member/schema/media/hash/
+   read bound가 cache key이며 latest나 새로운 Graph/source identity를 만들지 않는다.
+4. 주된 연산은 동일 불변 member의 중복 해석과 key 조회다. 기존 dict/tuple index를 쓰며
+   현재 Item/승인/lineage 관계의 scalar SQL 질의와 검사는 그대로 수행한다.
+5. cache의 1,024 member/64MiB source bytes/100,000 index row 한도를 유지한다.
+   초과 값은 완전히 검증하되 보관하지 않는다. Python RSS 한도와 동일한 수치는 아니다.
+6. 전체 typed source 검증은 문항마다 수행한다. 새 hint query/관계 preload나 publication
+   source 수 한도를 만들지 않으며 cache 예산 초과도 종전 검증·오류 의미를 바꾸지 않는다.
+7. 비용은 반복 JSON bytes 해석 O(N·B)에서 고유 member 해석 O(U·B)+문항 검증 O(N)으로,
+   다른 Item/Artifact/페이지/accepted-result/receipt 검증 비용은 제거하지 않는다.
+   SQL 비용이 남으면 기존 `read_item_source_relations` 적용을 별도로 측정·검토한다.
+8. cache는 첫 읽기 session/transaction에만 속한다. service/global/Session.info나
+   최종 쓰기 transaction에 넘기지 않는다. 동시 publication은 별도 cache를 사용한다.
+9. 실제 actor 권한·source approval/lifecycle·report/receipt/hash 비교와 NAS publication 후
+   현재 source fence는 유지한다. 최종 advisory lock/current-corpus CAS와 재전송 의미도 같다.
+10. 실패 decode는 보관하지 않고 잘못된 pin·철회·누락·중복은 원래 해석기가 거절한다.
+    기존 역사와 출력은 불변이며 DB/schema/index/worker 계약·의존성을 추가하지 않는다.
+11. 전체 Graph 재검증을 생략하거나 전역 cache를 두는 대안은 현재 권한·재현성을 약화한다.
+    이미 존재하는 owner-local cache 입력만 전달하는 것이 더 작은 변경이다.
+
+`tests/unit/test_knowledge_graph_publication_source_cache.py`는 동일한 기출 출처를 서로
+다른 analysis run ID로 520회 해석하는 synthetic 회귀다. 공유 provenance member 4개의
+read가 2,080→4회로 줄어도 scalar SQL/page-member 검증 횟수와 canonical projection
+bytes/SHA가 같아야 한다. 다음 publication의 fresh capture, 예산 fallback과 철회/오류도
+검사한다. 이 결과를 실제 서로 다른 520문항의 고유 member 수나 약 17분 publication
+전체의 원인 분해·운영 활성화 증거로 주장하지 않는다.
+
+DB 검증은 명시적으로 승인된 격리 integration 환경에서만 한다. 기존
+`test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently`
+의 concurrent-CAS/replay와 `test_graph_publication_interruption.py`의 네 interruption 경계를
+유지한다. 기출 확장 검증은 같은 provenance를 공유하는 서로 다른 승인 Item 두 개를
+publication하고, 읽기 후 최종 검증 전 source 철회 시 publication/current-corpus가
+바뀌지 않는지 검사한다. source-only 검증을 이 DB 통합 검사의 실행으로 간주하지 않는다.

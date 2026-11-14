@@ -270,19 +270,29 @@ def inspect_fixed_unit(
         for path in expected_drop_in_paths
     ):
         raise ValueError("INFERENCE_CPU_STATUS_INVALID")
-    result = subprocess.run(
-        (
-            SYSTEMCTL,
-            "--no-pager",
-            "show",
-            unit_name,
-            *(f"--property={name}" for name in _PROPERTIES),
-        ),
-        capture_output=True,
-        check=False,
-        timeout=15,
-        env=_ENVIRONMENT,
+    argv = (
+        SYSTEMCTL,
+        "--no-pager",
+        "show",
+        unit_name,
+        *(f"--property={name}" for name in _PROPERTIES),
     )
+    # Only the read-only observation can repeat; no start, claim or peer authority
+    # is replayed. Every successful response still passes the complete parser below.
+    for attempt in range(2):
+        try:
+            result = subprocess.run(
+                argv,
+                capture_output=True,
+                check=False,
+                timeout=15,
+                env=_ENVIRONMENT,
+            )
+        except subprocess.TimeoutExpired as error:
+            if attempt:
+                raise ValueError("INFERENCE_CPU_STATUS_UNAVAILABLE") from error
+        else:
+            break
     if result.returncode != 0 or len(result.stdout) > 16 * 1024 or len(result.stderr) > 16 * 1024:
         raise ValueError("INFERENCE_CPU_STATUS_UNAVAILABLE")
     output = result.stdout.decode("utf-8", errors="strict")

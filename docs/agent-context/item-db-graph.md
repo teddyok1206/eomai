@@ -61,6 +61,12 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 저장된 경고/이상 기록까지 보이는지 확인한다. 내용상 문제를 기록하는 것과 기술적 실패를
 성공으로 꾸미는 것은 다르다. 기존 FAILED는 보존하고 지원된 reconcile/retry만 쓴다.
 
+공통 Graph publication은 읽기 transaction마다 기존 `PastExamSourceResolutionCache`를
+하나 생성해 공유 기출 provenance의 반복 해석만 줄인다. 현재 승인·권한·source lineage와
+페이지 member 검사는 문항마다 유지하며, cache를 최종 쓰기 transaction이나 service에
+보관하지 않는다. `test_knowledge_graph_publication_source_cache.py`가 출력 동등성과
+읽기 횟수·철회·예산 fallback을 검증한다. source 후보와 실제 설치는 구분한다.
+
 분석의 최초 멱등 key가 FAILED를 가리켜도 `KnowledgeAnalysisApplicationService.resolve_retry`
 가 명시적 predecessor chain의 같은 source/operator/preset/hash만 따라간다. cohort의
 cached failed 분석도 이 owner에서 확인한 뒤 보류를 판정한다. terminal worker 실패와

@@ -675,3 +675,38 @@ retirement까지 모두 PASS다. 저장된 JSON을 실행 권한이나 live 관�
 
 INDEX/QUERY 제어 설정 전환·원래 retained 작업 복구·새 vector commit/retrieval은 아직
 남아 있다. CPU/CUDA 설치 검증 완료를 서비스 재개나 전체 450문항 완료로 확대하지 않는다.
+
+### 11:13–11:17 UTC: 제어 설정 연결 완료·INDEX의 별도 상태 조회 timeout
+
+CPU/CUDA 실제 receipt를 기존 backend/environment serializer와 routing Artifact publisher로
+연결해 15개 환경·설정·QUERY unit 파일을 함께 선택했다. config6의 legacy=null·단일
+public-solution namespace·API provider7084·INDEX executable47fc·QUERY owner11d는
+유지했고 host-aware verifier/prepare/controller만 e042로 바꿨다. 새 verifier는 실제 CPU
+prefix와 선택 cache를 사용한 격리 실행에서 exit0을 확인했다. 기존12개 REQUESTED는 모두
+구 service revision의 무시작 이력이며 현재 e492 claim query가 선택하지 않으므로 보존했다.
+
+QUERY는 새 InvocationID `0e3dad6b31e645e6be892a6dd4f697d8`로 정상 실행 중이다.
+INDEX는 InvocationID `a3ea47a804d1423d83d8b353be4364ae`에서 source 준비를 진행했지만
+11:17:23에 root 제어채널의 `inspect_fixed_unit` read-only `systemctl show`가 15초
+timeout으로 종료됐다. 새 host admission 오류나 모델 결과 오류로 분류하지 않는다.
+동일 exact-unit 읽기는 후속 관측에서 8.9ms로 정상이라 무조건 큰 timeout을 주지 않는다.
+
+- 원 parent `job_3d0b271fd1b942a781b53866bd6a44fc`와 allocation
+  `embeddingallocation_e4a8619e19634c34b917defae5dc0b78`는 CLAIMED/no ROUTE/no BOUND이며
+  신규 Workflow·완료 Artifact는 없다. root 제어채널은 실제 FAILED, 수치 unit은 미호출이다.
+  증거 `staging/native-host-unbound-parent-state-20261114.json`. 실패를 성공으로 바꾸거나
+  새 key로 우회하지 않고 만료·빈 handoff·무grant를 기존 공식 owner로 확인해 닫는다.
+- source 후보는 기존 상태 조회 adapter에서 `TimeoutExpired`만 같은 argv/env/15초로
+  한 번 더 관측한다. 성공 응답의 13개 property·peer/PID·drop-in 검사는 유지하며,
+  두 번 실패하면 기존 상태 조회 불가 오류다. start·dispatch·claim·계산은 재실행하지 않는다.
+- Graph publication은 읽기 transaction마다 기존 bounded provenance cache 하나만
+  전달한다. 새 SQL preload/global cache 없이 현재 승인·lineage와 모든 scalar 검사를
+  유지한다. synthetic 공유 member read2,080→4와 출력 bytes/SHA 동등성은 실제 전체
+  publication 시간 단축이나 운영 활성화의 대체 증거가 아니다.
+- 두 source 변경의 집중216개/Ruff/format/mypy2개 PASS. 별도 disposable PostgreSQL에서
+  Graph CAS/replay/4개 중단 경계 등14개, INDEX Identity·fence·취소·policy258개 PASS.
+  이 DB는 운영 DB와 별개다. 처음 source gate는 잘못 지정한 파일명으로 테스트 실행 전
+  종료됐으며 r2의 올바른 suite에서 PASS했다. 해당 invocation 로그도 보존한다.
+
+새 INDEX executable/Identity successor와 공식 unbound 복구, 안전한 Material 인계 및
+실제 신규 vector commit은 다음 단계다. 현재 INDEX는 다시 실행 중이라고 보고하지 않는다.

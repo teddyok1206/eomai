@@ -9,6 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from eom_orchestrator import inference_transfer_cpu_systemd as cpu
@@ -198,6 +199,113 @@ def status_document(**updates: str) -> bytes:
     )
     values.update(updates)
     return "\n".join(f"{key}={value}" for key, value in values.items()).encode()
+
+
+@pytest.mark.parametrize(
+    "drop_in", (None, "/run/systemd/system/fixed.service.d/10-allocation.conf")
+)
+def test_status_retries_only_timed_out_observation_with_identical_command(
+    monkeypatch: pytest.MonkeyPatch, drop_in: str | None
+) -> None:
+    unit = cpu.cpu_unit_names(EXECUTION)[1]
+    payload = status_document(DropInPaths=drop_in or "")
+    timeout = subprocess.TimeoutExpired("fixed-read-only-show", 15)
+    run = Mock(side_effect=[timeout, subprocess.CompletedProcess([], 0, payload, b"")])
+    monkeypatch.setattr(cpu.subprocess, "run", run)
+
+    observed = cpu.inspect_fixed_unit(
+        unit,
+        template=cpu.CPU_TEMPLATE,
+        expected_drop_in_paths=() if drop_in is None else (drop_in,),
+    )
+
+    assert observed.main_pid == 0 and observed.invocation_id == "a" * 32
+    assert observed.drop_in_paths == (drop_in or "")
+    assert run.call_count == 2 and run.call_args_list[0] == run.call_args_list[1]
+    (argv,) = run.call_args.args
+    assert argv == (
+        cpu.SYSTEMCTL,
+        "--no-pager",
+        "show",
+        unit,
+        *(f"--property={name}" for name in cpu._PROPERTIES),
+    )
+    assert len(cpu._PROPERTIES) == 13
+    assert run.call_args.kwargs == {
+        "capture_output": True,
+        "check": False,
+        "timeout": 15,
+        "env": {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
+    }
+
+
+def test_status_two_timeouts_raise_stable_error_from_last_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = subprocess.TimeoutExpired("fixed-show-first", 15)
+    last = subprocess.TimeoutExpired("fixed-show-last", 15)
+    run = Mock(side_effect=[first, last])
+    monkeypatch.setattr(cpu.subprocess, "run", run)
+
+    with pytest.raises(ValueError, match=r"^INFERENCE_CPU_STATUS_UNAVAILABLE$") as raised:
+        cpu.inspect_cpu_unit(cpu.cpu_unit_names(EXECUTION)[1], template=cpu.CPU_TEMPLATE)
+
+    assert raised.value.__cause__ is last
+    assert run.call_count == 2 and run.call_args_list[0] == run.call_args_list[1]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "nonzero",
+        "oversized_stdout",
+        "oversized_stderr",
+        "missing",
+        "truncated",
+        "duplicate",
+        "unknown",
+        "utf8",
+        "fragment",
+        "drop_in",
+        "reload",
+        "os_error",
+    ),
+)
+def test_status_does_not_retry_failed_or_invalid_observations(
+    monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    payload, stderr, returncode = status_document(), b"", 0
+    if fault == "nonzero":
+        returncode = 1
+    elif fault == "oversized_stdout":
+        payload = b"x" * (16 * 1024 + 1)
+    elif fault == "oversized_stderr":
+        stderr = b"x" * (16 * 1024 + 1)
+    elif fault == "missing":
+        payload = payload.replace(b"MainPID=0\n", b"")
+    elif fault == "truncated":
+        payload = payload.rsplit(b"\n", 1)[0]
+    elif fault == "duplicate":
+        payload += b"\nMainPID=0"
+    elif fault == "unknown":
+        payload += b"\nUnexpected=value"
+    elif fault == "utf8":
+        payload += b"\xff"
+    elif fault == "fragment":
+        payload = status_document(FragmentPath="/tmp/alternate.service")
+    elif fault == "drop_in":
+        payload = status_document(DropInPaths="/tmp/unexpected.conf")
+    elif fault == "reload":
+        payload = status_document(NeedDaemonReload="yes")
+    run = Mock(return_value=subprocess.CompletedProcess([], returncode, payload, stderr))
+    if fault == "os_error":
+        run.side_effect = OSError("read-only systemctl unavailable")
+    monkeypatch.setattr(cpu.subprocess, "run", run)
+
+    with pytest.raises((ValueError, OSError)):
+        cpu.inspect_cpu_unit(cpu.cpu_unit_names(EXECUTION)[1], template=cpu.CPU_TEMPLATE)
+
+    run.assert_called_once()
 
 
 @pytest.mark.parametrize(
