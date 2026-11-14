@@ -288,3 +288,24 @@ unique successor, current Graph head CAS와 bounded Graph adjacency를 재사용
 동일 pinned owner만 재시작했으며 source·model/default/QUERY pin은 바꾸지 않았다. 서비스가
 `active`라는 것과 새로운 CUDA encoding/index revision이 생겼다는 것은 분리해 판정한다.
 현재 오류를 새 작업 identity로 우회하거나 과거 RUNNING/FAILED 기록을 성공으로 바꾸지 않는다.
+
+### 승인 V1 노드와 후속 풀이 참조의 호환 투영 — 2026-11-14
+
+승인된 V1 분석은 명시적 `node_type`과 opaque ID를 허용하지만, 후속 공개 풀이의
+참조 계약은 유형별 ID 표현과 길이를 더 엄격히 제한한다. 등록 Item 어댑터는 기존
+hash-pinned `typedReferenceNode` schema와 Pydantic 검증을 모두 통과한 실제 ID만 작은
+`reference_index`에 투영한다. 이는 전체 Graph나 승인 분석을 다시 쓰는 작업이 아니다.
+원 proposal·ID·모든 members/counts·anchors·해시·승인 이력은 그대로 유지하며, worker에도
+기존 전체 base members를 제공한다. 풀이에서 사용할 수 있는 ID 집합만 명시적으로 제한한다.
+
+접근은 bounded 노드 순회와 유형별 count/map, 정렬된 불변 참조 tuple이다. 비용은
+O(V log V + A * D)이며 새로운 DB·queue·모델 호출·대용량 사본이 없다. 표현할 수 없는
+노드의 제외 수와 유형만 결정적인 경고로 남긴다. 문제 요소와 개념 역할이 남지 않으면
+모델 실행 전에 명시적으로 거부한다. source/permission/member/hash/anchor 실패는 제외
+사유로 처리하지 않는다. 승인 ID 변경이나 released schema 완화는 과거 근거를 바꾸므로
+사용하지 않으며, 동일 입력은 동일 참조 목록과 hash를 생성한다.
+
+참조 역할을 전혀 표현할 수 없는 경우에만 전용 예외를 반환한다. 자료 학습은
+`BASE_INVALID`의 직접 원인이 이 전용 예외일 때 기존 claim-fenced `fail_task`를 호출해
+해당 문항 작업만 실패로 남기고 다음 작업을 처리한다. 등록 Item과 승인 base는 보존한다.
+그 밖의 source·hash·permission·schema 오류를 일괄 문항 실패로 감추지 않는다.

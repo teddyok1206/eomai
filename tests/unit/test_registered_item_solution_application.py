@@ -78,7 +78,14 @@ def source_fixture(version="3.0"):
                 stable_key="physics.motion",
                 label="운동",
                 anchor_ids=["anchor_problem"],
-            )
+            ),
+            dict(
+                node_id="knode_item_element_given",
+                node_type="ITEM_ELEMENT",
+                stable_key="item.given",
+                label="조건",
+                anchor_ids=["anchor_problem"],
+            ),
         ],
         edges=[],
         claims=[],
@@ -96,7 +103,8 @@ def test_registered_reference_index_uses_exact_source_fields_not_anchor_names(ve
     # Names deliberately contradict their true JSON locations.
     document["anchors"][0]["anchor_id"] = "anchor_answer_named_but_problem"
     document["anchors"][1]["anchor_id"] = "anchor_problem_named_but_answer"
-    document["nodes"][0]["anchor_ids"] = ["anchor_answer_named_but_problem"]
+    for node in document["nodes"]:
+        node["anchor_ids"] = ["anchor_answer_named_but_problem"]
     proposal = KnowledgeAnalysisWorkerProposal.model_validate(document)
     index = registered_item_solution_reference_index(request, proposal, source)
     assert index.problem_anchor_ids == ("anchor_answer_named_but_problem",)

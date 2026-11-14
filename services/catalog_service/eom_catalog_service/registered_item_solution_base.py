@@ -8,8 +8,11 @@ not from model-written anchor names or a past-exam occurrence that does not exis
 from __future__ import annotations
 
 import json
+import logging
 import re
-from typing import Any, cast
+from collections import Counter
+from functools import lru_cache
+from typing import Any
 
 from eom_catalog_contracts import (
     SOLUTION_REFERENCE_NODE_TYPES,
@@ -25,9 +28,12 @@ from eom_catalog_contracts import (
     RegisteredItemSolutionBasePointer,
     validate_contract,
 )
+from eom_catalog_contracts.validation import load_schema
 from eom_identifiers import content_sha256
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
@@ -45,6 +51,56 @@ _SOURCE_FIELDS = {
     "2.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
     "3.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
 }
+_LOGGER = logging.getLogger(__name__)
+_CONCEPTUAL_REFERENCE_TYPES = frozenset({"CONCEPT", "PROCESS", "OBSERVABLE_PROPERTY", "FORMULA"})
+
+
+class RegisteredItemSolutionReferenceError(ValueError):
+    """A valid accepted base cannot express the roles required by a new full report."""
+
+    code = "REGISTERED_ITEM_SOLUTION_REFERENCE_ROLES_UNAVAILABLE"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
+
+
+@lru_cache(maxsize=1)
+def _reference_node_validator() -> Draft202012Validator:
+    # Cache only the existing hash-pinned schema, not a validation result or authority.
+    return Draft202012Validator(
+        load_schema("knowledge-analysis-solution-types-v1")["$defs"]["typedReferenceNode"]
+    )
+
+
+def _compatible_reference_nodes(
+    proposal: KnowledgeAnalysisWorkerProposal,
+) -> tuple[KnowledgeAnalysisBaseReferenceNode, ...]:
+    nodes: list[KnowledgeAnalysisBaseReferenceNode] = []
+    excluded: Counter[str] = Counter()
+    validator = _reference_node_validator()
+    for node in proposal.nodes:
+        if node.node_type not in SOLUTION_REFERENCE_NODE_TYPES:
+            continue
+        value = {"node_id": node.node_id, "node_type": node.node_type}
+        if not validator.is_valid(value):
+            excluded[node.node_type] += 1
+            continue
+        try:
+            reference = KnowledgeAnalysisBaseReferenceNode.model_validate(value)
+        except ValidationError:
+            excluded[node.node_type] += 1
+            continue
+        nodes.append(reference)
+    if excluded:
+        _LOGGER.warning(
+            "REGISTERED_ITEM_SOLUTION_REFERENCE_SUBSET excluded_count=%d excluded_types=%s",
+            sum(excluded.values()),
+            ",".join(f"{kind}:{count}" for kind, count in sorted(excluded.items())),
+        )
+    kinds = {node.node_type for node in nodes}
+    if "ITEM_ELEMENT" not in kinds or not kinds & _CONCEPTUAL_REFERENCE_TYPES:
+        raise RegisteredItemSolutionReferenceError()
+    return tuple(sorted(nodes, key=lambda node: node.node_id))
 
 
 def _json_pointer(value: dict[str, Any], locator: str) -> tuple[str, object]:
@@ -108,18 +164,7 @@ def registered_item_solution_reference_index(
             answer.add(anchor.anchor_id)
         else:
             raise ValueError("registered solution anchor has no source-defined content role")
-    nodes = tuple(
-        sorted(
-            (
-                KnowledgeAnalysisBaseReferenceNode(
-                    node_id=node.node_id, node_type=cast(Any, node.node_type)
-                )
-                for node in proposal.nodes
-                if node.node_type in SOLUTION_REFERENCE_NODE_TYPES
-            ),
-            key=lambda node: node.node_id,
-        )
-    )
+    nodes = _compatible_reference_nodes(proposal)
     value = dict(
         anchor_ids=tuple(sorted(anchor.anchor_id for anchor in proposal.anchors)),
         problem_anchor_ids=tuple(sorted(problem)),

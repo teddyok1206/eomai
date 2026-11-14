@@ -67,6 +67,12 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 보관하지 않는다. `test_knowledge_graph_publication_source_cache.py`가 출력 동등성과
 읽기 횟수·철회·예산 fallback을 검증한다. source 후보와 실제 설치는 구분한다.
 
+등록 문항의 공개 풀이는 `registered_item_solution_base.py`에서 원 accepted proposal과
+모든 anchor/member를 보존하고, 기존 typed-reference schema로 표현 가능한 노드만
+후속 reference index에 투영한다. 필수 역할 부족 전용 오류만 Material의 해당 task를
+실패 처리하며, 출처·권한·hash 오류는 이 경계에서 숨기지 않는다. 상세 판단은
+`docs/architecture/CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md`를 확인한다.
+
 분석의 최초 멱등 key가 FAILED를 가리켜도 `KnowledgeAnalysisApplicationService.resolve_retry`
 가 명시적 predecessor chain의 같은 source/operator/preset/hash만 따라간다. cohort의
 cached failed 분석도 이 owner에서 확인한 뒤 보류를 판정한다. terminal worker 실패와

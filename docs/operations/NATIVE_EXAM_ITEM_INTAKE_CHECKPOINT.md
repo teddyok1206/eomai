@@ -710,3 +710,43 @@ timeout으로 종료됐다. 새 host admission 오류나 모델 결과 오류로
 
 새 INDEX executable/Identity successor와 공식 unbound 복구, 안전한 Material 인계 및
 실제 신규 vector commit은 다음 단계다. 현재 INDEX는 다시 실행 중이라고 보고하지 않는다.
+
+### 11:39–12:20 UTC: 네 번째 base 호환성 진단·원 할당 실패 종료·INDEX successor
+
+첫 회차의 확정 metadata 관측은 APPROVED Item4 / accepted base4 / accepted 공개 풀이3 /
+완료 QUESTION3 / 네 번째 ANALYZING / 나머지21 PENDING이다. 이후 Material은
+`KNOWLEDGE_ANALYSIS_BASE_INVALID`로 자동 재시작했다. 모델을 다시 호출하지 않고 실제
+네 base를 읽어 source pointer·receipt·anchor를 대조했다. 모든 source/hash/anchor가
+정상이며, 네 번째의19개 노드 중 OBSERVABLE_PROPERTY 두 개만 후속 typed-reference
+형식과 맞지 않았다. 필요한 ITEM_ELEMENT7·개념/공식 등17개는 호환된다.
+
+기본 분석의 넓은 V1 노드 ID 표현과 풀이지원의 좁은 표현 차이다. 원19개 노드·18개
+anchor·전체 JSONL·receipt·accepted 결과를 바꾸거나 새 base를 만들지 않는다. 후보는
+기존 strict schema/Pydantic을 통과한17개만 후속 참조 index에 투영하고 안전한 개수/유형
+경고를 남긴다. 필수 문항/개념 역할이 없는 전용 제한만 기존 claim fence의 해당 task
+FAILED로 기록한다. 일반 BASE_INVALID·권한·source/hash 오류는 여전히 전파한다.
+증거는 `staging/native-fourth-base-diagnostic-20261114.json`과
+`staging/native-fourth-base-nodes-20261114.json`이다. Material의 실패 재시작 loop는
+중지했으며 승인된 네 문항·세 Graph·worker 이력은 보존했다. 정상 Graph 작업을 kill해
+인계한 것으로 기록하지 않는다. 수정 후보 검증과 실제 Material 재개는 구분한다.
+
+별도 INDEX 원 할당은 실제 root가 빈 native handoff/descriptor까지 준비한 상태였다.
+마지막 peer 검사 frame만 보고 준비 전 부재라고 한 추론은 실제 descriptor 확인으로
+폐기했다. R2 activation guard는 Identity 변경 전에 거절했고 그 실패도 보존했다.
+기존 Unbound1.0 owner의 실제 PREPARE가 만료·FAILED root·빈 입출력·무grant를 통과했고,
+RECORD가 원 parent를 FAILED로 종료하며 같은 요청의 두 번 재전송이 같음을 확인했다.
+실패를 성공으로 재해석하거나 handoff 파일을 새로 만들어 증거를 꾸미지 않았다.
+
+- 원 failure evidence: `artifact_c4fa8a3965d64b17aaf3a4b7d3de646e` /
+  `rev_893f4dfe9098463c8e44424572eb4f7d`, SHA
+  `ae3f1245abca547412712c75245e87ebfdd073cf2f376c7991b109599e536195`.
+- `e99b6c123de7f319077fd893ee89c2d73712850d`의 실제 INDEX Identity successor
+  `localindexservicerev_b89afabb12f84008b5ccc38e6c0c6b8a`를 기존 공식 등록/활성화·정책
+  owner로 반영했다. 이전에 준비/게시한 동일 plan·ID를 사용했고 새 key로 우회하지 않았다.
+  controller/verifier/수치 설치 e042·QUERY11d·API/Web7084와 기존 벡터는 유지했다.
+- 새 INDEX InvocationID `c2b10c5489c14045b8863bc0f9b1d5f1`가 실행 중이다. source 준비가
+  진행 중이며 신규 vector commit 성공은 아직 확인하지 않았다. 원12개 구 service의
+  무시작 Workflow·원 실패 invocation·실패 guard 로그는 그대로다.
+
+슬롯/자료 등록 재개, 새 벡터 저장·실제 검색 및 나머지17회 접수는 계속 남아 있다.
+단일 성공 sample이나 실행 중 상태로 전체450 목표를 완료 처리하지 않는다.

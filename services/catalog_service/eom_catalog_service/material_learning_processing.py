@@ -16,6 +16,7 @@ from eom_workflow.material_learning_state import MaterialLearningState, Material
 from sqlalchemy import select
 
 from eom_catalog_service.curriculum_graph_structure import integrated_science_curriculum_units
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisServiceError
 from eom_catalog_service.material_graph_learning import MaterialGraphLearningService
 from eom_catalog_service.material_item_registration import MaterialItemRegistrationService
 from eom_catalog_service.material_learning_artifacts import (
@@ -41,6 +42,7 @@ from eom_catalog_service.material_learning_store import (
     transition_material_task,
 )
 from eom_catalog_service.material_task_history import read_material_task_histories
+from eom_catalog_service.registered_item_solution_base import RegisteredItemSolutionReferenceError
 
 _ANALYSIS_FAILURES = frozenset({"FAILED", "REJECTED", "CANCELLED"})
 _REGISTRATION_SOURCE_EXCEPTIONS = frozenset(
@@ -261,11 +263,19 @@ class MaterialLearningProcessingService:
                 return self._analysis_progress(claim, task.task_id, base)
             if solution_id is None and self._paused(claim):
                 return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PAUSED")
-            solution = self.graph.advance_item_solution(
-                base_analysis_run_id=base.analysis_run_id,
-                task_id=task.task_id,
-                operator_id=context.operator_id,
-            )
+            try:
+                solution = self.graph.advance_item_solution(
+                    base_analysis_run_id=base.analysis_run_id,
+                    task_id=task.task_id,
+                    operator_id=context.operator_id,
+                )
+            except KnowledgeAnalysisServiceError as error:
+                if error.code != "KNOWLEDGE_ANALYSIS_BASE_INVALID" or not isinstance(
+                    error.__cause__, RegisteredItemSolutionReferenceError
+                ):
+                    raise
+                self.coordinator.fail_task(claim, task.task_id, error.__cause__.code)
+                return MaterialCoordinatorProgress(claim.run_id, task.task_id, "FAILED")
             self._pin_analysis(claim, task.task_id, solution, solution=True)
             if solution.state != "ACCEPTED":
                 return self._analysis_progress(claim, task.task_id, solution)
