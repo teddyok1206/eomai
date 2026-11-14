@@ -455,3 +455,23 @@ INDEX는 이전 failed/무PID 상태를 그대로 유지한 것이며 임베딩�
 현재 배포 기록 root는 `/var/lib/eom-native-preparation-recovery-release-20261114`다.
 Slack milestone은 `devreport_ea4376117f294dbc872090abeea5a792` HTTP200/SAVED다.
 native 원문·공개 풀이·Graph·임베딩 및 전체 450문항 검증 전까지 목표를 완료 처리하지 않는다.
+
+### 08:15 UTC: 첫 discovery의 결과 검증과 순차 처리
+
+첫 회차의 원문 준비는 완료됐고 총 6개 DISCOVER 묶음을 기존 단일 AI lane에서 처리한다.
+첫 묶음은 slot05에서 정상 exit0으로 JSON을 반환했지만 typed 검증이
+`MATERIAL_LEARNING_PAGE_COVERAGE_INVALID`로 거절했다. 첫 두 coverage의 roles에
+`QUESTION`과 `NON_CONTENT`가 함께 있었다. 이때 NON_CONTENT는 페이지 전체에 학습 내용이
+없다는 뜻이므로 다른 역할과 함께 쓸 수 없다. 사용량/로그인/CMYK 파일 오류가 아니라
+응답 분류의 모순이며, 원 JSON과 FAILED Job/Workflow/task는 보존한다.
+
+읽기 전용 진단은 원문·주석·프롬프트를 출력하지 않고 coverage index/허용 enum/검증 code만
+확인했다. `staging/native-material-worker-diagnostic-r2-20261114.json`이 증거다.
+두 번째·세 번째·네 번째 묶음은 RESULT_READY가 됐고 다섯 번째가 실행 중이다. slot03의
+실제 ACTIVE lease와 처리 중 Workflow도 별도 공식 read model/메타데이터로 확인했다.
+`staging/native-material-first-observe-20261114.json`은 08:03 시점의 작은 상태/포인터 기록이다.
+
+모든 현재 task가 terminal이 된 후 기존 Intake.retry의 실패 단위 successor 경계를 사용한다.
+이 경로는 DISCOVER 실패도 지원하며 완료된 준비/다른 discovery 결과와 exact input/output을
+predecessor history로 재사용한다. 새 복구 프로토콜이나 JSON 정규화로 기존 실패를 성공으로
+바꾸지 않는다. 첫 native 등록·공개 풀이·Graph·원문 다운로드의 실제 검증은 아직 남아 있다.
