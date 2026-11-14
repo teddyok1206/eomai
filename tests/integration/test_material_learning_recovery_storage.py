@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -12,7 +13,15 @@ from eom_catalog_contracts.material_learning_intake import (
     GetMaterialLearningTaskQuery,
     RetryMaterialLearningRunCommand,
 )
+from eom_catalog_contracts.material_learning_preparation import MaterialPreparationProfile
+from eom_catalog_contracts.material_preparation_recovery import RecoverMaterialPreparationCommand
 from eom_catalog_service import material_learning_recovery as owner
+from eom_catalog_service.educational_material_registration import material_document_identity
+from eom_catalog_service.material_intake_read import (
+    material_preparation_pointer,
+    read_material_preparation,
+)
+from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_models import (
     MaterialLearningRunRecord,
@@ -27,7 +36,9 @@ from eom_catalog_service.material_learning_store import (
     transition_material_run,
     transition_material_task,
 )
+from eom_catalog_service.material_preparation_recovery import MaterialPreparationRecoveryService
 from eom_catalog_service.material_task_history import read_material_task_histories
+from eom_identifiers import content_sha256
 from eom_textbook_analysis.bundle import PdfInspection
 from eom_workflow.material_learning_state import MaterialLearningState, MaterialTaskState
 from eom_workflow_runner.models import WorkflowCommandRecord
@@ -48,6 +59,177 @@ from tests.integration.test_preset_model_validation_persistence import (
 from tests.integration.test_registered_item_solution_application import controls as controls
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
+
+
+@pytest.fixture
+def failed_preparation(creative_engine, coordinator_case):
+    accepted, settings, restart = coordinator_case
+    first = restart(InterruptibleExtractor())
+    with pytest.raises(RuntimeError, match="synthetic process interruption"):
+        first.advance_once()
+    with Session(creative_engine) as session:
+        run = session.get(MaterialLearningRunRecord, accepted.run_id)
+        task = session.scalar(
+            select(MaterialLearningTaskRecord).where(
+                MaterialLearningTaskRecord.run_id == accepted.run_id
+            )
+        )
+        pointer = material_preparation_pointer(
+            session,
+            artifact_id=task.input_artifact_id,
+            revision_id=task.input_artifact_revision_id,
+            sha256=task.input_sha256,
+        )
+        actor, updated = run.created_by, run.updated_at
+    raw = first.coordinator.profile.model_dump(mode="json")
+    # This fixture is an identity-PDF source, so its Office profile stays absent.
+    raw["source_commit"] = "2" * 40
+    raw["profile_sha256"] = content_sha256({k: v for k, v in raw.items() if k != "profile_sha256"})
+    target = MaterialPreparationProfile.model_validate(raw)
+    drain = SimpleNamespace(require_quiescent=lambda: None)
+    service = MaterialPreparationRecoveryService(
+        creative_engine,
+        settings=settings,
+        target_profile=target,
+        drain=drain,
+    )
+    command = RecoverMaterialPreparationCommand(
+        actor_id=actor,
+        run_id=accepted.run_id,
+        expected_updated_at=updated,
+        expected_input_sha256=pointer.sha256,
+        target_profile_sha256=target.profile_sha256,
+        error_code="CREATIVE_PAGE_RENDERER_FAILED",
+    )
+    old_work = read_material_preparation(service.artifacts, pointer, authorize=lambda: None)
+    return SimpleNamespace(
+        accepted=accepted,
+        settings=settings,
+        restart=restart,
+        target=target,
+        service=service,
+        command=command,
+        old_pointer=pointer,
+        old_work=old_work,
+    )
+
+
+def test_preparation_successor_preserves_failed_input_replays_and_coordinator_uses_new_pin(
+    creative_engine, failed_preparation
+):
+    case = failed_preparation
+    result = case.service.recover(case.command)
+    assert not result.replayed and result.state == "RECEIVED"
+    assert case.service.recover(case.command).replayed
+    assert result.old_input == case.old_pointer
+    assert result.new_input.sha256 != result.old_input.sha256
+    assert (
+        read_material_preparation(case.service.artifacts, result.old_input, authorize=lambda: None)
+        == case.old_work
+    )
+    with Session(creative_engine) as session:
+        old = session.get(MaterialLearningRunRecord, result.predecessor_run_id)
+        new = session.get(MaterialLearningRunRecord, result.run_id)
+        task = session.get(MaterialLearningTaskRecord, result.task_id)
+        assert old.state == "FAILED" and old.error_code == case.command.error_code
+        assert new.attempt == old.attempt + 1
+        assert new.material_revision_id == old.material_revision_id
+        assert task.attempt == 2 and task.predecessor_task_id == result.predecessor_task_id
+        assert task.output_artifact_revision_id is None
+        assert len(read_material_task_histories(session, (task,))[task.task_id].tasks) == 2
+    extractor = InterruptibleExtractor()
+    extractor.interrupt = False
+    processing = case.restart(extractor)
+    # Trusted synthetic runtime composition, not a user-supplied profile override.
+    processing.coordinator.profile = case.target
+    processing.coordinator.preparation.source_commit = case.target.source_commit
+    assert processing.advance_once().phase == "PREPARED"
+    replayed = case.service.recover(case.command)
+    assert replayed.replayed and replayed.state == "DISCOVERING"
+    processing.registration.register_completed.assert_not_called()
+
+
+def test_concurrent_preparation_recovery_creates_one_successor(creative_engine, failed_preparation):
+    case = failed_preparation
+    gate = Barrier(2)
+
+    def recover():
+        gate.wait(timeout=10)
+        return case.service.recover(case.command)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(lambda _number: recover(), range(2)))
+    assert len({result.run_id for result in results}) == 1
+    assert sum(not result.replayed for result in results) == 1
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(
+                    MaterialLearningRunRecord.material_revision_id
+                    == results[0].material_revision_id
+                )
+            )
+            == 2
+        )
+
+
+@pytest.mark.parametrize(
+    "fault", ["stale", "foreign_actor", "live_lease", "output", "partial_document_job"]
+)
+def test_preparation_recovery_rejects_unsafe_scope_before_successor(
+    creative_engine, failed_preparation, fault
+):
+    case = failed_preparation
+    command = case.command
+    if fault == "stale":
+        command = command.model_copy(
+            update={"expected_updated_at": command.expected_updated_at - timedelta(seconds=1)}
+        )
+    elif fault == "foreign_actor":
+        command = command.model_copy(update={"actor_id": "operator_" + "0" * 32})
+    elif fault == "partial_document_job":
+        revision_id = material_document_identity(case.accepted.material_revision_id, "MAIN")[1]
+        # A conflicting committed/incomplete document job can precede its DB row.
+        # Reuse the real Artifact owner to create that occupied publication key.
+        publish_material_metadata(
+            case.service.artifacts,
+            case.settings,
+            case.old_work,
+            member_path="material/preparation-input.json",
+            schema_ref=case.old_pointer.schema_ref,
+            artifact_type="material-learning-preparation-input",
+            idempotency_key="material-document:" + revision_id,
+        )
+    else:
+        with Session(creative_engine) as session, session.begin():
+            run = session.get(MaterialLearningRunRecord, case.accepted.run_id)
+            task = session.scalar(
+                select(MaterialLearningTaskRecord).where(
+                    MaterialLearningTaskRecord.run_id == run.run_id
+                )
+            )
+            if fault == "live_lease":
+                run.lease_owner, run.lease_token = "synthetic-active-owner", "1" * 32
+                run.lease_expires_at = datetime.now(UTC) + timedelta(minutes=1)
+            else:
+                task.output_artifact_id = case.old_pointer.artifact_id
+                task.output_artifact_revision_id = case.old_pointer.artifact_revision_id
+                task.output_sha256 = case.old_pointer.sha256
+    with pytest.raises(ValueError):
+        case.service.recover(command)
+    with Session(creative_engine) as session:
+        run = session.get(MaterialLearningRunRecord, case.accepted.run_id)
+        assert run.state == "PREPARING"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.material_revision_id == run.material_revision_id)
+            )
+            == 1
+        )
 
 
 @pytest.fixture

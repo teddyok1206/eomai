@@ -3,7 +3,7 @@
 2026-11-13 UTC. 목표는 18회 450문항의 문제·해설 native HWPX, 원본 Excel metadata,
 기존 자료 학습·Registry·공개 풀이·공통 Graph·증분 임베딩 연결 및 운영 반영이다.
 설계 정본은 `docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`다. 이 기록의 소스 후보와
-실제 운영 활성화를 구별한다. 최신 상태는 아래 **호환 배포와 실제 UID 검증 완료**를 본다.
+실제 운영 활성화를 구별한다. 최신 상태는 아래 **2026-11-14: CMYK 원인 확정과 준비 복구 후보**를 본다.
 앞선 단계의 실패·대기 기록은 당시의 증거이며 덮어쓰지 않는다.
 
 ## 보존할 운영 경계
@@ -340,3 +340,72 @@ root/Catalog 두 UID를 허용한다. mode600·nlink1·서명·descriptor identi
 wire/profile/기존 checkpoint를 수정하는 기능은 아니다. renderer의 실제 내부 오류는 별도
 저권한 CPU 진단을 준비했으며, 추측으로 그림 추출을 생략하거나 PDF crop으로 바꾸지 않는다.
 새 코드와 기존 PREPARING input profile의 source pin은 별도 운영 복구 판단이 필요하다.
+
+## 2026-11-14: CMYK 원인 확정과 준비 복구 후보
+
+첫 picture-use 추출 실패의 원인은 원문 JPEG 7개의 **CMYK** mode였다. 기존 decoder는
+픽셀을 읽었지만 PNG 저장 단계가 `cannot write mode CMYK as PNG`로 거절됐다. source
+`3587bc6ddf110ea2f949567c92e5e7fdce57bb59`는 이미 decode한 CMYK 픽셀을 RGB로 바꿔
+저장하도록 수정하며, 오류를 숨기거나 원문 그림을 PDF crop으로 대체하지 않는다.
+
+- 수정된 별도 CPU 도구를 `/opt/eom/office-image-tools/3587bc6ddf110ea2f949567c92e5e7fdce57bb59`
+  에 설치하고 protected import·RECORD 370개를 검증했다. 설치와 기존 material profile의
+  운영 활성화는 다르다. GPU runtime은 변경하지 않았다.
+  `staging/install-office-cmyk-tools-20261114.log`.
+- 01회 MAIN의 기존 CMYK 7개는 모두 존재하며 decoded pixel 보존 증거 PASS다. 이 입력의
+  unsupported EMF member 5개는 원래 native 파일에 보존하고 picture-use의 미해결 상태를
+  명시했다. EMF를 PNG로 변환했다거나 모든 picture-use가 렌더링됐다고 주장하지 않는다.
+  `staging/office-cmyk-qualification-first-20261114.log`.
+- 이후 35개를 더 검사해 **18회 MAIN/SOLUTIONS 전체 36 source PASS**, 실패·대기 0,
+  누적 **328.049초**를 확인했다. 결과 위치는
+  `/tmp/eom-office-cmyk-qualification-3587bc6d-20261114`, 기록은 위 first log와
+  `staging/office-cmyk-qualification-all-20261114.log`다. 여기서 PASS는 실제 source의
+  안전한 catalog 추출·명시적 미해결 처리이며, 모든 EMF/효과/geometry의 raster 지원이나
+  문항·풀이·Graph·임베딩 완료를 뜻하지 않는다. 앞서 만든 900개 native fragment의 보존
+  qualification과도 별도 gate다. 이 검사에는 DB/NAS write·모델 실행·활성화가 없었다.
+
+소유권 재시도 수정은 `9526659929a9c3797019f131123ff5dc92aac0cd`에 있다. 업로드의
+현재 UID 검증을 풀지 않고, 기존 converter adapter의 고정 private workspace에서만 root와
+Catalog의 정확한 hand-off를 검사한다. 이 코드나 새 이미지 도구를 설치했다는 사실만으로
+옛 `7084bbc4` PREPARE input의 source pin을 새 코드로 바꿔 쓸 수는 없다.
+
+### 기존 owner의 명시적 준비 단계 복구
+
+schema-first `material-learning-preparation-recovery/1.0` 명령/결과와
+`MaterialPreparationRecoveryService`는 아직 운영 실행 전인 후보다. 새 HTTP·DB 테이블·queue나
+모델 executor를 만들지 않고, 기존 material revision·PREPARE task·Artifact owner·이벤트를
+사용한다. `material_preparation_drain.py`는 고정 material service의 실제 중지 상태와 관련
+Office/PDF child 종료를 확인하며 무관한 GPU/전역 작업의 중지를 요구하지 않는다.
+
+- 실제 원래 actor의 현재 권한·원본 receipt·rights·intake/input hash를 다시 검증한다.
+- 활성 lease, prepared/output/workflow/Item/분석/Graph, 이미 등록된 역할별 문서 또는 DB 행보다
+  먼저 생긴 고정 document publication job이 있으면 단순 준비 복구를 거절한다.
+- 새 입력은 설치 대상의 신뢰된 profile과 deterministic successor task에 pin한다. 외부
+  Artifact publication 뒤에도 revision→run 잠금 안에서 인가·부작용·재전송을 다시 확인한다.
+- 기존 PREPARE/run의 실제 FAILED 이벤트와 새 predecessor-linked attempt를 원자적으로
+  기록한다. 이전 input·실패 기록을 덮어쓰거나 옛 입력을 새 profile 성공으로 해석하지 않는다.
+  같은 요청 재전송은 기존 successor와 정확한 새 입력을 검증하며 새 실행을 만들지 않는다.
+- coordinator의 PREPARE 선택은 검증된 successor task를 재사용한다. 일반 task 생성과
+  기존 completed checkpoint/공개 풀이·Graph·embedding 경로는 유지한다.
+
+실제 disposable PostgreSQL의 관련 material suite는 **60 PASS / 38.58초**였다.
+`staging/native-preparation-recovery-db-tests-r2-20261114.log`에 동시 복구·중단·재전송·안전하지
+않은 상태 거부·기존 V1과 native V2 pin 보존 결과를 남겼다. 관련 source gate는 **743 PASS**,
+context/dependency **24 PASS**, core 5개 mypy와 변경 9개 format/Ruff PASS다. schema audit는
+canonical 1,395개·mirror 1,046개·참조 11,956개 PASS다. 운영 DB 테스트가 아니며 이 수치로
+실제 복구 성공을 대신하지 않는다. 임시 DB 공식 cleanup 기록은
+`staging/native-preparation-recovery-db-cleanup-20261114.log`에서 완료 여부를 확인한다.
+
+### 현재 운영 checkpoint와 다음 한 가지
+
+현재 이 입력의 첫 run `materialrun_19b54f5ad75f52fabeb089b7363131fe`는 원래
+`7084bbc4` input을 가진 **PREPARING**이며 material service는 중지 상태다. 이번 입력에서
+Item·모델 풀이보고서·Graph 등록은 **0**, 나머지 17회는 아직 접수하지 않았다. 원본 업로드와
+native 파일 publication·첫 intake 접수는 보존한다. 이 상태를 450문항 등록 완료나 기존
+임베딩의 진행 상태로 확대하지 않는다.
+
+다음은 검증한 수정본의 호환 설치와 새 target profile을 고정한 뒤, **기존 intake를 그대로
+가리키는 공식 preparation recovery를 한 번 실행**해 successor의 실제 준비를 확인하는 것이다.
+현재까지 target profile의 운영 전환·실제 recovery는 미실행이다. 첫 회차의 Item/원본
+다운로드·풀이·Graph·공통 INDEX 연결을 확인하기 전에는 나머지 17회를 중복 접수하거나
+전체 완료를 선언하지 않는다. Hancom 자체 육안 검토는 계속 NOT_RECORDED다.

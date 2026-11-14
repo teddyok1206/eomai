@@ -196,6 +196,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:4c58e96d5e10ff285d562d254b4c7097e4aca3af0b0e9a52f5ca18d7dcced477",
         ),
+        "material-learning-preparation-recovery-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-preparation-recovery-v1.schema.json",
+            "resources/material-learning/material-learning-preparation-recovery-v1.schema.json",
+            "1.0",
+            "sha256:90ead9f1d9ecbe569062b95f910144519ceed544849291670c886d952f5d12a0",
+        ),
+        "material-learning-preparation-recovery-result-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-preparation-recovery-result-v1.schema.json",
+            "resources/material-learning/material-learning-preparation-recovery-result-v1.schema.json",
+            "1.0",
+            "sha256:971a2d3723ff18a37ee5a8657bc5d8a739db06d88d8a3c875a240788e9b93eaf",
+        ),
         "material-learning-retry-result-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-retry-result-v1.schema.json",
             "resources/material-learning/material-learning-retry-result-v1.schema.json",

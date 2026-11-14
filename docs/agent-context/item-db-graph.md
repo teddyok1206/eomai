@@ -218,6 +218,19 @@ revision→run 잠금과 deterministic successor ID로 동시 재전송을 처�
 Workflow/분석·미정리 worker lease가 있으면 공식 reconcile 전에는 새 시도를 만들지 않는다.
 원본/구조 EXCEPTION은 그대로 보류하고, 준비 전의 원본 문제를 무한 재실행하지 않는다.
 
+prepared checkpoint도 없는 PREPARE 실패의 profile 교체는 일반 retry가 아니다.
+`packages/catalog_contracts/eom_catalog_contracts/material_preparation_recovery.py`의 닫힌
+계약과 `services/catalog_service/eom_catalog_service/material_preparation_recovery.py`를
+확인한다. 원래 actor/source/rights·입력 pin을 다시 검증하고, 고정 service/child drain은
+`material_preparation_drain.py`가 관측한다. 부분 EducationalDocument 등록뿐 아니라 고정
+document Artifact job이 먼저 생긴 경우도 거절한다. 같은 material revision에 새 입력을
+가진 predecessor-linked PREPARE attempt를 만들고 기존 input·FAILED 이벤트를 보존한다.
+`material_learning_store.material_preparation_task`가 이 task를 원래 coordinator에 연결한다.
+동시성·중단·재전송 검증은 `test_material_learning_recovery_storage.py`와 native 등록 DB
+suite를 함께 본다. 원문 JPEG의 CMYK→RGB PNG 정규화는 기존 image adapter의 책임이며,
+unsupported EMF를 성공한 raster로 간주하지 않는다. 실제 설치·복구 상태는
+`docs/operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md`에서 따로 확인한다.
+
 `material_task_history.py`는 최대32단계 predecessor를 하나의 indexed recursive query로
 읽는다. 서로 다른 자료·업로더·단위 또는 변경된 input/output은 이어받지 않는다. 전역 unique
 child owner는 원래 task에 남긴다. `material_task_source_read.py`는 명시적인 위치 조회에서만

@@ -198,3 +198,37 @@ expected hash로 저장한다. 접수/문항/등록 identity는 source revision�
 단순 대안인 전체 PDF crop은 편집성을 잃고, 모델 재작성은 원문을 바꿀 수 있다. 전체 HWPX를
 450개 Item에 그대로 붙이는 방식은 문항별 조회·배치 의미를 충족하지 않는다. 따라서 기존
 native package adapter에 작은 범위 분리기를 추가하는 것이 필요한 최소 확장이다.
+
+## 준비 단계 실패의 명시적 profile successor
+
+2026-11-14 추가. 기존 `7084` 준비 입력을 새 코드·도구라고 재해석하지 않는다.
+
+1. 책임/경계: Catalog의 준비 복구 use case만 추가한다. 초기 진입은 설치된 신뢰 maintenance
+   helper이며 새 HTTP/queue/worker는 만들지 않는다. 실제 root systemd adapter가 고정된
+   자료 학습 service의 loaded/inactive/dead, PID 0, pending job 없음 상태를 확인한다.
+2. 정본: 승인된 동일 material revision/intake/원본 문제·해설/Excel/native bundle과 기존
+   준비 입력 Artifact를 유지한다. 실패 원문과 이전 profile을 덮어쓰지 않는다.
+3. ID/revision: 기존 run/task를 실제 FAILED 이벤트로 닫고, 같은 material revision에
+   `attempt+1`, predecessor run/task 관계를 가진 successor를 만든다.
+4. 포인터: command는 실제 제출 actor·관찰 시각·old input SHA·target profile SHA와 허용된
+   진단 code만 받는다. target profile은 신뢰된 설치 runtime에서 별도로 공급한다.
+   기존 읽기 owner로 schema family, hash, 권한, intake 일치와 현재 lifecycle을 검사한다.
+5. 접근: revision/run 단건, 해당 run의 PREPARE 1개, 고정 MAIN/SOLUTIONS document와
+   publication job key만 조회한다. 이후 생성/모델 작업이 있으면 이 제한된 복구를 거절한다.
+6. 자료구조/index: 기존 PK/FK, `(material_revision_id,attempt)` unique, live revision partial
+   unique, task predecessor와 Artifact idempotency key를 재사용한다. 새 DB 구조는 없다.
+7. 규모/복잡도: 대상 run/task/document 수는 상수이며 index lookup이다. 한 복구의 metadata
+   입력은 작은 JSON 한 건이다. 문항 450개나 전체 Graph를 스캔하지 않는다.
+8. 동시성: 기존 revision → run 잠금 순서와 재검사를 사용한다. 외부 입력 publication 뒤
+   같은 원본/lease/현재 revision을 다시 확인한다. old FAILED를 먼저 flush한 뒤 successor를
+   삽입하여 live-run unique를 준수한다.
+9. 의존성: frozen 계약 → 기존 Catalog application → DB/Artifact/systemd adapter 순서다.
+   도메인/계약에 subprocess/SQL을 넣지 않는다. actual actor는 원래 제출자와 같아야 한다.
+10. 실패/retry: 허용 진단은 `CREATIVE_PAGE_RENDERER_FAILED`,
+    `MATERIAL_LEARNING_SOURCE_FILE_INVALID`다. live lease·output·Workflow·Item·Graph 또는
+    부분 document/publication이 있으면 거절한다. 동일 command는 같은 successor를 재조회하며
+    old updated_at 변경 때문에 replay가 막히지 않게 exact successor를 먼저 확인한다.
+    새 준비 입력은 target profile을 실제 Artifact로 pin하여 향후 latest로 바뀌지 않는다.
+11. 단순 대안: 예전 입력 덮어쓰기·source commit 위장은 재현성을 깨고, 전체 자료 재업로드는
+    identity/중복 문제를 만든다. 기존 post-prepared QUESTION retry를 풀어 버리지 않고,
+    PREPARE 단계에만 predecessor task를 재사용하는 것이 필요한 최소 확장이다.

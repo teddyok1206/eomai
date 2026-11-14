@@ -409,6 +409,33 @@ def add_material_task(
     return task, True
 
 
+def material_preparation_task(
+    session: Session, run: MaterialLearningRunRecord
+) -> tuple[MaterialLearningTaskRecord, bool]:
+    """Only explicit preparation recovery may precreate a linked successor task."""
+    task = session.scalar(
+        select(MaterialLearningTaskRecord).where(
+            MaterialLearningTaskRecord.run_id == run.run_id,
+            MaterialLearningTaskRecord.ordinal == 1,
+        )
+    )
+    if task is None or task.predecessor_task_id is None:
+        return add_material_task(
+            session, run, task_kind="PREPARE", unit_key="source-preparation", ordinal=1
+        )
+    if (
+        task.task_kind != "PREPARE"
+        or task.unit_key != "source-preparation"
+        or task.attempt != run.attempt
+        or task.input_artifact_revision_id is None
+    ):
+        raise MaterialLearningStorageError("MATERIAL_PREPARATION_SUCCESSOR_TASK_INVALID")
+    from eom_catalog_service.material_task_history import read_material_task_histories
+
+    read_material_task_histories(session, (task,))
+    return task, False
+
+
 def transition_material_task(
     session: Session,
     run: MaterialLearningRunRecord,

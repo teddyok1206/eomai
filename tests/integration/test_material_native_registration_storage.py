@@ -797,3 +797,112 @@ def test_native_registered_item_reuses_the_real_solution_and_common_embedding_pr
 
     create, resolved, _ = native_registration_case
     verify(creative_engine, (create, resolved), tmp_path, controls, material_purpose=True)
+
+
+def test_native_preparation_recovery_preserves_original_pair_workbook_and_bundle(
+    creative_engine, native_read_case
+):
+    from types import SimpleNamespace
+
+    from eom_catalog_contracts.material_learning_preparation import MaterialPreparationProfile
+    from eom_catalog_contracts.material_preparation_recovery import (
+        RecoverMaterialPreparationCommand,
+    )
+    from eom_catalog_service.material_intake_read import (
+        material_intake_pointer,
+        read_material_intake,
+        read_material_preparation,
+    )
+    from eom_catalog_service.material_learning_coordinator import build_material_preparation_input
+    from eom_catalog_service.material_learning_models import (
+        MaterialLearningRunRecord,
+        MaterialLearningTaskRecord,
+    )
+    from eom_catalog_service.material_preparation_recovery import MaterialPreparationRecoveryService
+
+    from tests.unit.test_material_learning_preparation import profile
+
+    create, resolved, binding = native_read_case
+    artifacts = create().artifacts
+    settings = create().settings
+    with Session(creative_engine) as session:
+        revision = session.get(LearningMaterialRevisionRecord, binding.material_revision_id)
+        intake_pointer = material_intake_pointer(
+            session,
+            artifact_id=revision.manifest_artifact_id,
+            revision_id=revision.manifest_artifact_revision_id,
+            sha256=revision.manifest_sha256,
+        )
+    intake = read_material_intake(artifacts, intake_pointer, authorize=lambda: None)
+    run_id, task_id = "materialrun_" + uuid4().hex, "materialtask_" + uuid4().hex
+    old_profile = MaterialPreparationProfile.model_validate(profile())
+    old_work = build_material_preparation_input(
+        intake, intake_pointer=intake_pointer, task_id=task_id, profile=old_profile
+    )
+    pointer = publish_material_metadata(
+        artifacts,
+        settings,
+        old_work,
+        member_path="material/preparation-input.json",
+        schema_ref="eom://schemas/material-learning/preparation-input/2.0",
+        idempotency_key="material-prepare-input:" + task_id,
+        artifact_type="material-learning-preparation-input",
+    )
+    now = datetime.now(UTC)
+    with Session(creative_engine) as session, session.begin():
+        session.add(
+            MaterialLearningRunRecord(
+                run_id=run_id,
+                material_revision_id=binding.material_revision_id,
+                attempt=1,
+                state="PREPARING",
+                next_event_sequence=1,
+                created_by=resolved.operator_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.flush()
+        session.add(
+            MaterialLearningTaskRecord(
+                task_id=task_id,
+                run_id=run_id,
+                task_kind="PREPARE",
+                unit_key="source-preparation",
+                ordinal=1,
+                attempt=1,
+                state="PREPARING",
+                execution_lane="MATERIAL_LEARNING",
+                input_artifact_id=pointer.artifact_id,
+                input_artifact_revision_id=pointer.artifact_revision_id,
+                input_sha256=pointer.sha256,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    raw = old_profile.model_dump(mode="json")
+    raw["source_commit"] = "2" * 40
+    raw["profile_sha256"] = content_sha256({k: v for k, v in raw.items() if k != "profile_sha256"})
+    target = MaterialPreparationProfile.model_validate(raw)
+    service = MaterialPreparationRecoveryService(
+        creative_engine,
+        settings=settings,
+        target_profile=target,
+        drain=SimpleNamespace(require_quiescent=lambda: None),
+    )
+    command = RecoverMaterialPreparationCommand(
+        actor_id=resolved.operator_id,
+        run_id=run_id,
+        expected_updated_at=now,
+        expected_input_sha256=pointer.sha256,
+        target_profile_sha256=target.profile_sha256,
+        error_code="MATERIAL_LEARNING_SOURCE_FILE_INVALID",
+    )
+    result = service.recover(command)
+    new_work = read_material_preparation(artifacts, result.new_input, authorize=lambda: None)
+    assert new_work.schema_version == "material-learning-preparation-input/2.0"
+    assert new_work.intake_manifest == old_work.intake_manifest == intake_pointer
+    assert new_work.native_bundle == old_work.native_bundle == intake.native_bundle
+    assert new_work.material_revision_id == old_work.material_revision_id
+    assert new_work.profile.profile_sha256 == target.profile_sha256
+    assert service.recover(command).replayed

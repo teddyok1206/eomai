@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/preparation-recovery-result/1.0",
+  "title": "EOM material preparation recovery result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-preparation-recovery-result/1.0"
+    },
+    "predecessor_run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "predecessor_task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "old_input": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "new_input": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "old_profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "new_profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "state": {
+      "enum": ["RECEIVED", "PREPARING", "DISCOVERING", "PROCESSING", "WAITING_FOR_CAPACITY", "PAUSED", "COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"]
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "predecessor_run_id",
+    "run_id",
+    "predecessor_task_id",
+    "task_id",
+    "material_id",
+    "material_revision_id",
+    "old_input",
+    "new_input",
+    "old_profile_sha256",
+    "new_profile_sha256",
+    "state",
+    "replayed"
+  ]
+}

@@ -82,6 +82,7 @@ from eom_catalog_service.material_learning_store import (
     add_material_task,
     claim_next_material_run,
     lock_material_run,
+    material_preparation_task,
     next_material_task,
     release_material_claim,
     renew_material_claim,
@@ -409,9 +410,7 @@ class MaterialLearningCoordinator:
                 )
             if run.state != "PREPARING":
                 raise ValueError("MATERIAL_LEARNING_PREPARATION_PHASE_INVALID")
-            task, _ = add_material_task(
-                session, run, task_kind="PREPARE", unit_key="source-preparation", ordinal=1
-            )
+            task, _ = material_preparation_task(session, run)
             task_id = task.task_id
             if task.state == "PENDING":
                 transition_material_task(
