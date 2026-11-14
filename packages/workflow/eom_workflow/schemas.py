@@ -15,6 +15,7 @@ from typing import Any, Literal, cast
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirement,
     ContentTeamMaterialRequirementV2,
+    KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
@@ -24,8 +25,10 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
     KnowledgeAnalysisRequestV11,
+    KnowledgeNodeType,
     catalog_schema_registry,
     content_team_material_required_retrieval_elements,
+    knowledge_node_id_prefix,
     validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
@@ -33,6 +36,7 @@ from eom_catalog_contracts.item_inference_transfer import ClaimId
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.models import FrozenModel
 from eom_catalog_contracts.validation import CatalogSchemaError
+from eom_catalog_contracts.validation import load_schema as load_catalog_schema
 from eom_hwpx_contracts import (
     ContentTeamLabeledBlock,
     ContentTeamMarkdownError,
@@ -3143,6 +3147,86 @@ def _describe_document_review_result_order(definitions: dict[str, Any]) -> None:
     )
 
 
+def _is_registered_item_reference_request(schema_id: str, worker_input: RoleWorkerInput) -> bool:
+    request = worker_input.request
+    return (
+        schema_id == "knowledge-analysis-proposal-result@1.0"
+        and worker_input.role == "support"
+        and isinstance(request, KnowledgeAnalysisWorkerRequest)
+        and type(request.analysis_request) is KnowledgeAnalysisRequestV2
+        and request.analysis_request.source.source_class == "APPROVED_ITEM"
+    )
+
+
+def _bind_registered_item_reference_nodes(
+    schema: dict[str, Any], proposal_properties: dict[str, Any]
+) -> None:
+    """Constrain this use case to the existing consumer's reference vocabulary.
+
+    Clone complete closed node objects per declared type: an extra allOf/partial object would
+    either leave a bypass branch or conflict with strict structured-output rules.
+    Non-reference nodes retain their original generic identity contract.
+    """
+    definitions = _mapping(schema, "$defs")
+    nodes = _mapping(proposal_properties, "nodes")
+    reference = _mapping(nodes, "items").get("$ref")
+    if not isinstance(reference, str) or not reference.startswith("#/$defs/"):
+        raise WorkflowSchemaError("registered Item nodes are not projectable")
+    node = _mapping(definitions, reference.removeprefix("#/$defs/"))
+    properties = _mapping(node, "properties")
+    type_reference = _mapping(properties, "node_type").get("$ref")
+    if not isinstance(type_reference, str) or not type_reference.startswith("#/$defs/"):
+        raise WorkflowSchemaError("registered Item node type is not projectable")
+    kinds = _mapping(definitions, type_reference.removeprefix("#/$defs/")).get("enum")
+    shared = load_catalog_schema("knowledge-analysis-solution-types-v1")
+    typed_properties = _mapping(
+        _mapping(_mapping(shared, "$defs"), "typedReferenceNode"), "properties"
+    )
+    reference_kinds = _mapping(typed_properties, "node_type").get("enum")
+    reference_pattern = _mapping(typed_properties, "node_id").get("pattern")
+    if (
+        not isinstance(kinds, list)
+        or not all(isinstance(kind, str) for kind in kinds)
+        or not isinstance(reference_kinds, list)
+        or not all(isinstance(kind, str) for kind in reference_kinds)
+        or not isinstance(reference_pattern, str)
+        or not set(reference_kinds) < set(kinds)
+    ):
+        raise WorkflowSchemaError("registered Item reference vocabulary differs")
+    prefixes = {kind: knowledge_node_id_prefix(KnowledgeNodeType(kind)) for kind in reference_kinds}
+    shared_prefix = "^knode_(?:" + "|".join(prefix[6:-1] for prefix in prefixes.values()) + ")_"
+    if not reference_pattern.startswith(shared_prefix):
+        raise WorkflowSchemaError("registered Item reference prefix vocabulary differs")
+    suffix_pattern = reference_pattern.removeprefix(shared_prefix)
+    references = []
+    for kind, prefix in prefixes.items():
+        reference_node = copy.deepcopy(node)
+        reference_properties = _mapping(reference_node, "properties")
+        reference_properties["node_type"] = {"type": "string", "enum": [kind]}
+        _mapping(reference_properties, "node_id")["pattern"] = "^" + prefix + suffix_pattern
+        references.append(reference_node)
+    others = copy.deepcopy(node)
+    _mapping(others, "properties")["node_type"] = {
+        "type": "string",
+        "enum": [kind for kind in kinds if kind not in reference_kinds],
+    }
+    nodes["items"] = {"anyOf": [*references, others]}
+
+
+def validate_role_result_for_request(
+    value: object, role: str, schema_id: str, worker_input: RoleWorkerInput
+) -> RoleResult:
+    """Preserve historical validation, then enforce the exact registered-Item subset."""
+    result = validate_role_result(value, role, schema_id)
+    if _is_registered_item_reference_request(schema_id, worker_input):
+        validate_schema_message(
+            constrained_result_schema(schema_id, worker_input),
+            result.model_dump(mode="json"),
+            schema_id,
+        )
+    return result
+
+
 def constrained_result_schema(
     schema_id: str,
     worker_input: RoleWorkerInput,
@@ -3309,6 +3393,8 @@ def constrained_result_schema(
             worker_input.request.analysis_request.analysis_request_id
         )
         analysis_request = worker_input.request.analysis_request
+        if _is_registered_item_reference_request(schema_id, worker_input):
+            _bind_registered_item_reference_nodes(schema, proposal_properties)
         if isinstance(analysis_request, (KnowledgeAnalysisRequestV10, KnowledgeAnalysisRequestV11)):
             _mapping(proposal_properties, "base_analysis_result_id")["const"] = (
                 analysis_request.base_analysis.analysis_result_id

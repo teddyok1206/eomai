@@ -490,3 +490,43 @@ bitmap 반사로 해석한 미활성 후보는 글자를 뒤집었으므로 배�
     제목 장식 선택은 남는다. 반대로 전체 문서/900개 Native 파일을 재생성하거나 여러
     서비스 schema를 새로 만들 필요는 없다. 기존 geometry·그림 선택·prepared 연결 세 경계를
     필요한 만큼만 보완한다. 예상 설계와 실제 구현/활성화를 구분한다.
+
+### 전체450개 실제 검사에서 발견한 후속 경계 (2026-11-14)
+
+현재 SDK9c/CPU2e의 로컬 파일 검사는450개 중448개 PASS, 두 예외다. 이는 등록/권한/
+Graph/임베딩 전체 완료가 아니라 실제 원본·분할 영수증·본문 그림 픽셀과 use 대조 결과다.
+다음 변경은 이 두 실제 형식과 그 실패 격리에 한정하며 기존 원본·실행은 변경하지 않는다.
+
+- 04회2번: 원 PNG는 컬러·반투명이고, 원본과 Native에 같은 `BLACK_WHITE` 표시 효과가
+  있다. 원본 유실이 아니라 기존 decoder의 지원 누락이다. 무효과/단순 grayscale로
+  대체하지 않고 실제 renderer의 흑백 연산을 확인한 뒤 alpha를 보존해 지원한다.
+- 12회14번: 본문 picture5개는 모두 해석되지만 동일 pixel/view에 원본 use 후보가 복수다.
+  임의 첫 후보·파일 이름·위치 추측으로 통과시키지 않는다. 기존 geometry/placement의
+  실제 대응을 확인했으며, 크기만으로는 분리되지 않았다. 원본도 HWPX인 이 사례에서는
+  분할 전후 picture subtree의 기존 `native_sha256`가 정확히 일치한다. 같은 HWPX 형식의
+  다중 view 후보만 `(view identity, native_sha256)` immutable 보조 map으로 유일하게
+  대응시킨다. exact 후보0/2개는 계속 거절하고 HWP→HWPX에는 이 증명을 적용하지 않는다.
+- 이 두 조건은 현재 준비 단계에서 일반 ValueError로 올라와 service 전체 재시작을
+  반복할 수 있다. 실제 source의 지원 불가/모호함에 해당하는 명시적 두 코드만 준비 owner에서
+  해당 run/task의 공식 실패로 격리한다. hash·권한·profile·실행환경 오류는 이 분류에 섞지
+  않는다. 실패 이력은 보존하며 후속 처리는 기존 retry/qualified recovery 경계를 쓴다.
+
+정본은 기존 원본과 Native Artifact다. logical/revision/hash와 pointer 구조, DB schema,
+worker wire·released Pack 의미는 유지한다. 연산/lookup은 image-provider decoder와
+Catalog의 기존 pure scope index가 각각 소유하며, 실패 전이는 기존 Coordinator/Processing
+owner가 소유한다. 원본 use 최대2048개의 immutable map과 문항별 use lookup을 유지하고
+모호함 해소도 검증 가능한 기존 value만 쓴다. 새 영구 cache/queue/DB 열은 필요 없다.
+동시성·멱등성·revision 잠금은 기존 owner 그대로다. 새 profile/설치 hash로만 활성화하고
+기존 진행·Graph/임베딩을 되돌리지 않는다. 테스트는 실제 효과 속성과 alpha, 실제 후보
+다중성 및 거부 분기, 준비 실패의 run 격리와 인프라 오류 전파, 기존25/전체450 파일 대조를
+포함한다. 지원 누락을 감추거나 모든 ValueError를 성공/정상 처리하는 대안은 채택하지 않는다.
+
+흑백 view는 기존 일반/회색조 연산을 유지하면서 LibreOffice24.2 raster MONO와 같은
+`(76R + 151G + 29B) >> 8 >= 128` 연산을 적용하고 원 alpha를 보존한다. 근거는
+[정수 밝기](https://raw.githubusercontent.com/LibreOffice/core/libreoffice-24-2/include/tools/color.hxx),
+[MONO 연결](https://raw.githubusercontent.com/LibreOffice/core/libreoffice-24-2/vcl/source/graphic/GraphicObject.cxx),
+[임계값](https://raw.githubusercontent.com/LibreOffice/core/libreoffice-24-2/vcl/source/bitmap/bitmap.cxx),
+[alpha와 분리된 변환](https://raw.githubusercontent.com/LibreOffice/core/libreoffice-24-2/vcl/source/bitmap/BitmapEx.cxx)이다.
+이는 Hancom의 실제 화면과 pixel-golden 검증을 끝냈다는 뜻이 아니다. 현재 H2O의 PDF
+렌더 경로는 이 효과를 적용하지 않으므로 그 PDF를 흑백 효과의 정답으로 쓰지 않는다.
+원본 PNG와 편집 가능한 Native HWPX의 그림·효과 속성은 수정하지 않는다.

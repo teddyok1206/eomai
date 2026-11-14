@@ -450,16 +450,20 @@ def test_guidance_is_bounded_including_64_allowed_uses_and_contains_only_pinned_
 
 
 def test_source_index_is_frozen_and_owns_only_immutable_derived_candidates():
-    source = _catalog(SOURCE, (FIGURE, LOGO))
+    source = _catalog(SOURCE, (FIGURE, LOGO), native=True)
     index = build_native_source_visual_index(source, source_catalog_sha256=_sha(source))
     assert index.source_sha256 == SOURCE
     assert index.source_catalog_sha256 == _sha(source)
     assert isinstance(index.candidates, MappingProxyType)
+    assert isinstance(index.native_candidates, MappingProxyType)
     assert all(isinstance(ids, tuple) for ids in index.candidates.values())
+    assert all(isinstance(ids, tuple) for ids in index.native_candidates.values())
     with pytest.raises(FrozenInstanceError):
         index.source_sha256 = "sha256:" + "0" * 64
     with pytest.raises(TypeError):
         index.candidates[next(iter(index.candidates))] = ()
+    with pytest.raises(TypeError):
+        index.native_candidates[next(iter(index.native_candidates))] = ()
     with pytest.raises(TypeError):
         NativeSourceVisualIndex(source, source_sha256="sha256:" + "0" * 64)
 
@@ -547,6 +551,251 @@ def test_per_book_source_hash_validation_and_index_cost_is_once_with_bitwise_equ
     # A later call/book builds its own index; nothing persists globally.
     assert build_native_source_visual_index(source, source_catalog_sha256=catalog_sha) is not index
     assert counts == dict(source=2, question=count, hash=2, source_lookup=4)
+
+
+def _case12_catalog(*, question):
+    """Exact five descriptor hashes/geometry from approved case12/14 diagnostic.
+
+    This closed metadata subset is synthetic, not the complete canonical source
+    catalog or a claim to parse/render source bytes in a contract unit test.
+    """
+    source_sha = (
+        "sha256:4465bab738133d43c428675a0ea7e4bc8ef05e0a742a758d9e88a2726e740f7a"
+        if question
+        else "sha256:cbeb64a319e4b1f9c9cb5e964b8ff4215865591282e862bfa69c9611196ec01b"
+    )
+    hashes = (
+        "db62ceb8843204b36c3d3cbe64f8f8d767f9f692e132e3286b534d5e6743603d",
+        "2df575268e38aba0542f35c8df20561a68fb3f1d6b471dd55e1173f72f7af519",
+        "daed771128740d7546909ac365a10de172672b96bce6c112360adef7790b06ba",
+        "6616dc47a31669e0d9a20f137d58bbb51bc9ea4e58a8071855d542e41506b21a",
+        "54e874703cb47027289fcb8255c4e2f953bb85088b4eea2bc00b26cd7a59a09a",
+    )
+    views = (
+        "3a9454d99f387a37b914eaaca6903c55f222b1da0f7e1b54b9da17945077aeeb",
+        "774ca8bed759d2e7e965140b4ec333192dc7c6367b47b5ac7999522ef24c7b3b",
+        "b8f8e74d83b87ae4fc7ca1dcb2e052a08d02ef7db31c3a67cbef130b1f1774ba",
+    )
+    viewports = ((1600, 3556, 19669, 15831), (19923, 3556, 37961, 15831), (0, 19964, 76800, 41940))
+    ordinals = (130, 165, 200, 235, 340) if question else (3939, 3974, 4009, 4044, 4149)
+    value = _catalog(source_sha, (), native=True).model_dump(mode="json")
+    whole = "893df86d233b30f0a808481075457a52147b6f42e348815cba40f38bc3570158"
+    value["embedded_images"]["images"] = [
+        dict(
+            source_member="BinData/image14.png",
+            source_member_sha256="sha256:" + whole,
+            source_format="PNG",
+            pixel_sha256="sha256:dd3f6a35c9593e277b238b78fd822d531ab93690da357b154b83a4a7117daccc",
+            member_path="images/" + whole + ".png",
+            sha256="sha256:" + whole,
+            width_px=1024,
+            height_px=559,
+            content_length=103695,
+        )
+    ]
+    for index, ordinal in enumerate(ordinals):
+        view_index = index % 2 if index < 4 else 2
+        locator = OfficeObjectLocator(member_path="Contents/section3.xml", ordinal=ordinal)
+        identifier = office_object_id(source_sha, locator)
+        value["picture_uses"].append(
+            dict(
+                use_id=identifier,
+                locator=locator.model_dump(mode="json"),
+                source_member="BinData/image14.png",
+                native_sha256="sha256:" + hashes[index],
+                group_id=None,
+                geometry=dict(
+                    original_extent=(76800, 41940),
+                    viewport=viewports[view_index],
+                    clockwise_quarter_turns=0,
+                    flip_horizontal=False,
+                    flip_vertical=False,
+                ),
+                placement=dict(
+                    anchor_ordinal=ordinal - 2,
+                    width=(5973, 5963, 23492)[view_index],
+                    height=4058 if index < 4 else 6722,
+                    horizontal_offset=0,
+                    vertical_offset=3825,
+                    horizontal_relative="COLUMN",
+                    vertical_relative="PARA",
+                    z_order=211 + index if index < 4 else 210,
+                ),
+                unresolved_reasons=[],
+            )
+        )
+        value["rendered_uses"].append(
+            dict(
+                use_id=identifier,
+                member_path="uses/" + views[view_index] + ".png",
+                sha256="sha256:" + views[view_index],
+                width_px=242 if index < 4 else 1024,
+                height_px=165 if index < 4 else 293,
+                content_length=(9171, 6567, 41542)[view_index],
+            )
+        )
+    return _rehash_catalog(value)
+
+
+def _rehash_catalog(value):
+    embedded = value["embedded_images"]
+    embedded["manifest_sha256"] = content_sha256(
+        {key: member for key, member in embedded.items() if key != "manifest_sha256"}
+    )
+    value["manifest_sha256"] = content_sha256(
+        {key: member for key, member in value.items() if key != "manifest_sha256"}
+    )
+    return OfficePictureUseCatalog.model_validate(value)
+
+
+def _case12_scope(source, question, *, source_index=None):
+    file = _file().model_copy(
+        update={
+            "original_source_sha256": source.embedded_images.source_sha256,
+            "document": _file().document.model_copy(
+                update={"sha256": question.embedded_images.source_sha256}
+            ),
+        }
+    )
+    arguments = dict(
+        item_number=14,
+        source_catalog=source,
+        source_catalog_sha256=_sha(source),
+        question_catalog=question,
+    )
+    return (
+        build_material_native_question_visual_scope(file, **arguments)
+        if source_index is None
+        else build_material_native_question_visual_scope_from_index(
+            file, source_index=source_index, **arguments
+        )
+    )
+
+
+def test_case12_actual_five_hashes_resolve_distinct_same_view_native_instances():
+    source, question = _case12_catalog(question=False), _case12_catalog(question=True)
+    scope = _case12_scope(source, question)
+    expected = tuple(sorted(use.use_id for use in source.picture_uses))
+    assert scope.allowed_picture_use_ids == expected
+    assert set(expected) == {
+        "officeobj_84096e23962441fb79249e5693c0dc03",
+        "officeobj_22bcc6156beec2afaad2f10d871066ef",
+        "officeobj_95b3d9e6551ae86b0c896b8694ac649e",
+        "officeobj_07c22f8fc360d4146957bf73ea7baf18",
+        "officeobj_6cd1acd0fa1936dac5cfb9ca4351d211",
+    }
+    # The identical display sizes and rebased anchor ordinals are not selectors.
+    assert source.picture_uses[0].placement.width == source.picture_uses[2].placement.width
+    assert question.picture_uses[0].placement != source.picture_uses[0].placement
+    for index, use in enumerate(question.picture_uses):
+        single = question.model_dump(mode="json")
+        single["picture_uses"], single["rendered_uses"] = (
+            [single["picture_uses"][index]],
+            [single["rendered_uses"][index]],
+        )
+        assert _case12_scope(source, _rehash_catalog(single)).allowed_picture_use_ids == (
+            source.picture_uses[index].use_id,
+        )
+        assert use.native_sha256 == source.picture_uses[index].native_sha256
+
+
+@pytest.mark.parametrize(
+    "fault", ["no-exact", "two-exact", "cross-format", "wrong-view", "other-view-native"]
+)
+def test_native_secondary_lookup_never_guesses_or_overrides_view_and_format(fault):
+    source, question = _case12_catalog(question=False), _case12_catalog(question=True)
+    value = source.model_dump(mode="json")
+    candidate = question.model_dump(mode="json")
+    code = "MATERIAL_NATIVE_VISUAL_SOURCE_USE_AMBIGUOUS"
+    if fault == "no-exact":
+        candidate["picture_uses"][0]["native_sha256"] = "sha256:" + "f" * 64
+    elif fault == "two-exact":
+        value["picture_uses"][2]["native_sha256"] = value["picture_uses"][0]["native_sha256"]
+    elif fault == "cross-format":
+        value["embedded_images"]["source_format"] = "HWP5"
+    elif fault == "other-view-native":
+        candidate["picture_uses"][0]["native_sha256"] = value["picture_uses"][-1]["native_sha256"]
+    else:
+        digest = "f" * 64
+        candidate["rendered_uses"][0].update(
+            sha256="sha256:" + digest, member_path="uses/" + digest + ".png"
+        )
+        code = "MATERIAL_NATIVE_VISUAL_SOURCE_USE_NOT_FOUND"
+    with pytest.raises(ValueError, match=code):
+        _case12_scope(_rehash_catalog(value), _rehash_catalog(candidate))
+
+
+def test_secondary_index_excludes_group_composition_even_when_native_hash_is_exact():
+    source = _catalog(SOURCE, (FIGURE, FIGURE, FIGURE), native=True)
+    question = _catalog(FRAGMENT, (NATIVE_FIGURE,), native=True)
+    value = source.model_dump(mode="json")
+    locator = OfficeObjectLocator(member_path="Contents/section0.xml", ordinal=100)
+    group = office_object_id(SOURCE, locator)
+    value["native_objects"] = [
+        dict(
+            object_id=group,
+            locator=locator.model_dump(mode="json"),
+            kind="GROUP",
+            group_id=None,
+            native_sha256="sha256:" + "f" * 64,
+        )
+    ]
+    value["picture_uses"][0].update(
+        group_id=group, unresolved_reasons=["GROUP_COMPOSITION_REQUIRED"]
+    )
+    value["rendered_uses"] = value["rendered_uses"][1:]
+    candidate = question.model_dump(mode="json")
+    candidate["picture_uses"][0]["native_sha256"] = value["picture_uses"][0]["native_sha256"]
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_VISUAL_SOURCE_USE_AMBIGUOUS"):
+        _scope(_rehash_catalog(value), _rehash_catalog(candidate))
+
+
+def test_unique_view_path_does_not_require_same_native_hash():
+    source, question = _case12_catalog(question=False), _case12_catalog(question=True)
+    expected = _case12_scope(source, question)
+    value = question.model_dump(mode="json")
+    value["picture_uses"][-1]["native_sha256"] = "sha256:" + "f" * 64
+    assert _case12_scope(source, _rehash_catalog(value)) == expected
+
+
+@pytest.mark.parametrize("count", [1, 25])
+def test_secondary_index_is_built_once_per_book_with_identical_standalone_projection(
+    monkeypatch, count
+):
+    source, question = _case12_catalog(question=False), _case12_catalog(question=True)
+    expected = _case12_scope(source, question)
+    counts = dict(source=0, question=0, hash=0, source_lookup=0)
+    require, encode, identity = (
+        selection_owner._require_catalog,
+        selection_owner.canonical_json_bytes,
+        selection_owner._view_identity,
+    )
+
+    def validate(catalog, *, question):
+        counts["question" if question else "source"] += 1
+        return require(catalog, question=question)
+
+    def canonical(value):
+        counts["hash"] += 1
+        return encode(value)
+
+    def view_identity(image, view):
+        if image is source.embedded_images.images[0]:
+            counts["source_lookup"] += 1
+        return identity(image, view)
+
+    monkeypatch.setattr(selection_owner, "_require_catalog", validate)
+    monkeypatch.setattr(selection_owner, "canonical_json_bytes", canonical)
+    monkeypatch.setattr(selection_owner, "_view_identity", view_identity)
+    index = build_native_source_visual_index(source, source_catalog_sha256=_sha(source))
+    actual = tuple(_case12_scope(source, question, source_index=index) for _ in range(count))
+    assert counts == dict(source=1, question=count, hash=1, source_lookup=5)
+    assert actual == (expected,) * count
+    assert all(
+        canonical_json_bytes(scope.model_dump(mode="json"))
+        == canonical_json_bytes(expected.model_dump(mode="json"))
+        for scope in actual
+    )
 
 
 def test_contract_helper_has_no_infrastructure_import_or_io_calls():

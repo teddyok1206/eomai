@@ -128,7 +128,7 @@ from eom_workflow.schemas import (
     result_schema_protocol,
     role_schema_bundle_hash,
     validate_role_input,
-    validate_role_result,
+    validate_role_result_for_request,
 )
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
@@ -1307,7 +1307,7 @@ class Orchestrator:
             if recovery_state is not JobState.VALIDATING_RESULT:
                 self._transition(job_id, JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED")
             raw_result = load_worker_result(run.result_path, run.result_path.parent)
-            result = validate_role_result(raw_result, role, result_schema)
+            result = validate_role_result_for_request(raw_result, role, result_schema, worker_input)
             if (
                 result.job_id != worker_input.job_id
                 or result.workflow_id != worker_input.workflow_id

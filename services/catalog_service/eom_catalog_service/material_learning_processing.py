@@ -37,6 +37,7 @@ from eom_catalog_service.material_learning_artifacts import (
     read_material_metadata,
 )
 from eom_catalog_service.material_learning_coordinator import (
+    NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS,
     MaterialCoordinatorProgress,
     MaterialDiscoveryPlan,
     MaterialLearningCoordinator,
@@ -63,7 +64,7 @@ _REGISTRATION_SOURCE_EXCEPTIONS = frozenset(
     {"MATERIAL_ITEM_SOURCE_UNREADABLE", "MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED"}
 )
 _KNOWLEDGE_COMMAND_REF = "eom://schemas/knowledge/create-material-knowledge-analysis/1.0"
-_TERMINAL_SOURCE_LIMITS = frozenset(
+_TERMINAL_PREPARATION_SOURCE_ERRORS = NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS | frozenset(
     {
         "MATERIAL_LEARNING_PDF_ENCRYPTED",
         "MATERIAL_LEARNING_SOURCE_PAGE_LIMIT",
@@ -109,7 +110,7 @@ class MaterialLearningProcessingService:
                 try:
                     return self.coordinator.prepare(claim)
                 except MaterialLearningSourceError as error:
-                    if error.code not in _TERMINAL_SOURCE_LIMITS:
+                    if error.code not in _TERMINAL_PREPARATION_SOURCE_ERRORS:
                         raise  # Infrastructure/profile/pointer failures are not source quality.
                     with self.sessions.begin() as session:
                         run = lock_material_run(session, claim, now=datetime.now(UTC))

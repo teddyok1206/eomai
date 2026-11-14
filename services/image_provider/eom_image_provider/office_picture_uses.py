@@ -17,6 +17,7 @@ from eom_image_provider.office_embedded_images import (
     _extract_office_image_payload,
     read_verified_office_source,
 )
+from eom_image_provider.office_picture_color_mode import OfficePictureColorMode
 from eom_image_provider.office_picture_records import read_hwp_picture_uses
 from eom_image_provider.office_picture_views import render_office_picture_views
 from eom_image_provider.office_picture_xml import read_hwpx_picture_uses
@@ -36,14 +37,14 @@ def extract_office_picture_uses(
     embedded = _extract_office_image_payload(
         payload, expected_sha256=expected_sha256, workspace=workspace
     )
-    grayscale_uses: set[str] = set()
+    color_modes: dict[str, OfficePictureColorMode] = {}
     if embedded.source_format == "HWP5":
         uses, objects = read_hwp_picture_uses(
-            payload, source_sha256=expected_sha256, grayscale_uses=grayscale_uses
+            payload, source_sha256=expected_sha256, color_modes=color_modes
         )
     else:
         uses, objects = read_hwpx_picture_uses(
-            payload, source_sha256=expected_sha256, grayscale_uses=grayscale_uses
+            payload, source_sha256=expected_sha256, color_modes=color_modes
         )
     images = {image.source_member for image in embedded.images}
     unsupported = set(embedded.unsupported_members)
@@ -63,7 +64,7 @@ def extract_office_picture_uses(
         "rendered_uses": [
             view.model_dump(mode="json")
             for view in render_office_picture_views(
-                embedded, checked, workspace=workspace, grayscale_uses=frozenset(grayscale_uses)
+                embedded, checked, workspace=workspace, color_modes=color_modes
             )
         ],
         "native_objects": [obj.model_dump(mode="json") for obj in objects],

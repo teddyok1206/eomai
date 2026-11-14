@@ -80,7 +80,10 @@ from eom_catalog_service.material_learning_models import (
     MaterialLearningTaskRecord,
 )
 from eom_catalog_service.material_learning_pages import MaterialPagePreparationService
-from eom_catalog_service.material_learning_source import authorize_material_learning
+from eom_catalog_service.material_learning_source import (
+    MaterialLearningSourceError,
+    authorize_material_learning,
+)
 from eom_catalog_service.material_learning_store import (
     MaterialRunClaim,
     add_material_task,
@@ -110,6 +113,12 @@ _NATIVE_DISCOVERY_SOURCE_ERRORS = frozenset(
         "MATERIAL_NATIVE_DISCOVERY_NUMBER_DUPLICATED",
         "MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE",
         "MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH",
+    }
+)
+NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS = frozenset(
+    {
+        "MATERIAL_NATIVE_VISUAL_QUESTION_USE_UNRESOLVED",
+        "MATERIAL_NATIVE_VISUAL_SOURCE_USE_AMBIGUOUS",
     }
 )
 
@@ -481,13 +490,24 @@ class MaterialLearningCoordinator:
             and self.native_visuals is not None
         ):
             with self.maintain_claim(claim):
-                outcome = self.native_visuals.enrich(
-                    outcome.prepared,
-                    outcome.pointer,
-                    intake=intake,
-                    operator_id=intake.requested_by,
-                    authorize=lambda: self.authorize(claim),
-                )
+                try:
+                    outcome = self.native_visuals.enrich(
+                        outcome.prepared,
+                        outcome.pointer,
+                        intake=intake,
+                        operator_id=intake.requested_by,
+                        authorize=lambda: self.authorize(claim),
+                    )
+                except ValueError as error:
+                    code = str(error)
+                    # Only these pure scope failures describe unsupported source
+                    # visuals; pointer/profile/authority and adapter failures do not.
+                    if (
+                        type(error) is not ValueError
+                        or code not in NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS
+                    ):
+                        raise
+                    raise MaterialLearningSourceError(code) from error
         require_native_material_checkpoint_chain(
             intake, preparation=work, prepared=outcome.prepared, intake_pointer=intake_pointer
         )

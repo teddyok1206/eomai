@@ -335,6 +335,14 @@ V1 후속 revision으로 바꾼다. [그림 범위 계산](../../packages/catalo
 문항의 실제 BODY picture use를 whole pixel·view SHA/크기로 유일하게 대응시키며 ZIP의
 전체 binary 목록이나 같은 binary의 모든 use를 허용하지 않는다. 안내 suffix는 권한이
 아니며 SourceAuthorizer는 실제 native bundle/checkpoint와 base 페이지를 재검증한다.
+같은 HWPX의 view 후보가 여러 개일 때만 기존 native subtree SHA 보조 index로 유일성을
+증명한다. 원본 HWP와 변환 HWPX의 native bytes를 같은 것으로 간주하지 않는다.
+그림 decoder의 color-mode map은 일반/기존 회색조/BLACK_WHITE를 구분하며,
+[color-mode owner](../../services/image_provider/eom_image_provider/office_picture_color_mode.py)는
+흑백 사용본에만 정수 MONO 연산을 적용하고 원 PNG/alpha를 보존한다.
+준비 단계의 지원불가 그림·모호한 use 두 코드는 Coordinator에서 기존 source-error로
+번역하고 Processing의 해당 run/task FAILED 전이로 격리한다. hash/권한/profile/인프라
+오류를 source 품질 오류로 숨기지 않는다.
 [Native visual owner](../../services/catalog_service/eom_catalog_service/material_native_visual_preparation.py)는
 등록 시에도 실제 native 문항 파일로 범위를 독립 재계산한다. 공개 worker wire는 그대로다.
 visual recovery는 accepted 결과·Item·분석·Graph pin이 없는 실패 QUESTION을 가진 terminal

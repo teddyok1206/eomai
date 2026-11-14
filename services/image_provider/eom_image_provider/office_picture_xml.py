@@ -22,6 +22,10 @@ from eom_image_contracts.office_picture_uses import (
 )
 
 from eom_image_provider.office_embedded_images import OfficeEmbeddedImageError
+from eom_image_provider.office_picture_color_mode import (
+    HWPX_PICTURE_COLOR_MODES,
+    OfficePictureColorMode,
+)
 from eom_image_provider.office_picture_records import _diagonal_scale_flips, _rotation_quarter_turn
 
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
@@ -231,7 +235,10 @@ def _placement(node: ET.Element, anchor: int | None) -> OfficePicturePlacement |
 
 
 def read_hwpx_picture_uses(
-    payload: bytes, *, source_sha256: str, grayscale_uses: set[str] | None = None
+    payload: bytes,
+    *,
+    source_sha256: str,
+    color_modes: dict[str, OfficePictureColorMode] | None = None,
 ) -> tuple[list[OfficePictureUse], list[OfficeNativeObject]]:
     # Full ZIP path/expansion validation is performed by the shared whole-image
     # extractor before this read; no paths are extracted to the filesystem.
@@ -278,18 +285,18 @@ def read_hwpx_picture_uses(
                         reasons.append("GEOMETRY_UNRESOLVED")
                     if group_id is not None:
                         reasons.append("GROUP_COMPOSITION_REQUIRED")
-                    gray = images[0].get("effect") == "GRAY_SCALE" and grayscale_uses is not None
+                    mode = HWPX_PICTURE_COLOR_MODES.get(images[0].get("effect", "REAL_PIC"))
                     if (
                         images[0].get("bright", "0") != "0"
                         or images[0].get("contrast", "0") != "0"
-                        or (images[0].get("effect", "REAL_PIC") != "REAL_PIC" and not gray)
+                        or mode is None
+                        or (mode is not OfficePictureColorMode.NORMAL and color_modes is None)
                         or images[0].get("alpha", "0") != "0"
                         or any(len(effect) for effect in node.findall(HP + "effects"))
                     ):
                         reasons.append("IMAGE_EFFECT_UNSUPPORTED")
-                    if gray:
-                        assert grayscale_uses is not None
-                        grayscale_uses.add(identifier)
+                    if mode is not None and color_modes is not None:
+                        color_modes[identifier] = mode
                     uses.append(
                         OfficePictureUse(
                             use_id=identifier,

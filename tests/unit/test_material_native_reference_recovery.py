@@ -1,6 +1,7 @@
 """Combined retry cloning with a typed synthetic Knowledge application guard port."""
 
 from dataclasses import replace
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -161,6 +162,84 @@ def test_exact_replay_reproduces_reference_proof_without_creating_another_succes
     assert first.run_id == second.run_id and not first.replayed and second.replayed
     assert case.validate.call_count == 4
     assert len([row for row in case.added if isinstance(row, MaterialLearningRunRecord)]) == 1
+
+
+def ordinary_failure(case):
+    task = MaterialLearningTaskRecord(
+        task_id="materialtask_" + "f" * 32,
+        run_id=case.source.run_id,
+        task_kind="QUESTION",
+        unit_key="question-17",
+        ordinal=6,
+        attempt=1,
+        state="FAILED",
+        error_code="MATERIAL_LEARNING_ANALYSIS_TERMINAL_FAILURE",
+        workflow_id="workflow_" + "f" * 32,
+        analysis_run_id="analysisrun_" + "f" * 32,
+        **{name: getattr(case.reference, name) for name in owner._ARTIFACT_FIELDS},
+    )
+    case.tasks = (*case.tasks, task)
+    owner._quiescent_failed_workflows.return_value[task.workflow_id] = SimpleNamespace(
+        state="COMPLETED", created_actor_id=ACTOR
+    )
+    return task
+
+
+def test_mixed_ordinary_terminal_analysis_reuses_item_without_accepted_base_guard(monkeypatch):
+    case = reference_case(monkeypatch)
+    ordinary = ordinary_failure(case)
+    result = recover(case)
+    assert result.retried_tasks == 4 and result.reused_tasks == 2
+    clones = [row for row in case.added if isinstance(row, MaterialLearningTaskRecord)]
+    clone = clones[-1]
+    assert clone.state == "REGISTERED" and clone.predecessor_task_id == ordinary.task_id
+    assert all(getattr(clone, name) == getattr(ordinary, name) for name in owner._ARTIFACT_FIELDS)
+    assert clone.analysis_run_id is None and clone.solution_analysis_run_id is None
+    assert clone.workflow_id is None and clone.error_code is None
+    assert ordinary.state == "FAILED" and ordinary.analysis_run_id is not None
+    assert recover(case).replayed
+    assert {call.kwargs["task_id"] for call in case.validate.call_args_list} == {
+        case.reference.task_id
+    }
+
+
+def test_ordinary_failure_alone_cannot_acquire_the_reference_recovery_scope(monkeypatch):
+    case = reference_case(monkeypatch)
+    ordinary_failure(case)
+    case.reference.error_code = "MATERIAL_LEARNING_ANALYSIS_TERMINAL_FAILURE"
+    with pytest.raises(MaterialLearningSourceError, match="REFERENCE_RECOVERY_PHASE_INVALID"):
+        recover(case)
+    case.validate.assert_not_called()
+    assert not case.added
+
+
+def test_forged_typed_task_error_still_requires_the_actual_accepted_base_owner(monkeypatch):
+    case = reference_case(monkeypatch)
+    ordinary = ordinary_failure(case)
+    ordinary.error_code = RegisteredItemSolutionAnchorError.code
+
+    def validate(_session, *, task_id, operator_id):
+        assert operator_id == ACTOR
+        if task_id == ordinary.task_id:
+            raise ValueError("MATERIAL_REGISTERED_BASE_RECOVERY_BASE_INVALID")
+        return case.proof
+
+    case.validate.side_effect = validate
+    with pytest.raises(ValueError, match="RECOVERY_BASE_INVALID"):
+        recover(case)
+    assert not case.added
+
+
+def test_stale_mixed_command_is_rejected_before_any_reference_owner_read(monkeypatch):
+    case = reference_case(monkeypatch)
+    ordinary_failure(case)
+    case.command = case.command.model_copy(
+        update={"expected_updated_at": case.command.expected_updated_at + timedelta(seconds=1)}
+    )
+    with pytest.raises(MaterialLearningSourceError, match="STATE_STALE"):
+        recover(case)
+    case.validate.assert_not_called()
+    assert not case.added
 
 
 @pytest.mark.parametrize("field", ["task_id", "item_revision_id", "base_analysis_run_id"])

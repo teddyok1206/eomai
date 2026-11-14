@@ -22,6 +22,9 @@ from eom_catalog_service.material_intake_read import (
     read_material_preparation,
 )
 from eom_catalog_service.material_learning_artifacts import publish_material_metadata
+from eom_catalog_service.material_learning_coordinator import (
+    NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS,
+)
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRevisionRecord,
@@ -449,6 +452,8 @@ def test_inherited_task_cannot_resolve_another_unit(creative_engine, failed_disc
     [
         (3, True, "MATERIAL_LEARNING_PDF_ENCRYPTED"),
         (2001, False, "MATERIAL_LEARNING_SOURCE_PAGE_LIMIT"),
+        (3, False, "MATERIAL_NATIVE_VISUAL_QUESTION_USE_UNRESOLVED"),
+        (3, False, "MATERIAL_NATIVE_VISUAL_SOURCE_USE_AMBIGUOUS"),
     ],
 )
 def test_unprocessable_source_is_terminal_without_blocking_next_material(
@@ -461,7 +466,13 @@ def test_unprocessable_source_is_terminal_without_blocking_next_material(
 ):
     accepted, settings, restart = coordinator_case
     bad = InterruptibleExtractor()
-    bad.inspect = lambda _path: PdfInspection(page_count=page_count, encrypted=encrypted)
+
+    def inspect(_path):
+        if code in NATIVE_VISUAL_PREPARATION_SOURCE_ERRORS:
+            raise MaterialLearningSourceError(code)
+        return PdfInspection(page_count=page_count, encrypted=encrypted)
+
+    bad.inspect = inspect
     result = restart(bad).advance_once()
     assert result.run_id == accepted.run_id and result.phase == "FAILED"
     with Session(creative_engine) as session:

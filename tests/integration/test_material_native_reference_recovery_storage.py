@@ -62,6 +62,9 @@ from tests.integration.test_material_learning_recovery_storage import (
 from tests.integration.test_material_learning_recovery_storage import (
     registration_case as registration_case,
 )
+from tests.integration.test_material_registered_base_recovery_storage import (
+    registered_base_recovery_case as registered_base_recovery_case,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -76,7 +79,7 @@ class _ReferenceProofPortValue:
     accepted_result_sha256: str
 
 
-def _accepted_base(case, engine, tmp_path):
+def _base_analysis(case, engine, tmp_path, *, roles_failure=False):
     """Use the existing synthetic worker-response adapter, never a live model."""
     analyses = knowledge_owner.KnowledgeAnalysisApplicationService(engine, case.settings)
     base = analyses.create(
@@ -120,11 +123,20 @@ def _accepted_base(case, engine, tmp_path):
     ).model_dump(mode="json")
     proposal["anchors"][0].update(locator="/body", excerpt_sha256=content_sha256(content["body"]))
     proposal["anchors"][1]["locator"] = "/solution"
+    if roles_failure:
+        proposal["nodes"] = [
+            node for node in proposal["nodes"] if node["node_type"] == "ITEM_ELEMENT"
+        ]
     knowledge._complete_proposal(
         engine,
         case.settings,
         run_id=base.analysis_run_id,
-        staging_root=tmp_path / "native-reference-storage-response",
+        staging_root=tmp_path
+        / (
+            "native-reference-storage-failed-response"
+            if roles_failure
+            else "native-reference-storage-response"
+        ),
         proposal_override=KnowledgeAnalysisWorkerProposal.model_validate(proposal),
     )
     result = analyses.reconcile(
@@ -132,14 +144,20 @@ def _accepted_base(case, engine, tmp_path):
             analysis_run_id=base.analysis_run_id, requested_by=case.command.actor_id
         )
     )
-    assert result.state == "ACCEPTED"
+    assert result.state == ("FAILED" if roles_failure else "ACCEPTED")
+    if roles_failure:
+        with Session(engine) as session:
+            assert (
+                session.get(KnowledgeAnalysisRunRecord, result.analysis_run_id).error_code
+                == "REGISTERED_ITEM_SOLUTION_REFERENCE_ROLES_UNAVAILABLE"
+            )
     return result.analysis_run_id
 
 
 @pytest.fixture
 def native_reference_retry_case(creative_engine, native_visual_retry_case, tmp_path, monkeypatch):
     case = native_visual_retry_case
-    base_id = _accepted_base(case, creative_engine, tmp_path)
+    base_id = _base_analysis(case, creative_engine, tmp_path)
     run_id, reference_id = "materialrun_" + uuid4().hex, "materialtask_" + uuid4().hex
     now = datetime.now(UTC)
     with Session(creative_engine) as session, session.begin():
@@ -263,6 +281,7 @@ def test_combined_concurrent_replay_inherits_item_but_not_old_analysis_pin(
     assert sum(not value.replayed for value in results) == 1
     assert results[0].retried_tasks == 3 and results[0].reused_tasks == 1
     assert _successor_count(creative_engine, case.command.run_id) == 1
+
     with Session(creative_engine) as session:
         old = session.get(MaterialLearningTaskRecord, case.reference_id)
         run = session.get(MaterialLearningRunRecord, results[0].run_id)
@@ -398,3 +417,99 @@ def test_combined_replay_reauthorizes_and_changed_prepared_cannot_fork(
     replay = _recover(case)
     assert replay.replayed and replay.run_id == result.run_id
     assert _successor_count(creative_engine, case.command.run_id) == 1
+
+
+def test_genuine_invalid_accepted_guard_and_ordinary_failed_analysis_share_one_successor(
+    creative_engine, registered_base_recovery_case, tmp_path, monkeypatch
+):
+    """Real accepted-invalid guard/FAILED analysis; fixture source admission stays synthetic.
+
+    The extra ordinary row declares a completed result-admission workflow port;
+    this storage test does not claim that its reused bytes were re-extracted.
+    """
+    case, _analyses, command, reference_id, accepted, _content = registered_base_recovery_case
+    failed_id = _base_analysis(case, creative_engine, tmp_path, roles_failure=True)
+    ordinary_id = "materialtask_" + uuid4().hex
+    with Session(creative_engine) as session, session.begin():
+        reference = session.get(MaterialLearningTaskRecord, reference_id)
+        failed = session.get(KnowledgeAnalysisRunRecord, failed_id)
+        session.add(
+            MaterialLearningTaskRecord(
+                task_id=ordinary_id,
+                run_id=command.run_id,
+                task_kind="QUESTION",
+                unit_key="synthetic-ordinary-result-admission",
+                ordinal=4,
+                attempt=2,
+                state="FAILED",
+                execution_lane="MATERIAL_LEARNING",
+                error_code="MATERIAL_LEARNING_ANALYSIS_TERMINAL_FAILURE",
+                workflow_id=failed.workflow_id,
+                analysis_run_id=failed_id,
+                **{name: getattr(reference, name) for name in owner._ARTIFACT_FIELDS},
+            )
+        )
+        item_count = session.scalar(select(func.count()).select_from(ItemRevisionRecord))
+        analysis_count = session.scalar(
+            select(func.count()).select_from(KnowledgeAnalysisRunRecord)
+        )
+    actual_guard = (
+        knowledge_owner.KnowledgeAnalysisApplicationService.validate_material_base_recovery
+    )
+    checked = []
+
+    def observe_guard(self, session, *, task_id, operator_id):
+        checked.append(task_id)
+        return actual_guard(self, session, task_id=task_id, operator_id=operator_id)
+
+    monkeypatch.setattr(
+        knowledge_owner.KnowledgeAnalysisApplicationService,
+        "validate_material_base_recovery",
+        observe_guard,
+    )
+    barrier = Barrier(2)
+
+    def recover(_):
+        barrier.wait(timeout=15)
+        return owner.recover_native_material_references(
+            case.sessions, command, prepared=case.pointer, artifacts=case.artifacts
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(recover, range(2)))
+    assert len({result.run_id for result in results}) == 1
+    assert sum(not result.replayed for result in results) == 1
+    assert set(checked) == {reference_id} and len(checked) == 4
+    with Session(creative_engine) as session:
+        tasks = tuple(
+            session.scalars(
+                select(MaterialLearningTaskRecord)
+                .where(MaterialLearningTaskRecord.run_id == results[0].run_id)
+                .order_by(MaterialLearningTaskRecord.ordinal)
+            )
+        )
+        assert [task.state for task in tasks] == [
+            "COMPLETED",
+            "REGISTERED",
+            "PENDING",
+            "REGISTERED",
+        ]
+        for clone in (tasks[1], tasks[3]):
+            old = session.get(MaterialLearningTaskRecord, clone.predecessor_task_id)
+            assert all(
+                getattr(clone, name) == getattr(old, name) for name in owner._ARTIFACT_FIELDS
+            )
+            assert clone.analysis_run_id is None and clone.solution_analysis_run_id is None
+            assert clone.workflow_id is None
+        assert (
+            session.get(MaterialLearningTaskRecord, reference_id).analysis_run_id
+            == accepted.analysis_run_id
+        )
+        assert session.get(MaterialLearningTaskRecord, ordinary_id).analysis_run_id == failed_id
+        assert session.get(KnowledgeAnalysisRunRecord, accepted.analysis_run_id).state == "ACCEPTED"
+        assert session.get(KnowledgeAnalysisRunRecord, failed_id).state == "FAILED"
+        assert session.scalar(select(func.count()).select_from(ItemRevisionRecord)) == item_count
+        assert (
+            session.scalar(select(func.count()).select_from(KnowledgeAnalysisRunRecord))
+            == analysis_count
+        )

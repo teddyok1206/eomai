@@ -50,6 +50,7 @@ from eom_catalog_service.material_learning_source import (
 )
 from eom_catalog_service.material_learning_store import append_material_event
 from eom_catalog_service.material_native_resolution import read_material_native_bundle
+from eom_catalog_service.material_registered_base_recovery import REGISTERED_BASE_RECOVERY_CODES
 from eom_catalog_service.material_task_history import (
     MAX_MATERIAL_ATTEMPTS,
     read_material_task_histories,
@@ -216,7 +217,8 @@ def _retry_material_learning_run(
             tuple(
                 row
                 for row in failed
-                if any(getattr(row, field) is not None for field in _VISUAL_FAILED_OUTPUT_FIELDS)
+                if row.error_code in REGISTERED_BASE_RECOVERY_CODES
+                and any(getattr(row, field) is not None for field in _VISUAL_FAILED_OUTPUT_FIELDS)
             )
             if isinstance(target, _NativeReferencePreparedTarget)
             else ()

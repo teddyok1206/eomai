@@ -26,6 +26,10 @@ from eom_image_contracts.office_picture_uses import (
 )
 
 from eom_image_provider.office_embedded_images import OfficeEmbeddedImageError, _inflate
+from eom_image_provider.office_picture_color_mode import (
+    HWP_PICTURE_COLOR_MODES,
+    OfficePictureColorMode,
+)
 
 _MAX_STREAM = 64 * 1024 * 1024
 _MAX_TOTAL = 128 * 1024 * 1024
@@ -228,7 +232,7 @@ def _section_objects(
     member: str,
     source_sha256: str,
     bindings: tuple[str | None, ...],
-    grayscale_uses: set[str] | None = None,
+    color_modes: dict[str, OfficePictureColorMode] | None = None,
 ) -> tuple[list[OfficePictureUse], list[OfficeNativeObject]]:
     stack: list[HwpRecord] = []
     shapes: list[HwpRecord] = []
@@ -273,19 +277,19 @@ def _section_objects(
                 reasons.append("GEOMETRY_UNRESOLVED")
             if group_id is not None:
                 reasons.append("GROUP_COMPOSITION_REQUIRED")
-            # Hancom table32: 1 is the ordinary grayscale picture mode, not
-            # shadow/glow effects. Only the paired renderer may resolve it.
-            gray = record.body[70] == 1 and grayscale_uses is not None
+            # Hancom table32 modes are resolved only by the paired renderer;
+            # brightness, contrast and other effects remain unsupported.
+            mode = HWP_PICTURE_COLOR_MODES.get(record.body[70])
             if (
                 record.body[68:70] != b"\0\0"
-                or (record.body[70] != 0 and not gray)
+                or mode is None
+                or (mode is not OfficePictureColorMode.NORMAL and color_modes is None)
                 or (len(record.body) >= 82 and struct.unpack_from("<I", record.body, 78)[0] != 0)
                 or (len(record.body) == 91 and record.body[90] != 0)
             ):
                 reasons.append("IMAGE_EFFECT_UNSUPPORTED")
-            if gray:
-                assert grayscale_uses is not None
-                grayscale_uses.add(office_object_id(source_sha256, locator))
+            if mode is not None and color_modes is not None:
+                color_modes[office_object_id(source_sha256, locator)] = mode
             proof = record.body + (b"" if shape is None else shape.body)
             uses.append(
                 OfficePictureUse(
@@ -362,7 +366,10 @@ def _placement(control: HwpRecord | None, anchor: int | None) -> OfficePicturePl
 
 
 def read_hwp_picture_uses(
-    payload: bytes, *, source_sha256: str, grayscale_uses: set[str] | None = None
+    payload: bytes,
+    *,
+    source_sha256: str,
+    color_modes: dict[str, OfficePictureColorMode] | None = None,
 ) -> tuple[list[OfficePictureUse], list[OfficeNativeObject]]:
     try:
         import olefile  # type: ignore[import-untyped]
@@ -417,7 +424,7 @@ def read_hwp_picture_uses(
                 member=member,
                 source_sha256=source_sha256,
                 bindings=bindings,
-                grayscale_uses=grayscale_uses,
+                color_modes=color_modes,
             )
             uses.extend(found)
             objects.extend(native)

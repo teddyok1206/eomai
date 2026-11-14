@@ -128,9 +128,7 @@ def test_grayscale_use_keeps_original_color_member_and_distinct_display_pixels(
             assert displayed.convert("RGBA").tobytes() == expected.tobytes()
 
 
-@pytest.mark.parametrize(
-    "change", ['bright="1"', 'contrast="-1"', 'alpha="100"', 'effect="BLACK_WHITE"']
-)
+@pytest.mark.parametrize("change", ['bright="1"', 'contrast="-1"', 'alpha="100"', 'effect="SEPIA"'])
 def test_grayscale_does_not_silently_ignore_other_effects(tmp_path: Path, change: str) -> None:
     body = picture().replace('effect="REAL_PIC"', 'effect="GRAY_SCALE"')
     key = change.split("=")[0]
@@ -314,7 +312,7 @@ def hwp_shape() -> bytes:
     )
 
 
-@pytest.mark.parametrize("tone", [0, 1, 2])
+@pytest.mark.parametrize("tone", [0, 1, 2, 3])
 def test_hwp_bindata_index_is_not_the_storage_number(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tone: int
 ) -> None:
@@ -376,13 +374,13 @@ def test_hwp_bindata_index_is_not_the_storage_number(
     assert result.picture_uses[0].use_id != result.picture_uses[1].use_id
     assert all(use.geometry is not None for use in result.picture_uses)
     assert result.picture_uses[1].unresolved_reasons == ()
-    if tone == 2:
+    if tone == 3:
         assert result.picture_uses[0].unresolved_reasons == ("IMAGE_EFFECT_UNSUPPORTED",)
         assert len(result.rendered_uses) == 1
     else:
         assert result.picture_uses[0].unresolved_reasons == ()
         assert len(result.rendered_uses) == 2
-        if tone == 1:
+        if tone in (1, 2):
             assert result.rendered_uses[0].sha256 != result.rendered_uses[1].sha256
     assert [obj.kind for obj in result.native_objects] == ["TABLE", "EQUATION"]
 

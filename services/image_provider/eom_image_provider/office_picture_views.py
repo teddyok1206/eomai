@@ -1,4 +1,4 @@
-"""Native integer viewport, quarter-turn and explicit grayscale source views."""
+"""Native integer viewport, quarter-turn and explicit source color-mode views."""
 
 from __future__ import annotations
 
@@ -6,14 +6,18 @@ import hashlib
 import io
 import os
 import stat
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImageSet
 from eom_image_contracts.office_picture_uses import OfficePictureUse, OfficePictureView
-from PIL import Image, ImageOps
+from PIL import Image
 
 from eom_image_provider.office_embedded_images import OfficeEmbeddedImageError
+from eom_image_provider.office_picture_color_mode import (
+    OfficePictureColorMode,
+    apply_office_picture_color_mode,
+)
 
 
 def render_office_picture_views(
@@ -21,7 +25,7 @@ def render_office_picture_views(
     uses: Sequence[OfficePictureUse],
     *,
     workspace: Path,
-    grayscale_uses: frozenset[str] = frozenset(),
+    color_modes: Mapping[str, OfficePictureColorMode] | None = None,
 ) -> tuple[OfficePictureView, ...]:
     """No PDF pixels, guessed boxes, resizing, white-margin trimming or label erasure.
 
@@ -29,8 +33,11 @@ def render_office_picture_views(
     Whole unchanged uses reference the existing canonical local member directly.
     """
     images = {image.source_member: image for image in embedded.images}
-    if not grayscale_uses.issubset({use.use_id for use in uses}):
+    modes = {} if color_modes is None else color_modes
+    if not modes.keys() <= {use.use_id for use in uses}:
         raise OfficeEmbeddedImageError("OFFICE_PICTURE_EFFECT_USE_MISSING")
+    if any(not isinstance(mode, OfficePictureColorMode) for mode in modes.values()):
+        raise OfficeEmbeddedImageError("OFFICE_PICTURE_EFFECT_MODE_INVALID")
     grouped: dict[str, list[OfficePictureUse]] = {}
     for use in uses:
         if not use.unresolved_reasons:
@@ -65,18 +72,28 @@ def render_office_picture_views(
                 geometry = use.geometry
                 assert geometry is not None
                 box = geometry.pixel_box(width=image.width_px, height=image.height_px)
+                color_mode = modes.get(use.use_id, OfficePictureColorMode.NORMAL)
                 recipe = (
                     *box,
                     geometry.clockwise_quarter_turns,
                     geometry.flip_horizontal,
                     geometry.flip_vertical,
-                    use.use_id in grayscale_uses,
+                    color_mode,
                 )
                 previous = cache.get(recipe)
                 if previous is not None:
                     rendered[use.use_id] = previous.model_copy(update={"use_id": use.use_id})
                     continue
-                if recipe == (0, 0, image.width_px, image.height_px, 0, False, False, False):
+                if recipe == (
+                    0,
+                    0,
+                    image.width_px,
+                    image.height_px,
+                    0,
+                    False,
+                    False,
+                    OfficePictureColorMode.NORMAL,
+                ):
                     view = OfficePictureView(
                         use_id=use.use_id,
                         member_path=image.member_path,
@@ -93,13 +110,7 @@ def render_office_picture_views(
                         cropped = cropped.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
                     for _ in range(geometry.clockwise_quarter_turns):
                         cropped = cropped.transpose(Image.Transpose.ROTATE_270)
-                    if use.use_id in grayscale_uses:
-                        # Deterministic luma, no threshold/dither, original alpha
-                        # and every spatial pixel preserved. The source remains
-                        # intact in images/, and this distinct view is hash-named.
-                        rgba = cropped.convert("RGBA")
-                        cropped = ImageOps.grayscale(rgba.convert("RGB")).convert("RGBA")
-                        cropped.putalpha(rgba.getchannel("A"))
+                    cropped = apply_office_picture_color_mode(cropped, color_mode)
                     total_pixels += cropped.width * cropped.height
                     if total_pixels > 100_000_000:
                         raise OfficeEmbeddedImageError("OFFICE_PICTURE_VIEW_PIXEL_LIMIT")

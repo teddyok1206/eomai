@@ -65,6 +65,9 @@ class NativeSourceVisualIndex:
     source_sha256: str = field(init=False)
     source_catalog_sha256: str = field(init=False)
     candidates: Mapping[_ViewIdentity, tuple[str, ...]] = field(init=False, repr=False)
+    native_candidates: Mapping[tuple[_ViewIdentity, str], tuple[str, ...]] = field(
+        init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         catalog = self._catalog
@@ -73,17 +76,25 @@ class NativeSourceVisualIndex:
         images = {image.source_member: image for image in catalog.embedded_images.images}
         views = {view.use_id: view for view in catalog.rendered_uses}
         candidates: dict[_ViewIdentity, list[str]] = {}
+        native_candidates: dict[tuple[_ViewIdentity, str], list[str]] = {}
         for use in catalog.picture_uses:
             if not use.unresolved_reasons:
                 assert use.source_member is not None
                 key = _view_identity(images[use.source_member], views[use.use_id])
                 candidates.setdefault(key, []).append(use.use_id)
+                if catalog.embedded_images.source_format == "HWPX":
+                    native_candidates.setdefault((key, use.native_sha256), []).append(use.use_id)
         object.__setattr__(self, "source_sha256", catalog.embedded_images.source_sha256)
         object.__setattr__(self, "source_catalog_sha256", digest)
         object.__setattr__(
             self,
             "candidates",
             MappingProxyType({key: tuple(ids) for key, ids in candidates.items()}),
+        )
+        object.__setattr__(
+            self,
+            "native_candidates",
+            MappingProxyType({key: tuple(ids) for key, ids in native_candidates.items()}),
         )
 
 
@@ -131,6 +142,15 @@ def build_material_native_question_visual_scope_from_index(
         matches = source_index.candidates.get(key, ())
         if not matches:
             raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_USE_NOT_FOUND")
+        if (
+            len(matches) > 1
+            and source_catalog.embedded_images.source_format
+            == question_catalog.embedded_images.source_format
+            == "HWPX"
+        ):
+            # Native HWPX subtree identity survives splitting; binary HWP and
+            # converted HWPX use different representations and cannot prove this.
+            matches = source_index.native_candidates.get((key, use.native_sha256), ())
         if len(matches) != 1:
             raise ValueError("MATERIAL_NATIVE_VISUAL_SOURCE_USE_AMBIGUOUS")
         allowed.add(matches[0])
