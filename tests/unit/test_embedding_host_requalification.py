@@ -30,10 +30,15 @@ from tests.unit.test_embedding_host_configuration_files import (
 )
 
 
-def successor(original: Fixture, *, wrong_target: bool = False) -> Fixture:
+def successor(
+    original: Fixture,
+    *,
+    wrong_target: bool = False,
+    baseline: str = host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+) -> Fixture:
     body = original.resolve().snapshot.model_dump(mode="json")
     body["configuration_revision_id"] = "embeddinghostconfigrev_" + "a" * 32
-    body["baseline_host_seed_sha256"] = host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256
+    body["baseline_host_seed_sha256"] = baseline
     if not wrong_target:
         body["host_seed_sha256"] = host.reviewed_embedding_host_configuration_seed(
             baseline_host_seed_sha256=body["baseline_host_seed_sha256"],
@@ -78,10 +83,14 @@ def test_new_baseline_cannot_reuse_old_target_even_with_valid_new_manifest_hash(
         updated.resolve()
 
 
+@pytest.mark.parametrize(
+    "baseline",
+    [host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256, host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256],
+)
 def test_cpu_capture_passes_reviewed_files_to_existing_shared_guard(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, baseline: str
 ) -> None:
-    updated = successor(_fixture(tmp_path, monkeypatch))
+    updated = successor(_fixture(tmp_path, monkeypatch), baseline=baseline)
     resolved = updated.resolve()
     _mount_ports(monkeypatch, updated)
     witness = capture.require_host_configuration_snapshot_mount(resolved)
@@ -112,15 +121,19 @@ def test_cpu_capture_passes_reviewed_files_to_existing_shared_guard(
     )
 
 
+@pytest.mark.parametrize(
+    "baseline",
+    [host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256, host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256],
+)
 def test_cuda_capture_selects_reviewed_base_without_changing_cuda_guard(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, baseline: str
 ) -> None:
     _value, selected, witness, base, _observed = cast(Callable[..., Any], ports)(
         tmp_path, monkeypatch
     )
     changed_base = replace(
         selected.base_configuration,
-        baseline_host_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+        baseline_host_seed_sha256=baseline,
     )
     changed = replace(selected, base_configuration=changed_base)
     changed_witness = replace(witness, configuration=changed)
@@ -137,7 +150,7 @@ def test_cuda_capture_selects_reviewed_base_without_changing_cuda_guard(
         assert len(base.descriptors) == 6
     assert base.closed and len(observed) == 1
     assert observed[0] == host.reviewed_embedding_host_files(
-        baseline_host_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+        baseline_host_seed_sha256=baseline,
         cache_byte_count=changed.cache_byte_count,
         cache_sha256=changed.cache_sha256,
     )
@@ -157,3 +170,91 @@ def test_unknown_baseline_is_rejected_by_stdlib_reader_before_native_capture(
     fixture.pointer = snapshot_pointer(snapshot)
     with pytest.raises(capture.HostConfigurationSnapshotError, match="SEED_PIN_INVALID"):
         fixture.resolve()
+
+
+def test_glibc_successor_changes_only_the_eight_reviewed_package_members() -> None:
+    cache = dict(
+        cache_byte_count=45467,
+        cache_sha256="sha256:bc2b95fdb167f457249c288055aa78a2fe3e67364b66d73a8f6d8dc745bcf3f3",
+    )
+    old = host.reviewed_embedding_host_files(
+        baseline_host_seed_sha256=host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256, **cache
+    )
+    new = host.reviewed_embedding_host_files(
+        baseline_host_seed_sha256=host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256, **cache
+    )
+    assert len(old) == len(new) == 23
+    assert tuple(path for path, _, _ in old) == tuple(path for path, _, _ in new)
+    old_by_path = {path: (size, sha) for path, size, sha in old}
+    changed = {
+        path.name: (size, sha) for path, size, sha in new if (size, sha) != old_by_path[path]
+    }
+    assert changed == {
+        "ld-linux-x86-64.so.2": (
+            236616,
+            "5fc0940888e9d2e1a00e66d6b1a559c36364ee867683652e1074fa576952cc3f",
+        ),
+        "libc.so.6": (
+            2129424,
+            "755a371e86cc9f564ab54f66140747700fb0a103f698f659f2060f707897e09a",
+        ),
+        "libpthread.so.0": (
+            14408,
+            "cd34f895c9d2aa669d5d2654bed6b71210fc9003c3a1e96bb5311a40feb86039",
+        ),
+        "libdl.so.2": (
+            14408,
+            "4dbcca3c01ca84d092b5b7b2610f5835b55fc70a0288dd9d766b40ac9386e2d9",
+        ),
+        "libutil.so.1": (
+            14408,
+            "0cf9051e58789348d681a984d8e6d96334610093289b783539764a3d611921d3",
+        ),
+        "libm.so.6": (
+            952616,
+            "5dcc4d25466e29ca390ed6fabb371c69b65dff6fa4e91c34561057a020d6994a",
+        ),
+        "librt.so.1": (
+            14624,
+            "5a00236da5864e8d1123d74e616713110708d6e3e604188f4f256dab4c6941d4",
+        ),
+        "libresolv.so.2": (
+            64008,
+            "4dcb01645dbeea5d17f28fd96a730430a808d828b3b7d6a097cfbc311501f69f",
+        ),
+    }
+    assert (
+        len(
+            {
+                host.FIXED_EMBEDDING_HOST_SEED_SHA256,
+                host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+                host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256,
+                host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256,
+            }
+        )
+        == 4
+    )
+
+
+def test_glibc_snapshot_requires_its_own_target_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = _fixture(tmp_path, monkeypatch)
+    before = original.manifest.read_bytes()
+    updated = successor(original, baseline=host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256)
+    assert updated.resolve().snapshot.baseline_host_seed_sha256 == (
+        host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256
+    )
+    assert original.manifest.read_bytes() == before
+
+
+def test_glibc_snapshot_cannot_rehash_an_old_host_seed_as_new_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    updated = successor(
+        _fixture(tmp_path, monkeypatch),
+        baseline=host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256,
+        wrong_target=True,
+    )
+    with pytest.raises(capture.HostConfigurationSnapshotError, match="SEED_PIN_INVALID"):
+        updated.resolve()

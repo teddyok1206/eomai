@@ -293,7 +293,9 @@ def test_reviewed_host_baselines_are_closed_immutable_successors() -> None:
     assert legacy == "sha256:fd1fc7c52afd572b04c818925a47d23d14ef15f87c842931584ae83e6a761a40"
     assert successor == "sha256:e896af20bceb93494f9dd0b724dd0ef01d3ba718c64836b8c4546f4a8a8d7960"
     zlib = host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256
-    assert set(host._REVIEWED_HOST_BASELINES) == {legacy, successor, zlib}
+    glibc = host.UBUNTU_GLIBC_20261114_HOST_SEED_SHA256
+    assert glibc == "sha256:2104bd40a40a0977ecb03465df828ad68cf07bae424883d2526d3e9889fc248b"
+    assert set(host._REVIEWED_HOST_BASELINES) == {legacy, successor, zlib, glibc}
     assert host._REVIEWED_HOST_BASELINES[legacy] is host._FILES
     previous = host._REVIEWED_HOST_BASELINES[legacy]
     current = host._REVIEWED_HOST_BASELINES[successor]
@@ -1054,7 +1056,7 @@ for forbidden in ('pydantic','jsonschema','eom_catalog_contracts','eom_identifie
                   'torch','transformers','numpy','safetensors','tokenizers'):
  assert not any(n==forbidden or n.startswith(forbidden+'.') for n in sys.modules)
 assert len(host._FILES)==23 and hasattr(conda.CondaArchiveToolAdmission,'open_zstd')
-assert len(host._REVIEWED_HOST_BASELINES)==3
+assert len(host._REVIEWED_HOST_BASELINES)==4
 assert host.reviewed_embedding_host_configuration_seed(
  baseline_host_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
  cache_byte_count=48,cache_sha256='sha256:'+'e'*64).startswith('sha256:')

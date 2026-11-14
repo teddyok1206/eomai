@@ -1,6 +1,7 @@
 """Native question/solution inventory constrains model discovery before task creation."""
 
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType, SimpleNamespace
 
@@ -17,6 +18,7 @@ from eom_catalog_service.material_learning_coordinator import (
     MaterialLearningCoordinator,
     bind_native_material_discovery_plan,
 )
+from eom_identifiers import content_sha256
 from eom_workflow.material_learning_plan import PlannedMaterialUnit
 
 from tests.unit.test_material_native_files import native_work
@@ -58,6 +60,83 @@ def test_exact_native_pair_accepts_numeric_label_variants_not_external_numbers()
     bound = bind_native_material_discovery_plan(replace(value, by_unit=values), bundle())
     assert bound.by_unit[question.unit_key].solution_unit_keys == ("solution-one",)
     assert bundle().items[0].source_metadata.external_number is None
+
+
+def test_answer_heading_is_not_accepted_as_a_question_printed_label():
+    value = plan()
+    values = dict(value.by_unit)
+    question = values["question-one"]
+    values[question.unit_key] = replace(
+        question,
+        unit=question.unit.model_copy(update={"printed_label": "1. 정답 : ③ (ㄱ, ㄴ)"}),
+    )
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID"):
+        bind_native_material_discovery_plan(replace(value, by_unit=values), bundle())
+
+
+def test_twenty_five_native_pairs_accept_twenty_one_answer_headings_and_four_plain_labels():
+    # Actual heading forms from the first exam; no question text or model result is copied.
+    labels = (
+        "1. 정답 : ③ (ㄱ, ㄴ)",
+        "2. 정답 : ② (ㄴ)",
+        "3. 정답 : ⑤ (ㄱ, ㄴ, ㄷ)",
+        "4. 정답 : ③ (ㄷ)",
+        "5. 정답 : ② (ㄴ)",
+        "6. 정답 : ③ (ㄱ, ㄴ)",
+        "7. 정답 : ④ (ㄴ, ㄷ)",
+        "8. 정답 : ⑤ (ㄴ, ㄷ)",
+        "9. 정답 : ③ (ㄱ, ㄴ)",
+        "10. 정답 : ③ (ㄱ, ㄴ)",
+        "11. 정답 : ② (ㄴ)",
+        "12. 정답 : ① (ㄱ)",
+        "13. 정답 : ④ (ㄴ, ㄷ)",
+        "14. 정답 : ① (ㄱ)",
+        "15. 정답 : ① (ㄱ)",
+        "16. 정답 : ① (ㄴ)",
+        "17. 정답 : ① (ㄱ, ㄷ)",
+        "18. 정답 : ⑤ (ㄴ, ㄷ)",
+        "19. 정답 : ③ (ㄷ)",
+        "20. 정답 : ③ (ㄱ, ㄴ)",
+        "21. 정답 : ④ (ㄴ, ㄷ)",
+        "22.",
+        "23.",
+        "24.",
+        "25.",
+    )
+    value = plan()
+    question, solution = value.by_unit["question-one"], value.by_unit["solution-one"]
+    items, units = [], {}
+    original = native_exam_bundle()
+    for number, label in enumerate(labels, 1):
+        item = deepcopy(original["items"][0])
+        item.update(item_number=number, printed_label=f"{number}.", row_number=number + 2)
+        for role, filename in (("question", "question.hwpx"), ("solution", "solution.hwpx")):
+            item[role]["document"]["member_path"] = f"items/{number}/{filename}"
+        items.append(item)
+        for base, key, printed_label in (
+            (question, f"question-{number}", f"{number}."),
+            (solution, f"solution-{number}", label),
+        ):
+            units[key] = replace(
+                base,
+                unit_key=key,
+                ordinal=number * 2 - (base is question),
+                unit=base.unit.model_copy(update={"printed_label": printed_label}),
+                solution_unit_keys=(),
+            )
+    original["items"] = items
+    original["bundle_sha256"] = content_sha256(
+        {key: child for key, child in original.items() if key != "bundle_sha256"}
+    )
+    native = MaterialNativeExamBundle.model_validate(original)
+    # Pair by explicit source+number, not arrival order or label-string equality.
+    discovered = replace(value, by_unit=dict(reversed(tuple(units.items()))))
+    before = {key: unit.unit.model_dump(mode="json") for key, unit in discovered.by_unit.items()}
+    bound = bind_native_material_discovery_plan(discovered, native)
+    for number, label in enumerate(labels, 1):
+        assert bound.by_unit[f"question-{number}"].solution_unit_keys == (f"solution-{number}",)
+        assert bound.by_unit[f"solution-{number}"].unit.printed_label == label
+    assert {key: unit.unit.model_dump(mode="json") for key, unit in bound.by_unit.items()} == before
 
 
 @pytest.mark.parametrize("missing", ["question-one", "solution-one"])

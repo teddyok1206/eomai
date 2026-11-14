@@ -906,3 +906,328 @@ def test_native_preparation_recovery_preserves_original_pair_workbook_and_bundle
     assert new_work.material_revision_id == old_work.material_revision_id
     assert new_work.profile.profile_sha256 == target.profile_sha256
     assert service.recover(command).replayed
+
+
+@pytest.fixture
+def native_finalization_case(creative_engine, native_read_case, monkeypatch):
+    """Real source/Artifact/history; only already-completed model admission is synthetic."""
+    from types import SimpleNamespace
+
+    from eom_catalog_contracts.material_discovery_finalization_recovery import (
+        RecoverNativeMaterialDiscoveryFinalizationCommand,
+    )
+    from eom_catalog_contracts.material_learning_preparation import MaterialPreparationProfile
+    from eom_catalog_contracts.material_native_intake import MaterialNativePreparedArtifact
+    from eom_catalog_service import material_discovery_finalization_recovery as recovery_owner
+    from eom_catalog_service.material_discovery_finalization_recovery import (
+        NativeMaterialDiscoveryFinalizationRecoveryService,
+    )
+    from eom_catalog_service.material_intake_read import (
+        material_intake_pointer,
+        read_material_intake,
+    )
+    from eom_catalog_service.material_learning_coordinator import build_material_preparation_input
+    from eom_catalog_service.material_learning_models import (
+        MaterialLearningRunRecord,
+        MaterialLearningTaskRecord,
+    )
+    from eom_catalog_service.material_native_resolution import read_material_native_bundle
+
+    from tests.unit.test_material_learning_preparation import profile
+    from tests.unit.test_material_native_discovery_coverage import plan
+    from tests.unit.test_material_native_intake import native_prepared
+
+    create, resolved, binding = native_read_case
+    settings, artifacts = create().settings, create().artifacts
+    with Session(creative_engine) as session:
+        revision = session.get(LearningMaterialRevisionRecord, binding.material_revision_id)
+        intake_pointer = material_intake_pointer(
+            session,
+            artifact_id=revision.manifest_artifact_id,
+            revision_id=revision.manifest_artifact_revision_id,
+            sha256=revision.manifest_sha256,
+        )
+    intake = read_material_intake(artifacts, intake_pointer, authorize=lambda: None)
+    native = read_material_native_bundle(
+        artifacts,
+        intake.native_bundle,
+        sources=intake.sources,
+        operator_id=resolved.operator_id,
+        authorize=lambda: None,
+    )
+    data = native_prepared()
+    data.update(
+        material_id=binding.material_id,
+        material_revision_id=binding.material_revision_id,
+        intake_manifest=intake_pointer.model_dump(mode="json"),
+        native_bundle=intake.native_bundle.model_dump(mode="json"),
+    )
+    for source, selection in zip(data["sources"], intake.sources, strict=True):
+        source["original"] = selection.source_upload.original.model_dump(mode="json")
+        source["actual_format"] = "HWPX"
+    prepared = MaterialNativePreparedArtifact.model_validate(rehash(data, "prepared_sha256"))
+    pointer = publish_material_metadata(
+        artifacts,
+        settings,
+        prepared,
+        member_path="material/prepared.json",
+        schema_ref="eom://schemas/material-learning/prepared/2.0",
+        idempotency_key="native-finalization-prepared:" + uuid4().hex,
+        artifact_type="material-learning-prepared",
+    )
+    runs = tuple("materialrun_" + uuid4().hex for _ in range(3))
+    prepares = tuple("materialtask_" + uuid4().hex for _ in range(3))
+    discovers = tuple("materialtask_" + uuid4().hex for _ in range(2))
+    work = build_material_preparation_input(
+        intake,
+        intake_pointer=intake_pointer,
+        task_id=prepares[1],
+        profile=MaterialPreparationProfile.model_validate(profile()),
+    )
+    preparation_pointer = publish_material_metadata(
+        artifacts,
+        settings,
+        work,
+        member_path="material/preparation-input.json",
+        schema_ref="eom://schemas/material-learning/preparation-input/2.0",
+        idempotency_key="native-finalization-input:" + uuid4().hex,
+        artifact_type="material-learning-preparation-input",
+    )
+    now = datetime.now(UTC)
+    with Session(creative_engine) as session, session.begin():
+        for index, run_id in enumerate(runs):
+            session.add(
+                MaterialLearningRunRecord(
+                    run_id=run_id,
+                    material_revision_id=binding.material_revision_id,
+                    attempt=index + 1,
+                    predecessor_run_id=runs[index - 1] if index else None,
+                    state="FAILED",
+                    next_event_sequence=1,
+                    created_by=resolved.operator_id,
+                    prepared_artifact_id=pointer.artifact_id if index else None,
+                    prepared_artifact_revision_id=pointer.artifact_revision_id if index else None,
+                    prepared_sha256=pointer.sha256 if index else None,
+                    error_code="MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID" if index == 2 else None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.flush()
+        for index, task_id in enumerate(prepares):
+            session.add(
+                MaterialLearningTaskRecord(
+                    task_id=task_id,
+                    run_id=runs[index],
+                    task_kind="PREPARE",
+                    unit_key="source-preparation",
+                    ordinal=1,
+                    attempt=index + 1,
+                    predecessor_task_id=prepares[index - 1] if index else None,
+                    state="COMPLETED" if index else "FAILED",
+                    execution_lane="MATERIAL_LEARNING",
+                    input_artifact_id=preparation_pointer.artifact_id,
+                    input_artifact_revision_id=preparation_pointer.artifact_revision_id,
+                    input_sha256=preparation_pointer.sha256,
+                    output_artifact_id=pointer.artifact_id if index else None,
+                    output_artifact_revision_id=pointer.artifact_revision_id if index else None,
+                    output_sha256=pointer.sha256 if index else None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        for index, task_id in enumerate(discovers):
+            session.add(
+                MaterialLearningTaskRecord(
+                    task_id=task_id,
+                    run_id=runs[index + 1],
+                    task_kind="DISCOVER",
+                    unit_key="native-discovery-main",
+                    ordinal=2,
+                    attempt=index + 1,
+                    predecessor_task_id=discovers[0] if index else None,
+                    state="COMPLETED",
+                    execution_lane="MATERIAL_LEARNING",
+                    workflow_id=resolved.selection.workflow_id if index == 0 else None,
+                    input_artifact_id=resolved.work_pointer.artifact_id,
+                    input_artifact_revision_id=resolved.work_pointer.artifact_revision_id,
+                    input_sha256=resolved.work_pointer.sha256,
+                    output_artifact_id=resolved.result_pointer.artifact_id,
+                    output_artifact_revision_id=resolved.result_pointer.artifact_revision_id,
+                    output_sha256=resolved.result_pointer.sha256,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+    value = plan()
+    values = dict(value.by_unit)
+    for key, original in values.items():
+        role = "MAIN" if original.unit.kind == "QUESTION" else "SOLUTIONS"
+        source = next(source for source in prepared.sources if source.source_role == role)
+        values[key] = replace(original, source=source)
+    admitted = replace(value, run_id=runs[2], by_unit=values)
+    # The model owner has separate complete-result/rights tests. This explicit
+    # admission port avoids Codex, reconstructed worker prose or fake Job state.
+    monkeypatch.setattr(recovery_owner, "read_material_discovery_plan", lambda *a, **k: admitted)
+    service = NativeMaterialDiscoveryFinalizationRecoveryService(
+        creative_engine, settings=settings, source_commit="f" * 40
+    )
+    command = RecoverNativeMaterialDiscoveryFinalizationCommand(
+        actor_id=resolved.operator_id,
+        run_id=runs[2],
+        expected_updated_at=now,
+        expected_prepared_sha256=pointer.sha256,
+        target_source_commit="f" * 40,
+    )
+    return SimpleNamespace(
+        service=service,
+        command=command,
+        runs=runs,
+        prepares=prepares,
+        discovers=discovers,
+        pointer=pointer,
+        native=native,
+        admitted=admitted,
+        owner=recovery_owner,
+        settings=settings,
+    )
+
+
+def test_native_finalization_concurrent_attempt_four_reuses_all_results_without_model(
+    creative_engine, native_finalization_case
+):
+    from eom_catalog_service.material_discovery_finalization_recovery import (
+        NativeMaterialDiscoveryFinalizationRecoveryService,
+    )
+    from eom_catalog_service.material_learning_models import (
+        MaterialLearningRunRecord,
+        MaterialLearningTaskRecord,
+    )
+    from eom_catalog_service.material_task_history import read_material_task_histories
+    from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
+
+    case = native_finalization_case
+    with Session(creative_engine) as session:
+        before = tuple(
+            session.scalar(select(func.count()).select_from(model))
+            for model in (
+                WorkflowInstanceRecord,
+                WorkflowCommandRecord,
+                ItemRevisionRecord,
+            )
+        )
+    barrier = Barrier(2)
+
+    def submit(_):
+        service = NativeMaterialDiscoveryFinalizationRecoveryService(
+            creative_engine, settings=case.settings, source_commit="f" * 40
+        )
+        barrier.wait(timeout=10)
+        return service.recover(case.command)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(submit, range(2)))
+    assert len({result.run_id for result in results}) == 1
+    assert sum(not result.replayed for result in results) == 1
+    result = results[0]
+    assert result.prepared == case.pointer and result.reused_tasks == 2
+    with Session(creative_engine) as session:
+        original = session.get(MaterialLearningRunRecord, case.command.run_id)
+        successor = session.get(MaterialLearningRunRecord, result.run_id)
+        assert (
+            original.state == "FAILED" and original.updated_at == case.command.expected_updated_at
+        )
+        assert original.error_code == "MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID"
+        assert successor.predecessor_run_id == original.run_id and successor.attempt == 4
+        tasks = tuple(
+            session.scalars(
+                select(MaterialLearningTaskRecord)
+                .where(MaterialLearningTaskRecord.run_id == result.run_id)
+                .order_by(MaterialLearningTaskRecord.ordinal)
+            )
+        )
+        assert [(task.task_kind, task.state, task.attempt) for task in tasks] == [
+            ("PREPARE", "COMPLETED", 4),
+            ("DISCOVER", "COMPLETED", 3),
+        ]
+        assert all(task.workflow_id is None and task.item_revision_id is None for task in tasks)
+        history = read_material_task_histories(session, tasks)
+        assert len(history[tasks[0].task_id].tasks) == 4
+        assert len(history[tasks[1].task_id].tasks) == 3
+        assert history[tasks[1].task_id].result_task().workflow_id is not None
+        assert before == tuple(
+            session.scalar(select(func.count()).select_from(model))
+            for model in (
+                WorkflowInstanceRecord,
+                WorkflowCommandRecord,
+                ItemRevisionRecord,
+            )
+        )
+    assert case.service.recover(case.command).replayed
+
+
+@pytest.mark.parametrize("fault", ["stale", "source", "prepared", "actor", "pair"])
+def test_native_finalization_invalid_commands_or_pair_never_create_a_run(
+    creative_engine, native_finalization_case, monkeypatch, fault
+):
+    from datetime import timedelta
+
+    from eom_catalog_service.material_learning_models import MaterialLearningRunRecord
+
+    case, command = native_finalization_case, native_finalization_case.command
+    changes = {
+        "stale": dict(expected_updated_at=command.expected_updated_at - timedelta(seconds=1)),
+        "source": dict(target_source_commit="e" * 40),
+        "prepared": dict(expected_prepared_sha256="sha256:" + "0" * 64),
+        "actor": dict(actor_id="operator_" + "0" * 32),
+    }
+    if fault == "pair":
+        broken = replace(
+            case.admitted,
+            by_unit={
+                key: value
+                for key, value in case.admitted.by_unit.items()
+                if value.unit.kind == "QUESTION"
+            },
+        )
+        monkeypatch.setattr(case.owner, "read_material_discovery_plan", lambda *a, **k: broken)
+    else:
+        command = command.model_copy(update=changes[fault])
+    with pytest.raises(ValueError):
+        case.service.recover(command)
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.predecessor_run_id == case.command.run_id)
+            )
+            == 0
+        )
+
+
+def test_native_finalization_transaction_interruption_has_no_partial_successor(
+    creative_engine, native_finalization_case, monkeypatch
+):
+    from eom_catalog_service.material_learning_models import MaterialLearningRunRecord
+
+    case = native_finalization_case
+
+    def interrupt(*args, **kwargs):
+        raise RuntimeError("synthetic finalization transaction interruption")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(case.owner, "append_material_event", interrupt)
+        with pytest.raises(RuntimeError, match="transaction interruption"):
+            case.service.recover(case.command)
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(MaterialLearningRunRecord)
+                .where(MaterialLearningRunRecord.predecessor_run_id == case.command.run_id)
+            )
+            == 0
+        )
+    result = case.service.recover(case.command)
+    assert not result.replayed and case.service.recover(case.command).replayed

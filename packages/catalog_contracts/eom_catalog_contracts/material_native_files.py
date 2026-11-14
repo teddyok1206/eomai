@@ -23,6 +23,11 @@ NATIVE_WORKBOOK_MANIFEST_REF = "eom://schemas/material-learning/native-exam/1.0"
 _HWPX_MEDIA = frozenset({"application/vnd.hancom.hwpx", "application/hwp+zip"})
 _WORKBOOK_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _PRINTED_NUMBER = re.compile(r"\s*([0-9]{1,5})\s*(?:번|[.)])?\s*")
+_PRINTED_ANSWER_HEADING = re.compile(
+    r"[ \t]*([0-9]{1,5})\.[ \t]*정답[ \t]*:[ \t]*[①-⑤][ \t]*"
+    r"\([ \t]*(?:ㄱ(?:[ \t]*,[ \t]*ㄴ)?(?:[ \t]*,[ \t]*ㄷ)?|ㄴ(?:[ \t]*,[ \t]*ㄷ)?|ㄷ)"
+    r"[ \t]*\)[ \t]*"
+)
 NativeNumber = Annotated[int, Field(strict=True, ge=1, le=10000)]
 
 
@@ -32,6 +37,12 @@ def material_native_printed_number(value: str | None) -> int:
     if match is None or not 1 <= int(match[1]) <= 10000:
         raise ValueError("MATERIAL_NATIVE_PRINTED_NUMBER_INVALID")
     return int(match[1])
+
+
+def material_native_solution_number(value: str | None) -> int:
+    """Read a solution-only answer heading without rewriting its source label or answer."""
+    match = _PRINTED_ANSWER_HEADING.fullmatch(value) if value is not None else None
+    return material_native_printed_number(match[1] if match is not None else value)
 
 
 class MaterialNativeFileBinding(FrozenModel):
@@ -186,7 +197,7 @@ def require_material_native_binding_for_work(
         raise ValueError("MATERIAL_NATIVE_ORIGINAL_SOURCE_MISMATCH")
     solutions = tuple(solution for solution in work.solutions if solution.kind == "SOLUTION")
     if not solutions or any(
-        material_native_printed_number(solution.printed_label) != binding.item_number
+        material_native_solution_number(solution.printed_label) != binding.item_number
         or any(anchor.source_role != "SOLUTIONS" for anchor in solution.anchors)
         for solution in solutions
     ):

@@ -483,3 +483,41 @@ predecessor history로 재사용한다. 새 복구 프로토콜이나 JSON 정�
 검증을 통과했지만 아직 운영 worker에는 활성화하지 않았다. 향후 새 Job에 실제로 사용된
 `prompt.txt` SHA와 설치 source를 확인해야 하며, instruction bundle의 manifest hash를
 이 inline 안내문 자체의 hash로 확대 해석하지 않는다.
+
+### 후속 실제 분석 완료와 번호 머리말 수정 후보
+
+기존 retry owner는 실패한 첫 DISCOVER 한 개만 재실행하고 준비/다른 다섯 결과 총 6개를
+재사용했다. successor는 `materialrun_571bf9403c5e52b29009b25427d5bf84`다. 이 실행에서
+여섯 모델 결과가 모두 COMPLETED가 됐지만 최종 native 연결이
+`MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID`로 중단됐다. 원문 준비나 모델 결과를 다시
+실패로 바꾸지 않았으며 두 실패 run의 이력은 각각 보존한다.
+
+공식 `read_material_discovery_plan`을 읽은 진단에서 QUESTION 25개와 SOLUTION 25개를
+모두 확인했다. 해설 21개의 label이 `번호. 정답 : 선택지 (선택 기호)` 머리말이라 기존
+순수 번호 reader만 거절했고, 나머지 네 해설과 모든 문제 번호는 이미 맞았다.
+`staging/native-material-discovery-labels-20261114.json`이 읽기 증거다. 새 해설 전용
+decoder로 기록된 실제 50개 metadata를 대조해 문제/해설 각각 1–25의 정확한 집합과
+중복 0을 확인했다. 원문/label/정답은 수정하지 않았고 모델 호출 0이다.
+
+신규 최종화 복구 후보는 성공한 native2 준비와 여섯 결과의 pointer/history를 상속한
+linked run만 만든다. actualactor·current revision·권리·native chain·새 decoder의25쌍·
+완료 child·lease·lane/ordinal·잠금 뒤 작은 Artifact 승인/membership을 재검사한다.
+기존 retry의 `retried_tasks >= 1` 계약과 과거 FAILED는 그대로다.
+
+- 실제 disposable DB 관련 suite **67 PASS / 44.29초**: 같은 복구 동시 재전송·트랜잭션
+  중단/rollback·attempt3→4 native2/history·원 input/output/prepared 불변·새 모델/Item/Workflow
+  생성 0과 부정 guard를 포함한다. `staging/native-finalization-db-tests-20261114.log`.
+- 최종 관련 source gate **813 PASS**, role별 번호/바인딩 회귀 **93 PASS**, core5개 mypy PASS.
+  번호 pure reader는 유지하고 해설 전용 함수만 명시적인 정답 머리말을 추가로 읽는다.
+  `staging/native-finalization-source-gate-20261114.log`.
+- wire audit canonical1,397/mirror1,048/reference11,957 PASS. 기존 schema bytes는 변경하지 않았다.
+- 새 glibc baseline source/CPU·CUDA dispatch/부정·stdlib gate **238 PASS**다. 실제 원인은
+  06:06 UTC의 정상 libc6 8.9→8.12 패키지 갱신으로 확인했고, 기존 23개 중 정확히 8개
+  library hash만 달랐다. 새 host baseline/schema가 아니라 기존 snapshot/admission 경계의
+  별도 baseline을 준비했다. 수치 설치/활성화·벡터 저장 성공의 증거는 아니다.
+
+현재 이 후보는 운영 미반영이다. 다음은 보호된 새 owner 설치와 Material 전용 인계 후
+모델 재실행 없이 실제 최종화를 복구하고 첫 Item·원문 다운로드·공개 풀이·Graph를 확인하는
+것이다. API/Web은 현재 `7084bbc4`, Material은 `6a824aa4`이며 아직 Item/Graph 등록 0이다.
+INDEX/QUERY의 host requalification 및 실제 신규 embedding 저장도 별도로 남아 있다.
+전체 18회·450문항의 목표는 계속 ACTIVE이며 조기 완료로 축소하지 않는다.

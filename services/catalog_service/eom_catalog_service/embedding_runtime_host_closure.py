@@ -405,11 +405,52 @@ _UBUNTU_LIBZ_20261023_FILES = tuple(
     for path, size, sha in _UBUNTU_LIBLZMA_20261021_FILES
 )
 UBUNTU_LIBZ_20261023_HOST_SEED_SHA256 = _hash(_seed_bytes(_UBUNTU_LIBZ_20261023_FILES))
+# Ubuntu libc6 2.39-0ubuntu8.9 -> 2.39-0ubuntu8.12 changed these eight members.
+# This is an explicit reviewed successor, not a current-host fallback or admission.
+_UBUNTU_GLIBC_20261114_CHANGES = MappingProxyType(
+    {
+        _LOADER: (236616, "5fc0940888e9d2e1a00e66d6b1a559c36364ee867683652e1074fa576952cc3f"),
+        _LIB / "libc.so.6": (
+            2129424,
+            "755a371e86cc9f564ab54f66140747700fb0a103f698f659f2060f707897e09a",
+        ),
+        _LIB / "libpthread.so.0": (
+            14408,
+            "cd34f895c9d2aa669d5d2654bed6b71210fc9003c3a1e96bb5311a40feb86039",
+        ),
+        _LIB / "libdl.so.2": (
+            14408,
+            "4dbcca3c01ca84d092b5b7b2610f5835b55fc70a0288dd9d766b40ac9386e2d9",
+        ),
+        _LIB / "libutil.so.1": (
+            14408,
+            "0cf9051e58789348d681a984d8e6d96334610093289b783539764a3d611921d3",
+        ),
+        _LIB / "libm.so.6": (
+            952616,
+            "5dcc4d25466e29ca390ed6fabb371c69b65dff6fa4e91c34561057a020d6994a",
+        ),
+        _LIB / "librt.so.1": (
+            14624,
+            "5a00236da5864e8d1123d74e616713110708d6e3e604188f4f256dab4c6941d4",
+        ),
+        _LIB / "libresolv.so.2": (
+            64008,
+            "4dcb01645dbeea5d17f28fd96a730430a808d828b3b7d6a097cfbc311501f69f",
+        ),
+    }
+)
+_UBUNTU_GLIBC_20261114_FILES = tuple(
+    (path, *_UBUNTU_GLIBC_20261114_CHANGES.get(path, (size, sha)))
+    for path, size, sha in _UBUNTU_LIBZ_20261023_FILES
+)
+UBUNTU_GLIBC_20261114_HOST_SEED_SHA256 = _hash(_seed_bytes(_UBUNTU_GLIBC_20261114_FILES))
 _REVIEWED_HOST_BASELINES = MappingProxyType(
     {
         FIXED_EMBEDDING_HOST_SEED_SHA256: _FILES,
         UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256: _UBUNTU_LIBLZMA_20261021_FILES,
         UBUNTU_LIBZ_20261023_HOST_SEED_SHA256: _UBUNTU_LIBZ_20261023_FILES,
+        UBUNTU_GLIBC_20261114_HOST_SEED_SHA256: _UBUNTU_GLIBC_20261114_FILES,
     }
 )
 

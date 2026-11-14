@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-discovery-finalization-recovery-result/1.0",
+  "title": "EOM native material discovery finalization recovery result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "material-native-discovery-finalization-recovery-result/1.0"},
+    "predecessor_run_id": {"type": "string", "pattern": "^materialrun_[0-9a-f]{32}$"},
+    "run_id": {"type": "string", "pattern": "^materialrun_[0-9a-f]{32}$"},
+    "material_id": {"type": "string", "pattern": "^material_[0-9a-f]{32}$"},
+    "material_revision_id": {"type": "string", "pattern": "^materialrev_[0-9a-f]{32}$"},
+    "prepared": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember",
+      "properties": {
+        "schema_ref": {"const": "eom://schemas/material-learning/prepared/2.0"},
+        "member_path": {"const": "material/prepared.json"},
+        "media_type": {"const": "application/json"}
+      }
+    },
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "reused_tasks": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "state": {
+      "enum": ["RECEIVED", "PREPARING", "DISCOVERING", "PROCESSING", "WAITING_FOR_CAPACITY", "PAUSED", "COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"]
+    },
+    "replayed": {"type": "boolean"}
+  },
+  "required": [
+    "schema_version", "predecessor_run_id", "run_id", "material_id", "material_revision_id",
+    "prepared", "source_commit", "reused_tasks", "state", "replayed"
+  ]
+}

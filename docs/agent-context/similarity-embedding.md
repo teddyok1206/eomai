@@ -7,6 +7,12 @@ GraphRAG는 출처·개념 관계·접근 권한을, 벡터는 후보 순위화�
 어떤 view/profile로 입력하는지는 정본 projection과 source binding으로 확인한다.
 입력 텍스트·profile·view·model/runtime space가 다르면 같은 문항도 같은 벡터가 아니다.
 
+OS 라이브러리 변경으로 native admission이 거절되면 model/space와 설치 host 증거를 구분한다.
+`embedding_runtime_host_closure.py`의 명명된 baseline과 기존 snapshot/admission/selection을
+사용한다. 기존 seed/receipt를 덮어쓰거나 OS를 내리지 않으며, 설치 후보를 실제 vector commit
+완료로 보고하지 않는다. 절차와 제한은
+`docs/architecture/EMBEDDING_HOST_REQUALIFICATION_2026_11_14.md`를 참고한다.
+
 공개 풀이보고서의 관계/판단 근거를 쓰되, 단순히 공통 과목·유형이 같다는 것과 실제
 풀이 착상이 가깝다는 것을 구분한다. 유사도는 풀이 동일성의 확률이나 표절 판정이 아니다.
 필요한 설명은 `docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md`와

@@ -22,7 +22,10 @@ from eom_catalog_contracts.material_learning_preparation import (
     MaterialPreparationInput,
     MaterialPreparationProfile,
 )
-from eom_catalog_contracts.material_native_files import material_native_printed_number
+from eom_catalog_contracts.material_native_files import (
+    material_native_printed_number,
+    material_native_solution_number,
+)
 from eom_catalog_contracts.material_native_intake import (
     MATERIAL_NATIVE_PREPARATION_REF,
     MaterialIntake,
@@ -149,7 +152,11 @@ def bind_native_material_discovery_plan(
         if planned.source.original != originals[role]:
             raise ValueError("MATERIAL_NATIVE_DISCOVERY_SOURCE_MISMATCH")
         try:
-            number = material_native_printed_number(unit.printed_label)
+            number = (
+                material_native_printed_number(unit.printed_label)
+                if unit.kind == "QUESTION"
+                else material_native_solution_number(unit.printed_label)
+            )
         except ValueError as exc:
             raise ValueError("MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID") from exc
         selected = questions if unit.kind == "QUESTION" else solutions

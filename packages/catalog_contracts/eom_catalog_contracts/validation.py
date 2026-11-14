@@ -208,6 +208,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:971a2d3723ff18a37ee5a8657bc5d8a739db06d88d8a3c875a240788e9b93eaf",
         ),
+        "material-native-discovery-finalization-recovery-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-discovery-finalization-recovery-v1.schema.json",
+            "resources/material-learning/material-native-discovery-finalization-recovery-v1.schema.json",
+            "1.0",
+            "sha256:f977d7cc420fdaa1df2ce0223b7d3360832200450e50ddbe8b26002a3b391df1",
+        ),
+        "material-native-discovery-finalization-recovery-result-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-discovery-finalization-recovery-result-v1.schema.json",
+            "resources/material-learning/material-native-discovery-finalization-recovery-result-v1.schema.json",
+            "1.0",
+            "sha256:f9b923c6d8fdd613d4256eaa960aec93b6671b78879f69bbc40aaf908a5cd65a",
+        ),
         "material-learning-retry-result-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-retry-result-v1.schema.json",
             "resources/material-learning/material-learning-retry-result-v1.schema.json",

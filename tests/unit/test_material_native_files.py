@@ -15,6 +15,7 @@ from eom_catalog_contracts.material_native_files import (
     MaterialImportedNativeItemMetadata,
     MaterialNativeItemBinding,
     material_native_printed_number,
+    material_native_solution_number,
     material_native_source_identity,
     require_material_native_binding_for_work,
     require_material_native_metadata_binding,
@@ -177,14 +178,68 @@ def test_binding_is_schema_valid_frozen_pointer_only_and_preserves_raw_metadata(
 @pytest.mark.parametrize("label", ["1", "01", "1.", "1)", "1번", " 01 번 "])
 def test_explicit_numeric_label_variants(label):
     assert material_native_printed_number(label) == 1
+    assert material_native_solution_number(label) == 1
 
 
 @pytest.mark.parametrize(
-    "label", [None, "", "예제1", "문항 1", "1. 제목", "1-2", "0", "10001", "\uff11"]
+    "label,number",
+    [
+        ("4. 정답 : ③ (ㄷ)", 4),
+        ("1. 정답 : ③ (ㄱ, ㄴ)", 1),
+        ("3. 정답 : ⑤ (ㄱ, ㄴ, ㄷ)", 3),
+        ("17. 정답 : ① (ㄱ, ㄷ)", 17),
+        ("7. 정답 : ④ (ㄴ, ㄷ)", 7),
+    ],
+)
+def test_closed_solution_answer_heading_reads_only_number_without_rewriting_label(label, number):
+    assert material_native_solution_number(label) == number
+    with pytest.raises(ValueError, match="PRINTED_NUMBER_INVALID"):
+        material_native_printed_number(label)
+
+
+def test_solution_answer_heading_preserves_exact_work_label_during_native_binding():
+    binding = MaterialNativeItemBinding.model_validate(binding_data())
+    work = native_work()
+    work["solutions"][0]["printed_label"] = "1. 정답 : ③ (ㄱ, ㄴ)"
+    parsed = MaterialExtractionWork.model_validate(rehash(work))
+    require_material_native_binding_for_work(binding, parsed)
+    assert parsed.solutions[0].printed_label == "1. 정답 : ③ (ㄱ, ㄴ)"
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        None,
+        "",
+        "예제1",
+        "문항 1",
+        "1. 제목",
+        "1-2",
+        "0",
+        "10001",
+        "\uff11",
+        "1 정답 : ③ (ㄷ)",
+        "1. 정답 : 3 (ㄷ)",
+        "1. 정답 : ⑥ (ㄷ)",
+        "1. 정답 : ③ (ㄹ)",
+        "1. 정답 : ③ (ㄱ, ㄱ)",
+        "1. 정답 : ③ (ㄷ, ㄱ)",
+        "1. 정답 : ③ (ㄱ, 2)",
+        "1. 정답 : ③ (ㄷ) 2.",
+        "1-2. 정답 : ③ (ㄷ)",
+        "문항 1. 정답 : ③ (ㄷ)",
+        "1. 정답 및 해설 : ③ (ㄷ)",
+        "1. 정답 : ③ (ㄷ)\n해설",
+        "1. 정답 : ③ (ㄷ)\n",
+        "0. 정답 : ③ (ㄷ)",
+        "10001. 정답 : ③ (ㄷ)",
+    ],
 )
 def test_unrelated_labels_are_not_guessed(label):
     with pytest.raises(ValueError, match="PRINTED_NUMBER_INVALID"):
         material_native_printed_number(label)
+    with pytest.raises(ValueError, match="PRINTED_NUMBER_INVALID"):
+        material_native_solution_number(label)
 
 
 @pytest.mark.parametrize(

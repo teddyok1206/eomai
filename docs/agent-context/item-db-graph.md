@@ -231,6 +231,13 @@ suite를 함께 본다. 원문 JPEG의 CMYK→RGBA PNG 정규화는 기존 image
 unsupported EMF를 성공한 raster로 간주하지 않는다. 실제 설치·복구 상태는
 `docs/operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md`에서 따로 확인한다.
 
+모든 native discovery가 완료됐지만 번호 표기 최종화에서 실패한 경우는 worker retry가
+아니다. `material_discovery_finalization_recovery.py`의 닫힌 명령/application은 기존 native2
+prepared와 완료 결과·역할·권리·hash를 검증하고, 같은 pointer를 상속한 linked run만 만든다.
+새 모델·문항·파일을 복제하지 않는다. 번호의 순수 reader는 그대로이며
+`material_native_solution_number`만 명시적인 정답 머리말을 읽는다. 문항/metadata reader를
+느슨하게 바꾸지 않는다. 설계와 실제 설치 상태는 위 native 문서 두 개에서 구분한다.
+
 `material_task_history.py`는 최대32단계 predecessor를 하나의 indexed recursive query로
 읽는다. 서로 다른 자료·업로더·단위 또는 변경된 input/output은 이어받지 않는다. 전역 unique
 child owner는 원래 task에 남긴다. `material_task_source_read.py`는 명시적인 위치 조회에서만

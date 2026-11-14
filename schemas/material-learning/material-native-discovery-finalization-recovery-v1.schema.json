@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-discovery-finalization-recovery/1.0",
+  "title": "EOM native material discovery finalization recovery 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "material-native-discovery-finalization-recovery/1.0"},
+    "operation": {"const": "RECOVER_NATIVE_MATERIAL_DISCOVERY_FINALIZATION"},
+    "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "run_id": {"type": "string", "pattern": "^materialrun_[0-9a-f]{32}$"},
+    "expected_updated_at": {"type": "string", "format": "date-time"},
+    "expected_prepared_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "target_source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+  },
+  "required": [
+    "schema_version", "operation", "actor_id", "run_id", "expected_updated_at",
+    "expected_prepared_sha256", "target_source_commit"
+  ]
+}

@@ -232,3 +232,43 @@ native package adapter에 작은 범위 분리기를 추가하는 것이 필요�
 11. 단순 대안: 예전 입력 덮어쓰기·source commit 위장은 재현성을 깨고, 전체 자료 재업로드는
     identity/중복 문제를 만든다. 기존 post-prepared QUESTION retry를 풀어 버리지 않고,
     PREPARE 단계에만 predecessor task를 재사용하는 것이 필요한 최소 확장이다.
+
+## 해설 번호 표기와 완료된 discovery의 최종화 복구
+
+2026-11-14 실제 첫 회차는 QUESTION/SOLUTION 각 25개를 모두 발견했지만,
+`4. 정답 : ③ (ㄷ)`처럼 번호 뒤에 정답 머리말이 붙은 SOLUTION label을 순수 번호
+reader가 거절했다. 모델 응답·원문을 고쳐 쓰거나 여섯 분석을 다시 실행하지 않는다.
+
+1. 책임/경계: 번호 해석은 기존 native binding 계약 모듈, 검증된 최종화의 재개는
+   Catalog의 기존 material recovery 경계에 둔다. 초기 진입은 보호된 maintenance helper이며
+   새 HTTP/queue/worker/Graph/문항 registry를 만들지 않는다.
+2. 정본: 같은 native intake2/preparation2/prepared2와 accepted discovery Artifact를 쓴다.
+   원문·printed label·해설 정답·FAILED run을 수정하지 않는다.
+3. ID/revision: 문항 번호 reader의 순수 숫자 의미는 유지하고, 해설 전용 reader만 닫힌
+   `번호. 정답: 선택지 (ㄱ, ㄴ...)` 머리말을 추가로 읽는다. 그룹 범위·설명·다른 숫자를
+   추정하지 않는다. 최종화 복구는 같은 material revision의
+   새 run/linked task attempt이며 원래 성공한 input/output pointer를 상속한다.
+4. 포인터: 실제 actor, 실패 run, 관찰 updated_at, expected prepared SHA와 신뢰된 설치
+   source commit을 닫힌 schema-first 명령으로 고정한다. native bundle·원본 권리·완료 child
+   결과는 기존 공식 reader로 schema/hash/권한/lifecycle/선행 관계를 다시 확인한다.
+5. 접근: 단일 revision/run, 완료 PREPARE/DISCOVER task, 같은 native bundle의 번호 집합과
+   accepted result lookup이다. 다른 문항·전체 Graph를 스캔하지 않는다.
+6. 자료구조/index: 기존 PK/unique/partial-live index·predecessor chain과 dict/set을 쓴다.
+   새 테이블·index·영속 tracker는 없다.
+7. 복잡도: task·발견 unit에 선형이고 현재 7개 task/50개 unit이다. 대용량 원문/PNG/HWPX를
+   복사하지 않고 입력·결과의 작은 immutable pointer만 상속한다.
+8. 동시성: revision → run 잠금 순서, 실제 lease/child terminal 확인과 deterministic command
+   identity를 유지한다. 최종화 plan이 새 decoder로 완전히 검증된 뒤에만 successor를 생성한다.
+9. 의존성: 순수 번호 계약 → 기존 Catalog recovery use case → 기존 DB/Artifact adapter다.
+   계약에 SQL·파일·모델 호출을 넣지 않는다. actual actor 권한은 현재 상태로 재검증한다.
+10. 실패/retry: 초기 범위는 `MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID`로 종료된 native run의
+    전 task COMPLETED·QUESTION/EXPLANATION 미생성·prepared 존재 경우뿐이다. 실패 결과의
+    성공 재해석은 하지 않으며, 동일 command replay는 검증한 같은 successor를 반환한다.
+    생성 worker 수는 0이고 coordinator가 재사용한 결과로 다시 최종화한다. 원래 retry의
+    `retried_tasks >= 1` 계약은 바꾸지 않고 별도 작은 복구 결과를 사용한다.
+11. 단순 대안: 여섯 모델 재실행은 이미 성공한 분석을 중복하며, 원 label 교체/FAILED 해제는
+    이력을 훼손한다. 이미 소유한 최종화 단계만 재개하는 것이 필요한 최소 확장이다.
+
+검증은 명확한 해설 머리말/종전 숫자/모호한 그룹·설명 거절, 25쌍 대응, immutable
+predecessor/output, 동시 동일 복구와 stale/권한/lease/부분 등록 거절을 포함한다.
+설치 전 소스 검증과 실제 운영의 최종화·문항 등록 성공을 분리한다.
