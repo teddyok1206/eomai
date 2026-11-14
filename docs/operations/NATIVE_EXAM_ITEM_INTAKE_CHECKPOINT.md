@@ -3,7 +3,7 @@
 2026-11-13 UTC. 목표는 18회 450문항의 문제·해설 native HWPX, 원본 Excel metadata,
 기존 자료 학습·Registry·공개 풀이·공통 Graph·증분 임베딩 연결 및 운영 반영이다.
 설계 정본은 `docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`다. 이 기록의 소스 후보와
-실제 운영 활성화를 구별한다. 최신 상태는 아래 **2026-11-14: CMYK 원인 확정과 준비 복구 후보**를 본다.
+실제 운영 활성화를 구별한다. 최신 상태는 아래 **2026-11-14: Material 전용 인계와 실제 준비 통과**를 본다.
 앞선 단계의 실패·대기 기록은 당시의 증거이며 덮어쓰지 않는다.
 
 ## 보존할 운영 경계
@@ -409,3 +409,49 @@ native 파일 publication·첫 intake 접수는 보존한다. 이 상태를 450�
 현재까지 target profile의 운영 전환·실제 recovery는 미실행이다. 첫 회차의 Item/원본
 다운로드·풀이·Graph·공통 INDEX 연결을 확인하기 전에는 나머지 17회를 중복 접수하거나
 전체 완료를 선언하지 않는다. Hancom 자체 육안 검토는 계속 NOT_RECORDED다.
+
+## 2026-11-14: Material 전용 인계와 실제 준비 통과
+
+07:56 UTC 확인. 수정 source `6a824aa48967270cc116661813d3d734f2f16e4e`를
+커밋·push하고 공식 API/Web build, wheel RECORD, 설치 시뮬레이션을 통과했다. 실제 운영에는
+**자료 학습 owner와 그 CPU 그림 도구만** 인계했다. API/platform/Web 설치는 `7084bbc4`를
+유지한다. 해당 API diff는 이미 적용한 SELECT-only 정책뿐이며 Web·공개 API 계약·라우트는
+변경이 없다. 새 준비 복구 계약은 새 Material owner 내부에서만 사용한다. native parser와
+원문 CPU capsule, 출시 Pack 1.1, 기존 문항·공개 풀이·Graph·그림 catalog 형식은 보존한다.
+
+처음 준비한 전체 호환 배포는 기존 QUERY 서비스가 06:06 UTC부터 failed/PID0인 상태라
+all-active 사전조건에서 멈췄다. 새 immutable owner/wheel 저장까지만 진행됐고 API 교체나
+설정 활성화는 없었다. 정상 API/Web을 함께 교체할 이유가 없음을 실제 diff로 재검토한 뒤
+Material 전용 인계로 좁혔다. 보호 설치본 선택 검사에서 과거 release scaffold의 module
+검색 순서도 바로잡고 새 Material 모듈 4개가 실제 새 owner에서 로드됨을 확인했다.
+실패한 준비·관측 로그는 보존하며 이전 설치본을 덮어쓰거나 성공 기록으로 바꾸지 않았다.
+
+- 기존 공식 context 1.24의 `ADMIT_PASS`를 통과했다. 운영 DB head는 `20261112_0079`로
+  유지했고 migration·계정·비밀번호·권한 추가·프리셋 변경은 없다.
+- 원래 material revision/intake와 문항별 원문 HWPX bundle/Excel 포인터를 그대로 가리키는
+  공식 preparation recovery가 성공했다. 원래 run은 진단 code를 가진 FAILED 이력으로
+  남으며 successor `materialrun_cb17abe582a359398fd42f50ce8ef8c3`와 predecessor task가
+  연결된다. 동일 command replay는 같은 successor를 반환했다.
+- 실제 새 input/profile pin, old input 불변, 원문·Excel/native bundle 불변을 확인했다.
+  `staging/native-preparation-recover-r2-20261114.json`과 보호된 release record의
+  `preparation-recovery-proof.json`이 증거다. 첫 중지 검사는 잠깐 실행 중이던 PDF child를
+  감지해 거절했으며 해당 child 종료 확인 후 같은 경계를 사용했다. 무조건 재실행하지 않았다.
+- Material unit의 owner source와 env의 source/그림 도구 경로만 갱신하고 서비스만 시작했다.
+  `staging/native-material-only-release-activate-20261114.log`,
+  `staging/native-material-only-release-postdeploy-20261114.log`는 PASS다. API/Web·QUERY 설정과
+  당시 QUERY state·INDEX 파일/InvocationID·인증·창작 설정은 기존 그대로임을 대조했다.
+- 실제 첫 회차가 **PREPARED → READY → RUNNING**을 통과했다. discovery Workflow는
+  `workflow_d03694e75aa7469d977ea442cad3e36e`다. 후속 관측에서 유효 worker lease 1개와
+  처리 중 command 1개, 준비 대기 command 0을 확인했다. 이것은 Item·공개 풀이·Graph·벡터
+  저장 완료의 대체 증거가 아니다. 나머지 17회는 첫 실제 등록 검증 뒤 같은 입력 경로로 진행한다.
+
+별도 QUERY의 기존 수치 runtime 검사는 읽기 전용/no-model probe에서
+`NATIVE_INSTALLATION_CAPTURE_INVALID`의 원인이 host closure의
+`INSTALLED_RUNTIME_FILE_HASH_MISMATCH`임을 확인했다. 원문·모델·벡터 실패로 해석하거나
+검증을 제거하지 않는다. `staging/native-query-verifier-diagnostic-20261114.json`을 보존했다.
+INDEX는 이전 failed/무PID 상태를 그대로 유지한 것이며 임베딩이 실행 중이라고 보고하지 않는다.
+첫 등록 확인과 기존 증분 인덱스의 실제 재개·신규 vector 저장은 아직 남아 있다.
+
+현재 배포 기록 root는 `/var/lib/eom-native-preparation-recovery-release-20261114`다.
+Slack milestone은 `devreport_ea4376117f294dbc872090abeea5a792` HTTP200/SAVED다.
+native 원문·공개 풀이·Graph·임베딩 및 전체 450문항 검증 전까지 목표를 완료 처리하지 않는다.
