@@ -5,6 +5,49 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 22:49 UTC — 완료19개 보존·실패6개 후속 실행과 INDEX 복구
+
+run4는 QUESTION COMPLETED19/FAILED6으로 정상 terminal 처리됐다. 공개 풀이19개와
+문항19개의 Graph 연결을 확인했다. Graph revision은6개이며, 이를 연결 문항6개로
+세면 안 된다. 등록된23개 전체의 실제 actor 권한·원본/Native lineage·본문·그림 hash
+감사는23 PASS/불일치0이다. 그림 없는 정상 문항도 포함한다. source-catalog의 과거42b2
+생성 증거는 그대로 검증했고70 생성본으로 바꿔 부르지 않았다. 감사의 DB/NAS 쓰기와
+모델/GPU 호출은0이다.
+
+공식 `recover_native_material_references`로 run5
+`materialrun_5657a103ccc4526088ec722ae3abf0e2`를 생성했다. 완료19개의 Item/분석/공개 풀이/
+Graph pin은 그대로 상속했고, 원 run4의 state·task pin·기존 accepted-invalid 분석도
+바꾸지 않았음을 재대조했다. 새 Prepared3은
+artifact_d0f34322fa604d5da7930a4f3c4908f8 / rev_22ef5690195d466ab2b8fc9758bf8c56,
+SHA `176c14ecf395e89d07f5aa2da7706cb716d2a05846473eabf8a538fe5afaa2d1`다.
+복구 생성 자체의 모델 호출은0이다. Material을 다시 시작했고 실제 슬롯03이 실패분의
+새 추출을 실행 중이다. 공식 `MaterialLearningReadService.inspect`의 read-only 조회는
+COMPLETED19/REGISTERED4/RUNNING1/PENDING1, Graph 연결19개를 확인했다.
+
+INDEX의19a8 문제도 새 계약이나 직접 row 수정 없이 기존 복구 owner로 처리했다.
+원래 READY 기록의 numerical Invocation9b87d014ed4c456e9b9647df639a273d와 실제 grant/input
+연결을 검증하고, 그 invocation의 **기존 FAILED retirement**를 찾았다. 현재 unit의 빈
+Invocation은 미실행 증거가 아니었다. `recover_retired_indexing_workflow`로 정확한
+기존 Workflow/encoding4개의 실제 실패를 기록했고 동일 명령 재전송도 검증했다.
+planning SUCCEEDED와 기존 벡터/이력은 불변이다. 명령 SHA는
+`241660f998ccb604d2b00a2e5ae48ab3d3972b26acc3306fa519ff8a8131458d`이며 새 계산/서비스
+효과는 복구 transaction에서0이다. 같은 INDEX 설정으로 다시 시작해 PID4111864 /
+Invocation1186ee5ff1424504bca03dc911cb9f09의 active 상태를 확인했다. 새 수치 완료·인덱스
+게시까지 끝났다고 주장하지 않고 계속 관찰한다. QUERY는 원 PID/Invocation을 유지한다.
+
+현재 전체450개 목표는 계속 ACTIVE다. 다음은 run5의6개 완료와 첫 회차25개 실제
+조회/Graph 검증, 원래 HTTP 배치 driver의 정확한6실패 successor 채택 후 나머지17회차
+입력, 전체450개 및 증분 임베딩 연결이다. 번호250개와 미기입200개 정책도 유지한다.
+실패5개를 가정한 이전 초안은 실행하지 않았다.
+
+근거: staging의 `native-reference-recovery-terminal19-20261114.json`,
+`native-approved-visual-audit-r3-20261114.jsonl`, `native-reference-recovery-apply-r3-20261114.log`,
+`native-reference-run5-public-status-20261114.json`,
+`native-gpu19a-original-retirement-probe-20261114.json`,
+`native-gpu19a-bound-failure-recovery-{prepare,record}-20261114.log`,
+`native-index-post19a-resume-progress-20261114.json`이다. 원본/900분할 파일과 이 검증 기록은
+계속 보존하며, 전체450개 등록 완료로 보고하지 않는다.
+
 ## 2026-11-14 22:10 UTC — private 실행 모듈 반영·자료 학습 재개
 
 `70bebfb3`의 Catalog/Material과 ROLE Runner4개를 실제로 반영했다. 최종 postdeploy와

@@ -117,6 +117,12 @@ INDEX 인계에서는 exit 0 이후에도 완료 중인 CUDA가 생성한 미실
 실행 중/실패한 요청을 일괄 취소하거나 DB row를 직접 고치지 않는다. 관련 절차·증거는
 `docs/operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md`를 참고한다.
 
+GPU unit의 현재 Invocation이 비어 있어도 과거 미실행이나 NOT_GRANTED의 증거는 아니다.
+원래 READY 기록과 실제 grant/input을 공식 reader로 검증한 뒤 그 READY의 정확한
+Invocation에 저장된 retirement를 읽는다. BOUND 이후의 실제 FAILED retirement는
+`read_retired_embedding_failure`와 `recover_retired_indexing_workflow`가 처리한다.
+planning SUCCEEDED를 수치 완료로 세거나, BOUND를 Unbound 복구로 우회하지 않는다.
+
 정상 입력 뒤의 저장·Graph·검색 실패는 담당 deterministic 코드에서 재현한다. 디스크/DB
 자원 장애, 잘못된 AI 결과, 권한/hash 위반을 분리한다. 안전한 원래 요청 재개와 모든 오류
 무시하기는 다르다. timeout만으로 미실행을 가정하지 않는다.
