@@ -12,6 +12,78 @@ from psycopg import sql
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+def test_native_material_projections_use_actual_read_only_api_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
+        pytest.skip("run through guarded disposable API database")
+    from eom_api.services.query_adapter import QueryAdapter
+    from eom_catalog_service.material_native_item_read import read_native_material_original_metadata
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    values = dict(
+        line.split("=", 1)
+        for line in Path(os.environ["EOM_API_TEST_RUNTIME_ENV"]).read_text().splitlines()
+    )
+    runtime_url = values["EOM_API_DATABASE_URL"]
+    with psycopg.connect(runtime_url.replace("+psycopg", "")) as runtime:
+        database, role = runtime.execute("SELECT current_database(), current_user").fetchone()
+        assert database.startswith("eom_api_test_")
+        assert role.startswith("eom_api_test_runtime_")
+        for table, key in (
+            ("learning_materials", "material_id"),
+            ("learning_material_revisions", "material_revision_id"),
+            ("item_metadata_snapshots", "item_revision_id"),
+        ):
+            for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                assert runtime.execute(
+                    "SELECT has_table_privilege(current_user, %s, %s)",
+                    (f"app.{table}", privilege),
+                ).fetchone() == (False,)
+            # WHERE false prevents data changes even if a future grant regresses;
+            # PostgreSQL must still check the actual relation privileges.
+            for statement in (
+                sql.SQL("INSERT INTO app.{} SELECT * FROM app.{} WHERE false").format(
+                    sql.Identifier(table), sql.Identifier(table)
+                ),
+                sql.SQL("DELETE FROM app.{} WHERE false").format(sql.Identifier(table)),
+                sql.SQL("UPDATE app.{} SET {} = {} WHERE false").format(
+                    sql.Identifier(table), sql.Identifier(key), sql.Identifier(key)
+                ),
+            ):
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    runtime.execute(statement)
+                runtime.rollback()
+
+    engine = create_engine(runtime_url)
+    try:
+        # The disposable DB need not contain a published corpus. Only the selector
+        # is synthetic: the real QueryAdapter executes its complete joined SQL as
+        # the restricted API role, so an omitted grant reproduces production 500.
+        monkeypatch.setattr(
+            QueryAdapter,
+            "_current_assessment_snapshot_id",
+            staticmethod(lambda _session: "graphrev_" + "0" * 32),
+        )
+        page = QueryAdapter(engine, b"native-material-role-test-key-32!").material_item_db_entries(
+            approval_state=None, limit=1, cursor=None
+        )
+        assert page.data == ()
+        assert page.next_cursor is None
+        assert page.has_more is False
+        with Session(engine) as session:
+            assert (
+                read_native_material_original_metadata(
+                    session,
+                    item_manifests={"itemrev_" + "0" * 32: "sha256:" + "0" * 64},
+                )
+                == {}
+            )
+    finally:
+        engine.dispose()
+
+
 def test_slot_projection_actual_api_role_keeps_private_chat_denied_and_control_lock() -> None:
     if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
         pytest.skip("run through guarded disposable API database")

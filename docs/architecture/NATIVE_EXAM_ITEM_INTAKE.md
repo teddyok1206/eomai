@@ -118,6 +118,24 @@ fallback이 아니며 기존 STRICT parser/merge는 이 template도 계속 거�
 
 ## 트랜잭션과 복구
 
+### API 목록 읽기와 실제 DB runtime 권한
+
+`QueryAdapter.material_item_db_entries`는 기존 Graph membership·Registry revision과 자료의
+작은 제목/수명주기 metadata를 indexed join으로 읽는 API read model이다. native 원본 metadata
+projection도 기존 Item metadata snapshot을 대조한다. 이 읽기의 SQL 역할은
+`runtime_privileges.READ_TABLES`가 소유하며 `learning_materials`,
+`learning_material_revisions`, `item_metadata_snapshots`의 SELECT가 필요하다. INSERT/UPDATE/
+DELETE/TRUNCATE나 원본 파일 접근 권한을 추가하지 않는다. 접수·등록·Artifact commit은 기존
+Catalog/application 소유자에 그대로 둔다. 원본 한글 다운로드는 실제 reader의 권한을 확인하는
+기존 Catalog RPC를 쓰며 API가 NAS 파일을 직접 여는 경로를 만들지 않는다.
+
+권한 정책의 변경은 공식 runtime-role reconciler로 반영하고, disposable DB의 실제 제한
+역할로 목록 SQL·metadata lookup과 쓰기 거부를 함께 검증한다. owner DB 역할로만 통과한
+테스트나 READY를 이 증거로 대신하지 않는다. 사용자 인증과 DB service 역할 권한은 다르다.
+목록을 읽지 않거나 오류를 빈 목록으로 숨기는 우회는 선택하지 않는다. 기존 read model을
+새 RPC/registry로 대체하는 것보다 이 작은 SELECT-only 정책 보완이 단순하며, 원래 API의
+ITEM_READ·CONTENT_INTAKE_READ 경계와 고정 revision/hash 검증은 유지한다.
+
 ### 후속 Excel의 중복 등록 차단
 
 초기 native 등록은 실제 operator와 `material_native_source_identity`로 만든 registration

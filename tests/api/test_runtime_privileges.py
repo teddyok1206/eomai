@@ -27,6 +27,19 @@ def test_external_item_db_is_read_only_for_api_runtime() -> None:
     assert tables.isdisjoint(UPDATE_TABLES)
 
 
+def test_native_material_db_projection_is_read_only_for_api_runtime() -> None:
+    tables = {"learning_materials", "learning_material_revisions", "item_metadata_snapshots"}
+    assert tables <= set(READ_TABLES)
+    assert tables.isdisjoint(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    assert tables.isdisjoint(dict(UPDATE_COLUMN_PRIVILEGES))
+    # Registration, original-document processing and task state remain Catalog-owned.
+    for table in ("material_learning_runs", "material_learning_tasks", "material_learning_events"):
+        assert table not in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES
+
+
 def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "pdf_document_review_upload_intents" in READ_TABLES
     assert "pdf_document_review_upload_intents" in INSERT_TABLES

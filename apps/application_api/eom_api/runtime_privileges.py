@@ -91,6 +91,9 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "item_components",
     "item_db_similarity_searches",
     "item_events",
+    # Native material DB/source projections read Catalog-owned immutable metadata.
+    # Publication, task transitions and all material writes stay with Catalog.
+    "item_metadata_snapshots",
     "item_relationships",
     "item_revisions",
     "items",
@@ -112,6 +115,8 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "knowledge_node_source_pointers",
     "knowledge_nodes",
     "knowledge_snapshot_analyses",
+    "learning_material_revisions",
+    "learning_materials",
     "legacy_item_extraction_batch_work_units",
     "legacy_item_extraction_batches",
     "legacy_item_extraction_decisions",
