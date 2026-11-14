@@ -750,3 +750,145 @@ RECORD가 원 parent를 FAILED로 종료하며 같은 요청의 두 번 재전�
 
 슬롯/자료 등록 재개, 새 벡터 저장·실제 검색 및 나머지17회 접수는 계속 남아 있다.
 단일 성공 sample이나 실행 중 상태로 전체450 목표를 완료 처리하지 않는다.
+
+### 12:41–12:44 UTC: Material 보강본 활성화·GPU 신규 저장 확인
+
+실제 네 base를 source51 설치 후보로 읽는 canary가 PASS했다. 앞선 세 문항의 후속
+reference index bytes/SHA는 기존과 같고, 네 번째는 원19개 노드·18개 anchor·전체
+accepted 결과를 보존한 채 호환17개만 투영했다. source/member/receipt/hash 검사와
+필수 역할 조건은 유지했다. 이 점검 자체의 모델 호출·DB 변경은0이다.
+
+Material-only release의 prepare·ADMIT·0079 read-only 검증·활성화·postdeploy가 PASS다.
+첫 활성화 시도는 다른 한글 변환 child의 drain 검사에서 파일 변경 전에 중단됐고,
+해당 child의 종료를 확인한 뒤 동일 준비본으로 r2를 진행했다. 실패 로그도 보존했다.
+
+- Material source `51e0d4548850bcebbd6f52ec05f7643d01882fac`, PID3242830,
+  InvocationID `9309bc8610eb4b4b8d72b0a170a4fdf5`.
+- INDEX PID3166352/InvocationID `c2b10c5489c14045b8863bc0f9b1d5f1`, QUERY
+  PID3099382/InvocationID `0e3dad6b31e645e6be892a6dd4f697d8`는 전후 동일하다.
+  API/Web·worker·native Pack·preset·수치 설치·기존 벡터·DB head도 변경하지 않았다.
+- 동일 finalization run/attempt4·prepared SHA·네 Item·세 Graph·기존 accepted 분석
+  ID/SHA를 보존했다. 네 번째 accepted base의 최초 공개 풀이
+  `analysisrun_cdd7166ca15b4a82ae2ca96c5ce5d516`만 새로 RUNNING이며,
+  `workflow_565f654846ea482d9903ad20755fdb68`의 analyze를 처리한다.
+  관측 시점의 완료 QUESTION3/공개 풀이3/Graph3을4로 확대하지 않는다.
+
+GPU도 단순 active가 아니라 새 저장을 확인했다. 새 INDEX Identity의 첫 CUDA parent와
+Workflow가 SUCCEEDED/COMPLETED이며, native encoding 완료8개 중4개가 Catalog에
+등록됐다. 나머지4개는 별도 Workflow의 VALIDATING_RESULT 단계였다. 현재 CUDA index
+`embeddingindexrev_5ef112416ce85546aba42ce1713a5f0b`는 approved manifest
+`artifact_6ebeab8ece514d21b9ac65ab61532f9f` / `rev_a423e2f28e764a28b13ba676ac085857`,
+SHA `465cf9eb3c3c55619d0f61e9578b42a442ea479d8833e550913d30f71f0ecfb1`를
+참조하며 binding1300 / eligible source1559다. 이 수치는 namespace 전체 수이며 김병훈
+문항 완료 수가 아니다. 첫 native 세 문항 중1·3번은 같은 Graph의 approved shard/binding에
+연결됐고2번은 아직 미등록이다. 읽기 전용 metadata 점검이므로 vector bytes 검증·실제
+query 권한/검색 성공까지 주장하지 않는다.
+
+증거는 `staging/native-reference-candidate-canary-20261114.json`,
+`staging/native-graph-cache-material-{prepare,admit,activate-r2,postdeploy}-20261114.log`,
+`staging/native-material-observe51-first-20261114.json` 및
+`staging/native-index-vector-progress-first-20261114.json`이다. 새 observer는 설치
+Material51과 변경하지 않은 finalization proof sourcef42를 별도로 검증한다.
+나머지17회 접수와 실제 HTTPS native 다운로드는 기존2번 창의 Studio 인증 입력을
+기다린다. 기존 입력창을 보존했으며 첫 회차·GPU 처리는 이 대기와 무관하게 계속된다.
+
+12:48 UTC 후속 관측에서는 네 번째 공개 풀이가 ACCEPTED이고 task는 PUBLISHING으로
+전진했다. 기존 accepted base를 재사용했으며 새 base/Item을 중복 생성하지 않았다.
+전체 네 풀이 승인과 Graph 세 게시 완료를 구분한다.
+
+나머지 회차 전에는 공용 Workflow 실행부도 호환 인계해야 한다. Material51/Pack1.1만
+바꾸면 `PlatformRoleJobExecutor`가 실제 worker 입력에 넣는 전역 안내 상수는7084인
+채로 남는다. 51 플랫폼 wheel의 `eom_workflow/material_learning_prompt.py`는 d253 및
+HEAD와 byte-identical(SHA `7ccd75da0e1bbc38258beb8fecb4c2dc7a61fa7d49be009a6e737fbe78c1db6a`)
+이며 새 NON_CONTENT 배타 분류 안내를 포함한다. 새 빌드를 만들거나 Pack에 임시 지침을
+중복 주입하는 문제가 아니다. 현재 Graph 작업을 자연 완료한 뒤 새 admission만 멈추도록
+Material main에 지원된 SIGINT를 보냈다. `systemctl stop`의3분 제한으로 Graph를
+강제 종료하지 않았고, 살아 있는 global worker/runner에도 종료 신호를 보내지 않았다.
+공용 API/platform/Web·QUERY provider pin 인계와 실제 신규 worker 지침 확인은 다음 단계다.
+
+### 12:55–13:12 UTC: 추가 임베딩 저장·별도 신규 할당 실패·정상 Graph drain
+
+이후 관측에서 두 INDEX Workflow가 모두 COMPLETED이고 encoding8개가 모두 Catalog에
+등록됐다. CPU/CUDA 두 공간의 기존1·3번 native 문항 binding/shard도 approved다.
+2번은 아직 없다. 이 성공들과 별개로 신규 parent
+`job_ee377da2cf0847528ab9b6b296ef6574`의 root는12:41:44에 GPU 자원 확인 단계에서
+실패했고, INDEX main은 기존 CPU 작업을 자연 완료한 뒤12:55:25에 종료됐다.
+
+- exact root InvocationID `c0fa04348c9c40c1bebfe11cbb8b550d`, allocation
+  `embeddingallocation_dccabd6ea03a4b0eaa69656a5ae2ba4c`, request SHA
+  `942501a23a9933c5817e6f83047067a48a117b175cfc1d1e4216febe9dff4d30`.
+- safe root journal은 `embedding_gpu_batch_observation:504` →
+  `embedding_cuda_probe_resource_observation:711`의 자원 관측 실패를 가리킨다.
+  ROOT_READY 전이며 native 계산 unit은 미실행이다. 앞서 검토한 두 번째 source-admit의
+  deadline 가설을 이번 root 실패 원인으로 사용하지 않는다. Material daemon-reload와
+  시간은 겹치지만 어느 물리 관측 조건이 실패했는지는 masked 진단만으로 확정하지 않았다.
+- 기존 공식 Unbound1.0 PREPARE는 만료·FAILED root·빈 handoff/무grant를 검증했다.
+  RECORD는 원 parent를 FAILED로 기록했고 같은 요청 replay도 PASS다. 새 key·다른
+  service identity·모델 재계산·실패→성공 변경은 없다. 같은 SDK e99를 사용했다.
+- canonical failure evidence `artifact_13b3a7c90bdb41ffbc860a090ca48eb4` /
+  `rev_9cac8b86ba104c9e83e28773688c5128`, member `controller-failure.json`, SHA
+  `1ae1e81d0e936d89aa5ee94a01fba2389a2ebe5ab524686af5997090930d8098`.
+- 증거: `staging/native-index-vector-progress-after-exit-20261114.json`,
+  `staging/native-index-root-failure-details-20261114.json`,
+  `staging/native-index-vector-progress-allocation-20261114.json`,
+  `staging/native-index-second-unbound-{prepare,record}-20261114.log`.
+  별도 diagnostic 초안은 잘못 지정한 controller env 경로로 FileNotFoundError가 났다.
+  이를 검증 PASS로 세지 않고, 이미 동작한 observer와 exact-unit/journal 읽기로 확인했다.
+
+Material main은 SIGINT 뒤 현재 Graph publication을 끝내고 exit0으로 정상 정지했다.
+13:12 관측은 Item4/base4/public report4/published Graph4이며 task는 COMPLETED3 /
+GRAPH_READY1 / PENDING21이다. 마지막 task 완료는 coordinator가 재개한 뒤 공식 전이를
+거치게 둔다. Graph4를 게시했다는 이유로 DB row를 직접 완료 처리하지 않는다.
+기존17분 cold 게시와 이번 약10분 게시의 입력·Graph 크기가 달라 cache만의 성능 개선율로
+단정하지 않는다. 실제 관측은 `staging/native-material-observe51-drained-20261114.json`이다.
+
+공용 배포는 이미 실패해 PID0인 INDEX를 굳이 먼저 재시작하지 않고, 이 exact 실패 상태와
+공식 원 parent 종료를 checkpoint로 보존한 채 GPU 미실행 상태에서 진행한다. 기존
+GPU/worker quiet guard를 유지하고 INDEX의 private SDK·Identity·수치 설치·vector를
+교체하지 않는다. 호환 API/platform/Web/QUERY provider 반영 후 INDEX·Material은 별도
+정상 시작으로 재개한다. 실패 종료 자체는 같은 요청을 재실행할 권한이 아니며, 다음
+실제 published Graph의 정상 증분 intent와 기존 vector 재사용을 관측해야 한다.
+
+### 13:27–13:39 UTC: 공용 호환 배포 완료·다음 문항과 CUDA 실제 실행 재개
+
+API/platform/contracts·Web·공용 Workflow Runner를 source51로 호환 배포했다.
+기존 context1.24의 실제 ADMIT 기록을 재사용하고0079 VERIFY만 수행했다. 새 migration,
+프리셋/Pack 변경, 인증 변경, INDEX Identity/SDK/수치 설치 변경은 없다. 설치 wheel/RECORD,
+서비스·HTTPS 정적 자산·익명 접근 거부의 기존 공식 postdeploy가 PASS다.
+HTTPS native 파일 다운로드 및 인증 사용자 화면 확인은 여전히 별도 미완료다.
+
+준비 과정에서 Catalog의 public-read pin `68662d…`가 QUERY의 실제 predecessor
+`0ab244…`와 다른 pre-existing drift를 발견했다. 첫 prepare의 dirty 문서 검사와
+r2 marker 검사는 서비스 교체 전에 거절됐고 실패 로그/빈 r2 ROOT를 보존했다.
+작성 중이던 문서만 staging patch로 보관·복원해 검증된51 candidate를 clean 상태로
+배포했다. r3에서는 기존 보호된 prepare의 Catalog predecessor marker 하나만 실제
+값으로 고정하고, 네 QUERY 설정의 typed successor 생성·hash·CAS는 그대로 사용했다.
+이미 준비된 세 wheel은 정확한 root 소유/0444/nlink1/이름/SHA 검증 후 재사용했다.
+
+- 공용 release ROOT: `/var/lib/eom-native-shared-runtime51-release-r3-20261114`.
+  실제 API source51/PID3297861, Web source51/PID3299009, QUERY owner11d/PID3298205.
+  공용 Workflow Runner의 새 프로세스들과 실제 설치 안내 모듈51을 확인했다.
+- postdeploy에서 QUERY public JSON·QUERY 환경 pin·Catalog effective 환경 pin이 모두
+  `sha256:450e5ca5701a3bad39f812d4e1c667ce5662031bffe6b69fa93aba8def845ca3`다.
+  `catalog-predecessor-drift.reconciled.json`은 실제 일치 확인 뒤에만 기록했다.
+- INDEX는 배포 중 원 실패/PID0/c2b와 private SDK e99를 그대로 보존했다. postdeploy
+  종료 후에만 별도 정상 시작했다. 새 PID3303076/InvocationID
+  `12411fc2eebf4448b8e2f2ffd603a3a5`다. 진행 중인 GPU를 끊거나 실패 요청을 다시
+  실행한 것이 아니다.
+- Material도 postdeploy 뒤 별도 시작했다. PID3303074/InvocationID
+  `6d6deede2a4a4fbf9c501b3efc723636`; 기존 GRAPH_READY를 공식 완료로 전이해
+  QUESTION 완료4/25가 됐고5번은 새 `workflow_c3ea59687d364799b85db632c7de1c85`에서
+  실제 RUNNING/learn, slot05 유효 lease다. source51 공용 실행자를 사용한다.
+- 새 Graph에 따른 정상 증분 parent `job_677ed58bae084d2d85f3431bde79b8a6`는 CUDA
+  route/BOUND를 통과했다. 13:38 관측의 실제 numerical Workflow
+  `workflow_bc4eaa4ec6724f4c9cc2994ad84c780a`와 encoding4개가 RUNNING이며 오류는
+  없다. parent SUCCEEDED를 numerical 완료로 혼동하지 않는다. 이미 저장된8개는
+  그대로고, 이번4개 저장 완료는 다음 관측 대상이다.
+
+증거는 `staging/native-shared-runtime51-r3-{prepare,drain,ack,activate,postdeploy}-20261114.log`,
+`staging/native-shared-runtime51-background-resume-20261114.log`,
+`staging/native-material-observe51-after-shared-resume-20261114.json`과
+`staging/native-index-vector-progress-after-shared-resume-20261114.json`이다.
+450문항 목표는 ACTIVE이며 완료로 바꾸지 않았다. 나머지17회차 접수와 실제 HTTPS
+native 다운로드는 기존 tmux2번 `native-exam`의 최초 Studio 로그인 입력을 기다린다.
+새 로그인 창·새 idempotency key·중복 검색/모델 실행은 만들지 않았다.

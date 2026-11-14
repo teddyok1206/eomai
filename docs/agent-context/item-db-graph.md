@@ -6,6 +6,12 @@ coordinator claim을 유지한다. 이 범위는 새 실행 권한/queue가 아�
 token을 부활시키지 않는다. task 완료는 범위 종료 후 기존 row/token fence로 기록한다.
 실제 의미와 운영 반영 여부는 자료 학습 설계/운영 기록에서 확인한다.
 
+자료 학습 child의 실제 안내문은 공용 Workflow Runner의
+`PlatformRoleJobExecutor`가 `eom_workflow.material_learning_prompt`에서 가져온다.
+Material owner의 private SDK나 Pack만 갱신해도 이 전역 executor의 이미 import한
+안내문이 바뀌는 것은 아니다. 프롬프트 수정의 운영 반영은 실제 실행자 설치/재시작과
+새 worker 입력 provenance로 확인하고, 과거 입력은 바꾸지 않는다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,
