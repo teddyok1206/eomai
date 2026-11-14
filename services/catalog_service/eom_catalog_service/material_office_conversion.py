@@ -15,6 +15,11 @@ from eom_catalog_contracts.material_office_conversion import (
 )
 from eom_identifiers import sha256_file
 
+from eom_catalog_service.material_learning_source import (
+    MaterialSourceFileFingerprint,
+    validate_material_source_file,
+)
+from eom_catalog_service.office_converter_worker import INSTANCE_PATTERN
 from eom_catalog_service.office_document_converter import SystemdOfficeDocumentConverter
 
 _STAGING = Path("/var/lib/eom-catalog-api/staging")
@@ -148,21 +153,50 @@ class CatalogOwnerMaterialOfficeConverter:
         )
         return _ROOT / instance_id
 
-    def _read(
-        self, workspace: Path, *, source_format: str, operation: str, expected: str | None = None
-    ) -> OfficeDocumentReviewConversionIdentity:
-        if workspace.parent != _ROOT or source_format not in {"HWP", "HWPX"}:
+    def _source(self, workspace: Path, source_format: str) -> tuple[Path, os.stat_result]:
+        if (
+            os.geteuid() != 0
+            or workspace.parent != _ROOT
+            or workspace.resolve() != workspace
+            or INSTANCE_PATTERN.fullmatch(workspace.name) is None
+            or source_format not in {"HWP", "HWPX"}
+        ):
             raise ValueError("MATERIAL_OFFICE_COMMAND_INVALID")
+        account = pwd.getpwnam("eom-catalog-manager")
+        for directory in (_ROOT, workspace):
+            metadata = directory.lstat()
+            if (
+                directory.is_symlink()
+                or not stat.S_ISDIR(metadata.st_mode)
+                or metadata.st_uid != account.pw_uid
+                or metadata.st_mode & 0o077
+            ):
+                raise ValueError("MATERIAL_OFFICE_WORKSPACE_INVALID")
         source = workspace / ("original." + source_format.lower())
         metadata = source.lstat()
-        account = pwd.getpwnam("eom-catalog-manager")
         if (
             source.is_symlink()
             or not stat.S_ISREG(metadata.st_mode)
             or metadata.st_nlink != 1
             or metadata.st_uid not in {0, account.pw_uid}
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or not 8 <= metadata.st_size <= 256 * 1024**2
         ):
             raise ValueError("MATERIAL_OFFICE_SOURCE_INVALID")
+        return source, metadata
+
+    def validate_source(
+        self, workspace: Path, *, fingerprint: MaterialSourceFileFingerprint
+    ) -> None:
+        """Accept the two exact handoff owners, never the observed UID by itself."""
+        source, metadata = self._source(workspace, fingerprint.source_format)
+        validate_material_source_file(source, fingerprint, expected_owner_uid=metadata.st_uid)
+
+    def _read(
+        self, workspace: Path, *, source_format: str, operation: str, expected: str | None = None
+    ) -> OfficeDocumentReviewConversionIdentity:
+        source, metadata = self._source(workspace, source_format)
+        account = pwd.getpwnam("eom-catalog-manager")
         digest = sha256_file(source)
         if expected is not None and digest != expected:
             raise ValueError("MATERIAL_OFFICE_SOURCE_INVALID")

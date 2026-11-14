@@ -318,3 +318,25 @@ SELECT-only 정책과 실제 제한 역할의 회귀를 커밋·push했다. 원�
 자동 재시도하지 않으며 원래 key/checkpoint를 보존한다. 401도 재로그인 loop로 숨기지 않는다.
 오프라인 4개 검사는 이 경계와 동일 key 재개를 확인했다. 앞서 실패한 실제 입력 프로세스는
 이미 로그아웃했으므로 운영 재검증용 로그인 창을 기존 pane에 새로 준비했다.
+
+## 첫 회차 실제 접수와 원문 준비 진단
+
+후속 실제 로그인은 성공했고 기존 고유번호 250개/미제공 200개를 운영 read model과
+대조했다. legacy 32 batch와 기존 외부 등록 목록 1행을 조회하여 번호 겹침 0을 확인했다.
+`checkpoint.number-collisions.json`은 소스 namespace가 다른 문항의 중복 판정/덮어쓰기 권한이
+아니라 이번 입력의 읽기 증거다. 첫 MAIN/SOLUTIONS 업로드와 native 분리·원문 publication,
+접수가 완료되어 `materialrun_19b54f5ad75f52fabeb089b7363131fe`를 반환했다. 다른 17회는 아직
+접수하지 않았으며 첫 회차도 Item·공개 풀이·Graph 완료로 확대하지 않는다.
+
+기존 자료 학습 owner의 PREPARING에서 Office→PDF 이후 내장 picture-use catalog 추출이
+`CREATIVE_PAGE_RENDERER_FAILED`로 종료됐다. 같은 run의 재시도에서는 converter가 넘겨받은
+Catalog 소유 source를 root 현재 UID 기준 validator가 거절하여
+`MATERIAL_LEARNING_SOURCE_FILE_INVALID`가 발생했다. 둘은 사용자 비밀번호 문제와 다르다.
+실제 원문·접수·실패 journal을 보존하고 Studio 세션은 메모리에서 유지한다.
+
+소유권 재시도 수정 후보는 converter의 고정 작업공간 validation port로 경계를 옮긴다.
+기본 업로드는 여전히 현재 UID만 허용하며, 변환 adapter만 고정된 private Catalog workspace와
+root/Catalog 두 UID를 허용한다. mode600·nlink1·서명·descriptor identity·hash 검사는 유지한다.
+wire/profile/기존 checkpoint를 수정하는 기능은 아니다. renderer의 실제 내부 오류는 별도
+저권한 CPU 진단을 준비했으며, 추측으로 그림 추출을 생략하거나 PDF crop으로 바꾸지 않는다.
+새 코드와 기존 PREPARING input profile의 source pin은 별도 운영 복구 판단이 필요하다.

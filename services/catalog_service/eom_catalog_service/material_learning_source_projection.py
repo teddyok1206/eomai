@@ -40,7 +40,6 @@ from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceError,
     MaterialLearningSourceService,
     MaterialSourceFileFingerprint,
-    validate_material_source_file,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -55,6 +54,10 @@ class MaterialOfficeConverter(Protocol):
     h2orestart_bundle: Path
 
     def get_or_create_workspace(self, instance_id: str) -> Path: ...
+
+    def validate_source(
+        self, workspace: Path, *, fingerprint: MaterialSourceFileFingerprint
+    ) -> None: ...
 
     def convert(
         self, workspace: Path, *, source_format: str
@@ -196,9 +199,9 @@ class MaterialSourceProjectionService:
             source = workspace / ("original." + receipt.source_format.lower())
             if not os.path.lexists(source):
                 self._copy_member(receipt.original, source)
-            validate_material_source_file(
-                source,
-                MaterialSourceFileFingerprint(
+            self.converter.validate_source(
+                workspace,
+                fingerprint=MaterialSourceFileFingerprint(
                     receipt.source_format, receipt.original.bytes, receipt.original.sha256
                 ),
             )

@@ -74,9 +74,18 @@ class MaterialSourceFileFingerprint:
 
 
 def validate_material_source_file(
-    source: Path, command: MaterialSourceUploadCommand | MaterialSourceFileFingerprint
+    source: Path,
+    command: MaterialSourceUploadCommand | MaterialSourceFileFingerprint,
+    *,
+    expected_owner_uid: int | None = None,
 ) -> None:
-    """Validate at the private input boundary, never trust a filename or caller hash."""
+    """Validate exact private input; only an internal workspace owner selects a UID.
+
+    Upload admission keeps the current-process UID default. The Office owner may
+    explicitly validate its own fixed workspace after the root-to-Catalog handoff;
+    neither an upload command nor a model can select this internal argument.
+    """
+    owner_uid = os.geteuid() if expected_owner_uid is None else expected_owner_uid
     if not 8 <= command.content_length <= 256 * 1024 * 1024:
         raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_FILE_INVALID")
     descriptor = os.open(
@@ -87,7 +96,7 @@ def validate_material_source_file(
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
-            or before.st_uid != os.geteuid()
+            or before.st_uid != owner_uid
             or before.st_size != command.content_length
             or stat.S_IMODE(before.st_mode) != 0o600
         ):
@@ -98,7 +107,7 @@ def validate_material_source_file(
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_SIGNATURE_INVALID")
         else:
             try:
-                validate_office_source(source, command.source_format, os.geteuid())
+                validate_office_source(source, command.source_format, owner_uid)
             except OfficeConverterError as error:
                 raise MaterialLearningSourceError(
                     "MATERIAL_LEARNING_SOURCE_SIGNATURE_INVALID"
