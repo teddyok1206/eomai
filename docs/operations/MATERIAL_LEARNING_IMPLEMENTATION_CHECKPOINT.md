@@ -5,6 +5,52 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 21:59 UTC — 450문항 그림 전수 검사와 실행 모듈 인계
+
+후보 `70bebfb36738db365a0dcad60c5ca0b8c5f771f9`(tree
+`627433425baec57914053177daad4772f495aad9`)를 커밋·푸시하고 별도 immutable SDK와
+CPU 그림 도구로 설치했다. 기존 입력 manifest와 18개 MAIN 원본·450개 Native 문항,
+분할 receipt를 그대로 사용한 재검사는 **450 PASS / 0 FAIL / BODY picture use373개**다.
+04회2번의 BLACK_WHITE 두 사용본과 12회14번의 동일 HWPX 그림 개체5개도 통과했다.
+원본 변경·모델/GPU 호출·DB/NAS 쓰기는 이 검사에서 모두0이다. 이것은 등록450개나
+한글 육안 검수/교육 품질의 완료가 아니라, 실제 원본 파일·그림 대응의 offline 증거다.
+
+같은 후보는 알려진 그림 해석 예외를 단일 자료의 terminal 실패로 격리하며, 일반 FAILED와
+accepted-invalid base가 섞인 공식 복구를 지원한다. 등록 base의 출력 schema와 수신 검증은
+기존 public node-type별 ID prefix 및 shared suffix 규칙을 함께 사용한다. v21 원문 지침과
+historical proposal/schema bytes는 바꾸지 않았다. disposable PostgreSQL106개 회귀 후
+전용 DB/계정을 정리했다. 소스·그림·최종 contextual 검사와 Ruff/format/mypy·wire audit 및
+wheel RECORD/import 검사도 통과했다. 실제 보호 Pillow11.3에서는4101색상의 정수식/alpha와
+원본 불변을 별도로 확인했다. 소스 gate들에는 중복 검증이 있어 단순 합산하지 않는다.
+
+호환 인계 범위는 private Catalog/Material과 실제 ROLE Runner4개다. API/Web51과 공개
+QUERY pin851은 그대로 유지한다. Runner는 공유 runtime.env를 수정하지 않고 마지막의
+전용 비밀 없는 EnvFile로 새 immutable prefix를 선택한다. ADMIT 및 migration0079 VERIFY는
+PASS다. 이 시각에는 Material이 SIGINT로 정상 종료됐고, 기존 분석 worker1개의 자연 완료를
+기다리고 있다. **아직 이 checkpoint를 운영 활성화·새 보고서/Graph 성공으로 읽으면 안 된다.**
+첫 helper의 module-file 문맥 오류와 다음 numeric 상태 guard 거절은 파일 교체 전 발생했고
+실패 로그를 보존했다. 최종 동결 helper는 release_r3.py, SHA
+`79911a0d517410b485f31775a5992777f5a3a6286ca9f388bd3c2166c355ae7f`다.
+
+그 guard에서 확인한 INDEX는 이 배포의 변경 전에21:19 UTC에 별도 종료돼 있었다.
+원인은 설치된 e99의 systemctl 상태 관측2/5/10초 timeout 소진
+(`LOCAL_INDEXING_RUNTIME_UNAVAILABLE`, local_indexing_runtime:218)이다. 설정/hash/GPU 추론
+실패로 확대 해석하지 않는다. manager 정상 응답을 확인하고 같은 설정·같은 서비스로만
+재기동했다. 새 PID4017862/Invocation5da1a41838074533a79d088404624fb7은 active이며,
+QUERY PID3528016/Invocationd8261930e63649f0bcf1c4e35c2f8fba는 보존했다. 구 실패Invocation과
+완료 벡터/원래 CPU 명령은 보존하며, 성공한 계산을 새 계산으로 우회하지 않는다.
+
+21:47 실제 run4 관측은 등록21/accepted base18/공개 풀이17/Graph5, 실패6개다.
+기존 실패5개 외에22번의 분석 실패가 추가됐으므로, 실패5개/완료20개로 고정한 복구 초안은
+**실행하지 않는다.** 새 원인과 최종 terminal 집합을 확인한 뒤 지원된 successor를 적용한다.
+전체450개 등록·공개 풀이·공통 Graph·증분 임베딩과 실제 조회의 목표는 계속 ACTIVE다.
+
+근거: staging의 `native-body-picture-450-r2-qualification-20261114.log`,
+`native-picture-completion-release-{prepare,admit,activate}-r3-20261114.log`,
+`native-index-current-invocation-diagnostic-r2-20261114.json` 및 같은 시각의 운영 기록.
+전수 summary SHA는 `3f8815db22cbca628a7403aafa19d54306bafafdc65285f3acd4b18f11b1ecd3`다.
+이 로그·원본·생성 파일·대기 중인 인증 입력은 Git에 넣지 않는다.
+
 ## 2026-11-14 19:38 UTC — 좁은 호환 배포와 실제 처리 재개
 
 Catalog private receiver와 Material owner를 `9c5b4bb790eae9db472357217b0d5afb9a4b37dc`
