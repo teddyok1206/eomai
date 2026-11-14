@@ -5,6 +5,32 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 23:14 UTC — 재처리 문항 실제 그림·임베딩 저장 확인
+
+run5의9번이 새 Item으로 등록됐다. 실제 actor의 공식 Native source 읽기와 완료된 추출
+결과를 대조해 본문 picture use `officeobj_b189714d298cd92309e1ceea45c62427`, 등록 PNG
+SHA `41ea433a4bb82f8965310c1683a09729f548c51b430472f0c919f90f75082c41`, 원본 문항 HWPX
+SHA가 일치함을 확인했다. 현재 Prepared3의 실제 source catalog를 해석했으며 과거 Prepared2
+증거로 대신하지 않았다. 이 검증의 DB/NAS 쓰기와 모델 실행은0이다. 23:13 공식 run 읽기는
+등록24/25, Graph 연결19/25, COMPLETED19/PUBLISHING1/REGISTERED4/RUNNING1이다.
+이는 첫 회차 전체 완료나450개 등록 완료를 뜻하지 않는다.
+
+나머지17회차 HTTP 배치 driver r4는 기존 checkpoint/원본 archive와 정확한6개 복구 집합을
+유지한다. 설치된70 SDK의 offline preflight는18회450개 PASS, 네트워크/로그인0이다.
+첫 회차25개 완료 및 실제 공개 읽기 뒤에만 나머지를 제출한다. driver의 로컬 HTTP 검증을
+HTTPS 브라우저 검증이라고 보고하지 않는다.
+
+INDEX는 active 확인뿐 아니라 새 수치 결과의 저장까지 진척됐다. 23:14 관측의 GPU head는
+1356→1360(22:52 게시), CPU head는1296→1300(22:44 게시)이다. 새 GPU4개의 계산·등록과
+Workflow 완료가 확인됐다. 다음 GPU4개는 RUNNING, CPU4개는 계산 후 결과 검증 중이다.
+두 공간의 수를 합치지 않으며 관측 window의 완료 수를 누적 전체 수로 부르지 않는다.
+QUERY PID3528016/Invocationd826은 그대로다. 이전 FAILED retirement는 보존한다.
+
+근거: `staging/native-run5-q9-visual-20261114.json`,
+`native-reference-run5-public-status-2315-20261114.json`,
+`native-batch-driver-r4-installed-preflight-20261114.log`,
+`native-index-progress-2316-20261114.json`이다. 관측 파일명보다 내부 UTC 시각을 우선한다.
+
 ## 2026-11-14 22:49 UTC — 완료19개 보존·실패6개 후속 실행과 INDEX 복구
 
 run4는 QUESTION COMPLETED19/FAILED6으로 정상 terminal 처리됐다. 공개 풀이19개와
