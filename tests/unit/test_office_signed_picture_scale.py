@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import struct
 from pathlib import Path
@@ -30,6 +31,44 @@ ROTATIONS: tuple[Matrix, ...] = (
     (0, 1, 0, -1, 0, 0),
 )
 
+# Two exact geometry-only record pairs from the bounded, hash-verified MAIN HWP.
+# No question text or image bytes are fixtures. Independent native HWPX geometry
+# observations pin their expected image extents, full viewports and axis flips.
+REFLECTED_SIZE_RECORDS = (
+    (
+        "636970246369702432b5ffff9726000000000100a0980300c0c60000c5630000"
+        "76eaffff000008240000e2310000c50a00000100000000000000f03f00000000"
+        "000000000000000080b3d2c00000000000000000000000000000f03f00000000"
+        "804bc3400000008044bebb3f00000000000000000000000080b3d24000000000"
+        "000000000000004055bebbbf00000000000db1c0000000000000f03f00000000"
+        "0000000000000000000000000000000000000000000000000000f03f00000000"
+        "00000000",
+        "0000000000000000000000000000000000000000a098030000000000a0980300c0c60000"
+        "00000000c0c6000000000000000000001c4a030094d40000000000000000000000000109"
+        "000099ea0038000000001c4a030094d4000000",
+        "f2a5b6da92b8da02101a308442381c624e0bf29438bdcc34ce463554be2253cc",
+        "af6461442dd2ff1d98c416602c14e9979bad0745fc6d201cd479d3c519491391",
+        (215580, 54420),
+        (False, True),
+    ),
+    (
+        "63697024636970246e02ffffd7c7feff00000100bc6001009c8e020086e4ffff"
+        "ff320000000008240000bd0d00007f1900000100000000000000f03f00000000"
+        "000000000000000040b2efc00000000000000000000000000000f03f00000000"
+        "9082f3c000000000fef0b3bf000000000000000000000000c090f14000000000"
+        "000000000000008073f1b33f000000009082f340000000000000f03f00000000"
+        "0000000000000000000000000000000000000000000000000000f03f00000000"
+        "00000000",
+        "0000000000000000000000000000000000000000bc60010000000000bc6001009c8e0200"
+        "000000009c8e020000000000000000009c080100c8ea010000000000000000000000000a"
+        "000087dd6638000000009c080100c8ea010000",
+        "06eee4d7d21c536df13ba381cf6a82f0eef08a6c787943e9247bb91ffa093d09",
+        "ed0d170814038c12539847f3c08ea2201ad13f79529c1d7d177f80a94b776007",
+        (67740, 125640),
+        (True, False),
+    ),
+)
+
 
 def xml_picture(scale: Matrix, *, angle: int = 0, flags: int = 0) -> ET.Element:
     value = ET.fromstring(
@@ -54,6 +93,72 @@ def binary_shape(scale: Matrix, *, angle: int = 0, flags: int = 0) -> bytes:
     struct.pack_into("<6d", value, 8 + 44 + 48, *scale)
     struct.pack_into("<6d", value, 8 + 44 + 96, *ROTATIONS[(angle // 90) % 4])
     return bytes(value)
+
+
+@pytest.mark.parametrize(
+    "shape_hex,picture_hex,shape_sha,picture_sha,extent,flips", REFLECTED_SIZE_RECORDS
+)
+def test_actual_signed_hwp_size_records_match_native_hwpx_geometry_without_double_flip(
+    shape_hex, picture_hex, shape_sha, picture_sha, extent, flips
+) -> None:
+    shape, image = bytes.fromhex(shape_hex), bytes.fromhex(picture_hex)
+    assert hashlib.sha256(shape).hexdigest() == shape_sha
+    assert hashlib.sha256(image).hexdigest() == picture_sha
+    assert len(shape) == 196 and len(image) == 91
+    initial_x, initial_y, current_x, current_y, flags = struct.unpack_from("<4iI", shape, 20)
+    assert initial_x > 0 and initial_y > 0 and flags == 604504064
+    assert (current_x < 0, current_y < 0) == flips
+    scale = struct.unpack_from("<6d", shape, 100)
+    xml = xml_picture(scale)
+    rectangle = xml.find(f"{{{HP}}}imgRect")
+    dimensions = xml.find(f"{{{HP}}}imgDim")
+    clip = xml.find(f"{{{HP}}}imgClip")
+    assert rectangle is not None and dimensions is not None and clip is not None
+    points = struct.unpack_from("<8i", image, 12)
+    for number in range(4):
+        point = rectangle.find(f"{{{HC}}}pt{number}")
+        assert point is not None
+        point.attrib.update(x=str(points[number * 2]), y=str(points[number * 2 + 1]))
+    dimensions.attrib.update(dimwidth=str(extent[0]), dimheight=str(extent[1]))
+    clip.attrib.update(left="0", top="0", right=str(extent[0]), bottom=str(extent[1]))
+    observed = _shape_geometry(shape, image)
+    assert observed is not None and observed == _geometry(xml)
+    assert observed.original_extent == extent
+    assert observed.viewport == (0, 0, *extent)
+    assert (observed.flip_horizontal, observed.flip_vertical) == flips
+    assert observed.clockwise_quarter_turns == 0
+
+
+@pytest.mark.parametrize("axis", (0, 1))
+def test_negative_current_size_without_matching_scale_sign_remains_unresolved(axis: int) -> None:
+    shape = bytearray(binary_shape(IDENTITY))
+    struct.pack_into("<i", shape, 8 + 20 + axis * 4, -100)
+    assert _shape_geometry(bytes(shape), hwp_picture()) is None
+
+
+@pytest.mark.parametrize("offset", (12, 16, 20, 24))
+@pytest.mark.parametrize("value", (0, -1_000_000_001, 1_000_000_001, -(2**31)))
+def test_signed_dimensions_keep_nonzero_magnitude_bounds(offset: int, value: int) -> None:
+    shape = bytearray(binary_shape(SCALES[2]))
+    struct.pack_into("<i", shape, 8 + offset, value)
+    assert _shape_geometry(bytes(shape), hwp_picture()) is None
+
+
+@pytest.mark.parametrize("offset", (12, 16))
+def test_negative_initial_extent_is_not_a_reflected_current_size(offset: int) -> None:
+    shape = bytearray(binary_shape(SCALES[2]))
+    struct.pack_into("<i", shape, 8 + offset, -100)
+    assert _shape_geometry(bytes(shape), hwp_picture()) is None
+
+
+def test_reflected_current_sizes_do_not_relax_viewport_or_picture_rectangle_checks() -> None:
+    shape_hex, picture_hex, *_ = REFLECTED_SIZE_RECORDS[0]
+    shape, image = bytes.fromhex(shape_hex), bytearray.fromhex(picture_hex)
+    struct.pack_into("<i", image, 52, 1_000_000_000)
+    assert _shape_geometry(shape, bytes(image)) is None
+    image = bytearray.fromhex(picture_hex)
+    struct.pack_into("<i", image, 24, 1)
+    assert _shape_geometry(shape, bytes(image)) is None
 
 
 @pytest.mark.parametrize("scale", SCALES)

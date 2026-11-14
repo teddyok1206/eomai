@@ -105,7 +105,7 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     if len(shape) < offset + 92 or len(picture) < 73:
         return None
     initial_width, initial_height, current_width, current_height, flags = struct.unpack_from(
-        "<5I", shape, offset + 12
+        "<4iI", shape, offset + 12
     )
     # High editing/reserved bits are present in ordinary Hancom originals.
     # Only the specified flip bits affect this view; the actual linear
@@ -115,8 +115,8 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     if (
         not 0 < initial_width <= 1_000_000_000
         or not 0 < initial_height <= 1_000_000_000
-        or not 0 < current_width <= 1_000_000_000
-        or not 0 < current_height <= 1_000_000_000
+        or not 0 < abs(current_width) <= 1_000_000_000
+        or not 0 < abs(current_height) <= 1_000_000_000
         or angle % 90
         or not 1 <= count <= 32
         or offset + 92 + count * 96 > len(shape)
@@ -134,6 +134,12 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     if count != 1:
         return None
     scale, rotate = matrices[6:12], matrices[12:18]
+    # Interoperable HWP readers use signed extents (pyhwp SHWPUNIT/H2O int),
+    # despite table 83's UINT32 label. Reflected current sizes must agree with
+    # their scale axis; only the matrix below determines orientation, not a
+    # second flip inferred from the size. Initial image extents stay positive.
+    if (current_width < 0 and scale[0] >= 0) or (current_height < 0 and scale[4] >= 0):
+        return None
     flips = _diagonal_scale_flips(scale, horizontal=bool(flags & 1), vertical=bool(flags & 2))
     if flips is None or _rotation_quarter_turn(rotate) != (angle // 90) % 4:
         return None

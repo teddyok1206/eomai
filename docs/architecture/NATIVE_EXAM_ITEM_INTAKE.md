@@ -465,6 +465,12 @@ Q9는 Y 음수, Q13은 X 음수이며 rotation은 identity, 명시 flip은 모�
 6. geometry: 유한·비영 diagonal S와 quarter-turn R에서 signed scale의 반사를 원 viewport
    crop 뒤, 기존 회전 전에 적용한다. 양수 scale의 기존 명시 flip 동작은 유지한다.
    음수 scale과 명시 flip이 함께 있는 모호한 경우, shear·비직교 회전·다중 matrix는 계속 거절한다.
+   실제 HWP의 current height/width도 반사된 축에서 음수다. pyhwp의 SHWPUNIT 및 기존
+   H2O의 signed int 처리에 맞춰 initial/current 크기는 signed로 해석하고 flags는 unsigned로
+   읽는다. initial은 양수, current는 0이 아닌 기존 크기 상한 이내이며, 음수 current 축에는
+   같은 축의 음수 scale이 있어야 한다. 방향은 matrix에서 한 번만 결정한다. 두 실제
+   geometry record 쌍의 SHA fixture로 HWP/HWPX viewport·반사 일치를 검증하며, 이를
+   한글에서 직접 열린 화면의 육안 검수 PASS로 확대하지 않는다.
 7. use-case: 새 Native 작업의 안내에는 실제 문항의 허용 use만 deterministic하게 추가한다.
    이 안내는 권한이 아니다. 등록 owner가 원본/문항 파일과 대조한 동일 범위를 독립 검증하고
    제목·해설·다른 문항 그림을 거절한다. 기존 저장된 원문 지침 replay는 보존한다.
