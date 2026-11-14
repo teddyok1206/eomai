@@ -475,3 +475,11 @@ native 원문·공개 풀이·Graph·임베딩 및 전체 450문항 검증 전�
 이 경로는 DISCOVER 실패도 지원하며 완료된 준비/다른 discovery 결과와 exact input/output을
 predecessor history로 재사용한다. 새 복구 프로토콜이나 JSON 정규화로 기존 실패를 성공으로
 바꾸지 않는다. 첫 native 등록·공개 풀이·Graph·원문 다운로드의 실제 검증은 아직 남아 있다.
+
+이 실패에 대응하는 소스 후보는 기존 `MaterialPageCoverage` 규칙을
+`MATERIAL_LEARNING_GUIDANCE`에도 명확히 설명한다. 역할 중복 금지와 NON_CONTENT 단독 사용,
+문제 페이지의 머리말·꼬리말·저작권 표시를 NON_CONTENT로 함께 분류하지 않도록 보완했다.
+팀장 프롬프트·schema·validator·기존 Job bytes는 바꾸지 않는다. 집중 51개/Ruff/format/mypy
+검증을 통과했지만 아직 운영 worker에는 활성화하지 않았다. 향후 새 Job에 실제로 사용된
+`prompt.txt` SHA와 설치 source를 확인해야 하며, instruction bundle의 manifest hash를
+이 inline 안내문 자체의 hash로 확대 해석하지 않는다.

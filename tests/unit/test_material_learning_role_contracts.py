@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.material_learning import MaterialPageCoverage
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
 from eom_workflow.control_plane import ResolvedExecutionPlanV33
@@ -179,6 +180,37 @@ def test_worker_guidance_reads_variable_layout_without_changing_source_identity(
     ).read_text()
     for pattern in ("Two-column", "ANSWER_KEY", "worked example", "section_path", "printed_label"):
         assert pattern in layer
+
+
+def test_discovery_guidance_explains_existing_page_coverage_constraints():
+    """Instruction regression, not a guarantee of live model output correctness."""
+    for requirement in (
+        "Each page's roles must be unique",
+        "use NON_CONTENT only as its sole role",
+        "the entire page has no instructional content",
+        "Never add NON_CONTENT to a question page",
+        "header, footer or copyright notice",
+    ):
+        assert requirement in MATERIAL_LEARNING_GUIDANCE
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [
+        ["QUESTION", "QUESTION"],
+        ["QUESTION", "NON_CONTENT"],
+        ["NON_CONTENT", "NON_CONTENT"],
+    ],
+)
+def test_guidance_does_not_relax_duplicate_or_mixed_non_content_coverage(roles):
+    with pytest.raises(ValidationError, match="MATERIAL_LEARNING_PAGE_COVERAGE_INVALID"):
+        MaterialPageCoverage(source_role="MAIN", physical_page=1, roles=roles, note="")
+
+
+@pytest.mark.parametrize("roles", [["QUESTION"], ["QUESTION", "SOLUTION"], ["NON_CONTENT"]])
+def test_existing_distinct_content_roles_or_single_non_content_remain_valid(roles):
+    parsed = MaterialPageCoverage(source_role="MAIN", physical_page=1, roles=roles, note="")
+    assert parsed.roles == tuple(roles)
 
 
 @pytest.mark.parametrize(
