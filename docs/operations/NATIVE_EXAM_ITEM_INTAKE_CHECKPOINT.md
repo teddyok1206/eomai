@@ -1003,3 +1003,43 @@ release ROOT는 `/var/lib/eom-native-index-fd-budget-release-20261114`와
 명시한 관측 successor로 확인했다. 기존 service/e99·각 조회 한도·canonical 검사와
 실패 로그를 유지했다.17회차 접수와 실제 인증 사용자 원본 조회는 기존 tmux2번
 `native-exam`의 최초 로그인 입력 대기이며, 전체450 목표는 계속 ACTIVE다.
+
+### 15:21–15:37 UTC: 실제 다음 문항 진행과 GPU 저장·Workflow 완료
+
+15:21 Material 관측에서6번째 public report가 ACCEPTED가 됐고, 해당 task는
+PUBLISHING으로 남긴 채7번째 QUESTION의 새 RUNNING 작업이 시작됐다.15:26에는
+등록 Item7/base accepted6/public accepted6/Graph5/완료 QUESTION5다. 이는 새 묶음
+scheduler가 한 문항의 Graph 게시를 기다리며 다음 분석을 막지 않는 실제 증거다.
+아직 최대25개 첫 묶음 게시 완료나 전체450 완료를 뜻하지 않는다.
+
+GPU 복구는 서비스 READY가 아니라 다음 실제 완료로 확인했다.
+
+- 새 CUDA parent `job_de716eb2f5ef41d68452083fa03b30c3` SUCCEEDED.
+- 수치4개가 각각 기존 owned encoding Job의 SUCCEEDED/completion event를 거쳤고,
+ 15:32 관측에서4개 모두 Catalog encoding에 실제 등록됐다.
+- Workflow `workflow_874a8fb549c64b468a4e38d600d1299a`는15:37 관측에서 COMPLETED,
+  원 command `wfcmd_cc350734a6304baabd31fd2445858118`는 attempt1/SUCCEEDED/error null이다.
+  allocation/INDEX_PREPARED/REGISTERED/COMPLETED checkpoint와 최종 Workflow를 분리했다.
+- 실제 새 GPU head `embeddingindexrev_047d70f6294173baeeae123c374156df`는
+  `graphrev_908f81e0f460ecad36fce1d61409bc7c`에 고정돼 있다. manifest는
+  `artifact_ecb720594a434969bdd8a5e81f9e5ba8` /
+  `rev_a73375b0e02d45df8badceef77be2a04`, SHA
+  `90278dfd4a97fdc9133eb862263043207269557917e32739b78a4cd6360fddbb`다.
+- INDEX owner는 같은 invocation으로 계속 active이며, 별도 재시작 없이 다음
+  `workflow_5548683099b54372af43ba19a360c32d`의 CPU 증분 작업을 진행한다.
+  원 두 unbound 실패는 여전히 FAILED다. 자료·수치 입력·구 벡터 삭제는 없다.
+
+구 관측기의 `current_service_*encodings`는 누적 총계가 아니다. underlying reader는
+진행 중 Workflow와 최근 terminal4개만 읽는다. 마지막 완료 뒤 옛 terminal이 창에서
+빠져20→16이 돼도 저장 삭제를 뜻하지 않는다. 새4개의 저장·완료는 위 exact Job/
+Workflow/encoding/head로 판단한다. 향후450 coverage도 해당450 Item/base/public-report의
+exact binding 집합으로 확인하며 관측 창·전체5686개·head의1312 binding을 대용하지 않는다.
+표본1·3은 CPU/CUDA binding metadata가 있고2는 현재 선택 범위에서 미관측이다.
+이를 새 버그나 검색 완료로 단정하지 않으며 실제 source별 포함 검증이 남아 있다.
+
+증거: `staging/native-material-batch-progress-20261114T{1521,1526,1534}.json`,
+`staging/native-index-pid1-storage-progress-20261114T1532.json`,
+`staging/native-index-pid1-workflow-settlement-20261114.json`.
+17회차 접수와 실제 사용자 조회는 기존 로그인 입력 대기다. 기존 driver의
+`verify-native`는 인증된 loopback API 다운로드 검증이며 HTTPS/browser 확인과
+동일시하지 않는다. 어느 쪽도 아직 실행 PASS로 보고하지 않는다. 전체 목표는 ACTIVE다.
