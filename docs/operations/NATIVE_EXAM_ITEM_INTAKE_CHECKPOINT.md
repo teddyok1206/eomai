@@ -622,3 +622,56 @@ Slack `devreport_d656877f2a094de8b3e22b1011913707` HTTP200/SAVED.
 발생했다. 향후 자료 학습 개선은 기존 per-publication source cache/readset의 재사용을
 먼저 검토한다. 새로운 cache/queue나 지연 Graph framework부터 만들지 않는다. 원문·보고서·
 승인·권한·hash·최종 corpus CAS 검사는 유지하고 실제 측정/동등 projection 검증을 붙인다.
+
+### 10:29–10:54 UTC: CPU 실제 admission 완료·첫 회차 연속 등록
+
+기존 CPU cache CAS의 atime 오탐은 보호된 FD/hash/9필드 epoch reader를 사용하는 별도
+operator successor에서 바로잡았다. 이전 실패 로그는 보존했고 실제 selected-cache는
+`76048812`에서 `be7e4691`로 이동했다. 새 CPU config `c8acdc23`에 대해 실제 격리
+no-forward probe, 같은 실행에서의 installation seal 및 독립 reader가 모두 PASS다.
+
+- execution `b693acdd4c3c4102a94156c4f1cd0b10`, actual PID3051029,
+  InvocationID `2c0e24b31aa947feacea97dd69ab1eef`.
+- receipt raw SHA `428a46f0dd1b0bc5f566dcd5ba46d590b9f17bfcc6273b06b09a09ad9d4f21f7`,
+  numerical runtime `f02cfc2b` 유지. 모델·tokenizer·forward 호출은 0이다.
+- 증거 `staging/native-host-cpu-admission-20261114.log`. 이 CPU 설치 승인은 INDEX/QUERY
+  활성화나 신규 벡터 저장 성공의 대체 증거가 아니다.
+- CUDA config `embeddingnativeconfigrev_cead122d56455798ad838dcab3eeeb0f`의 실제
+  준비도 완료됐다. 원 numerical runtime `d0887315`, bundle/proof/숫자 구현을 유지하며
+  inventory32,641개와 probe 입력을 고정했다. 증거
+  `staging/native-host-cuda-configuration-20261114.json`. CUDA native probe/seal은 아직
+  미실행이고 CUDA 전역 cache도 이전 선택을 유지한다.
+
+첫 회차의 정확한 최종화 successor 관측은 APPROVED Item3 / accepted base3 /
+accepted 공개 풀이3 / QUESTION 완료2 / Graph 게시 중1 / 대기22다. 오류는 관측되지 않았다.
+`staging/native-finalization-observe-1054-20261114.json`은 이 시점의 metadata 증거이며
+전체450 완료나 이후의 현재 수치를 뜻하지 않는다. 첫 두 Graph와 모든 과거 FAILED는
+보존하고 coordinator는 다음 문항을 계속 처리한다.
+
+현재 INDEX config6은 legacy=null인 단일 public-solution 그룹이며, INDEX 목적 controller와
+general QUERY controller의 source pin은 서로 다르다. 과거 linked-selection helper의
+7개 namespace를 재적용하지 않는다. 실제 새 host baseline을 모르는 이전 controller는
+거절되므로, 새 host-aware verifier/controller successor와 실제 admission receipt를 함께
+선택하되 API provider7084·recipe/space·기존 namespace·목적별 delegation 의미를 보존한다.
+원래 retained INDEX 실행을 먼저 분류하고 그 상태에 맞는 기존 recovery owner를 사용한다.
+서비스 source를 유지하면서 service-upgrade 전용 cancellation에 허위 successor를 넣지 않는다.
+
+### 10:55 UTC: CUDA 실제 probe·seal·lease retirement 완료
+
+CUDA cache의 exact CAS `9f0a5146 → 0b0a8632`가 PASS이고 CPU cache/기존 failed owner는
+보존됐다. 새 config `cead122d`의 실제 고정 unit 실행에서 READY/FINAL 두 ACK와 같은 live
+process의 loaded closure를 검증한 뒤 receipt2.1 seal, 독립 reader 및 지원된 정상 종료
+retirement까지 모두 PASS다. 저장된 JSON을 실행 권한이나 live 관측 대신 사용하지 않았다.
+
+- execution `3c9f1273420642c29a0ec08f25a64168`, PID3078233,
+  InvocationID `527cf70ef2f84e9aada9a717ee915a25`.
+- receipt raw SHA `e4f2d8db18bcc0511765b965b132e3e9f3e385ef7330fba4f75c1482980d31a6`,
+  semantic SHA `3be70d44639783a6ce7ea6a700aa1fa334208d4fc9155917518bf7eb7eecb4b0`.
+- 모델·tokenizer·forward0, CUDA init/synchronize 각각1. 물리 GPU lease의 PID1 FD-store
+  반환과 같은 inode 재조회 PASS. 실제 admission과 root metadata reader의 의미는 구분한다.
+- 증거 `staging/native-host-cuda-cache-cas-20261114.log` 및
+  `staging/native-host-cuda-admission-20261114.log`. 보호된 원본은
+  `/var/lib/eom-host-requalification-20261114/cuda-runtime/probe`에 보존한다.
+
+INDEX/QUERY 제어 설정 전환·원래 retained 작업 복구·새 vector commit/retrieval은 아직
+남아 있다. CPU/CUDA 설치 검증 완료를 서비스 재개나 전체 450문항 완료로 확대하지 않는다.
