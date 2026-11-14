@@ -1076,3 +1076,46 @@ resource owner의 구4096 상한을 호출한다. CPU fallback·완료 결과 �
 관측기 또한 parent 이력이8개를 넘으면 서비스 장애처럼 보이지 않도록 recent8과 명시적
 truncation을 반환한다. strict source/권한·비terminal64 한도는 유지하며 계산·DB 쓰기는 없다.
 이 절은 계획이며 설정 전환·실제 QUERY 성공으로 보고하지 않는다.
+
+### 16:08–16:17 UTC: 검색 controller 전환·원 작업 정상 완료·INDEX 재개
+
+INDEX의 원 main-only SIGINT 요청은 모델/계산을 취소하지 않았다. 원 invocation7ed가
+현재 CPU554868…/CUDAef643… 호출을 끝낸 뒤 exit0/PID0으로 정상 종료했고,
+16:17 관측에서 두 exact Workflow 모두 COMPLETED/error null을 확인했다.
+
+동결된 기존 QUERY-only owner의 PREPARE는 설정 변경 없이 네 후보 파일과 byte snapshot을
+준비했다. QUERY의 원 pool drain 뒤 Catalog 고정 Unix socket은 실제 root `ss` 관측에서
+accepted0/queued0였고, 그 직후 Catalog도 main-only SIGINT/exit0으로 정지했다.
+ACTIVATE는 네 exact predecessor를 CAS로 전환하고 daemon-reload 뒤 Catalog/QUERY만
+시작했다. source0f282·구 schema·수치 receipt·권한 정책과 INDEX delegation은 보존했다.
+
+- public config raw SHA는 `851a4e9cc4f3dc5c6c15a2e717ecd515ef5155795a52e4a57c2b117e42589f15`다.
+  파일뿐 아니라 QUERY의 `EOM_PUBLIC_REFERENCE_QUERY_CONFIGURATION_SHA256`와 Catalog의
+  `EOM_PUBLIC_SIMILARITY_READ_CONFIG_SHA256` effective 환경 값도 이 SHA와 일치했다.
+- Catalog: source51/PID3528013/invocation `07ff450263944f5594425a7782d4569f`.
+  QUERY: owner11d/PID3528016/invocation `d8261930e63649f0bcf1c4e35c2f8fba`.
+- 첫 read-only POSTDEPLOY는 QUERY의 READY/socket 생성 전에 검사해 socket assertion으로
+  끝났다. 재설치/재시작 없이 동일 PID의 실제 READY와 socket을 확인한 뒤 같은 read-only
+  점검만 재실행해 PASS했다. 원 로그도 보존하며 이를 runtime 실패로 재해석하지 않는다.
+- 그 뒤에만 INDEX e99를 별도 정상 시작했다. PID3532049/invocation
+  `1d8e6e31400940d6b09dae42fdf94236`, 기존 service Identity/configuration은 같다.
+- Material0f282의 PID3457862/invocation342a47…과 공용 API/Web/Runner51은 전환 내내
+  그대로다. 공식 health smoke와 실제 `/api/v1/health/{live,ready}`200, HTTPS Web200,
+  미인증 Native source 조회401을 확인했다. 처음 임의 `/health/*`로 검사한404는 잘못된
+  진단 URL이었으며, 올바른 공식 smoke로 확인했다. 인증·비밀번호·원 source/벡터는 안 바꿨다.
+
+증거: `staging/native-query-fd-controller-{prepare,activate,postdeploy,postdeploy-r2}-20261114.log`,
+`staging/native-query-fd-effective-{query,catalog}-pin-20261114.json`,
+`staging/native-query-fd-readiness-events-20261114.json`,
+`staging/native-query-fd-{official-health-smoke-20261114.log,public-health-r2-20261114.json}`,
+`staging/native-index-after-query-controller-resume-20261114.json`.
+실제 인증된 Native 유사도 QUERY는 여전히 미실행이다. config/서비스/계산 INDEX의 PASS로
+사용자 검색 성공을 대신하지 않는다. 기존 tmux2번 입력창 외 새 로그인 창은 만들지 않았다.
+
+16:17 Material는 등록 Item9/base accepted9/public accepted8/Graph5다. 이는 원문9번까지
+모두 성공한 수치가 아니다. 원문9번(ordinal16) 추출은15:59:49에 WORKER_RESULT_INVALID로
+실패했고, 원문10번은 별도로 정상 진행 중이다. 이 실패는16:09 설정 전환보다 먼저 발생했다.
+원 task/input/failure는 보존하고 검증 원인을 따로 진단한다. 기존 retry owner는 run의
+모든 task가 terminal일 때 FAILED/COMPLETED_WITH_EXCEPTIONS에서만 허용한다. 따라서 나머지
+문항을 계속 처리한 뒤 공식 successor retry로 실패9번만 다시 처리하며, 성공 문항의 모델/
+Item/Graph를 재생성하거나 PROCESSING row를 직접 고치지 않는다. 전체450 목표는 ACTIVE다.
