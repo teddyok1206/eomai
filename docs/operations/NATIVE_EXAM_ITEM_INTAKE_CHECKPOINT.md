@@ -923,3 +923,38 @@ accepted-analysis public reader의3개 한도도 기존 bounded chunk로 유지�
 기존51 runtime은 아직 이 묶음 코드를 사용하지 않는다. 현재 publication을 정상 완료한
 뒤 private Material SDK만 새 후보로 인계하고 실제 task/Graph 진행을 확인해야 한다.
 GPU의 현재 numerical 실행·수치 설치·벡터는 보존한다. 전체450 목표는 미완료다.
+
+### 반복 GPU 중단의 실제 원인과 최소 수정 — 운영 반영 전
+
+INDEX invocation `12411fc2eebf4448b8e2f2ffd603a3a5`는14:45:04 UTC에 종료했다.
+직접 원인은14:31:28 root controller의 resource observation 거부 뒤 owner channel EOF다.
+이전 root `c0fa04348c9c40c1bebfe11cbb8b550d`와 새
+`ca3bc1a4ecf04e6dadbaf4f2e2b389d1`의 top-level 진단 site가 모두
+`embedding_cuda_probe_resource_observation:209`를 가리킨다. 앞선 진단 projection은
+top-level `sites`를 빠뜨려 이 정보를 보이지 않게 했다. daemon-reload/계산 시간초과를
+반복 실패의 확정 원인으로 취급하지 않는다.
+
+해당 줄은 GPU 작업 수가 아니라 host 전체 PID1의 FD를4096개로 제한했다. 현재 관측도
+4075개이며 allocation 때 추가된 다른 FD가 이를 넘길 수 있다. 유한 상한만65536으로
+늘리고, 상한 초과에 `EMBEDDING_GPU_PID1_FD_INSPECTION_BUDGET_EXCEEDED` local 진단을
+남긴다. public purpose-specific 오류·프로토콜과 실제 lock inode/epoch·UID·mode·flags·
+exclusive flock·중복·fdstore 검증은 바꾸지 않는다. 별도 cache/모델/DB/schema는 없다.
+scandir는 streaming O(host FD count), 유한65536이며 canonical vector·수치 입력은 불변이다.
+
+원 unbound parent `job_7299e2fbe30449d89a8d0ff72c99fc4a`는 기존 공식 owner로
+PREPARE(쓰기0)와 RECORD를 수행했다. 원 no-grant/root 실패를 보존한 FAILED 기록이며
+같은 기록 replay PASS, 모델 실행0·retry0이다. canonical evidence는
+`artifact_670430b0888e4b4f85ceabc7cd4aa3d5` /
+`rev_3480f8d05fcc45dd9d3e79502884dde8`, `controller-failure.json`, SHA
+`6ff8b7861a8744f801fb331f776d305e86546c334d3791da1dd037e68252aeee`다.
+저장된16개 encoding과 성공 Workflow는 그대로다. 실패 parent를 재실행하거나 성공으로
+바꾸지 않으며, 수정 controller와 새 정상 증분 intent의 실제 commit은 후속 검증 대상이다.
+
+증거: `staging/native-index-root-{ca3bc,c0fa}-deep-sites-20261114.json`,
+`staging/native-index-pid1-fd-count-20261114.log`,
+`staging/native-index-third-unbound-{prepare,record}-20261114.log`.
+독립 source 검토와 agent 집중183개·Ruff·mypy는 PASS다. 큰 FD 목록의 경계·초과·중복·
+교체 회귀를 포함하며, 운영 controller는 아직 e042이므로 source PASS를 활성 PASS로
+보고하지 않는다. b532 묶음 개선과 이 수정이 포함된 명시적 successor SDK를 설치하고
+INDEX 전용 controller delegation과 private Material만 전환한다. 공용 API/Web/Runner51,
+QUERY11d·공통 bootstrap·수치 runtime·기존 receipt·vector는 유지한다.

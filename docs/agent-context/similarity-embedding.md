@@ -88,6 +88,12 @@ caller의 UID/GID·birth·unit 검사는 그대로다. INDEX 전용 controller d
 QUERY/controller 주 진입점·수치 runtime은 보존할 수 있다. 상세 검증은 위 운영 기록과
 `tests/unit/test_embedding_native_process_member_transition.py`를 확인한다.
 
+GPU 물리 lease의 PID1 retained-FD 검사는 해당 GPU unit의 descriptor만이 아니라 host
+전체 PID1 목록을 순회한다. `embedding_cuda_probe_resource_observation`의 유한 상한은
+65,536이며, 초과는 별도 local 진단 코드로 구분한다. 실제 lock inode/epoch·holder·flags·
+fdstore·정확히 한 개 조건은 그대로 검사한다. host-wide 개수를 작은 worker 한도로
+오인하거나 EOF만 보고 numerical/model 실패로 분류하지 않는다.
+
 descriptor의 `daemon-reload` 제한을 수정해도 INDEX가 구 controller를 별도 pin하면
 그 수정은 활성화되지 않는다. 공용 bootstrap/QUERY와 INDEX delegation을 구분하고,
 INDEX owner의 `controller_release`와 root env의 INDEX release/bootstrap SHA를 함께

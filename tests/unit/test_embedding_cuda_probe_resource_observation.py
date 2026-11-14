@@ -932,6 +932,81 @@ def test_allocation_uses_its_own_ready_and_unit_for_both_kernel_locks(kernel):
     )  # terminal phase uses PID1; no dead-worker FD is invented
 
 
+def unrelated_pid1_descriptors(kernel, monkeypatch, count, *, retained=("80",)):
+    """The host-wide manager can hold many unrelated files before the exact lease."""
+    _, fake, state, _ = kernel
+    state["pid1"] = [str(number) for number in range(100000, 100000 + count)] + list(retained)
+    original = owner.os.stat
+
+    def metadata_for(path):
+        if str(path).startswith("/proc/1/fd/") and path.name not in retained:
+            return fake.values[20]
+        return original(path)
+
+    monkeypatch.setattr(owner.os, "stat", metadata_for)
+
+
+@pytest.mark.parametrize("unrelated_count", [4097, 65535])
+def test_allocation_accepts_exact_retained_lease_among_many_unrelated_host_fds(
+    kernel, monkeypatch, unrelated_count
+):
+    report = allocation_report(kernel)
+    assert owner._MAX_PID1_FDS == 65536
+    unrelated_pid1_descriptors(kernel, monkeypatch, unrelated_count)
+    observed = owner.observe_embedding_gpu_allocation_resources(
+        report, unit=kernel[2]["expected_unit"], lease_gid=2468
+    )
+    assert observed.pid1_descriptor == 80
+    assert observed.shared_gpu_lease.holder_pid == report.pid
+
+
+def test_allocation_host_fd_budget_exhaustion_retains_generic_wire_and_exact_local_code(
+    kernel, monkeypatch
+):
+    report = allocation_report(kernel)
+    unrelated_pid1_descriptors(kernel, monkeypatch, 65536)
+    with pytest.raises(
+        ValueError, match=r"^EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID$"
+    ) as failure:
+        owner.observe_embedding_gpu_allocation_resources(
+            report, unit=kernel[2]["expected_unit"], lease_gid=2468
+        )
+    cause = failure.value.__context__
+    assert isinstance(cause, owner.Pid1FdInspectionBudgetExceeded)
+    assert cause.code == "EMBEDDING_GPU_PID1_FD_INSPECTION_BUDGET_EXCEEDED"
+
+
+def test_many_unrelated_host_fds_do_not_hide_a_duplicate_retained_lease(kernel, monkeypatch):
+    report = allocation_report(kernel)
+    unrelated_pid1_descriptors(kernel, monkeypatch, 4097, retained=("80", "81"))
+    with pytest.raises(ValueError, match="EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_embedding_gpu_allocation_resources(
+            report, unit=kernel[2]["expected_unit"], lease_gid=2468
+        )
+
+
+def test_many_unrelated_host_fds_do_not_accept_a_replaced_matching_descriptor(kernel, monkeypatch):
+    report = allocation_report(kernel)
+    unrelated_pid1_descriptors(kernel, monkeypatch, 4097)
+    original = owner.os.stat
+    reads = 0
+
+    def replaced(path):
+        nonlocal reads
+        if str(path) == "/proc/1/fd/80":
+            reads += 1
+            if reads > 1:
+                return kernel[1].values[20]
+        return original(path)
+
+    monkeypatch.setattr(owner.os, "stat", replaced)
+    with pytest.raises(ValueError, match="EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_embedding_gpu_allocation_resources(
+            report, unit=kernel[2]["expected_unit"], lease_gid=2468
+        )
+    assert reads == 2
+
+
 @pytest.mark.parametrize(
     "fault",
     [

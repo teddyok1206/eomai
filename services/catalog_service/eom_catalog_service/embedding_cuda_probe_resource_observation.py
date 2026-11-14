@@ -45,10 +45,20 @@ if TYPE_CHECKING:
 
 _LOCK = Path("/run/eom-gpu-lease/gpu0.lock")
 _PID1_FDS = Path("/proc/1/fd")
-_MAX_PID1_FDS = 4096
+# PID1 serves the whole host, not only EOM's retained GPU descriptors.
+_MAX_PID1_FDS = 65536
 _MAX_IMAGE_WORKER_FDS = 4096
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 type ProbeReport = NativeCudaProbeLeaseReady | NativeCudaProbeResult
+
+
+class Pid1FdInspectionBudgetExceeded(ValueError):
+    """Bounded local diagnosis; the public purpose-specific error remains unchanged."""
+
+    code = "EMBEDDING_GPU_PID1_FD_INSPECTION_BUDGET_EXCEEDED"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 def _require(condition: bool) -> None:
@@ -206,7 +216,9 @@ def _observe_pid1_retained_lock(lease: _RetainedLease) -> int:
     matching: list[int] = []
     with os.scandir(_PID1_FDS) as entries:
         for count, entry in enumerate(entries, 1):
-            _require(count <= _MAX_PID1_FDS and re.fullmatch(r"[0-9]{1,7}", entry.name) is not None)
+            if count > _MAX_PID1_FDS:
+                raise Pid1FdInspectionBudgetExceeded()
+            _require(re.fullmatch(r"[0-9]{1,7}", entry.name) is not None)
             descriptor = int(entry.name)
             try:
                 value = os.stat(_PID1_FDS / entry.name)
