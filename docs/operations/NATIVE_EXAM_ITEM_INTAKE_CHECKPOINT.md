@@ -1043,3 +1043,36 @@ exact binding 집합으로 확인하며 관측 창·전체5686개·head의1312 b
 17회차 접수와 실제 사용자 조회는 기존 로그인 입력 대기다. 기존 driver의
 `verify-native`는 인증된 loopback API 다운로드 검증이며 HTTPS/browser 확인과
 동일시하지 않는다. 어느 쪽도 아직 실행 PASS로 보고하지 않는다. 전체 목표는 ACTIVE다.
+
+### 검색 GPU의 같은 검사 연결 — 전환 계획, 아직 적용 전
+
+INDEX 전용 delegation만 바꾸면 public routed QUERY의 controller는 e042에 남는다.
+실제 선택 public config450e5…와 공통 bootstrap e042를 대조했고, 새 CUDA 검색도 같은
+resource owner의 구4096 상한을 호출한다. CPU fallback·완료 결과 열기는 이 경로와
+다르다. 현재 검색 실패가 재현됐다고 주장하지 않으며, Native 실제 검색 검증 전 같은
+수정본을 기존 QUERY-only selection owner로 연결한다.
+
+- 책임/정본: 기존 보호된 QUERY selection과 공통 root bootstrap 설정. SDK0f282는 이미
+  설치됐으며 새 모델·수치 runtime·service Identity·wire/schema·DB는 만들지 않는다.
+- identity/pointer: QUERY owner11d/API provider51·수치 receipt·INDEX delegation0f282는
+  유지한다. public config의 controller만0f282로 바꾸고 canonical raw SHA를 QUERY unit과
+  Catalog consumer marker에 같이 고정한다. 다른 public 필드와 primary/mixed/private
+  설정은 byte 단위로 보존한다.
+- access/구조/비용: 네 고정 경로의 작은 keyed before/after manifest와 exact hash CAS다.
+  비용은 설정과 선택 SDK wheel 크기에 선형이며 corpus 탐색·모델 실행은 없다.
+- 동시성/전환: INDEX의 현재 호출을 main-only SIGINT로 정상 drain한다. QUERY도 기존
+  pool wait 경계로 끝낸다. Catalog는 daemon RPC thread라 exit0만으로 drain을 증명하지
+  않는다. 고정 Unix socket의 실제 accepted/queued connection0을 관측한 짧은 유지보수
+  창에서 정상 정지한다. 이 관측은 admission lock이 아니며 새 연결 race에 따른 일시
+  unavailable 위험은 남는다. 기존 idempotency/transaction으로 처리 여부를 확인한다.
+- 실패/replay: 네 rename 각각만 atomic하다. 변경 중 오류면 두 reader를 정지 상태로
+  유지해 실제 before/after를 대조한다. 불명확한 요청을 새 key로 다시 보내거나 원
+  실패를 성공으로 바꾸지 않는다. 성공 후 Catalog/QUERY만 시작·검증하고 INDEX를 별도
+  재개한다. API/Web/공용 Runner/Material의 설치·진행 중 모델 작업은 보존한다.
+- 더 단순한 대안: INDEX-only 활성 상태를 전체 GPU 검색 PASS로 부르면 같은 구 검사가
+  남는다. 반대로 전체 플랫폼 재설치나 새 drain framework는 이 네 설정 전환에 필요 없다.
+
+실행용 초안은 기존11월2일 QUERY-only owner body를 현재 typed parser로 갱신했다.
+관측기 또한 parent 이력이8개를 넘으면 서비스 장애처럼 보이지 않도록 recent8과 명시적
+truncation을 반환한다. strict source/권한·비terminal64 한도는 유지하며 계산·DB 쓰기는 없다.
+이 절은 계획이며 설정 전환·실제 QUERY 성공으로 보고하지 않는다.
