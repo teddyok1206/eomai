@@ -5,6 +5,36 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 18:48 UTC — Native 원본 검증과 현재 처리 중단 원인
+
+목표는 계속 ACTIVE이며 전체450문항 완료를 주장하지 않는다. 첫 회차에서 등록14개,
+accepted base14개, 공개 풀이13개, Graph 연결5개를18:25 UTC에 관측했다. 9번·13번의
+과거 추출 실패와 나머지9개 QUESTION 대기는 보존한다. Native 문제/해설900개와
+Excel18개의 준비가 운영 Item450개 완료를 뜻하지 않는다.
+
+- 실제 첫25개 BODY 그림을 원본 raster의 pixel·viewport·use와 대조한다. EMF 제목 장식이나
+  ZIP의 미참조 member는 본문 그림이 아니다. scope/Prepared3 및 per-book index를 커밋했다.
+  CPU tool/SDK의 `2b66d109` 후보는 구조상25개 대응은 통과했지만 직접 PNG를 열어보니
+  음수 scale의 과도한 반사 해석이 글자를 뒤집었다. **운영 비활성 상태로 보존**하고
+  signed resize-box와 명시 bitmap flip을 구분하는 최종 수정을 검증 중이다.
+- 기존 승인14개는 실제 actor 권한과 공식 Native/Registry/accepted-result 읽기로
+  본문 use 범위·등록 이미지·원 content hash·lineage를 대조해 모두 PASS다. 첫 감사의
+  Role envelope/learning-result hash 혼동은 도구에서만 수정하고 첫 로그와 Item은 보존했다.
+  Graph/교육 품질 검수까지 했다고 주장하지 않는다.
+- 14번째 등록 문항(원문16번)은 기본 분석 ACCEPTED 뒤 공개 풀이 준비에서
+  `KNOWLEDGE_ANALYSIS_BASE_INVALID`로 자동 재시작을 반복했다.18:30 UTC경 Material만
+  정상 정지했다. read-only 진단은 원본/Artifact/receipt 해시가 아니라 모델이 선언한
+  13개 anchor 중 `solution` 발췌 해시1개의 불일치를 확인했다. 개념 노드가 모두 그
+  anchor만 참조하므로 해시/역할 검증을 완화해 우회하지 않고 공식 후속 분석을 준비한다.
+- API/Web·global runner와 Catalog는51, private Material은0f282 설치를 유지한다.
+  새 CPU tool/SDK는 별도 prefix에만 준비했다. INDEX/QUERY의 PID·Invocation·수치
+  runtime은 보존한다.18:26 UTC에 CPU/CUDA 실행과 이전 CUDA 완료를 확인했으며
+  bounded window의 encoding 수를450개 전체 coverage로 합산하지 않는다.
+
+다음은 원본 그림 방향의 실제 픽셀 검증, 승인 전 발췌 검증 및 사용불가 accepted base의
+공식 복구, Catalog·Material만의 호환 반영과 원래 작업 재개다. 성공 task·정본·실패 이력은
+유지하며 전체450개·실제 자료 조회·공통 Graph·증분 INDEX 검증까지 계속한다.
+
 ## 사용자 지정 후속 순서
 
 현재 자료 학습의 구현·검증·운영 배포와 실제 동작 확인을 먼저 완료한다. 그 뒤에 Map에서

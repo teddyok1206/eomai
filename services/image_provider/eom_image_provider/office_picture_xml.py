@@ -149,10 +149,24 @@ def _geometry(node: ET.Element) -> OfficePictureGeometry | None:
             )
         ):
             return None
+        initial_size = current_size = None
+        if scale[0] < 0 or scale[4] < 0:
+            original = _one(node, HP + "orgSz")
+            current = _one(node, HP + "curSz")
+            initial_size = (_number(original, "width"), _number(original, "height"))
+            # Converted HWPX keeps signed literals; Hancom can serialize the
+            # same signed 32-bit current extent as an unsigned wrapped value.
+            values = tuple(_number(current, name) for name in ("width", "height"))
+            if any(not -(2**31) <= value < 2**32 for value in values):
+                return None
+            signed = tuple(value - 2**32 if value >= 2**31 else value for value in values)
+            current_size = (signed[0], signed[1])
         orientation = _diagonal_scale_flips(
             scale,
             horizontal=_boolean(flips, "horizontal"),
             vertical=_boolean(flips, "vertical"),
+            initial_size=initial_size,
+            current_size=current_size,
         )
         if orientation is None:
             return None

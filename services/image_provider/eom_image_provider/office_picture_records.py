@@ -134,13 +134,13 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     if count != 1:
         return None
     scale, rotate = matrices[6:12], matrices[12:18]
-    # Interoperable HWP readers use signed extents (pyhwp SHWPUNIT/H2O int),
-    # despite table 83's UINT32 label. Reflected current sizes must agree with
-    # their scale axis; only the matrix below determines orientation, not a
-    # second flip inferred from the size. Initial image extents stay positive.
-    if (current_width < 0 and scale[0] >= 0) or (current_height < 0 and scale[4] >= 0):
-        return None
-    flips = _diagonal_scale_flips(scale, horizontal=bool(flags & 1), vertical=bool(flags & 2))
+    flips = _diagonal_scale_flips(
+        scale,
+        horizontal=bool(flags & 1),
+        vertical=bool(flags & 2),
+        initial_size=(initial_width, initial_height),
+        current_size=(current_width, current_height),
+    )
     if flips is None or _rotation_quarter_turn(rotate) != (angle // 90) % 4:
         return None
     points = struct.unpack_from("<8i", picture, 12)
@@ -174,20 +174,41 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
 
 
 def _diagonal_scale_flips(
-    scale: tuple[float, ...], *, horizontal: bool, vertical: bool
+    scale: tuple[float, ...],
+    *,
+    horizontal: bool,
+    vertical: bool,
+    initial_size: tuple[int, int] | None = None,
+    current_size: tuple[int, int] | None = None,
 ) -> tuple[bool, bool] | None:
-    """Resolve only unambiguous local reflections from an already finite scale.
+    """Separate signed resize-box handedness from explicit bitmap orientation.
 
-    R * S applies scale/reflection before rotation. Negative scale with declared
-    flip flags has ambiguous double-reflection semantics, so it remains unresolved
-    rather than guessing XOR. Positive scale keeps the predecessor flags unchanged.
+    Hancom table 83 declares bitmap flips separately from size/rendering data.
+    A negative scale is admitted only as a closed signed resize: S * orgSz must
+    equal signed curSz within one native-unit rounding error on both axes.
+    It never invents a raster reflection. The positive-scale path is unchanged.
     """
     if abs(scale[1]) > 1e-7 or abs(scale[3]) > 1e-7 or scale[0] == 0 or scale[4] == 0:
         return None
-    negative_x, negative_y = scale[0] < 0, scale[4] < 0
-    if (negative_x or negative_y) and (horizontal or vertical):
+    if current_size is not None and any(
+        current < 0 and factor >= 0
+        for current, factor in zip(current_size, (scale[0], scale[4]), strict=True)
+    ):
         return None
-    return horizontal or negative_x, vertical or negative_y
+    if scale[0] < 0 or scale[4] < 0:
+        if initial_size is None or current_size is None:
+            return None
+        for initial, current, factor in zip(
+            initial_size, current_size, (scale[0], scale[4]), strict=True
+        ):
+            if (
+                not 0 < initial <= 1_000_000_000
+                or not 0 < abs(current) <= 1_000_000_000
+                or (current < 0) != (factor < 0)
+                or abs(initial * factor - current) > 1
+            ):
+                return None
+    return horizontal, vertical
 
 
 def _rotation_quarter_turn(matrix: tuple[float, ...]) -> int | None:

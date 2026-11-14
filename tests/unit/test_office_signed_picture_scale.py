@@ -1,9 +1,10 @@
-"""Signed diagonal native scale preserves crop, local reflection and rotation."""
+"""Signed resize-box scale is not bitmap mirroring; explicit flips preserve pixels."""
 
 from __future__ import annotations
 
 import hashlib
 import io
+import math
 import struct
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -33,7 +34,8 @@ ROTATIONS: tuple[Matrix, ...] = (
 
 # Two exact geometry-only record pairs from the bounded, hash-verified MAIN HWP.
 # No question text or image bytes are fixtures. Independent native HWPX geometry
-# observations pin their expected image extents, full viewports and axis flips.
+# observations pin their image extents/viewports; observed signed-size axes are
+# NOT bitmap flips. These records explicitly declare no horizontal/vertical flip.
 REFLECTED_SIZE_RECORDS = (
     (
         "636970246369702432b5ffff9726000000000100a0980300c0c60000c5630000"
@@ -83,7 +85,20 @@ def xml_picture(scale: Matrix, *, angle: int = 0, flags: int = 0) -> ET.Element:
     assert flips is not None
     flips.set("horizontal", str(flags & 1))
     flips.set("vertical", str((flags >> 1) & 1))
+    ET.SubElement(value, f"{{{HP}}}orgSz", width="1900", height="1300")
+    current = resized_dimensions(scale)
+    ET.SubElement(value, f"{{{HP}}}curSz", width=str(current[0]), height=str(current[1]))
     return value
+
+
+def resized_dimensions(scale: Matrix) -> tuple[int, int]:
+    values = tuple(
+        round(initial * factor)
+        if math.isfinite(factor) and abs(initial * factor) <= 1_000_000_000
+        else initial
+        for initial, factor in zip((1900, 1300), (scale[0], scale[4]), strict=True)
+    )
+    return values[0], values[1]
 
 
 def binary_shape(scale: Matrix, *, angle: int = 0, flags: int = 0) -> bytes:
@@ -92,14 +107,16 @@ def binary_shape(scale: Matrix, *, angle: int = 0, flags: int = 0) -> bytes:
     struct.pack_into("<H", value, 8 + 32, angle)
     struct.pack_into("<6d", value, 8 + 44 + 48, *scale)
     struct.pack_into("<6d", value, 8 + 44 + 96, *ROTATIONS[(angle // 90) % 4])
+    if scale[0] < 0 or scale[4] < 0:
+        struct.pack_into("<2i", value, 8 + 20, *resized_dimensions(scale))
     return bytes(value)
 
 
 @pytest.mark.parametrize(
     "shape_hex,picture_hex,shape_sha,picture_sha,extent,flips", REFLECTED_SIZE_RECORDS
 )
-def test_actual_signed_hwp_size_records_match_native_hwpx_geometry_without_double_flip(
-    shape_hex, picture_hex, shape_sha, picture_sha, extent, flips
+def test_actual_signed_hwp_size_records_keep_bitmap_unmirrored_in_native_hwpx(
+    tmp_path, shape_hex, picture_hex, shape_sha, picture_sha, extent, flips
 ) -> None:
     shape, image = bytes.fromhex(shape_hex), bytes.fromhex(picture_hex)
     assert hashlib.sha256(shape).hexdigest() == shape_sha
@@ -110,6 +127,11 @@ def test_actual_signed_hwp_size_records_match_native_hwpx_geometry_without_doubl
     assert (current_x < 0, current_y < 0) == flips
     scale = struct.unpack_from("<6d", shape, 100)
     xml = xml_picture(scale)
+    original = xml.find(f"{{{HP}}}orgSz")
+    current = xml.find(f"{{{HP}}}curSz")
+    assert original is not None and current is not None
+    original.attrib.update(width=str(initial_x), height=str(initial_y))
+    current.attrib.update(width=str(current_x), height=str(current_y))
     rectangle = xml.find(f"{{{HP}}}imgRect")
     dimensions = xml.find(f"{{{HP}}}imgDim")
     clip = xml.find(f"{{{HP}}}imgClip")
@@ -125,8 +147,30 @@ def test_actual_signed_hwp_size_records_match_native_hwpx_geometry_without_doubl
     assert observed is not None and observed == _geometry(xml)
     assert observed.original_extent == extent
     assert observed.viewport == (0, 0, *extent)
-    assert (observed.flip_horizontal, observed.flip_vertical) == flips
+    assert (observed.flip_horizontal, observed.flip_vertical) == (False, False)
     assert observed.clockwise_quarter_turns == 0
+    # Exact signed-size metadata must not mirror independently known corner
+    # pixels. A full, zero-flip view reuses the original PNG byte-for-byte.
+    section = f'<hp:sec xmlns:hp="{HP}" xmlns:hc="{HC}">'.encode()
+    section += ET.tostring(xml) + b"</hp:sec>"
+    manifest = (
+        f'<opf:package xmlns:opf="{OPF}"><opf:item id="image1" '
+        'href="../BinData/picture.png"/></opf:package>'
+    ).encode()
+    source = hwpx(
+        tmp_path,
+        (
+            ("Contents/content.hpf", manifest),
+            ("Contents/section0.xml", section),
+            ("BinData/picture.png", raster()),
+        ),
+    )
+    extracted = extract_office_picture_uses(
+        source, expected_sha256=sha(source), workspace=tmp_path / "output"
+    )
+    assert extracted.picture_uses[0].geometry == observed
+    assert extracted.rendered_uses[0].sha256 == extracted.embedded_images.images[0].sha256
+    assert (tmp_path / "output" / extracted.rendered_uses[0].member_path).read_bytes() == raster()
 
 
 @pytest.mark.parametrize("axis", (0, 1))
@@ -163,11 +207,13 @@ def test_reflected_current_sizes_do_not_relax_viewport_or_picture_rectangle_chec
 
 @pytest.mark.parametrize("scale", SCALES)
 @pytest.mark.parametrize("angle", (0, 90, 180, 270))
-def test_hwp_and_hwpx_resolve_same_signed_local_reflection(scale: Matrix, angle: int) -> None:
+def test_hwp_and_hwpx_resolve_signed_resize_without_inventing_reflection(
+    scale: Matrix, angle: int
+) -> None:
     xml = _geometry(xml_picture(scale, angle=angle))
     binary = _shape_geometry(binary_shape(scale, angle=angle), hwp_picture())
     assert xml is not None and binary == xml
-    assert (xml.flip_horizontal, xml.flip_vertical) == (scale[0] < 0, scale[4] < 0)
+    assert (xml.flip_horizontal, xml.flip_vertical) == (False, False)
     assert xml.clockwise_quarter_turns == angle // 90
     assert xml.viewport == (0, 0, 1900, 1300)
 
@@ -183,9 +229,64 @@ def test_positive_scale_keeps_existing_declared_flags(flags: int) -> None:
 
 @pytest.mark.parametrize("scale", SCALES)
 @pytest.mark.parametrize("flags", (1, 2, 3))
-def test_negative_scale_with_any_declared_flip_stays_unresolved(scale: Matrix, flags: int) -> None:
-    assert _geometry(xml_picture(scale, flags=flags)) is None
-    assert _shape_geometry(binary_shape(scale, flags=flags), hwp_picture()) is None
+def test_closed_signed_resize_respects_only_the_declared_bitmap_flip(
+    scale: Matrix, flags: int
+) -> None:
+    xml = _geometry(xml_picture(scale, flags=flags))
+    binary = _shape_geometry(binary_shape(scale, flags=flags), hwp_picture())
+    assert xml is not None and binary == xml
+    assert (xml.flip_horizontal, xml.flip_vertical) == (bool(flags & 1), bool(flags & 2))
+
+
+@pytest.mark.parametrize(
+    "field", ["missing-current", "positive-current", "wrong-size", "missing-original"]
+)
+@pytest.mark.parametrize("scale", SCALES)
+def test_negative_scale_without_closed_signed_resize_proof_is_unresolved(field, scale):
+    element = xml_picture(scale)
+    current = element.find(f"{{{HP}}}curSz")
+    original = element.find(f"{{{HP}}}orgSz")
+    assert current is not None and original is not None
+    if field == "missing-current":
+        element.remove(current)
+    elif field == "missing-original":
+        element.remove(original)
+    elif field == "positive-current":
+        current.attrib.update(
+            {name: str(abs(int(value))) for name, value in current.attrib.items()}
+        )
+    else:
+        current.set("width", str(int(current.attrib["width"]) + 10))
+    assert _geometry(element) is None
+    shape = bytearray(binary_shape(scale))
+    x, y = resized_dimensions(scale)
+    if field == "positive-current":
+        struct.pack_into("<2i", shape, 28, abs(x), abs(y))
+    else:
+        struct.pack_into("<i", shape, 28, x + 10)
+    assert _shape_geometry(bytes(shape), hwp_picture()) is None
+
+
+@pytest.mark.parametrize("scale", SCALES)
+def test_unsigned_wrapped_signed_hwpx_current_size_has_the_same_closed_meaning(scale):
+    element = xml_picture(scale)
+    current = element.find(f"{{{HP}}}curSz")
+    assert current is not None
+    expected = _geometry(element)
+    current.attrib.update(
+        {name: str(int(value) & 0xFFFFFFFF) for name, value in current.attrib.items()}
+    )
+    assert expected is not None and _geometry(element) == expected
+
+
+@pytest.mark.parametrize("axis", (0, 1))
+def test_negative_scale_rejects_zero_current_extent_even_on_the_other_axis(axis):
+    scale = (-1, 0, 0, 0, 1, 0) if axis == 0 else (1, 0, 0, 0, -1, 0)
+    element = xml_picture(scale)
+    current = element.find(f"{{{HP}}}curSz")
+    assert current is not None
+    current.set("height" if axis == 0 else "width", "0")
+    assert _geometry(element) is None
 
 
 @pytest.mark.parametrize(
@@ -226,10 +327,11 @@ def test_multiple_transform_pairs_and_nonquarter_rotation_stay_unresolved(scale:
 @pytest.mark.parametrize("scale", SCALES)
 @pytest.mark.parametrize("angle", (0, 90, 180, 270))
 @pytest.mark.parametrize("cropped", (False, True))
-def test_signed_views_crop_then_reflect_then_rotate_without_lost_corners(
-    tmp_path: Path, scale: Matrix, angle: int, cropped: bool
+@pytest.mark.parametrize("flags", (0, 1, 2, 3))
+def test_signed_resize_views_crop_then_explicit_flip_then_rotate_without_lost_corners(
+    tmp_path: Path, scale: Matrix, angle: int, cropped: bool, flags: int
 ) -> None:
-    element = xml_picture(scale, angle=angle)
+    element = xml_picture(scale, angle=angle, flags=flags)
     if cropped:
         clip = element.find(f"{{{HP}}}imgClip")
         assert clip is not None
@@ -256,9 +358,9 @@ def test_signed_views_crop_then_reflect_then_rotate_without_lost_corners(
     view = result.rendered_uses[0]
     with Image.open(io.BytesIO(raster())) as original:
         expected = original.crop((1, 2, 19, 13)) if cropped else original.copy()
-        if scale[0] < 0:
+        if flags & 1:
             expected = expected.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-        if scale[4] < 0:
+        if flags & 2:
             expected = expected.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
         for _ in range(angle // 90):
             expected = expected.transpose(Image.Transpose.ROTATE_270)

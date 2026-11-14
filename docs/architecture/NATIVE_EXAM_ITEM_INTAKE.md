@@ -440,11 +440,12 @@ JSON Schema2020-12와 Pydantic successor를 production worker 행동보다 먼�
 원01회9번과13번은 해당 문항의 JPEG가 있는데 worker가 전역 catalog의 제목 장식을
 선택해 실패했다. 실제 JPEG의 추가 경계는 양수로만 제한한 diagonal scale 해석이다.
 Q9는 Y 음수, Q13은 X 음수이며 rotation은 identity, 명시 flip은 모두 false다.
-절댓값만 취해 방향을 버리거나 다른 그림으로 대체하지 않는다.
+signed 크기와 bitmap flip은 같은 개념이 아니다. 실제 픽셀 대조에서 음수 scale을 그대로
+bitmap 반사로 해석한 미활성 후보는 글자를 뒤집었으므로 배포하지 않는다.
 
 1. 책임/정본: 기존 image parser와 Catalog Native intake/등록 owner가 고친다. 원본 HWP,
    검증된 문항별 HWPX, split evidence, XLSX와 기존 accepted Item/report/Graph는 유지한다.
-2. revision: geometry는 기존 V1 값의 flip으로 표현할 수 있다. 새 parser로 새 catalog1
+2. revision: 검증된 viewport와 명시 bitmap flip은 기존 V1 값으로 표현할 수 있다. 새 parser로 새 catalog1
    Artifact를 만들고 기존 catalog/실패 입력은 보존한다. EMF2/ImageSet2/Projection2/Doc2/
    새 worker wire는 필요 없다. Native prepared3만 base prepared2와 보완 catalog를 연결한다.
 3. pointers: prepared3는 exact base prepared/native bundle/intake와 역할별 base/new catalog,
@@ -462,15 +463,15 @@ Q9는 Y 음수, Q13은 X 음수이며 rotation은 identity, 명시 flip은 모�
    동일성·source/catalog SHA를 확인하는 호출 내 파생값이고 전역 권한 cache가 아니다.
    단독 등록은 기존 wrapper에서 fresh index를 만든다. 1·25개 synthetic 비교에서
    source 검증 N→1, source lookup 2N→2이며 scope canonical bytes는 동일해야 한다.
-6. geometry: 유한·비영 diagonal S와 quarter-turn R에서 signed scale의 반사를 원 viewport
-   crop 뒤, 기존 회전 전에 적용한다. 양수 scale의 기존 명시 flip 동작은 유지한다.
-   음수 scale과 명시 flip이 함께 있는 모호한 경우, shear·비직교 회전·다중 matrix는 계속 거절한다.
-   실제 HWP의 current height/width도 반사된 축에서 음수다. pyhwp의 SHWPUNIT 및 기존
-   H2O의 signed int 처리에 맞춰 initial/current 크기는 signed로 해석하고 flags는 unsigned로
-   읽는다. initial은 양수, current는 0이 아닌 기존 크기 상한 이내이며, 음수 current 축에는
-   같은 축의 음수 scale이 있어야 한다. 방향은 matrix에서 한 번만 결정한다. 두 실제
-   geometry record 쌍의 SHA fixture로 HWP/HWPX viewport·반사 일치를 검증하며, 이를
-   한글에서 직접 열린 화면의 육안 검수 PASS로 확대하지 않는다.
+6. geometry: 양수 scale의 기존 동작은 유지한다. 음수 scale은 유한·비영 diagonal S,
+   단일 matrix pair·quarter-turn R, 양수 orgSz와 signed curSz가 양 축 모두
+   `S × orgSz ≈ curSz`(native unit 반올림 오차 최대1)를 증명할 때만 resize-box 표현으로
+   처리한다. 크기의 부호로 bitmap 반사를 새로 만들지 않고, 명시 HWP flip bits/hp:flip만
+   viewport crop 뒤 기존 회전 전에 적용한다. HWP initial/current 크기는 signed,
+   flags는 unsigned로 읽고 HWPX의 엄격한 32-bit wrapped current 값도 같은 뜻으로 푼다.
+   curSz 누락·0·부호/크기 불일치, shear·비직교 회전·다중 matrix는 거절한다. 두 실제
+   geometry record 쌍과 독립 corner PNG로 원본과 같은 방향·픽셀을 검증한다. 동일한 가정을
+   공유한 두 decoder의 일치만으로 시각 품질이나 한글 육안 검수 PASS를 주장하지 않는다.
 7. use-case: 새 Native 작업의 안내에는 실제 문항의 허용 use만 deterministic하게 추가한다.
    이 안내는 권한이 아니다. 등록 owner가 원본/문항 파일과 대조한 동일 범위를 독립 검증하고
    제목·해설·다른 문항 그림을 거절한다. 기존 저장된 원문 지침 replay는 보존한다.
