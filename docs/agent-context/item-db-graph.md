@@ -20,6 +20,10 @@ generic 결과 validator는 좁히지 않는다. 설계는 `REGISTERED_ITEM_BASE
 
 Native 시험지의 QUESTION은 기존 one-AI lane을 유지하면서 최대25개 ordinal 구간의
 accepted base/공개 풀이를 준비한 뒤 공통 Graph를 한 번 게시할 수 있다.
+task ordinal은 행정 처리 순서이지 인쇄된 문항 번호가 아니다. 복구·감사에서 상수 뺄셈으로
+문항 번호를 계산하지 않는다. 원문 번호는 공식 task detail의 `printed_label`과
+`material_native_printed_number`, 또는 검증된 Native source의 `metadata.item_number`를
+사용하고, 순서와 문항 identity의 연결은 exact task/unit 및 source binding으로 확인한다.
 `material_question_processing_window`는 terminal 행도 구간에 포함하고 EXPLANATION에서
 멈춘다. processing의 checkpoint는 공개 풀이·Item/base·hash를 pin하며, 실제 publication
 뒤 동일 claim의 한 transaction에서만 GRAPH_READY를 연결한다. `publish_items`는 기존

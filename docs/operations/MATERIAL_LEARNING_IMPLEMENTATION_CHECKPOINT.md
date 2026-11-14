@@ -5,6 +5,26 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-14 23:25 UTC — 첫 회차25개 Native 실등록 전수 대조 PASS
+
+run5의 실제25 Item을 공식 Native source/완료된 추출/Registry/Artifact reader로 읽어
+문제·해설50개 파일, Excel25행과 원본·parsed workbook2개 member, 본문 PNG6개의 hash와
+연결을 검증했다. 기존 완료19개의 Item/base/Graph pin도 시작·끝에 그대로다. 검증의
+DB/NAS 쓰기와 모델 실행은0이다. read-only summary는25 PASS이며 records SHA는
+`305310b8e6da6c0610bab46e78fcd5377bbdb1c0d020d06abe0009cacedb1369`다.
+
+이 검증은 등록 원본·그림 검증이지 남은 풀이·Graph 완료 gate가 아니다. 관측 당시 run5는
+PROCESSING, COMPLETED19/PUBLISHING1/ANALYZING1/REGISTERED4, Graph 연결19개다.
+실제 후속 분석 슬롯03도 실행 중이다. 나머지17회차 제출은 기존 r4 driver의 최종 gate와
+실제 HTTP Native 읽기 뒤에 진행하며, 현재 목표를 완료 처리하지 않는다.
+
+첫 감사 helper는 처리 ordinal에서 인쇄 번호를 계산해 Q1→Q3→Q2 순서를 잘못 해석했다.
+운영 문항·코드는 바꾸지 않고 공식 Native metadata의 실제 번호로 대조하도록 수정했다.
+실패한 r1/r2 로그와 frozen helper는 보존했고, 그림 없는 정상 문항의 조건은 완화하지 않았다.
+최종 frozen helper SHA는 `31cc3f86a6d8c59833486809680a47824052661aaed131c69c5669523b22cb75`,
+증거는 `staging/native-run5-all25-visuals-r3-20261114.jsonl`이다. 한글 육안 검수나 실제
+유사도 검색 성공까지 이 메타데이터/bytes 검증으로 확대 주장하지 않는다.
+
 ## 2026-11-14 23:14 UTC — 재처리 문항 실제 그림·임베딩 저장 확인
 
 run5의9번이 새 Item으로 등록됐다. 실제 actor의 공식 Native source 읽기와 완료된 추출
