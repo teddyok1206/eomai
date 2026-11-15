@@ -67,6 +67,12 @@ try {
   const page = await browser.newPage({viewport: {width: 1440, height: 1100}});
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:' + server.address().port + '/studio/');
+  const workbookHelp = await page.locator('#material-workbook-help').textContent();
+  assert.ok(workbookHelp.includes('엑셀 없이 올리면 기존 자료 학습으로 처리합니다.'));
+  assert.ok(workbookHelp.includes('문제·해설 한글 파일과 문항 정보 엑셀을 함께 올리면'));
+  assert.ok(workbookHelp.includes('문항별로 편집 가능한 한글 원본과 엑셀의 문항 정보를 함께 등록합니다.'));
+  assert.equal(await page.locator('#material-workbook').evaluate(input => input.required), false);
+  assert.equal(await page.locator('#material-solutions').evaluate(input => input.required), false);
   await page.locator('#material-title').fill('혼합 교재 테스트');
   await page.locator('#material-description').fill('내부 검증용 합성 자료');
   await page.locator('#material-main').setInputFiles({name: '문제.hwp', mimeType: 'application/octet-stream', buffer: Buffer.from('%PDF-1.7\nmain')});
@@ -122,10 +128,27 @@ try {
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#material-learning-detail').textContent(), '');
   assert.equal(await page.locator('#material-learning-runs').textContent(), '');
+  await page.evaluate(() => {fixture.sourceFormat = 'HWPX';});
+  await page.locator('#material-title').fill('한글 원문 일반 학습');
+  await page.locator('#material-description').fill('엑셀 없는 문제·해설 한글 원문');
+  await page.locator('#material-main').setInputFiles({name: '문제.hwp', mimeType: 'application/octet-stream', buffer: Buffer.from('generic-native-main-synthetic')});
+  await page.locator('#material-solutions').setInputFiles({name: '해설.hwpx', mimeType: 'application/octet-stream', buffer: Buffer.from('generic-native-solutions-synthetic')});
+  await page.locator('#material-workbook').setInputFiles([]);
+  await page.locator('#material-rights').check();
+  await page.locator('#material-learning-start').click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-runs').textContent.includes('한글 원문 일반 학습'));
+  const pairedGenericRequests = await page.evaluate(() => fixture.calls.filter(call => call.path === '/material-learning' && call.body?.upload?.title === '한글 원문 일반 학습'));
+  assert.equal(pairedGenericRequests.length, 1);
+  assert.deepEqual(pairedGenericRequests[0].body.sources.map(source => source.source_role), ['MAIN', 'SOLUTIONS']);
+  assert.deepEqual(pairedGenericRequests[0].body.sources.map(source => source.source_upload.source_format), ['HWPX', 'HWPX']);
+  assert.equal(Object.hasOwn(pairedGenericRequests[0].body, 'native_bundle'), false);
+  assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path === '/material-learning/native-exams').length), 0, 'native pair without XLSX changed the existing general-learning route');
+  await page.evaluate(() => {fixture.sourceFormat = 'PDF';});
   const uploadCount = await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length);
   await page.locator('#material-title').fill('한글 문항 모의고사');
   await page.locator('#material-description').fill('내부 검증용 원본·문항 정보');
   await page.locator('#material-main').setInputFiles({name: '문제.hwp', mimeType: 'application/octet-stream', buffer: Buffer.from('native-main-synthetic')});
+  await page.locator('#material-solutions').setInputFiles([]);
   await page.locator('#material-workbook').setInputFiles({name: '문항정보.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('PK-synthetic-workbook')});
   await page.locator('#material-rights').check();
   await page.locator('#material-learning-start').click();
@@ -155,5 +178,5 @@ try {
   assert.deepEqual(Object.keys(nativeRequests[1].body.metadata).sort(), ['schema_version', 'upload', 'sources', 'source_namespace', 'exam_key', 'workbook_filename'].sort(), 'browser supplied actor or producer authority');
   assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), nativeUploadCount, 'native retry recopied sources');
   assert.deepEqual(errors, []);
-  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress pause-resume failed-unit-successor source-position safe-text stale-owner native-framed-xlsx native-pair-validation native-replay live-writes=0');
+  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress pause-resume failed-unit-successor source-position safe-text stale-owner optional-workbook-help generic-native-pair-no-xlsx native-framed-xlsx native-pair-validation native-replay live-writes=0');
 } finally {await browser.close(); await new Promise(resolve => server.close(resolve));}

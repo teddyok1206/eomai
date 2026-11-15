@@ -5,6 +5,30 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 03:54 UTC — 새 GPU 계산4건 성공 / Native 화면 경계 회귀
+
+재개한 같은 INDEX invocation의 새 요청
+`workflow_e74413aeeab44740b0aff664d9dd3c9f`와 owned encoding4개가 생성됐다. 03:47:37 UTC
+공식 observer에서4개 모두 SUCCEEDED 및 completion event 있음을 확인했다. Root service의
+active/READY만으로 대신 판정하지 않았다. 이때 새 index head 저장/Workflow 완료는 아직
+진행 중이고 stored GPU/CPU head는 각각1384/1324다. 근거는
+`staging/native-index-history-resumed-progress-0348-20261115.json`이다. 다른 원래 실행·
+첫 회차 문항·성공/실패 이력과 나머지17회차의 대기 중 HTTP driver는 보존했다.
+
+재사용 GUI/API를 추가 대조했다. Native 기능은 이 dataset driver만의 우회가 아니라
+기존 자료 학습의 문제 HWP/HWPX+해설 HWP/HWPX+실제 XLSX→공식 Native API 경로다.
+엑셀 없이 올리는 기존 일반 학습과는 동작이 다르므로 안내/문서의 경계를 명시했다.
+신규 mode/flag/worker/DB/wire/권한 변경은 없다. 이번450개는18개 실제 XLSX가 있어 전부
+현재 Native 입력 범위다. XLSX 없는 Native pair를 완료된 기능으로 확대해 말하지 않는다.
+
+기존 local Playwright module/binary를 사용해 합성 Chromium 포함49 PASS/SKIP0, developer
+context13 PASS, lint·JS 문법 검사가 통과했다. 별도 다운로드/설치0이다. 첫 browser 실행의
+기본 cache 경로 미발견은 실제 local browser 경로 지정으로 해소했다. 실제 사용자 HTTPS
+Native 업로드/다운로드 검증은 여전히 별도이며 첫25 Native download gate를 아직 통과했다고
+주장하지 않는다. root gate 로그는 `staging/native-material-guidance-root-gate-20261115.log`다.
+화면 안내 변경은 source 후보이며 Web-only wheel/설치·운영 HTML 대조 뒤 따로 기록한다.
+전체450개 목표는 ACTIVE다.
+
 ## 2026-11-15 03:37 UTC — 동일 완료 재조회 PASS·INDEX 재개
 
 같은 publication command의 APPLY replay는 원래 Workflow/index/hash/binding1384를 반환했다.

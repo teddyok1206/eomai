@@ -323,6 +323,9 @@ owner의 명시적 material evidence V6 경로로 읽고 구 consumer로 억지 
 `docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md`를 먼저 읽는다. 기존 자료 학습 화면의
 선택 엑셀은 `POST /material-learning/native-exams`의 제한된 JSON 한 줄 + XLSX stream을
 공식 API로 전달하고, 실제 actor·원본 receipt·권한·파일 hash 검증은 API/Catalog가 소유한다.
+엑셀 없이 올리면 기존 일반 학습 경로이며, 문항별 편집 원본을 보존하는 현재
+Native 입력은 문제·해설 HWP/HWPX와 실제 XLSX가 모두 필요하다. 엑셀 없는 Native pair는
+아직 후속 지원 범위다. 빈 고유번호를 허용하는 것과 XLSX 자체가 없는 것은 다르다.
 `material_native_preparation.py`는 보호된 CPU 도구로 원본을 문항별 native HWPX로 준비하고
 `material_native_publication.py`가 기존 Artifact owner에 primary HWPX와 단일 공유 Excel을
 등록한 뒤 원래 intake.create에 V2 bundle pointer만 넘긴다. worker가 NAS에 쓰거나 XLSX의

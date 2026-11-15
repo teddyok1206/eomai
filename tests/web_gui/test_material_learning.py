@@ -1,6 +1,7 @@
 """BFF preserves explicit consent, operator boundary and typed immutable receipts."""
 
 import json
+import re
 from datetime import UTC, datetime
 
 import httpx
@@ -109,6 +110,31 @@ def _native_acceptance():
         request_sha256="sha256:" + "4" * 64,
         replayed=False,
     )
+
+
+def test_served_material_upload_guidance_distinguishes_optional_workbook_paths():
+    gateway = LearningGateway()
+    client, _ = make_client(gateway=gateway)
+    with client:
+        login(client)
+        response = client.get("/studio/")
+        assert response.status_code == 200, response.text
+    html = response.text
+    assert (
+        "엑셀 없이 올리면 기존 자료 학습으로 처리합니다. "
+        "문제·해설 한글 파일과 문항 정보 엑셀을 함께 올리면, "
+        "문항별로 편집 가능한 한글 원본과 엑셀의 문항 정보를 함께 등록합니다. "
+        "한글 파일은 각각 50MB, 엑셀은 8MB까지이며, 없는 고유번호는 비워 둡니다."
+    ) in html
+    assert "선택 · 모의고사 한 회차" in html
+    for identifier in ("material-solutions", "material-workbook"):
+        control = re.search(r'<input\b[^>]*\bid="' + identifier + r'"[^>]*>', html)
+        assert control is not None
+        assert re.search(r"\srequired(?:[\s=>])", control.group()) is None
+        if identifier == "material-workbook":
+            assert 'accept=".xlsx"' in control.group()
+            assert 'aria-describedby="material-workbook-help"' in control.group()
+    assert not gateway.learning_calls
 
 
 def test_native_exam_envelope_stream_keeps_exact_bytes_and_request_key():
