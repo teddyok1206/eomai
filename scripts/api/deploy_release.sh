@@ -1855,7 +1855,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     for name in (
         "external-item-learning.v1.yaml", "external-item-learning.v2.yaml",
         "external-item-learning.v3.yaml",
-        "material-learning.v1.yaml", "material-learning.v2.yaml",
+        "material-learning.v1.yaml", "material-learning.v2.yaml", "material-learning.v3.yaml",
     ):
         (root / name).write_bytes(
             (Path(os.environ["REPOSITORY_ROOT"]) / "config/workflows" / name).read_bytes()
@@ -2072,6 +2072,7 @@ creative_source_definition = Path(legacy_definition).with_name("external-item-le
 creative_office_definition = Path(legacy_definition).with_name("external-item-learning.v3.yaml")
 material_definition = Path(legacy_definition).with_name("material-learning.v1.yaml")
 material_coverage_definition = Path(legacy_definition).with_name("material-learning.v2.yaml")
+material_exact_score_definition = Path(legacy_definition).with_name("material-learning.v3.yaml")
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -2290,6 +2291,8 @@ load_role_input_schema("support", "workflow-role/1.37.0")
 load_codex_result_schema("material-learning-result@1.0")
 load_role_input_schema("support", "workflow-role/1.39.0")
 load_codex_result_schema("material-learning-result@2.0")
+load_role_input_schema("support", "workflow-role/1.40.0")
+load_codex_result_schema("material-learning-result@3.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("support", "workflow-role/1.29.0")
 load_role_input_schema("support", "workflow-role/1.30.0")
@@ -2410,7 +2413,11 @@ if (
     or customer_support.definition_version != "1.0.0"
 ):
     raise SystemExit("customer-support workflow definition mismatch")
-for path, version in ((material_definition, "1.0.0"), (material_coverage_definition, "2.0.0")):
+for path, version in (
+    (material_definition, "1.0.0"),
+    (material_coverage_definition, "2.0.0"),
+    (material_exact_score_definition, "3.0.0"),
+):
     material = compile_definition(path, {"support"}).definition
     profile = material_learning_contract_for_definition(version)
     agent = next(step for step in material.steps if isinstance(step, AgentStep))
@@ -2466,6 +2473,7 @@ admitted_definitions = (
     compile_definition(creative_office_definition, {"support"}),
     compile_definition(material_definition, {"support"}),
     compile_definition(material_coverage_definition, {"support"}),
+    compile_definition(material_exact_score_definition, {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),

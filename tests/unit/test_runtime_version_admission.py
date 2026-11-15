@@ -68,6 +68,10 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
         ("external-item-learning", "2.0.0"): "external-item-learning.v2.yaml",
         ("external-item-learning", "3.0.0"): "external-item-learning.v3.yaml",
         ("knowledge-analysis", "11.0.0"): "knowledge-analysis.v11.yaml",
+        ("knowledge-analysis", "12.0.0"): "knowledge-analysis.v12.yaml",
+        ("material-learning", "1.0.0"): "material-learning.v1.yaml",
+        ("material-learning", "2.0.0"): "material-learning.v2.yaml",
+        ("material-learning", "3.0.0"): "material-learning.v3.yaml",
         ("item-inference-transfer-comparison", "1.1.0"): (
             "item-inference-transfer-comparison.v1_1.yaml"
         ),

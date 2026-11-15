@@ -451,6 +451,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         "private_chat_query_definition",
         "local_embedding_definition_v2",
         "reference_query_definition_v2",
+        "material_exact_score_definition",
     ),
 )
 def test_actual_installed_admission_comparison_rejects_an_omitted_native_definition(
@@ -493,9 +494,11 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
             "creative_source_definition",
             "creative_office_definition",
             "material_definition",
+            "material_coverage_definition",
+            "material_exact_score_definition",
         }
     ]
-    assert len(derived_definitions) == 4
+    assert len(derived_definitions) == 6
     assignment = next(
         node
         for node in inner.body

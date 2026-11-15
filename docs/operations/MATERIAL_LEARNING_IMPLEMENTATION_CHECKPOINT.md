@@ -21,6 +21,12 @@ OpenAPI breaking 검사 PASS(검사 범위 내 finding0), API 명세의 결정�
 기존 deprecation warning1은 별도로 남았다. `native-score-openapi-final-regression-20261115.log`.
 설치본 재검증과 실제 배포/Native canary는 이어서 진행하며 전체 goal은 ACTIVE다.
 
+두 번째 build의 RECORD/OpenAPI 비교는 통과했으나, 실제 isolated admission 비교가 새
+Material3 definition의 staging/compile 목록 누락을 발견했다. 비교 gate를 완화하지 않고 공식
+build의 기존 copy/compile/profile/schema 검사에3.0을 추가했다. 기존1/2도 계속 검사한다.
+정의 사본을 실제 copy block에서 읽고 compiler/admission과 대조하며, 새 Material3을 일부러
+누락하면 같은 installed 비교가 거절하는 회귀를 추가했다. 두 build 실패는 미설치 상태다.
+
 ## 2026-11-15 — 정확한 배점 등록·조회·설정 전환 후보 검증, 실제 활성화는 다음
 
 새 Lineage3 / 일반 Pack1.4 / Native Pack1.5를 기존 Registry owner에 연결했다. Native result3은

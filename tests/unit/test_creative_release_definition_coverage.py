@@ -41,6 +41,7 @@ def test_uploaded_material_is_in_the_actual_installed_definition_gate() -> None:
     for name, version in (
         ("material_definition", "1.0.0"),
         ("material_coverage_definition", "2.0.0"),
+        ("material_exact_score_definition", "3.0.0"),
     ):
         filename = f"material-learning.v{version[0]}.yaml"
         profile = material_learning_contract_for_definition(version)
@@ -51,7 +52,7 @@ def test_uploaded_material_is_in_the_actual_installed_definition_gate() -> None:
     assert 'raise SystemExit("material learning workflow profile mismatch")' in source
 
 
-def test_actual_release_copy_block_stages_both_material_definitions_without_activation(
+def test_actual_release_copy_block_stages_all_material_definitions_without_activation(
     monkeypatch, tmp_path
 ):
     script = (ROOT / "scripts/api/deploy_release.sh").read_text()
@@ -64,7 +65,7 @@ def test_actual_release_copy_block_stages_both_material_definitions_without_acti
         compile(copy_block, "release-definition-copy", "exec"),
         {"root": tmp_path, "Path": Path, "os": os},
     )
-    for version in ("1.0.0", "2.0.0"):
+    for version in ("1.0.0", "2.0.0", "3.0.0"):
         filename = f"material-learning.v{version[0]}.yaml"
         target = tmp_path / filename
         assert target.read_bytes() == (ROOT / "config/workflows" / filename).read_bytes()
