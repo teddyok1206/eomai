@@ -58,6 +58,39 @@ mocked Orchestrator 내부 결과만 확인하던 검사에 실제 두 진입점
 materialization을 보강했다. 관련 실제 source materializer 회귀72 PASS, mypy PASS다.
 수정 ROLE 설치/실제 재개와 남은450개 처리 검증은 계속 진행한다.
 
+### 23:34 UTC 후속 — 실제 ROLE 결과 검증 통과, INDEX 기존 CPU 작업 인계 중
+
+84ae184f를 commit/push하고 공식 API build-only/RECORD/별도 SDK 설치를 통과했다.
+기존 private handoff의 prepare·ADMIT·migration VERIFY0079·activate·postdeploy가 PASS다.
+Catalog/Material/네 ROLE runner만84ae184f SDK로 선택했다. API/Web/Chat/QUERY는73ea7068의
+호환 설치본을 유지하며 source·수치 CPU70/controller0f/model/recipe/space·관리자 모델과
+capacity는 변경하지 않았다. HTTPS Studio redirect 후200도 확인했다. helper는
+`/usr/local/libexec/eom-native-exact-score-release-20261115/materializer_r3.py`, 기록은
+`/var/lib/eom-native-score-materializer-release-20261115`다.
+
+prepare 앞선 두 검사의 historical shared51 baseline 가정 및 단일 EnvironmentFile 가정은
+현재 설치와 달라 거절됐다. 둘 다 stage/운영 변경 전 실패 로그를 보존했다. 최종 helper는
+동일 phase owner를 실제 shared73 baseline에 compose하고, 기존 coverage owner의 두 env
+파일·전체 drop-in hash inventory를 재사용했다. 검사를 삭제하거나 설치 source를 위조하지 않았다.
+관련 원본 materializer72 PASS와 최종 control/maintenance/source 경계72 PASS는 겹칠 수 있어
+합산하지 않는다. 별도 Schema/DDL 변경은 없다.
+
+Material invocation c9dbfde2…/PID1724599를 시작했고 회차3의 새 task가 실제3번 슬롯에서
+workflow_8b446382…/job_f42f79e6…로 실행되어23:33에 RESULT_READY까지 왔다. 이는 새 plan41
+실행·결과 검증의 실제 증거이지, 해당 Item/풀이/Graph 전체 완료 증거는 아니다. 재개 직후
+관측한 첫 FAILED는 앞선 구 실행기의 이미 실패한 task를 기록한 것이며 성공으로 바꾸지 않았다.
+원본450개 전체와16개 배점 보정 완료는 계속 확인한다.
+
+INDEX readonly23:27: CUDA head1420/1582, CPU head1336/1582다. 서로 다른 space이며 합산하지
+않는다. 현재 service의 미완료6건은 **CPU RUNNING1건(4 encoding SUCCEEDED, lease 만료)**과
+미실행 CPU PENDING5건이었다. 전부 unstarted로 보는 probe는 assert로 종료됐고 cancellation
+write는0이다. 네 성공 encoding과 원래 요청을 보존한다. 기존 installed0a56 SDK/runtime으로
+INDEX를 재시작해 invocation7126e44f…/PID1728282가 실제 CPU-overlap/reconciliation에 진입했다.
+새 설치본 인계를 위해 main의 supported SIGINT Event만 설정했고, 진행 중 call과 CPU future가
+자연 종료하도록 drain 중이다. numerical unit/worker에 강제 종료를 하지 않았다. 이는 INDEX84
+전환 완료나 새 GPU vector commit 증거가 아니다. 원래 CPU 작업 처리 및 미실행 요청의 기존
+maintenance owner 정리 후에만 metadata SDK84 successor를 활성화한다. 추가 인증은 현재 없다.
+
 ## 2026-11-15 22:07 UTC — 최종 설치 후보와 실제 원본 보정 대상 확인
 
 source73ea7068을 커밋·push했다. 공식 API build-only의 RECORD/source-free installed

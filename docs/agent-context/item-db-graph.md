@@ -53,6 +53,10 @@ successor이며 기존 정수 계약의 bytes/의미는 유지한다. 원문과 
 그림 coverage는 기존 Artifact다. 제출/재인가/결과 읽기는 exact request/plan/receipt를
 비교하고 다른 배점·구 role로의 재전송을 거절한다. Source 구현이 등록·HTTP 소비 경계와
 운영 활성화를 대신하지는 않는다. `test_material_learning_execution_v3.py`가 owner 구성을 검증한다.
+실제 ROLE 실행의 `execution_materializer`는 Artifact allowlist와 workspace 진입점 모두에서
+plan41을 명시적으로 읽어야 한다. 기존33/40의 페이지·권한·hash·analysis 크기 한도를 그대로
+재사용한다. mocked Orchestrator receipt 검사만으로 이 경계를 통과했다고 간주하지 않는다.
+`test_material_learning_execution_v2.py`의40/41 회귀가 두 실제 진입점과 페이지 파일을 검사한다.
 등록의 exact family는 `material_item_registration.py`의 Pack1.4/Native1.5와 Lineage3이며,
 같은 Registry key 잠금 안에서 Native 원문 배점을 다시 확인한다. content1.1의 canonical GET은
 기존 request10/new response19, 표시 읽기는 visual response2를 사용한다. 정수/미인쇄는 content1.0을
