@@ -5,6 +5,40 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 16:10 UTC — 실제 Native 다운로드 PASS·원래 INDEX 저장 완료 확인
+
+실제 guiadmin HTTP 세션에서 R5의 인쇄9번 등록 문항
+`itemrev_1302ff00302c467389e4056d209faf45`를 기존 DB/Native source 조회로 읽었다.
+문항 metadata·원본 workbook SHA·material revision을 대조했고 MAIN/SOLUTIONS를 각각
+다운로드했다. MAIN501680bytes/SHA116e204f, SOLUTIONS14074bytes/SHA39dec0c4가 정본 pointer와
+같으며 ETag·ZIP mimetype·native section도 PASS다. PDF 캡처나 새 HWPX 재생성이 아니다.
+실제 한글 레이아웃 육안 판정은 `NOT_RECORDED`로 구분한다. 증거는 기존 checkpoint의
+`checkpoint.canary-native.json`, checked_at16:04:22 UTC다.
+
+인증 재실행 중 구형 SDK7084를 지정한 operator invocation은 로그인 후 복구 계약의 lazy
+import에서 종료됐다. 실제 계정/API 로그인 문제가 아니다. 현 SDK0a56에서 archive18개,
+원본 checkpoint 재계획의 동일성, 선택한 복구 receipt4개와 installed Web gateway를
+로그인 없이 검증해 통과했다. 소스·비밀번호·정본·요청 key는 바꾸지 않았다. 이후 같은
+세션의 Native 다운로드 검증은 통과했으나 interactive 명령 전송의 빈 Enter가 정상 종료를
+유발했다. 이를 업로드 실패나 성공으로 바꾸지 않는다. 재실행은 검증된 exact R5 ID를
+`--continue-after-canary`에 직접 고정해 별도 interactive 입력 없이 남은17회차를 제출한다.
+이 기록 시점 새 실행은 기존 숨김 Studio 입력 대기이며 남은425개는 아직 미제출이다.
+
+별도 INDEX의05:24 CPU 원래 Workflow1440bc409e9143148293381c3b6c2a6f가 실제 COMPLETED,
+command SUCCEEDED와 기존4개 encoding/완료 checkpoint를 유지한 것을 공식 observer로
+확인했다. CUDA 후속2묶음도 COMPLETED이며 최신 GPU 저장 head1400/1582,
+CPU1328/1582다. INDEX는05:47:20에 기존 OS unit 조회 timeout 소진으로 다시 종료됐고
+수치/저장 실패의 증거는 없다. 관측 지연의 근본 원인은 여전히 미확인이다.
+
+16:07 공식 read-only observer로 정확한 남은 CPU 요청의 성공 encoding4개·만료 claim과
+두 미시도 CPU 요청을 확인했다.16:08 native batch lifetime 관측은528개 모두 terminal,
+blocking0/drained였다. 이후 동일 source0a56·Identity·runtime pin으로 공식 INDEX service만
+시작했다. 새 PID1098145/invocation0ab5ae52d9d7465380c7caeafc4e45bc이며16:09의 실제
+PUBLIC_SOLUTION_REPORTS/admission은 PASS다. 재개 후 새 index 저장 완료와450문항 전체
+완료를 뜻하지 않는다. 설정·모델·timeout을 바꾸거나 성공한 벡터를 재계산하지 않았다.
+근거는 `staging/native-index-current-input-resumed-inspect-20261115.json`,
+`native-index-before-resume-lifetimes-20261115.json`과 공식 service journal이다.
+
 ## 2026-11-15 05:08 UTC — 동일 capture 소비자 운영 정렬·중단된 CPU 저장 재개
 
 검증된 source `0a56aaf1ff82051fa7cd4c40eef8ddd163ed93ec`의 동일 SDK를 QUERY와 private

@@ -12,6 +12,10 @@ Python은 component에 지정된 Conda interpreter를 명시한다. 기본 API �
 `pyproject.toml`의 mypy_path/package 검색 경로와 기존 해당 suite 실행 방법을 확인하고,
 설치본 테스트를 source 테스트라고 보고하지 않는다.
 
+운영 client의 복구 계약도 실제 선택한 SDK에 있어야 한다. 새 로그인 전에 원본/checkpoint와
+명시한 복구 receipt의 offline parsing을 같은 설치본으로 확인한다. 인증 창 상태는 PID/comm과
+제한된 stdout 상태로 확인하고, 인증을 받았던 pane의 과거 화면은 종료 후에도 capture하지 않는다.
+
 ## 검증 선택
 
 계약/형식은 schema·Pydantic·resource mirror·canonical serialization을 검사한다.
