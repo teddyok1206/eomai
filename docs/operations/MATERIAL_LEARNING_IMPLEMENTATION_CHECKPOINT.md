@@ -5,6 +5,32 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 16:24 UTC — 18회차 전체 접수·두 번째 회차 실제 발견 진행
+
+실제 guiadmin 세션에서16:13:58부터 기존 r4 driver의 direct continuation으로 남은17회차를
+순차 제출했다. 마지막 native-exams 응답은16:18:53이며 모든17건이 `EXAM_ACCEPTED`,
+replayed=false였다. 원래18 source key/18 preparation key를 유지했고 checkpoint18건 모두
+acceptance가 있으며 pending/error0이다. 원래 첫 회차 acceptance와 R5 복구 이력은 그대로다.
+실행은 정상적으로 자신의 세션만 로그아웃하고 종료했다. 원본 Excel의250개 번호와200개
+미기입을 유지하며 새 고유번호를 생성하지 않았다. 근거는
+`staging/native-exam-http-driver-r4-remaining17-20261115.log`와 원래 batch checkpoint다.
+
+공식 `MaterialLearningReadService.inspect`를 default-transaction-read-only 연결에서 사용해
+18개 accepted run의 현재 상태를 확인했다.16:23:28의 실제 판정은 첫 회차 COMPLETED
+25개 Item/analysis/Graph 연결, 두 번째 회차 DISCOVERING, 나머지16개 RECEIVED다.
+두 번째 회차의 DISCOVER1개가 완료됐고 다음 DISCOVER가 같은 run에서 RUNNING이다.
+오류 코드는 없으며 실제 role worker unit의 live MainPID도 확인했다. 접수18개를
+450개 Item/풀이/Graph/임베딩 완료로 확대하지 않는다. 이후 worker·등록·공통 Graph·INDEX의
+실제 완료와 원본 metadata 및 Native 문서 읽기를 검증해야 하므로 전체 목표는 ACTIVE다.
+
+관측은 기존 공식 owner-read와 task history projection을 재사용하며 문항/worker 내용이나
+문서 bytes를 읽지 않았다. bounded18 run lookup이고 DB/NAS write·model call0이다.
+읽기 전용 helper는 protected driver와 SDK0a56 및 원본 archive/operator를 고정한다.
+진행 증거는 `staging/native18-accepted-progress-20261115.json`,
+`native18-active-task-progress-20261115.json`이며 현재 frozen helper는
+`/usr/local/libexec/eom-native-exam-http-driver-20261114/progress-18-r2.py`,
+SHA9946296cd11948b347740e991d2698d966548515ab3372249151db54b6cff9de다.
+
 ## 2026-11-15 16:10 UTC — 실제 Native 다운로드 PASS·원래 INDEX 저장 완료 확인
 
 실제 guiadmin HTTP 세션에서 R5의 인쇄9번 등록 문항
