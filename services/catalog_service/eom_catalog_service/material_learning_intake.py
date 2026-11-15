@@ -32,6 +32,9 @@ from pydantic import BaseModel
 from sqlalchemy import Engine, select
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.material_discovery_reanalysis import (
+    NativeMaterialDiscoveryReanalysisService,
+)
 from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRecord,
@@ -65,7 +68,14 @@ class MaterialLearningIntakeService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
 
     def retry(self, command: RetryMaterialLearningRunCommand) -> MaterialLearningRetryResult:
-        return retry_material_learning_run(self.sessions, command)
+        selected = NativeMaterialDiscoveryReanalysisService(
+            self.artifacts.engine, self.settings
+        ).try_retry(command)
+        return (
+            selected
+            if selected is not None
+            else retry_material_learning_run(self.sessions, command)
+        )
 
     def control(self, command: ControlMaterialLearningRunCommand) -> MaterialLearningControlResult:
         command = ControlMaterialLearningRunCommand.model_validate(command.model_dump(mode="json"))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import NAMESPACE_URL, uuid5
 
 from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialLearningRights
@@ -96,6 +96,33 @@ class _NativeReferencePreparedTarget:
 
 
 type _NativePreparedTarget = _NativeVisualPreparedTarget | _NativeReferencePreparedTarget
+
+
+def clone_material_retry_task(
+    row: MaterialLearningTaskRecord,
+    *,
+    run_id: str,
+    now: datetime,
+    checkpoint_state: Literal["PENDING", "RESULT_READY", "REGISTERED"] | None,
+) -> MaterialLearningTaskRecord:
+    """One task-attempt copy rule; PENDING has no inherited execution/result pointers."""
+    state = row.state if checkpoint_state is None else checkpoint_state
+    inherit = checkpoint_state != "PENDING"
+    return MaterialLearningTaskRecord(
+        task_id="materialtask_" + uuid5(NAMESPACE_URL, f"{run_id}:{row.task_id}").hex,
+        run_id=run_id,
+        task_kind=row.task_kind,
+        unit_key=row.unit_key,
+        ordinal=row.ordinal,
+        attempt=row.attempt + 1,
+        predecessor_task_id=row.task_id,
+        state=state,
+        execution_lane="MATERIAL_LEARNING",
+        error_code=row.error_code if state in {"EXCEPTION", "CANCELLED"} else None,
+        created_at=now,
+        updated_at=now,
+        **{name: getattr(row, name) for name in _ARTIFACT_FIELDS} if inherit else {},
+    )
 
 
 def retry_material_learning_run(
@@ -362,31 +389,18 @@ def _retry_material_learning_run(
         )
         copies = []
         for row in tasks:
-            state = row.state
-            inherit = state != "FAILED"
-            if state == "FAILED":
+            checkpoint_state: Literal["PENDING", "RESULT_READY", "REGISTERED"] | None = None
+            if row.state == "FAILED":
                 inherit = row.task_id in result_owners
-                state = (
+                checkpoint_state = (
                     "REGISTERED"
                     if inherit and row.item_revision_id
                     else "RESULT_READY"
                     if inherit
                     else "PENDING"
                 )
-            clone = MaterialLearningTaskRecord(
-                task_id="materialtask_" + uuid5(NAMESPACE_URL, f"{identity}:{row.task_id}").hex,
-                run_id=identity,
-                task_kind=row.task_kind,
-                unit_key=row.unit_key,
-                ordinal=row.ordinal,
-                attempt=row.attempt + 1,
-                predecessor_task_id=row.task_id,
-                state=state,
-                execution_lane="MATERIAL_LEARNING",
-                error_code=row.error_code if state in {"EXCEPTION", "CANCELLED"} else None,
-                created_at=now,
-                updated_at=now,
-                **{name: getattr(row, name) for name in _ARTIFACT_FIELDS} if inherit else {},
+            clone = clone_material_retry_task(
+                row, run_id=identity, now=now, checkpoint_state=checkpoint_state
             )
             copies.append(clone)
         session.add_all(copies)
@@ -610,3 +624,8 @@ def _result(
             replayed=replayed,
         )
     )
+
+
+# Historical private callers keep their behavior; native discovery reanalysis
+# shares the same exact workflow/analysis/lease fence through this public name.
+quiescent_material_task_workflows = _quiescent_failed_workflows

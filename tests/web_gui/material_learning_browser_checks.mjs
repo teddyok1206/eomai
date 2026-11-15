@@ -116,6 +116,17 @@ try {
   assert.equal(retries.length, 1);
   assert.deepEqual(retries[0].body, {expected_updated_at: '2026-11-06T00:00:00Z'});
   assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), 2, 'unit retry recopied original sources');
+  await page.evaluate(() => {
+    fixture.runs[0].state = 'FAILED';
+    fixture.runs[0].error_code = 'MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE';
+    fixture.runs[0].task_counts = [{state: 'COMPLETED', count: 7}];
+    fixture.taskState = 'COMPLETED';
+  });
+  await page.locator('#material-learning-refresh').click();
+  await page.getByRole('button', {name: '오류 난 부분 다시 처리', exact: true}).waitFor();
+  await page.evaluate(() => {fixture.runs[0].error_code = 'MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH';});
+  await page.locator('#material-learning-refresh').click();
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('button')).some(button => button.textContent === '오류 난 부분 다시 처리'));
   await page.evaluate(() => {fixture.taskState = 'FUTURE_STATE';});
   await page.locator('#material-learning-refresh').click();
   await page.waitForFunction(() => document.querySelector('#material-learning-detail [data-raw-state="FUTURE_STATE"]'));

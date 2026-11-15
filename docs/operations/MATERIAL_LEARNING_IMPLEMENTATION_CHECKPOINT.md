@@ -5,6 +5,31 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 17:49 UTC — 선택 재분석 구현·DB 검증 완료, 배포 전
+
+기존 retry wire와 linked run/task를 쓰는 `NativeMaterialDiscoveryReanalysisService`를
+구현했다. 원본/권리/prepared/native bundle/accepted result를 읽어 incomplete producer만
+선정하고 revision→run 잠금 아래 새 task를 만든다. 두 번째 회차의 예정 선택은2개이며
+PREPARE와 정상 발견4개는 그대로 재사용한다. 기존 FAILED/COMPLETED 기록은 수정하지 않는다.
+
+- Source 집중 회귀 **238 PASS**, core3파일 mypy와 Ruff/format PASS.
+- Guarded disposable DB migration79 왕복 PASS, Material suite **117 PASS**, 별도 coverage
+  upgrade **1 PASS**. 실제 source/rights/Artifact/history를 읽는 Native 복구 테스트도 포함한다.
+- 실제 브라우저 fixture PASS: task가 전부 완료됐어도 정확한 incomplete 실패에는 기존 retry
+  버튼이 보이고, 다른 실패를 임의 재처리하지 않는다. 실제 운영 retry 성공은 아직 아니다.
+- 초기 검증 실패는 invocation/합성 fixture와 새 코드의 task→event flush 순서를 구분해 보존했다.
+  DB에서 FK 실패를 재현한 뒤 기존 retry와 동일하게 task를 먼저 flush하도록 고쳤다.
+  immutable 실패/승인 Artifact를 시험용으로 덮어쓰는 fixture도 제거했다. DB 제약은 완화하지 않았다.
+- 증거: `staging/native-discovery-reanalysis-source-final-r2-20261115.log`,
+  `staging/native-discovery-reanalysis-db-full-20261115.log`,
+  `staging/native-discovery-reanalysis-browser-r3-20261115.log`.
+
+17:47 공식18회차 조회는 첫 회차25개 등록/풀이/Graph 완료, 두 번째 범위 실패,
+세 번째25개 task 생성·1개 Item/base·1개 source-unreadable 예외, 나머지15회차 RECEIVED다.
+`staging/native18-reanalysis-validation-progress-20261115.json`은 이 시점의 관측이며 전체450완료가 아니다.
+INDEX도 같은 Invocation이 OS runtime 관측 실패로 다시 멈춘 상태를 확인했다.
+성공한 벡터를 다시 계산하거나 Native 복구의 완료 증거로 합산하지 않는다.
+
 ## 2026-11-15 17:14 UTC — 두 번째 회차의 범위 완료 판정 실패·선택 재분석 후보
 
 두 번째 run `materialrun_3b66485a97fb5324b136228e0f18b120`은 발견6개를 모두 COMPLETED로

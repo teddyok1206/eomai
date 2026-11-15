@@ -36,6 +36,9 @@ Native의 정확한 문제/해설 번호·원본 대응과 완료 거부는
 번호/출처가 맞는다는 것과 모델이 범위를 완전히 읽었다는 것은 다르다. incomplete task
 선정은 원래 flag를 COMPLETE로 바꾸지 않는다. 후속 복구 설계·미활성 경계는
 `docs/architecture/NATIVE_DISCOVERY_COMPLETENESS_REANALYSIS.md`와 운영 checkpoint를 따른다.
+`material_discovery_reanalysis.py`는 기존 intake retry에서 정확한 incomplete 실패만
+받아 producer history로 재분석 대상을 정한다. revision→run 잠금 아래 새 linked task만
+생성하며 정상 발견·PREPARE는 그대로 상속한다. 새 입력이나 실행 권한을 모델이 고르지 않는다.
 
 ## 출처와 상태를 분리
 

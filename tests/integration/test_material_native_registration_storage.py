@@ -913,7 +913,7 @@ def test_native_preparation_recovery_preserves_original_pair_workbook_and_bundle
 
 
 @pytest.fixture
-def native_finalization_case(creative_engine, native_read_case, monkeypatch):
+def native_finalization_case(creative_engine, native_read_case, monkeypatch, request):
     """Real source/Artifact/history; only already-completed model admission is synthetic."""
     from types import SimpleNamespace
 
@@ -1012,7 +1012,9 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch):
                     prepared_artifact_id=pointer.artifact_id if index else None,
                     prepared_artifact_revision_id=pointer.artifact_revision_id if index else None,
                     prepared_sha256=pointer.sha256 if index else None,
-                    error_code="MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID" if index == 2 else None,
+                    error_code=getattr(request, "param", "MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID")
+                    if index == 2
+                    else None,
                     created_at=now,
                     updated_at=now,
                 )
@@ -1095,6 +1097,56 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch):
         owner=recovery_owner,
         settings=settings,
     )
+
+
+@pytest.mark.parametrize(
+    "native_finalization_case", ["MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE"], indirect=True
+)
+def test_native_incomplete_reanalysis_validates_real_source_and_inherited_producer(
+    creative_engine, native_finalization_case, monkeypatch
+):
+    """Real source, rights, checkpoint/history and Artifact IO; AI admission only is synthetic."""
+    from eom_catalog_contracts.material_learning_intake import RetryMaterialLearningRunCommand
+    from eom_catalog_service import material_discovery_reanalysis as reanalysis
+    from eom_catalog_service.material_learning_models import (
+        MaterialLearningRunRecord,
+        MaterialLearningTaskRecord,
+    )
+
+    case = native_finalization_case
+    values = {
+        key: replace(
+            planned,
+            discovery_task_id=case.discovers[0],
+            unit=planned.unit.model_copy(update={"continuation": "TO_NEXT"})
+            if planned.unit.kind == "QUESTION"
+            else planned.unit,
+        )
+        for key, planned in case.admitted.by_unit.items()
+    }
+    admitted = replace(case.admitted, by_unit=values)
+    monkeypatch.setattr(reanalysis, "read_material_discovery_plan", lambda *a, **k: admitted)
+    command = RetryMaterialLearningRunCommand(
+        actor_id=case.command.actor_id,
+        run_id=case.command.run_id,
+        expected_updated_at=case.command.expected_updated_at,
+    )
+    service = reanalysis.NativeMaterialDiscoveryReanalysisService(creative_engine, case.settings)
+    result = service.try_retry(command)
+    assert (result.reused_tasks, result.retried_tasks, result.state) == (1, 1, "DISCOVERING")
+    assert service.try_retry(command).replayed
+    with Session(creative_engine) as session:
+        rows = tuple(
+            session.scalars(
+                select(MaterialLearningTaskRecord)
+                .where(MaterialLearningTaskRecord.run_id == result.run_id)
+                .order_by(MaterialLearningTaskRecord.ordinal)
+            )
+        )
+        assert rows[0].state == "COMPLETED" and rows[0].predecessor_task_id == case.prepares[2]
+        assert rows[1].state == "PENDING" and rows[1].predecessor_task_id == case.discovers[1]
+        assert rows[1].input_artifact_revision_id is rows[1].output_artifact_revision_id is None
+        assert session.get(MaterialLearningRunRecord, command.run_id).state == "FAILED"
 
 
 def test_native_finalization_concurrent_attempt_four_reuses_all_results_without_model(

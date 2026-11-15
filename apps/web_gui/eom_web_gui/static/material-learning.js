@@ -67,7 +67,8 @@ export function createMaterialLearning({document, api, setStateStatus, explainEr
       target.append(button);
     }
     if (result.run.error_code) target.append(node("p", `확인 코드: ${result.run.error_code}`, "form-message error"));
-    if (["FAILED", "COMPLETED_WITH_EXCEPTIONS"].includes(result.run.state) && result.run.task_counts.some(value => value.state === "FAILED" && value.count > 0)) {
+    const incompleteDiscovery = result.run.state === "FAILED" && result.run.error_code === "MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE";
+    if (["FAILED", "COMPLETED_WITH_EXCEPTIONS"].includes(result.run.state) && (incompleteDiscovery || result.run.task_counts.some(value => value.state === "FAILED" && value.count > 0))) {
       const button = node("button", "오류 난 부분 다시 처리", "button quiet");
       button.type = "button";
       button.addEventListener("click", async () => {
