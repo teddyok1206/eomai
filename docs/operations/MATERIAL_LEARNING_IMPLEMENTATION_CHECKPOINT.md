@@ -5,6 +5,34 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 03:07 UTC — INDEX 실제 저장 성공·미완료 영수증 한 건 식별
+
+`0a56aaf1ff82051fa7cd4c40eef8ddd163ed93ec` 후보를 커밋·푸시하고 build-only/RECORD 및 공식
+immutable SDK 설치를 완료했다. 실제 runtime은 아직 전환하지 않았다. 최초 설치 시0444
+shell helper의 직접 실행은 실패했고, 같은 보호된 helper를 `/bin/bash`로 정상 실행했다.
+두 실행 로그를 보존한다. 임시 DB는 정식 cleanup으로 제거했다.
+
+정확한 현행 Identity 조회에서 `workflow_9713c7afeb0047e7b5aacd0c5bf738a8`의 command
+`wfcmd_b8e99d7c493442fa94fe3be2a035d391` 한 건이 PROCESSING으로 남은 것을 확인했다.
+02:28:38 UTC lease는 만료됐다. 공식 native readers의 짧은 SHARE 관측과 명시적 rollback에서
+encoding4개 SUCCEEDED/completion 있음, coordinator COMMITTING과 ALLOCATION/INDEX_PREPARED/
+REGISTERED3개 checkpoint를 확인했다. index revision은
+`embeddingindexrev_bfcc7f7a5b1831d9f6a2f7529f8798e7`이다. byte 검증은 아직 별도이며 metadata
+관측만으로 최종 Workflow COMPLETED를 주장하지 않는다. 원래 CPU 완료 command도 보존한다.
+
+새 영수증 producer는 allocation에서 예약된 ID이며 아직 Job이 없는 것이 정상이다. 진단
+초안이 그 예약 ID까지 Job 존재를 요구해 한 번 실패했으며, 원래 frozen helper/실패 로그를
+보존하고 필수 native/encoding Job만 검사하는 r3로 수정했다. 운영 row는 변경하지 않았다.
+근거는 `staging/native-index-history-blocked-workflow-inspect-r3-20261115.json`이다.
+
+이 한 건은 재계산/FAILED 정산 대신 기존 publication-only 복구로 완료한다. 인계 guard는
+완전히 계산·등록된 exact 원요청만 예외로 pin하고, 다른 미완료0·만료 lease·물리 drain·
+encoding 불변을 다시 검사한다. 새 service/grant의 공식 successor 반영 뒤 원래 완료
+영수증을 저장하고 동일 command replay를 확인한 후에만 INDEX를 시작한다. 세부는
+`../architecture/PUBLIC_SOLUTION_HISTORICAL_REVISION_CAPTURE.md`다. 현재 이 인계/복구는 아직
+미실행이다. frozen HTTP driver는 Studio 로그인 입력 대기이며 나머지17회차는 미제출이다.
+전체450개 목표는 ACTIVE다.
+
 ## 2026-11-15 02:51 UTC — 22번 새 풀이·Graph 완료 / INDEX 이력 조건 수정 후보
 
 22번의 image-only 새 revision에 대한 base `analysisrun_790cb7b9e71f4d1c8a8e6833c60ffadf`와

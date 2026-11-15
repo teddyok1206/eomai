@@ -40,3 +40,25 @@ source 회귀와 guarded disposable PostgreSQL에서 exact old revision·공개 
 보존, 불완전한 이력·hash·최종 권한 거부 및 locked bulk read를 검증한다. DB fixture의 source
 admission/report IO는 명시적 synthetic port여서 실제 NAS/운영 수치 완료 증거가 아니다.
 실제 재개와 새 index 저장은 운영 기록에서 별도 판정한다.
+
+## 이미 등록한 요청 한 건의 완료 인계
+
+실제 추가 관측에서 중단된 CUDA 요청 한 건은 encoding4개가 SUCCEEDED이고 coordinator가
+ALLOCATION → INDEX_PREPARED → REGISTERED까지 진행했다. 원래 command의 lease는 만료됐고
+INDEX PID는0이다. 이미 등록된 index를 다시 계산하거나 이 요청을 실패로 바꿀 필요가 없다.
+
+전환은 기존 Identity/grant successor와
+`recover_prepared_index_publication`의 root/schema-owner 유지보수를 조합한다. 종전 운영
+template의 unfinished0 조건은 **정확히 고정한 이 한 건만** 제외하도록 좁혀 사용한다.
+인계 직전 exact service/request/intent/registration/checkpoint·성공한4개 receipt와 잠금 만료,
+물리 자식 drain을 다시 검사하며 나머지 unfinished/held command는0이어야 한다. 새 service
+head는 기존 CAS로 갱신하고 current source grants는 이전 범위·모델·recipe와 동등해야 한다.
+완료 vector metadata의 고정 cutoff fingerprint와 다른 서비스/config의 불변도 대조한다.
+
+후속 복구는 기존 request·producer·Artifact·index ID와 저장된 encoding을 그대로 사용한다.
+publication-only executor는 source discovery·submit·allocation·수치 실행을 제공하지 않는다.
+원래 command 재claim 및 완료 영수증 저장은 기존 Runner/Orchestrator가 담당한다. 같은
+recovery command의 재실행은 같은 결과를 확인하며 실패·다른 head·미완료 encoding·유효한
+claim은 거부한다. 복구가 끝나기 전 새 INDEX discovery를 시작하지 않는다. 새 DB/queue/
+schema나 일반 runtime 권한은 추가하지 않는다. 기존 설계·동시성/중단/재전송 검증 경계는
+`../operations/RETIRED_INDEX_PUBLICATION_RECOVERY.md`를 따른다.
