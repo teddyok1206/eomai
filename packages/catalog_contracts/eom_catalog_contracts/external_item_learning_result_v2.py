@@ -8,6 +8,7 @@ from pydantic import Field, field_validator, model_validator
 
 from eom_catalog_contracts.creative_source_draft import (
     CreativeSourceItemDraft,
+    CreativeSourceItemDraftV2,
     SourceImageBlock,
     creative_source_field_region_roles,
     validate_source_draft_visual_regions,
@@ -90,9 +91,11 @@ class IndependentSourceSolution(FrozenModel):
         return self
 
 
-class ExternalItemLearningProposalV2(FrozenModel):
+class _SourceItemProposal[DraftT: (CreativeSourceItemDraft, CreativeSourceItemDraftV2)](
+    FrozenModel
+):
     item_number: int = Field(strict=True, ge=1, le=10000)
-    content: CreativeSourceItemDraft
+    content: DraftT
     content_region_map: tuple[ExternalItemContentRegionMap, ...] = Field(
         min_length=2, max_length=128
     )
@@ -120,7 +123,17 @@ class ExternalItemLearningProposalV2(FrozenModel):
         return self
 
 
-class SourceItemLearningObservation(FrozenModel):
+class ExternalItemLearningProposalV2(_SourceItemProposal[CreativeSourceItemDraft]):
+    """Historical archive proposal, still restricted to the released V1 draft."""
+
+
+class SourceItemLearningProposalV2(_SourceItemProposal[CreativeSourceItemDraftV2]):
+    """The material successor uses exact printed scores without archive identity."""
+
+
+class _SourceItemLearningObservation[
+    ProposalT: (ExternalItemLearningProposalV2, SourceItemLearningProposalV2)
+](FrozenModel):
     """Source draft and independent public solution, without archive identity.
 
     Both archive and uploaded-material learning use these same closure rules.
@@ -130,7 +143,7 @@ class SourceItemLearningObservation(FrozenModel):
 
     status: Literal["PROPOSED", "NEEDS_DECISION"]
     regions: tuple[ExternalItemLearningRegion, ...] = Field(min_length=1, max_length=64)
-    proposal: ExternalItemLearningProposalV2 | None
+    proposal: ProposalT | None
     solution_report: IndependentSourceSolution
     conflicts: tuple[ExternalItemLearningConflict, ...] = Field(max_length=32)
 
@@ -226,6 +239,19 @@ class SourceItemLearningObservation(FrozenModel):
             and editorial == independent
         ):
             raise ValueError("claimed source disagreement actually matches")
+
+
+class SourceItemLearningObservation(_SourceItemLearningObservation[ExternalItemLearningProposalV2]):
+    """Unchanged source closure for released archive/material observations."""
+
+
+class SourceItemLearningObservationV2(_SourceItemLearningObservation[SourceItemLearningProposalV2]):
+    """Same source/answer/region rules, with the explicit exact-score draft."""
+
+
+type SourceItemLearningObservationFamily = (
+    SourceItemLearningObservation | SourceItemLearningObservationV2
+)
 
 
 class ExternalItemLearningBodyV2(SourceItemLearningObservation):

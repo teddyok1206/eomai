@@ -14,6 +14,8 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentItemContent,
+    AssessmentItemContentV1_1,
+    BlockAssessmentItemContent,
     ContentIntakeKnowledgeSourceV2,
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
@@ -1887,7 +1889,7 @@ class KnowledgeGraphPublicationService:
         if structure is None:
             return
         self._require_structure_review(session, structure, reviewed_base_snapshot_revision_id)
-        content_by_revision: dict[str, AssessmentItemContent] = {}
+        content_by_revision: dict[str, BlockAssessmentItemContent] = {}
         for binding in structure.item_elements:
             revision = session.get(ItemRevisionRecord, binding.item_revision_id)
             item = session.get(ItemRecord, binding.item_id)
@@ -1933,10 +1935,12 @@ class KnowledgeGraphPublicationService:
                         "KNOWLEDGE_GRAPH_ITEM_POINTER_INVALID",
                         "Item element canonical content is invalid",
                     ) from exc
-                if not isinstance(loaded_content, AssessmentItemContent):
+                if not isinstance(
+                    loaded_content, (AssessmentItemContent, AssessmentItemContentV1_1)
+                ):
                     raise KnowledgeGraphPublicationError(
                         "KNOWLEDGE_GRAPH_ITEM_POINTER_INVALID",
-                        "Item element bindings require assessment item content schema 1.0",
+                        "Item element bindings require block assessment item content",
                     )
                 content = loaded_content
                 content_by_revision[binding.item_revision_id] = content
@@ -2639,7 +2643,7 @@ class KnowledgeGraphPublicationService:
 
     @staticmethod
     def _resolve_item_element(
-        content: AssessmentItemContent, element_kind: str, element_id: str
+        content: BlockAssessmentItemContent, element_kind: str, element_id: str
     ) -> bool | None:
         if element_kind in {"paragraph", "table", "image", "equation", "statement_set"}:
             for block in content.body:

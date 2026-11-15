@@ -40,6 +40,14 @@ Native의 정확한 문제/해설 번호·원본 대응과 완료 거부는
 받아 producer history로 재분석 대상을 정한다. revision→run 잠금 아래 새 linked task만
 생성하며 정상 발견·PREPARE는 그대로 상속한다. 새 입력이나 실행 권한을 모델이 고르지 않는다.
 
+Native 원문 배점 판독은 `eom_hwpx_contracts.native_item_score`의 bounded XML parser와
+Catalog의 `material_native_score.py`가 담당한다. 후자는 이미 source/split lineage를 확인한
+정확한 question descriptor만 읽고 전후 재인가한다. ABSENT/AMBIGUOUS를 미인쇄/0점으로
+간주하지 않는다. draft2/extraction2와 block content1.1은 정확한 반점 문자열을 전달하는
+successor이며 기존 정수 계약의 bytes/의미는 유지한다. 원문과 모델/등록 배점의 비교 및
+운영 활성화는 별도 경계다. 상세 설계와 남은 연결은
+`docs/architecture/NATIVE_PRINTED_SCORE_FIDELITY.md` 및 자료 학습 운영 checkpoint를 따른다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,

@@ -5,6 +5,63 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 배점 보존 기초 구현·검증, 운영 재개는 미완료
+
+새 `source-score/2.0`, source draft2, material extraction2와 canonical block content1.1을
+추가했다. old schema bytes는 바꾸지 않았다. 원문 ZIP/XML score reader는 정확한 question
+descriptor만 열고 bounded read·FD close·전후 재인가를 하며, 모호함/미관측/지원하지 않는
+소수와0/15/반올림 대체를 구분해 거절한다. 기존 region/answer/reference 검증은 두 실제
+형식에서 공유한다. 정수/미인쇄 materialization은 기존1.0을 유지한다.
+
+Catalog reader·Graph block element·그림 조회·question embedding projection과 Web Preview의
+source 후보가1.1을 이해한다. Preview는 schema URI/version mismatch를 거절하고, 새 source를
+구 template로 재생성할 수 있다고 표시하지 않는다. 배점만 바뀌어도 질문 임베딩 text/hash는
+동일하다는 회귀를 확인했다. 이것은 새 public solution/source revision을 이미 등록하거나
+옛 임베딩을 새 revision의 것이라고 바꾸었다는 뜻이 아니다.
+
+최종 후보 검증: `native-score-regression-r5-20261115.log`367 PASS,
+`native-score-historical-consumers-r2-20261115.log`117 PASS, source17개 focused mypy PASS,
+Ruff/format/diff-check PASS. wire audit의 canonical1411/mirror1062/reference12048 확인도 PASS다.
+개발용 index의40-path 제한을 넘긴 초기 오류는 경로 제한을 늘리지 않고 수정했다.
+이전 실패 로그는 보존했다. DB write/model 실행/worker 재생성0이며 이번 단계에 migration은 없다.
+
+**미배포**: 실제 ROLE/request/result·plan·등록 Pack·Catalog HTTP/visual response의 closed
+소비 경계를 아직 새 형식으로 연결하지 않았다. 값 모델 추가만으로 Material owner를 다시
+켜지 않는다. 다음은 최소 successor 연결과 Native 원문 score gate, 기등록 배점의 reviewed
+successor correction 및 기존 task/analysis 재사용을 검증하는 일이다.450개 전체 목표는 ACTIVE다.
+
+19:14:48 INDEX read-only 관측에서 GPU 저장 head는1420/1582, CPU1336/1582였다.
+앞선1412/1332보다 늘었지만 현재 INDEX unit은failed이고 QUERY는active다. 두 space를
+합산하지 않는다. evidence는 `staging/native-score-maintenance-index-20261115.json`이다.
+이 배점 유지보수는 INDEX를 stop/restart하지 않았으며 성공 벡터는 보존했다. 서비스가 현재
+돌고 있다는 주장이나 반복 OS 관측 실패가 해결됐다는 주장은 하지 않는다.
+
+## 2026-11-15 — 원본 배점 충실도 결함 확인, 등록 유지보수
+
+공식 Native question Artifact와 등록 content를 읽어 첫 회차25개를 대조한 결과,
+16개 배점이 원본과 달랐다. 기존 정수 전용 draft 때문에1.5/2.5를15/0/2로 제안·등록한
+사례다. 앞선25개 기술 완료를 배점 충실도 PASS로 해석하지 않는다. 원문 HWPX·Excel·
+해설·그림과 실패 이력은 보존했다. 증거는
+`staging/native-registered-score-audit-20261115.json`이다.
+
+분리된 실제450개 question XML을 bounded parser로 읽었다.1.5점144개·2.5점146개·
+2점160개이며,16회/18회 원 인쇄 합계50.5도 임의 보정하지 않는다.
+`staging/native-printed-score-corpus-450-r2-20261115.json`은 입력 판독 증거이지
+450개 등록 충실도나 운영 수정 완료 증거가 아니다.
+
+Material owner는 main-only SIGINT로 drain되어 inactive다. 지원된 control에서2회차
+후속 run과3회차를 PAUSED로 바꿨다.4회차 RECEIVED의 PAUSE는 기존 phase guard가
+거절했고 그 이후 요청은 하지 않았다. 해당 guard나 DB row를 우회하지 않는다.
+`staging/native-score-scope-pause-20261115.jsonl`과 root 보관 receipt가 우리가 바꾼
+두 pause만 기록한다. 나머지 RECEIVED를 실행시키지 않도록 수정 배포 전까지
+Material owner를 inactive로 유지한다. INDEX/QUERY는 이 유지보수로 교체·중단하지 않았다.
+
+새 score2 값 계약·원문 XML 판독기는 개발 후보다. 회귀132개·Ruff·두 파일 mypy는
+통과했지만 운영 연결/기등록 successor 보정은 아직 미완료다.3회차1번은 파일을 못
+읽은 것이 아니라 정수 계약에 소수 배점을 넣을 수 없어 proposal을 거부한 사례다.
+3회차2번 공개 풀이는 별개인 earlier-step dependency 검증 실패이며 검증을 완화하지 않는다.
+설계는 `docs/architecture/NATIVE_PRINTED_SCORE_FIDELITY.md`다. 전체 목표는 ACTIVE다.
+
 ## 2026-11-15 18:18 UTC — Native3 실제 선택 retry·Web 운영 반영, 전체 목표 계속
 
 Catalog-only 후속 source `36152674a37cd5e1f50e25e19dc35853b5097c75`를 설치·활성화했다.

@@ -31,15 +31,22 @@ _ID = re.compile(r"^[a-z][a-z0-9_]{7,127}$")
 _CONTENT_PROFILE_BY_SCHEMA: dict[str, ContentProfile] = {
     "eom.assessment.item-content/1.0": "BLOCKS_V1",
     "eom://schemas/item-registry/assessment-item-content-v1": "BLOCKS_V1",
+    "eom.assessment.item-content/1.1": "BLOCKS_V1",
+    "eom://schemas/item-registry/assessment-item-content-v1_1": "BLOCKS_V1",
     "eom.assessment.item-content/2.0": "CONTENT_TEAM_V2",
     "eom://schemas/item-registry/assessment-item-content-v2": "CONTENT_TEAM_V2",
     "eom.assessment.item-content/3.0": "CONTENT_TEAM_V3",
     "eom://schemas/item-registry/assessment-item-content-v3": "CONTENT_TEAM_V3",
 }
-_EXPECTED_CONTENT_VERSION: dict[ContentProfile, str] = {
-    "BLOCKS_V1": "1.0",
-    "CONTENT_TEAM_V2": "2.0",
-    "CONTENT_TEAM_V3": "3.0",
+_EXPECTED_CONTENT_VERSION: dict[str, str] = {
+    "eom.assessment.item-content/1.0": "1.0",
+    "eom://schemas/item-registry/assessment-item-content-v1": "1.0",
+    "eom.assessment.item-content/1.1": "1.1",
+    "eom://schemas/item-registry/assessment-item-content-v1_1": "1.1",
+    "eom.assessment.item-content/2.0": "2.0",
+    "eom://schemas/item-registry/assessment-item-content-v2": "2.0",
+    "eom.assessment.item-content/3.0": "3.0",
+    "eom://schemas/item-registry/assessment-item-content-v3": "3.0",
 }
 _CHOICE_LABELS = ("①", "②", "③", "④", "⑤")
 
@@ -96,7 +103,12 @@ def resolve_content_capability(
     return ContentCapability(
         schema_ref=schema_ref,
         profile=_CONTENT_PROFILE_BY_SCHEMA.get(schema_ref),
-        template_delivery_available=schema_ref in _CONTENT_PROFILE_BY_SCHEMA,
+        # Preview support does not promise a legacy template can regenerate a
+        # newly imported source. Original-native delivery is independent.
+        template_delivery_available=(
+            schema_ref in _CONTENT_PROFILE_BY_SCHEMA
+            and _EXPECTED_CONTENT_VERSION[schema_ref] != "1.1"
+        ),
     )
 
 
@@ -111,7 +123,9 @@ def project_item_content(
     profile = capability.profile
     if profile is None:
         raise ValueError("Unsupported Item content cannot be projected")
-    if content.get("schema_version") != _EXPECTED_CONTENT_VERSION[profile]:
+    if _CONTENT_PROFILE_BY_SCHEMA.get(capability.schema_ref) != profile or content.get(
+        "schema_version"
+    ) != _EXPECTED_CONTENT_VERSION.get(capability.schema_ref):
         raise ValueError("Item content version differs from its component schema")
     if profile == "BLOCKS_V1":
         return _project_blocks_v1(content, item_id, item_revision_id)
@@ -182,7 +196,13 @@ def _project_blocks_v1(
     )
     score = _object(content.get("score"), "Item score")
     points = score.get("points")
-    if not isinstance(points, int) or isinstance(points, bool):
+    integer = isinstance(points, int) and not isinstance(points, bool) and 0 <= points <= 100
+    half_point = (
+        content.get("schema_version") == "1.1"
+        and isinstance(points, str)
+        and re.fullmatch(r"[1-9][0-9]?\.5", points) is not None
+    )
+    if not (integer or half_point):
         raise ValueError("Item score is invalid")
     return ProjectedItemContent(
         profile="BLOCKS_V1",

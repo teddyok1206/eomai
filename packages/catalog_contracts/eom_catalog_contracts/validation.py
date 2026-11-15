@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "source-score-v2": CatalogSchemaResource(
+            "schemas/external-item/source-score-v2.schema.json",
+            "resources/external-item/source-score-v2.schema.json",
+            "2.0",
+            "sha256:37cdf2444f45ccf30fc8c09d84075447c3c111ff687a6152407f59ff4d25e4b1",
+        ),
         "material-learning-role-receipt-v2": CatalogSchemaResource(
             "schemas/material-learning/material-learning-role-receipt-v2.schema.json",
             "resources/material-learning/material-learning-role-receipt-v2.schema.json",
@@ -508,6 +514,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5df41437aab399a06417bdfb2c2987b7d05c8f9ec1450cf1bbdaabc92a471c53",
         ),
+        "material-learning-extraction-result-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-extraction-result-v2.schema.json",
+            "resources/material-learning/material-learning-extraction-result-v2.schema.json",
+            "2.0",
+            "sha256:50f77461134763e03d6a0fa051ede52bbbe837a4e66ceb029ecacabd3b0bee20",
+        ),
         "material-learning-extraction-result-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-extraction-result-v1.schema.json",
             "resources/material-learning/material-learning-extraction-result-v1.schema.json",
@@ -789,6 +801,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/external-item/external-item-learning-result-v2.schema.json",
             "2.0",
             "sha256:e764978731c408c5dcd03ab9c78c2dc918aa9e5edd4b0b2f78419d41a9989e26",
+        ),
+        "creative-source-item-draft-v2": CatalogSchemaResource(
+            "schemas/external-item/creative-source-item-draft-v2.schema.json",
+            "resources/external-item/creative-source-item-draft-v2.schema.json",
+            "2.0",
+            "sha256:04133dff2bbae48c281c6df8d0f291bff3b7220b653ca95bd0ae927ae72fd0ba",
         ),
         "creative-source-item-draft-v1": CatalogSchemaResource(
             "schemas/external-item/creative-source-item-draft-v1.schema.json",
@@ -2622,6 +2640,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/item-registry/assessment-item-content-v1.schema.json",
             "1.0",
             "sha256:ca0d360c209d26cce7e9283d42509204ccd8e50f519a85be871a2bbfc625a4bd",
+        ),
+        "assessment-item-content-v1_1": CatalogSchemaResource(
+            "schemas/item-registry/assessment-item-content-v1_1.schema.json",
+            "resources/item-registry/assessment-item-content-v1_1.schema.json",
+            "1.1",
+            "sha256:f16b16f2673178ce944f776a68e42de3fe4262ccebcdb3348939cb993e5236a1",
         ),
         "assessment-item-content-v2": CatalogSchemaResource(
             "schemas/item-registry/assessment-item-content-v2.schema.json",

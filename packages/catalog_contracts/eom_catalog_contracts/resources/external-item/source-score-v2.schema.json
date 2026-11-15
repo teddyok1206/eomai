@@ -1,0 +1,33 @@
+{
+  "$id": "eom://schemas/external-item/source-score/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Observed source score V2, preserving integer and exact positive half-point values",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "points"],
+      "properties": {
+        "state": {"const": "PRINTED"},
+        "points": {"$ref": "#/$defs/printedPoints"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "points"],
+      "properties": {
+        "state": {"const": "UNPRINTED"},
+        "points": {"type": "null"}
+      }
+    }
+  ],
+  "$defs": {
+    "printedPoints": {
+      "oneOf": [
+        {"type": "integer", "minimum": 0, "maximum": 100},
+        {"type": "string", "pattern": "^[1-9][0-9]?\\.5(?![\\s\\S])", "maxLength": 4}
+      ]
+    }
+  }
+}

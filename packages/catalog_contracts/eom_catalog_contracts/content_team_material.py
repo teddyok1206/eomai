@@ -10,6 +10,7 @@ from pydantic import model_validator
 from eom_catalog_contracts.assessment_item import (
     AssessmentItemContent,
     AssessmentItemContentContract,
+    AssessmentItemContentV1_1,
     ImageBlock,
     TableBlock,
 )
@@ -143,7 +144,7 @@ def derive_item_content_material_requirement_v2(
     bounded to 100 blocks; the legacy branch is O(b) time and O(b) bounded auxiliary space.
     """
 
-    if not isinstance(content, AssessmentItemContent):
+    if not isinstance(content, (AssessmentItemContent, AssessmentItemContentV1_1)):
         return derive_content_team_material_requirement_v2(content)
 
     visual_kinds = tuple(

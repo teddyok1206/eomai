@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-registry/assessment-item-content-v1_1",
+  "title": "EOM block Item content with exact half-point scores",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "locale", "title", "body", "interaction", "solution", "score"],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "locale": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1#/properties/locale"},
+    "title": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1#/properties/title"},
+    "body": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1#/properties/body"},
+    "interaction": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1#/properties/interaction"},
+    "solution": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1#/properties/solution"},
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points"],
+      "properties": {
+        "points": {"$ref": "eom://schemas/external-item/source-score/2.0#/$defs/printedPoints"}
+      }
+    }
+  }
+}

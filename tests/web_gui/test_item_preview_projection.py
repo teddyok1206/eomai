@@ -38,6 +38,36 @@ def _content_component(schema_ref: str = "eom.assessment.item-content/3.0") -> d
     }
 
 
+@pytest.mark.parametrize("points", ["1.5", "2.5", 2])
+def test_minor_block_successor_displays_score_without_advertising_template_regeneration(points):
+    from tests.unit.test_inference_transfer_item_projection import _item_v1
+
+    value = _item_v1().model_dump(mode="json")
+    value.update(schema_version="1.1", score={"points": points})
+    components = [_content_component("eom.assessment.item-content/1.1")]
+    capability = resolve_content_capability(components, REVISION_ID)
+    assert capability.profile == "BLOCKS_V1"
+    assert capability.template_delivery_available is False
+    projected = project_item_content(
+        content=value,
+        capability=capability,
+        components=components,
+        item_id=ITEM_ID,
+        item_revision_id=REVISION_ID,
+    )
+    assert projected.score_display == str(points)
+    assert projected.title == value["title"]
+    wrong_version = dict(value, schema_version="1.0")
+    with pytest.raises(ValueError, match="version differs"):
+        project_item_content(
+            content=wrong_version,
+            capability=capability,
+            components=components,
+            item_id=ITEM_ID,
+            item_revision_id=REVISION_ID,
+        )
+
+
 def _image_component(ordinal: int) -> dict[str, object]:
     return {
         "item_component_id": "itemcomponent_" + f"{ordinal + 4:x}" * 32,

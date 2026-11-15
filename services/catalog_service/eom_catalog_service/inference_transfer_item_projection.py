@@ -15,8 +15,10 @@ from typing import Literal
 from eom_catalog_contracts.assessment_item import (
     AssessmentItemContent,
     AssessmentItemContentContract,
+    AssessmentItemContentV1_1,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
+    BlockAssessmentItemContent,
     EquationBlock,
     ImageBlock,
     ParagraphBlock,
@@ -110,7 +112,7 @@ def _table_text(
     return "\n".join(lines)
 
 
-def _v1_question_parts(item: AssessmentItemContent) -> tuple[str, ...]:
+def _v1_question_parts(item: BlockAssessmentItemContent) -> tuple[str, ...]:
     parts: list[str] = []
     for block in item.body:
         if isinstance(block, ParagraphBlock):
@@ -196,7 +198,7 @@ def _render_checked_item_text(
 ) -> CanonicalExperimentItemText:
     parts = (
         _v1_question_parts(item)
-        if isinstance(item, AssessmentItemContent)
+        if isinstance(item, (AssessmentItemContent, AssessmentItemContentV1_1))
         else _content_team_question_parts(item)
     )
     text = "\n\n".join(parts)
@@ -292,7 +294,7 @@ def _original_item_metadata(
             source_sha256=source.sha256,
         )
 
-    if isinstance(item, AssessmentItemContent):
+    if isinstance(item, (AssessmentItemContent, AssessmentItemContentV1_1)):
         for block in item.body:
             append("MATERIAL_FORM", block.type)
             if isinstance(block, EquationBlock):
@@ -376,7 +378,7 @@ def project_staged_item_entry(
     limitations.update(result.limitations)
     has_images = (
         any(isinstance(block, ImageBlock) for block in checked_item.body)
-        if isinstance(checked_item, AssessmentItemContent)
+        if isinstance(checked_item, (AssessmentItemContent, AssessmentItemContentV1_1))
         else any(visual.kind == "IMAGE" for visual in checked_item.visuals)
     )
     if has_images:

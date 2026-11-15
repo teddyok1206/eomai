@@ -12,7 +12,10 @@ from eom_identifiers import content_sha256
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
-from eom_catalog_contracts.external_item_learning_result_v2 import SourceItemLearningObservation
+from eom_catalog_contracts.external_item_learning_result_v2 import (
+    SourceItemLearningObservation,
+    SourceItemLearningObservationV2,
+)
 from eom_catalog_contracts.item_origin import OriginArtifactMemberPointer
 from eom_catalog_contracts.legacy_assessment import NormalizedBoundingBox
 from eom_catalog_contracts.models import ActorId, FrozenModel, Sha256, UtcDatetime, _safe_text
@@ -354,6 +357,20 @@ class MaterialExtractionResult(SourceItemLearningObservation):
         return self
 
 
+class MaterialExtractionResultV2(SourceItemLearningObservationV2):
+    schema_version: Literal["material-learning-extraction-result/2.0"]
+    input_sha256: Sha256
+    office_bindings: OfficeVisualBindings | None
+
+    @model_validator(mode="after")
+    def installed_schema(self) -> Self:
+        validate_contract("material-learning-extraction-result-v2", self.model_dump(mode="json"))
+        return self
+
+
+type MaterialExtractionResultFamily = MaterialExtractionResult | MaterialExtractionResultV2
+
+
 MaterialLearningWork = Annotated[
     MaterialDiscoveryWork | MaterialExtractionWork, Field(discriminator="schema_version")
 ]
@@ -394,7 +411,7 @@ def validate_material_discovery(
 
 
 def validate_material_extraction(
-    result: MaterialExtractionResult, work: MaterialExtractionWork
+    result: MaterialExtractionResultFamily, work: MaterialExtractionWork
 ) -> None:
     if result.input_sha256 != work.input_sha256:
         raise ValueError("MATERIAL_LEARNING_RESULT_INPUT_MISMATCH")

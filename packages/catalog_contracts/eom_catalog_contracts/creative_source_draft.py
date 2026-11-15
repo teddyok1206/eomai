@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -17,10 +17,13 @@ from eom_catalog_contracts.assessment_item import (
 )
 from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningRegion
 from eom_catalog_contracts.models import FrozenModel, _safe_text
+from eom_catalog_contracts.source_score import SourceScoreV2
 from eom_catalog_contracts.validation import validate_contract
 
 CREATIVE_SOURCE_DRAFT_SCHEMA = "creative-source-item-draft-v1"
 CREATIVE_SOURCE_DRAFT_SCHEMA_REF = "eom://schemas/external-item/source-item-draft/1.0"
+CREATIVE_SOURCE_DRAFT_V2_SCHEMA = "creative-source-item-draft-v2"
+CREATIVE_SOURCE_DRAFT_V2_SCHEMA_REF = "eom://schemas/external-item/source-item-draft/2.0"
 
 CREATIVE_SOURCE_STATEMENT_GUIDANCE = (
     "Use statement_set for propositions the question asks the reader to judge, such as "
@@ -123,21 +126,20 @@ SourceDraftBlock = Annotated[
 ]
 
 
-class CreativeSourceItemDraft(FrozenModel):
-    schema_version: Literal["creative-source-item-draft/1.0"] = "creative-source-item-draft/1.0"
+class _SourceItemDraft(FrozenModel):
+    _schema_resource: ClassVar[str]
     locale: str = Field(pattern=r"^[a-z]{2}-[A-Z]{2}$")
     title: str = Field(min_length=1, max_length=20_000)
     body: tuple[SourceDraftBlock, ...] = Field(min_length=1, max_length=100)
     interaction: Interaction
     solution: ItemSolution
-    score: SourceScore
     solution_origin: Literal["EDITORIAL_SOURCE", "INDEPENDENT_PROPOSAL_UNVERIFIED"]
 
     _text = field_validator("title")(_safe_text)
 
     @model_validator(mode="after")
     def closed_item_references(self) -> Self:
-        validate_contract(CREATIVE_SOURCE_DRAFT_SCHEMA, self.model_dump(mode="json"))
+        validate_contract(self._schema_resource, self.model_dump(mode="json"))
         validate_item_reference_contract(
             block_ids=tuple(block.block_id for block in self.body),
             statement_ids=tuple(
@@ -152,8 +154,23 @@ class CreativeSourceItemDraft(FrozenModel):
         return self
 
 
+class CreativeSourceItemDraft(_SourceItemDraft):
+    _schema_resource = CREATIVE_SOURCE_DRAFT_SCHEMA
+    schema_version: Literal["creative-source-item-draft/1.0"] = "creative-source-item-draft/1.0"
+    score: SourceScore
+
+
+class CreativeSourceItemDraftV2(_SourceItemDraft):
+    _schema_resource = CREATIVE_SOURCE_DRAFT_V2_SCHEMA
+    schema_version: Literal["creative-source-item-draft/2.0"] = "creative-source-item-draft/2.0"
+    score: SourceScoreV2
+
+
+type SourceItemDraft = CreativeSourceItemDraft | CreativeSourceItemDraftV2
+
+
 def validate_source_draft_visual_regions(
-    draft: CreativeSourceItemDraft,
+    draft: SourceItemDraft,
     regions: tuple[ExternalItemLearningRegion, ...],
 ) -> None:
     """Check role/page/containment before any owner dereferences or crops bytes.

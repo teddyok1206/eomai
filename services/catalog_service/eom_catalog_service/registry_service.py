@@ -24,6 +24,7 @@ from eom_catalog_contracts import (
     ApproveItemRevisionCommandV1,
     AssessmentItemContent,
     AssessmentItemContentContract,
+    AssessmentItemContentV1_1,
     AssessmentLayoutObservation,
     AssessmentPageImagePointer,
     ImageBlock,
@@ -848,7 +849,11 @@ class RegistryService:
             )
             matches = [
                 block
-                for block in (content.body if isinstance(content, AssessmentItemContent) else ())
+                for block in (
+                    content.body
+                    if isinstance(content, (AssessmentItemContent, AssessmentItemContentV1_1))
+                    else ()
+                )
                 if isinstance(block, ImageBlock) and block.block_id == block_id
             ]
             if len(matches) != 1:

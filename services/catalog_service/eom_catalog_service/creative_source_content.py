@@ -6,7 +6,11 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from eom_catalog_contracts.assessment_item import AssessmentItemContent, ImageBlock
+from eom_catalog_contracts.assessment_item import (
+    AssessmentItemContent,
+    BlockAssessmentItemContent,
+    ImageBlock,
+)
 from eom_catalog_contracts.creative_source_lineage import (
     CreativeSourceAnswerMode,
     CreativeSourceNormalizationAction,
@@ -14,7 +18,7 @@ from eom_catalog_contracts.creative_source_lineage import (
 from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
 from eom_catalog_contracts.external_item_learning_result_v2 import (
     ExternalItemLearningResultV2,
-    SourceItemLearningObservation,
+    SourceItemLearningObservationFamily,
 )
 from eom_identifiers import content_sha256
 
@@ -33,7 +37,7 @@ class CreativeSourceContentError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class CreativeSourceContent:
-    content: AssessmentItemContent
+    content: BlockAssessmentItemContent
     proposed_content_sha256: str
     registered_content_sha256: str
     source_answer_mode: CreativeSourceAnswerMode
@@ -50,7 +54,7 @@ def materialize_creative_source_content_v2(
 
 
 def materialize_source_observation_content(
-    result: SourceItemLearningObservation, *, resolved_images: Mapping[str, ImageBlock]
+    result: SourceItemLearningObservationFamily, *, resolved_images: Mapping[str, ImageBlock]
 ) -> CreativeSourceContent:
     """Common source compiler; callers supply an already validated purpose result."""
     if result.proposal is None:

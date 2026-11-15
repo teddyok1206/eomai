@@ -3,22 +3,27 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from eom_catalog_contracts.assessment_item import AssessmentItemContent, ImageBlock
+from eom_catalog_contracts.assessment_item import (
+    AssessmentItemContent,
+    AssessmentItemContentV1_1,
+    BlockAssessmentItemContent,
+    ImageBlock,
+)
 from eom_catalog_contracts.creative_source_draft import (
-    CreativeSourceItemDraft,
     SourceImageBlock,
+    SourceItemDraft,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class MaterializedCreativeSourceDraft:
-    content: AssessmentItemContent
+    content: BlockAssessmentItemContent
     source_score_state: str
     solution_origin: str
     warning_codes: tuple[str, ...]
 
 
-def creative_source_draft_warning_codes(draft: CreativeSourceItemDraft) -> tuple[str, ...]:
+def creative_source_draft_warning_codes(draft: SourceItemDraft) -> tuple[str, ...]:
     """The compiler and official report reader share the same interpretation flags."""
     warnings = []
     if draft.score.state == "UNPRINTED":
@@ -29,7 +34,7 @@ def creative_source_draft_warning_codes(draft: CreativeSourceItemDraft) -> tuple
 
 
 def materialize_creative_source_draft(
-    draft: CreativeSourceItemDraft,
+    draft: SourceItemDraft,
     *,
     resolved_images: Mapping[str, ImageBlock],
 ) -> MaterializedCreativeSourceDraft:
@@ -55,9 +60,13 @@ def materialize_creative_source_draft(
             body.append(image.model_dump(mode="json"))
         else:
             body.append(block.model_dump(mode="json"))
-    content = AssessmentItemContent.model_validate(
+    # Only the explicit successor can carry fractional strings. Keep integer
+    # and unprinted historical materialization byte-for-byte equivalent.
+    fractional = draft.score.state == "PRINTED" and isinstance(draft.score.points, str)
+    model = AssessmentItemContentV1_1 if fractional else AssessmentItemContent
+    content = model.model_validate(
         {
-            "schema_version": "1.0",
+            "schema_version": "1.1" if fractional else "1.0",
             "locale": draft.locale,
             "title": draft.title,
             "body": body,

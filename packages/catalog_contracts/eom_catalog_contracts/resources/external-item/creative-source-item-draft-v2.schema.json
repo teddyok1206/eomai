@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/source-item-draft/2.0",
+  "title": "Source Item draft with exact printed scores",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "locale", "title", "body", "interaction", "solution", "score", "solution_origin"],
+  "properties": {
+    "schema_version": {"const": "creative-source-item-draft/2.0"},
+    "locale": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/locale"},
+    "title": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/title"},
+    "body": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/body"},
+    "interaction": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/interaction"},
+    "solution": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/solution"},
+    "score": {"$ref": "eom://schemas/external-item/source-score/2.0"},
+    "solution_origin": {"$ref": "eom://schemas/external-item/source-item-draft/1.0#/properties/solution_origin"}
+  }
+}

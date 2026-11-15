@@ -11,6 +11,7 @@ from eom_hwpx_contracts import ContentTeamEditorialDraft, ContentTeamEditorialDr
 from pydantic import Field, field_validator, model_validator
 
 from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
+from eom_catalog_contracts.source_score import HalfSourcePoints, IntegerSourcePoints
 
 ChoiceId = Annotated[str, Field(pattern=r"^choice_[a-z0-9][a-z0-9_]{0,31}$")]
 StatementId = Annotated[str, Field(pattern=r"^statement_[a-z][a-z0-9_]{0,31}$")]
@@ -19,6 +20,7 @@ BoundedAnswer = Annotated[str, Field(min_length=1, max_length=20_000)]
 ASSESSMENT_ITEM_CONTENT_FILE_NAME: Final = "assessment-item-content.json"
 ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE: Final = "application/json"
 ASSESSMENT_ITEM_CONTENT_SCHEMA_REF: Final = "eom.assessment.item-content/1.0"
+ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF: Final = "eom.assessment.item-content/1.1"
 ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF: Final = "eom.assessment.item-content/2.0"
 ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF: Final = "eom.assessment.item-content/3.0"
 
@@ -207,21 +209,19 @@ class ItemScore(FrozenModel):
     points: int = Field(ge=0, le=100)
 
 
-class AssessmentItemContent(FrozenModel):
-    """Canonical small value artifact pinned by an Item Revision component."""
+class _BlockAssessmentItemContent(FrozenModel):
+    """The unchanged block/reference semantics shared by both score versions."""
 
-    schema_version: Literal["1.0"] = "1.0"
     locale: str = Field(pattern=r"^[a-z]{2}-[A-Z]{2}$")
     title: str = Field(min_length=1, max_length=20_000)
     body: tuple[ContentBlock, ...] = Field(min_length=1, max_length=100)
     interaction: Interaction
     solution: ItemSolution
-    score: ItemScore
 
     _text = field_validator("title")(_safe_text)
 
     @model_validator(mode="after")
-    def consistent_references(self) -> AssessmentItemContent:
+    def consistent_references(self) -> _BlockAssessmentItemContent:
         validate_item_reference_contract(
             block_ids=tuple(block.block_id for block in self.body),
             statement_ids=tuple(
@@ -234,6 +234,27 @@ class AssessmentItemContent(FrozenModel):
             solution=self.solution,
         )
         return self
+
+
+class AssessmentItemContent(_BlockAssessmentItemContent):
+    """Released integer-score block content remains unchanged on the wire."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    score: ItemScore
+
+
+class ExactItemScore(FrozenModel):
+    points: IntegerSourcePoints | HalfSourcePoints
+
+
+class AssessmentItemContentV1_1(_BlockAssessmentItemContent):
+    """Same native blocks with exact, non-floating half-point values."""
+
+    schema_version: Literal["1.1"] = "1.1"
+    score: ExactItemScore
+
+
+type BlockAssessmentItemContent = AssessmentItemContent | AssessmentItemContentV1_1
 
 
 class AssessmentItemContentV2(ContentTeamEditorialDraft):
@@ -249,7 +270,7 @@ class AssessmentItemContentV3(ContentTeamEditorialDraftV2):
 
 
 type AssessmentItemContentContract = (
-    AssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
+    BlockAssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
 )
 
 

@@ -11,6 +11,7 @@ import pytest
 from eom_catalog_contracts.assessment_item import (
     AssessmentItemContent,
     AssessmentItemContentContract,
+    AssessmentItemContentV1_1,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
 )
@@ -64,6 +65,22 @@ def test_public_question_projection_rejects_forged_numeric_recipe():
     recipe = public_recipe().model_copy(update={"maximum_text_bytes": 999999})
     with pytest.raises(ValueError):
         render_public_reference_item_text(item=item, original_source=_source(item), recipe=recipe)
+
+
+def test_half_point_version_preserves_identical_question_embedding_input():
+    old = _item_v1()
+    document = old.model_dump(mode="json")
+    document.update(schema_version="1.1", score={"points": "1.5"})
+    current = AssessmentItemContentV1_1.model_validate(document)
+    previous = render_public_reference_item_text(
+        item=old, original_source=_source(old), recipe=public_recipe()
+    )
+    projected = render_public_reference_item_text(
+        item=current, original_source=_source(current), recipe=public_recipe()
+    )
+    assert projected.text == previous.text
+    assert projected.text_sha256 == previous.text_sha256
+    assert projected.original_source != previous.original_source
 
 
 def _recipe() -> ExperimentViewRecipe:

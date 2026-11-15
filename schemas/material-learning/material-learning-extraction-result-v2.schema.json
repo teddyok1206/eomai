@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/extraction-result/2.0",
+  "title": "Material source extraction with exact printed scores",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "input_sha256", "status", "regions", "proposal", "solution_report", "conflicts", "office_bindings"],
+  "properties": {
+    "schema_version": {"const": "material-learning-extraction-result/2.0"},
+    "input_sha256": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/input_sha256"},
+    "status": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/status"},
+    "regions": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/regions"},
+    "proposal": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/proposal"}]},
+    "solution_report": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/solution_report"},
+    "conflicts": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/conflicts"},
+    "office_bindings": {"$ref": "eom://schemas/material-learning/extraction-result/1.0#/properties/office_bindings"}
+  },
+  "$defs": {
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_number", "content", "content_region_map"],
+      "properties": {
+        "item_number": {"$ref": "eom://schemas/external-item/learning-result/2.0#/$defs/proposal/properties/item_number"},
+        "content": {"$ref": "eom://schemas/external-item/source-item-draft/2.0"},
+        "content_region_map": {"$ref": "eom://schemas/external-item/learning-result/2.0#/$defs/proposal/properties/content_region_map"}
+      }
+    }
+  }
+}
