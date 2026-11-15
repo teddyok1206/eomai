@@ -5,6 +5,43 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 02:02 UTC — coverage 후보 운영 반영·수치 runtime 보존
+
+`1b30a5805cfb04ddbff40cd1aeb59990f018ad56`(tree
+`f44687e38e99bab96d3239bca90802184a0dcd7d`)를 커밋·푸시했다. 별도 immutable SDK의
+wheel RECORD/source-free import, 정식 ADMIT와 migration0079 VERIFY, private postdeploy가
+PASS다. Catalog PID222321, ROLE Runner4개의 PID222549/222548/222551/222550, 재개한
+Material PID222919가 active다. Material은 지원된 SIGINT로 먼저 정상 drain했다.
+수치 자식이 자연 종료하는 공백에서만 설치 파일을 교체했고 GPU 작업은 중단하지 않았다.
+
+운영은 같은 logical Material preset의 ROLE1.39, definition2/plan40, coverage Pack1.2/1.3을
+사용한다. 기존 ROLE1.37·Pack1.0/1.1과 과거 receipt/lineage는 보존한다. 나머지3개 실행
+설정은 예전 env pin에서 `current_model_preset`가 검증한 실제 관리자 current로 재고정했다.
+현재4개 모두 기존 shared capacity `capacityrev_f145d972c88c4c74a1c698af873e3bcc`를 사용한다.
+다른3 logical current/history·관리자가 고른 모델/추론 깊이·실제 한도는 수정하지 않았다.
+
+API/Web PID3297861/3299009, QUERY PID3528016/Invocationd826, INDEX PID4111864/Invocation1186와
+수치 코드·worker executable·CPU 그림 도구70은 그대로다. 01:51 공식 읽기에서 GPU head는
+1380/1581, 별도 CPU head1320/1581이며 이전 저장 수1376/1316에서 각각4개 늘었다.
+이 수를 합치거나 새450개 전체의 임베딩 완료로 해석하지 않는다.
+
+초기 operator 실패도 남겼다. 첫 helper freeze의 터미널 입력 오류는 서비스 효과0이었다.
+R5의 상속19개는 분석 포인터를 직접 복사하지 않고 history owner로 읽는 정상 구조이므로
+배포 helper의 잘못된 direct-column 조건만 제거했다. controls helper는 실제 Material
+unit의 Catalog staging 경로를 사용하고 오래된3개 env pin을 공식 current resolver로
+정렬했다. 운영 row를 직접 고치거나 capacity 검사를 완화하지 않았다.
+
+근거는 staging의 `native-coverage-api-build-20261115.log`,
+`native-coverage-release-{prepare-r3,admit,activate-postdeploy-r3}-20261115.log`,
+`native-coverage-controls-stage-r4-20261115.log`, `native-index-progress-0151-20261115.json`이다.
+최종 release helper SHA는 `e009fc00c49dec7796608481bc2ff469c9c9b4b655e94ad9cadcdbcbebe55503`,
+controls helper SHA는 `95c90fd850deeed3f956c1164067054278d539728250c4b35b992afae39850f1`이다.
+두 disposable DB/제한 계정은 검증 후 정식 cleanup으로 제거했고 소스/실패 로그는 남겼다.
+
+**전체450개 목표는 ACTIVE다.** 이 기록은22번 그림 보완이나 새 풀이/Graph·실제 HTTP 읽기
+완료를 뜻하지 않는다. 다음은 검토한22번만 image-only successor로 수정해 새 분석·공개 풀이/
+Graph를 연결하고, 첫 회차 실제 다운로드 gate 뒤에 원래 나머지17회차 처리를 이어가는 것이다.
+
 ## 2026-11-15 01:34 UTC — 누락 방지 후보의 저장·동시성 회귀
 
 후속 최종 gate는 소스1179 PASS, 새 disposable DB의 정식 자료 학습 suite111개와 마지막

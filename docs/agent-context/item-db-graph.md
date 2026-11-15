@@ -376,6 +376,15 @@ native binding1은 그대로이며 새 lineage2 포인터는 새 결과에만 �
 선언·블록·원본 범위의 closure를 검사하며 과학적 의미의 동일성을 보증하지 않는다.
 후보 구현과 실제 Runner/Pack/서비스 활성화는 설계·릴리스 기록에서 별도로 확인한다.
 
+source `1b30a580`의 검토된 그림 한 개 보완은
+[correction owner](../../services/catalog_service/eom_catalog_service/material_native_visual_correction.py)의
+prepare/import_reviewed/validate_applied가 원본·권한·실제 current와 image-only 변경을 확인한다.
+[후속 분석 owner](../../services/catalog_service/eom_catalog_service/material_native_visual_correction_learning.py)는
+같은 receipt의 새 base/공개 풀이·공통 Graph를 연결한다. old task/분석 pin을 덮지 않으며
+실패한 분석을 새 key로 자동 우회하지 않는다. reviewed import의 동일 key staging은 기존
+`item_content_import.py`가 transaction lock으로 직렬화한다. 기존 approved-Item 분석의
+JSON 읽기를 PNG 픽셀 검수라고 해석하지 않는다. 실제 활성화는 operations checkpoint를 본다.
+
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`
