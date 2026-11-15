@@ -8,7 +8,7 @@ every use is reauthorized. Model commands remain with the existing runner.
 
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
@@ -22,14 +22,9 @@ from eom_catalog_contracts.material_learning_preparation import (
     MaterialPreparationInput,
     MaterialPreparationProfile,
 )
-from eom_catalog_contracts.material_native_files import (
-    material_native_printed_number,
-    material_native_solution_number,
-)
 from eom_catalog_contracts.material_native_intake import (
     MATERIAL_NATIVE_PREPARATION_REF,
     MaterialIntake,
-    MaterialNativeExamBundle,
     MaterialNativeLearningIntakeManifest,
     MaterialNativePreparationInput,
     MaterialNativePreparedArtifact,
@@ -97,6 +92,7 @@ from eom_catalog_service.material_learning_store import (
     transition_material_task,
 )
 from eom_catalog_service.material_learning_work import MaterialLearningWorkService
+from eom_catalog_service.material_native_discovery import bind_native_material_discovery_plan
 from eom_catalog_service.material_native_resolution import read_material_native_bundle
 from eom_catalog_service.material_native_visual_preparation import (
     MaterialNativeVisualPreparationService,
@@ -145,59 +141,6 @@ class MaterialDiscoveryPlan:
     ranges: tuple[DiscoveredMaterialRange, ...]
     by_unit: Mapping[str, PlannedMaterialUnit]
     by_task: Mapping[str, DiscoveredMaterialRange]
-
-
-def bind_native_material_discovery_plan(
-    plan: MaterialDiscoveryPlan, bundle: MaterialNativeExamBundle
-) -> MaterialDiscoveryPlan:
-    """Native file/Excel numbers constrain discovery; they never invent model regions."""
-    expected = {item.item_number for item in bundle.items}
-    questions: dict[int, PlannedMaterialUnit] = {}
-    solutions: dict[int, PlannedMaterialUnit] = {}
-    originals = {"MAIN": bundle.main_original, "SOLUTIONS": bundle.solutions_original}
-    for planned in plan.by_unit.values():
-        unit = planned.unit
-        if unit.kind not in {"QUESTION", "SOLUTION"}:
-            continue
-        role = "MAIN" if unit.kind == "QUESTION" else "SOLUTIONS"
-        if planned.source.source_role != role:
-            raise ValueError("MATERIAL_NATIVE_DISCOVERY_ROLE_MISMATCH")
-        if planned.source.original != originals[role]:
-            raise ValueError("MATERIAL_NATIVE_DISCOVERY_SOURCE_MISMATCH")
-        try:
-            number = (
-                material_native_printed_number(unit.printed_label)
-                if unit.kind == "QUESTION"
-                else material_native_solution_number(unit.printed_label)
-            )
-        except ValueError as exc:
-            raise ValueError("MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID") from exc
-        selected = questions if unit.kind == "QUESTION" else solutions
-        if number in selected:
-            raise ValueError("MATERIAL_NATIVE_DISCOVERY_NUMBER_DUPLICATED")
-        if unit.continuation != "COMPLETE":
-            raise ValueError("MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE")
-        selected[number] = planned
-    if set(questions) != expected or set(solutions) != expected:
-        raise ValueError("MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH")
-    units = dict(plan.by_unit)
-    for number, question in questions.items():
-        # This pair belongs to one verified native exam, not a fuzzy global
-        # number join across chapters or unrelated generic materials.
-        units[question.unit_key] = replace(
-            question,
-            solution_unit_keys=(solutions[number].unit_key,),
-            issue_codes=tuple(
-                code
-                for code in question.issue_codes
-                if code
-                not in {
-                    "NO_SOURCE_SOLUTION_INDEPENDENT_SOLUTION_REQUIRED",
-                    "AMBIGUOUS_SOURCE_SOLUTION",
-                }
-            ),
-        )
-    return replace(plan, by_unit=MappingProxyType(units))
 
 
 def build_material_preparation_input(

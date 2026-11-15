@@ -31,6 +31,12 @@ automatic publisher와 exact-member replay를 재사용한다. non-native/설명
 기존 순서다. 설계·후보 검증과 실제 SDK 활성화는 `NATIVE_EXAM_ITEM_INTAKE.md` 및 운영
 checkpoint에서 구분한다. 새 worker schema/DB queue를 만드는 기능이 아니다.
 
+Native의 정확한 문제/해설 번호·원본 대응과 완료 거부는
+`material_native_discovery.py`가 소유하고 coordinator의 기존 binder 이름은 유지한다.
+번호/출처가 맞는다는 것과 모델이 범위를 완전히 읽었다는 것은 다르다. incomplete task
+선정은 원래 flag를 COMPLETE로 바꾸지 않는다. 후속 복구 설계·미활성 경계는
+`docs/architecture/NATIVE_DISCOVERY_COMPLETENESS_REANALYSIS.md`와 운영 checkpoint를 따른다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,

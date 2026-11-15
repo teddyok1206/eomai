@@ -39,6 +39,18 @@ from tests.unit.test_material_learning_contracts import (
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_discovery_continuation_means_missing_input_not_a_physical_page_break():
+    for requirement in (
+        "spanning multiple physical pages is still COMPLETE",
+        "PROVIDED INPUT PAGES, including context pages outside core_pages",
+        "TO_NEXT means an unobserved remainder beyond the last provided input page",
+        "FROM_PREVIOUS means an unobserved beginning before the first provided input page",
+        "BOTH means both ends are unobserved",
+        "never infer missing continuation solely from a page or column break",
+    ):
+        assert requirement in MATERIAL_LEARNING_GUIDANCE
+
+
 def worker_input():
     value = _input()
     value.update(

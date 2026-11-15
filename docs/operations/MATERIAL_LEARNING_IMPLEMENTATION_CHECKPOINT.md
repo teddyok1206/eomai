@@ -5,6 +5,36 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 17:14 UTC — 두 번째 회차의 범위 완료 판정 실패·선택 재분석 후보
+
+두 번째 run `materialrun_3b66485a97fb5324b136228e0f18b120`은 발견6개를 모두 COMPLETED로
+마쳤으나 최종 Native 검증에서 `MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE`로 FAILED가
+됐다. 원본과 성공한 발견 Artifact 및 실패 상태는 보존한다. 다른 회차는 정상 queue에서
+계속 처리하며 이 실패를450개 완료로 숨기지 않는다.
+
+공식 source/결과 해석으로 문제25개·상세 해설25개·정답표1개를 확인했다. 문제9번과 해설
+6/11/16/21번만 TO_NEXT이며 실제 다음 페이지 anchor도 들어 있다. 이5개 unit의 원래
+owner는 MAIN 발견1개와 SOLUTIONS 발견1개, 합계2개 task다. 모델이 '다음 물리 페이지'와
+'제공한 context까지 읽어도 남은 미관측 부분'을 혼동했을 가능성을 확인했다. 이를 근거로
+원문/이미지를 보지 않고 모델 flag를 강제 COMPLETE로 바꾸지는 않는다. 증거는
+`staging/native-region-incomplete-inspection-r2-20261115.json`이다. 최초 진단 helper의 잘못된
+ORM 속성 접근도 READ_STOPPED로 보존했고 원본·DB write는0이었다.
+
+후속 설계를 `NATIVE_DISCOVERY_COMPLETENESS_REANALYSIS.md`에 기록했다. 기존 JSON Schema의
+continuation 의미를 명확히 하는 안내 후보와 Native inventory의 순수 공통 검증/대상 선정
+모듈을 작성했다. 엄격한 등록 binder는 incomplete를 계속 거부하며, 대상 선정은 COMPLETE
+변경이나 Artifact/DB mutation을 하지 않는다. 기존 coordinator 공개 binder 이름도 유지한다.
+source 회귀146 PASS, formatter/linter와 source3개 mypy PASS다. 이는 후보이며 아직 선택
+retry의 persistence/동시성 구현·운영 배포·실제 모델 재분석 성공을 뜻하지 않는다. 기존 retry
+owner로 정확한2개만 새 successor에서 재분석하고 나머지 준비/발견5개를 상속하는 연결이 남았다.
+
+INDEX는 재개 후 GPU1408/1582·CPU1332/1582까지 저장했다.17:03:05 새 CUDA batch 완료
+뒤17:03:10에 같은 OS unit 조회 timeout 소진으로 종료했다. 공식 read-only 관측에서 성공한
+encoding4개가 남은 CPU 요청의 만료 claim과 세 미시도 CPU 요청을 확인했고, physical batch
+관측은 blocking0이었다. 동일 source/pin으로 공식 service만 다시 시작했다. 새 PID1186360/
+invocation743275a9b86246f89391a47ba51d388c다. 조회 지연의 근본 원인은 여전히 미확인이며
+수치/저장 성공을 실패로 바꾸거나 timeout·권한 조건을 완화하지 않았다.
+
 ## 2026-11-15 16:24 UTC — 18회차 전체 접수·두 번째 회차 실제 발견 진행
 
 실제 guiadmin 세션에서16:13:58부터 기존 r4 driver의 direct continuation으로 남은17회차를

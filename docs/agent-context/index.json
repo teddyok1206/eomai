@@ -78,7 +78,7 @@
         "services/catalog_service/eom_catalog_service/material_task_source_read.py",
         "services/catalog_service/eom_catalog_service/material_item_registration.py",
         "packages/catalog_contracts/eom_catalog_contracts/material_native_visual_preparation.py",
-        "packages/catalog_contracts/eom_catalog_contracts/material_native_visual_selection.py",
+        "services/catalog_service/eom_catalog_service/material_native_discovery.py",
         "services/catalog_service/eom_catalog_service/material_native_visual_preparation.py",
         "services/catalog_service/eom_catalog_service/material_graph_learning.py",
         "services/catalog_service/eom_catalog_service/curated_document_assembly_service.py",
@@ -93,6 +93,7 @@
         "tests/unit/test_material_native_visual_coverage.py",
         "tests/unit/test_material_native_publication.py",
         "tests/unit/test_material_native_question_batch.py",
+        "tests/unit/test_material_native_discovery_coverage.py",
         "tests/unit/test_material_native_visual_prepared_read.py",
         "tests/unit/test_material_native_visual_work.py",
         "tests/unit/test_material_native_visual_authorization.py",
@@ -122,7 +123,7 @@
         "tests/integration/test_curated_assembly_library.py",
         "tests/integration/test_item_db_filter_options.py"
       ],
-      "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md", "docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md", "docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md", "docs/architecture/REGISTERED_ITEM_BASE_REFERENCE_RECOVERY.md", "docs/operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md"]
+      "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md", "docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md", "docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md", "docs/architecture/REGISTERED_ITEM_BASE_REFERENCE_RECOVERY.md", "docs/operations/NATIVE_EXAM_ITEM_INTAKE_CHECKPOINT.md", "docs/architecture/NATIVE_DISCOVERY_COMPLETENESS_REANALYSIS.md"]
     },
     {
       "id": "similarity-embedding",

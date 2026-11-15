@@ -18,6 +18,10 @@ from eom_catalog_service.material_learning_coordinator import (
     MaterialLearningCoordinator,
     bind_native_material_discovery_plan,
 )
+from eom_catalog_service.material_native_discovery import (
+    incomplete_native_discovery_tasks,
+    native_material_discovery_pairs,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.material_learning_plan import PlannedMaterialUnit
 
@@ -48,6 +52,56 @@ def plan():
 
 def bundle():
     return MaterialNativeExamBundle.model_validate(native_exam_bundle())
+
+
+def test_inventory_selection_does_not_complete_or_mutate_incomplete_model_regions():
+    value = plan()
+    values = dict(value.by_unit)
+    question = values["question-one"]
+    values[question.unit_key] = replace(
+        question, unit=question.unit.model_copy(update={"continuation": "TO_NEXT"})
+    )
+    incomplete = replace(value, by_unit=values)
+    pairs = native_material_discovery_pairs(incomplete, bundle())
+    assert pairs.questions[1] is values[question.unit_key]
+    assert pairs.questions[1].unit.continuation == "TO_NEXT"
+    with pytest.raises(TypeError):
+        pairs.questions[2] = question
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE"):
+        bind_native_material_discovery_plan(incomplete, bundle())
+
+
+def test_reanalysis_selects_exact_incomplete_source_tasks_not_every_discovery():
+    value = plan()
+    values = dict(value.by_unit)
+    question = values["question-one"]
+    values[question.unit_key] = replace(
+        question, unit=question.unit.model_copy(update={"continuation": "TO_NEXT"})
+    )
+    selected = incomplete_native_discovery_tasks(replace(value, by_unit=values), bundle())
+    assert selected == frozenset({"discovery-main"})
+    solution = values["solution-one"]
+    values[solution.unit_key] = replace(
+        solution, unit=solution.unit.model_copy(update={"continuation": "FROM_PREVIOUS"})
+    )
+    assert incomplete_native_discovery_tasks(replace(value, by_unit=values), bundle()) == frozenset(
+        {"discovery-main", "discovery-solutions"}
+    )
+    assert question.unit.continuation == "COMPLETE"
+
+
+def test_reanalysis_does_not_rerun_complete_sources_or_hide_missing_native_numbers():
+    value = plan()
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_DISCOVERY_REANALYSIS_NOT_REQUIRED"):
+        incomplete_native_discovery_tasks(value, bundle())
+    values = dict(value.by_unit)
+    question = values["question-one"]
+    values[question.unit_key] = replace(
+        question, unit=question.unit.model_copy(update={"continuation": "TO_NEXT"})
+    )
+    values.pop("solution-one")
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_DISCOVERY_COVERAGE_MISMATCH"):
+        incomplete_native_discovery_tasks(replace(value, by_unit=values), bundle())
 
 
 def test_exact_native_pair_accepts_numeric_label_variants_not_external_numbers():
