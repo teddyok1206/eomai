@@ -9,8 +9,10 @@ from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     MaterialLearningWorkflowRequestFamily,
     MaterialLearningWorkflowRequestV2,
+    MaterialLearningWorkflowRequestV3,
     material_learning_contract,
     material_learning_contract_for_definition,
     parse_material_learning_workflow_request,
@@ -36,6 +38,12 @@ class MaterialLearningSourceAuthorizer(Protocol):
         self, session: Session, *, operator_id: str, work: MaterialLearningWork
     ) -> MaterialLearningWorkerRequestV2:
         """Derive exact native scope/null from actual Catalog source, never caller authority."""
+        ...
+
+    def authorize_exact_score_input(
+        self, session: Session, *, operator_id: str, work: MaterialLearningWork
+    ) -> MaterialLearningWorkerRequestV3:
+        """Derive exact source score from the same actual Native question pin."""
         ...
 
 
@@ -102,7 +110,13 @@ def reauthorize_material_learning_submission(
     source_authorizer: MaterialLearningSourceAuthorizer,
 ) -> None:
     try:
-        if isinstance(request, MaterialLearningWorkflowRequestV2):
+        if isinstance(request, MaterialLearningWorkflowRequestV3):
+            exact_request = source_authorizer.authorize_exact_score_input(
+                session, operator_id=operator_id, work=request.work_input
+            )
+            if exact_request != request.worker_request():
+                raise ValueError("material source, native scope or score changed")
+        elif isinstance(request, MaterialLearningWorkflowRequestV2):
             actual_request = source_authorizer.authorize_future_input(
                 session, operator_id=operator_id, work=request.work_input
             )

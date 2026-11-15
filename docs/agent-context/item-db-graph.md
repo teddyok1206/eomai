@@ -47,6 +47,12 @@ Catalog의 `material_native_score.py`가 담당한다. 후자는 이미 source/s
 successor이며 기존 정수 계약의 bytes/의미는 유지한다. 원문과 모델/등록 배점의 비교 및
 운영 활성화는 별도 경계다. 상세 설계와 남은 연결은
 `docs/architecture/NATIVE_PRINTED_SCORE_FIDELITY.md` 및 자료 학습 운영 checkpoint를 따른다.
+새 Material request3/plan41의 `native_printed_score`는 같은 Catalog source owner의
+`authorize_exact_score_input`이 실제 question descriptor에서 계산한다. Role1.40/result3은
+기존 isolated Support lane을 유지하며 DB에는 receipt3의 다섯 작은 값만 남긴다. 전체 결과와
+그림 coverage는 기존 Artifact다. 제출/재인가/결과 읽기는 exact request/plan/receipt를
+비교하고 다른 배점·구 role로의 재전송을 거절한다. Source 구현이 등록·HTTP 소비 경계와
+운영 활성화를 대신하지는 않는다. `test_material_learning_execution_v3.py`가 owner 구성을 검증한다.
 
 ## 출처와 상태를 분리
 

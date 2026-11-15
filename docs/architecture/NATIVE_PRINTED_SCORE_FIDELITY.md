@@ -75,10 +75,35 @@ archive/result1은 새 draft를 수용하지 않는다. block1.1의 Preview는 e
 schema_version을 확인하고 template 재생성 가능 여부는 false다. 실제 원문 전달/합본은 별개다.
 같은 문항에서 배점만 바뀌어도 question embedding text/hash는 동일하다는 회귀를 추가했다.
 
-이 단계는 아직 source 후보다. ROLE/request/result·실행 plan과 등록/HTTP 응답의 닫힌
-계약에는 이전 형식만 허용된 곳이 있으므로, 값 모델을 추가한 것만으로 운영 지원을
-선언하거나 Material owner를 다시 켜지 않는다. 해당 소비 경계의 필요한 successor를
-호환 묶음으로 연결하고 기존 등록의 reviewed correction까지 검증해야 한다.
+후속 source에서는 ROLE1.40/request3/result3/plan41과 receipt3까지 연결했다. 그러나
+등록/HTTP 응답에는 이전 형식만 허용된 곳이 남아 있으므로 이를 운영 지원으로 선언하거나
+Material owner를 다시 켜지 않는다. 해당 소비 경계의 필요한 successor를 호환 묶음으로
+연결하고 기존 등록의 reviewed correction까지 검증해야 한다.
+
+### 실행 연결의 최소 successor
+
+현재 family의 점유를 확인한 뒤 새 Workflow3/ROLE1.40/result3/plan41을 사용한다.
+work1의 문항/페이지/해설 선택은 그대로 둔다. request3와 plan41에는 nullable
+`native_printed_score`라는 작은 값만 추가한다. Native scope가 있으면 Catalog가 그 scope의
+exact question document를 읽어 얻은 PRINTED 값을 필수로 넣으며, scope가 없으면 null이다.
+이 값은 이미 존재하는 question pointer와 request/plan hash에 묶이고 별도 정본이 아니다.
+모델은 expected value를 고르거나 권한으로 사용할 수 없다.
+
+새 result3은 discovery1 또는 extraction2만 받는다. Native 추출 결과의 score는 입력의
+정확한 기대값으로 제한하고 등록 owner도 원문을 다시 대조한다. 구 ROLE/result/plan은
+새 draft를 허용하도록 바꾸지 않는다. 공개 풀이의 source/step 검증과 숫자 임베딩 recipe는
+유지한다. 새 task만 새 실행 family로 제출하며 기존 제출된 task/result는 새 의미로 읽지 않는다.
+기존 Pack1.3의 실제 compatibility는 ROLE<1.40 / Workflow2로 닫혀 있다. metadata와
+component 종류가 같다는 이유로 이 Pack을 새 실행에 재사용하지 않는다. 일반/Native의
+필요한 Pack successor를 추가하되 기존 metadata 의미와 원문 file pointers는 유지한다.
+
+기등록 오류의 복구도 새 일반 framework보다 기존 학습/Registry revision 경계를 우선한다.
+원본과 배점이 다른 exact target만 후속 추출 대상으로 선정하고, source1.1을 지원하는
+새 result에서 정본을 만들며 기존 logical Item의 새 Revision으로 등록하는 방식을 우선 검증한다.
+정상 target은 상속한다. 모델이 반환하지 않은 올바른 소수 배점을 old accepted result에
+끼워 넣거나, old 풀이의 source revision/hash만 교체해 새 분석인 것처럼 만들지 않는다.
+새 Revision의 base/공개 풀이는 기존 분석 파이프라인이 처리하도록 한다. 실제 선택 retry·
+same-source successor의 transaction/멱등 경계를 구현·검증하기 전 운영 보정으로 선언하지 않는다.
 
 ## 구현·검증 순서
 

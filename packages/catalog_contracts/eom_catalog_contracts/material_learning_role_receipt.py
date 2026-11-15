@@ -10,6 +10,7 @@ from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.validation import validate_contract
 
 MATERIAL_LEARNING_ROLE_RECEIPT_V2_REF = "eom://schemas/material-learning/role-receipt/2.0"
+MATERIAL_LEARNING_ROLE_RECEIPT_V3_REF = "eom://schemas/material-learning/role-receipt/3.0"
 
 
 class MaterialLearningRoleReceiptV2(FrozenModel):
@@ -29,12 +30,34 @@ class MaterialLearningRoleReceiptV2(FrozenModel):
         return self
 
 
-type MaterialLearningRoleReceiptFamily = MaterialLearningRoleReceipt | MaterialLearningRoleReceiptV2
+class MaterialLearningRoleReceiptV3(FrozenModel):
+    """Exact-score output stays in its Artifact; the DB keeps only this small receipt."""
+
+    schema_version: Literal["material-learning-role-receipt/3.0"] = (
+        "material-learning-role-receipt/3.0"
+    )
+    result_schema: Literal["material-learning-result@3.0"] = "material-learning-result@3.0"
+    task_kind: Literal["DISCOVER", "EXTRACT_ITEM"]
+    input_sha256: Sha256
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def installed_receipt(self) -> Self:
+        validate_contract("material-learning-role-receipt-v3", self.model_dump(mode="json"))
+        return self
+
+
+type MaterialLearningRoleReceiptFamily = (
+    MaterialLearningRoleReceipt | MaterialLearningRoleReceiptV2 | MaterialLearningRoleReceiptV3
+)
 
 
 def parse_material_learning_role_receipt(value: object) -> MaterialLearningRoleReceiptFamily:
     """Select only a declared version; an invalid declared family never falls back."""
-    if isinstance(value, (MaterialLearningRoleReceipt, MaterialLearningRoleReceiptV2)):
+    if isinstance(
+        value,
+        (MaterialLearningRoleReceipt, MaterialLearningRoleReceiptV2, MaterialLearningRoleReceiptV3),
+    ):
         value = value.model_dump(mode="json")
     if not isinstance(value, Mapping):
         raise ValueError("MATERIAL_LEARNING_ROLE_RECEIPT_DOCUMENT_INVALID")
@@ -43,4 +66,6 @@ def parse_material_learning_role_receipt(value: object) -> MaterialLearningRoleR
         return MaterialLearningRoleReceipt.model_validate(value)
     if version == "material-learning-role-receipt/2.0":
         return MaterialLearningRoleReceiptV2.model_validate(value)
+    if version == "material-learning-role-receipt/3.0":
+        return MaterialLearningRoleReceiptV3.model_validate(value)
     raise ValueError("MATERIAL_LEARNING_ROLE_RECEIPT_SCHEMA_UNSUPPORTED")

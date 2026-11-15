@@ -2,14 +2,13 @@
 
 import re
 from collections.abc import Callable
-from decimal import Decimal
 from zipfile import ZIP_DEFLATED, ZIP_STORED, BadZipFile, ZipFile
 
 from eom_catalog_contracts.material_native_files import MaterialNativeFileBinding
 from eom_catalog_contracts.source_score import (
     PrintedSourceScoreV2,
     SourceScoreV2,
-    source_score_decimal,
+    require_source_score_matches,
 )
 from eom_hwpx_contracts.native_item_score import (
     NativePrintedScore,
@@ -110,5 +109,7 @@ def require_native_source_score(
     observation: NativePrintedScoreObservation, proposed: SourceScoreV2
 ) -> None:
     expected = expected_native_source_score(observation)
-    if source_score_decimal(proposed) != Decimal(str(expected.points)):
-        raise ValueError("MATERIAL_NATIVE_SCORE_MISMATCH")
+    try:
+        require_source_score_matches(expected, proposed)
+    except ValueError as error:
+        raise ValueError("MATERIAL_NATIVE_SCORE_MISMATCH") from error

@@ -37,11 +37,13 @@ from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisR
 from eom_catalog_contracts.material_learning import (
     MaterialDiscoveryResult,
     MaterialExtractionResult,
+    MaterialExtractionResultV2,
 )
 from eom_catalog_contracts.material_native_visual_coverage import (
     validate_material_native_visual_coverage,
 )
 from eom_catalog_contracts.models import FrozenModel
+from eom_catalog_contracts.source_score import require_source_score_matches
 from eom_catalog_contracts.validation import CatalogSchemaError
 from eom_catalog_contracts.validation import load_schema as load_catalog_schema
 from eom_hwpx_contracts import (
@@ -82,6 +84,7 @@ from eom_workflow.inference_transfer_workflow import (
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
 )
 from eom_workflow.models import (
     AuthoringRoleResult,
@@ -155,6 +158,7 @@ from eom_workflow.models import (
     LegacyItemExtractionWorkerRequest,
     MaterialLearningRoleResult,
     MaterialLearningRoleResultV2,
+    MaterialLearningRoleResultV3,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewRoleResultV4,
@@ -268,6 +272,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "external-item-learning-result@3.0",
             "material-learning-result@1.0",
             "material-learning-result@2.0",
+            "material-learning-result@3.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -351,6 +356,7 @@ RESULT_SCHEMA_FILES = {
     "external-item-learning-result@3.0": "external-item-learning-result-v3.schema.json",
     "material-learning-result@1.0": "material-learning-result-v1.schema.json",
     "material-learning-result@2.0": "material-learning-result-v2.schema.json",
+    "material-learning-result@3.0": "material-learning-result-v3.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -409,6 +415,7 @@ INPUT_SCHEMA_FILES_V1_36 = {"support": "external-item-learning-input-v3.schema.j
 INPUT_SCHEMA_FILES_V1_37 = {"support": "material-learning-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_38 = {"support": "knowledge-analysis-input-v12.schema.json"}
 INPUT_SCHEMA_FILES_V1_39 = {"support": "material-learning-input-v2.schema.json"}
+INPUT_SCHEMA_FILES_V1_40 = {"support": "material-learning-input-v3.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -461,6 +468,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "material-learning-result@1.0": "workflow-role/1.37.0",
     "knowledge-analysis-proposal-result@12.0": "workflow-role/1.38.0",
     "material-learning-result@2.0": "workflow-role/1.39.0",
+    "material-learning-result@3.0": "workflow-role/1.40.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -527,6 +535,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.37.0": INPUT_SCHEMA_FILES_V1_37,
     "workflow-role/1.38.0": INPUT_SCHEMA_FILES_V1_38,
     "workflow-role/1.39.0": INPUT_SCHEMA_FILES_V1_39,
+    "workflow-role/1.40.0": INPUT_SCHEMA_FILES_V1_40,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -569,6 +578,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.37.0",
     "workflow-role/1.38.0",
     "workflow-role/1.39.0",
+    "workflow-role/1.40.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -606,6 +616,8 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_36.values(),
             *INPUT_SCHEMA_FILES_V1_37.values(),
             *INPUT_SCHEMA_FILES_V1_38.values(),
+            *INPUT_SCHEMA_FILES_V1_39.values(),
+            *INPUT_SCHEMA_FILES_V1_40.values(),
         }
     )
 )
@@ -1894,6 +1906,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.37.0",
             "workflow-role/1.38.0",
             "workflow-role/1.39.0",
+            "workflow-role/1.40.0",
         },
     )
 
@@ -1931,6 +1944,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "external-item-learning-result@3.0",
             "material-learning-result@1.0",
             "material-learning-result@2.0",
+            "material-learning-result@3.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -2355,6 +2369,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return MaterialLearningRoleResult.model_validate(canonical_value)
         if schema_id == "material-learning-result@2.0" and role == "support":
             return MaterialLearningRoleResultV2.model_validate(canonical_value)
+        if schema_id == "material-learning-result@3.0" and role == "support":
+            return MaterialLearningRoleResultV3.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -3234,11 +3250,42 @@ def _bind_registered_item_reference_nodes(
     nodes["items"] = {"anyOf": [*references, others]}
 
 
+def _constrain_native_source_score(
+    schema: dict[str, Any], request: MaterialLearningWorkerRequestV3
+) -> None:
+    """Generation copies a host-observed small value; canonical admission still verifies it."""
+    score = request.native_printed_score
+    if score is None:
+        raise WorkflowSchemaError("native source score is required")
+    draft = _mapping(_mapping(schema, "$defs"), "CreativeSourceItemDraftV2")
+    branches = draft.get("anyOf")
+    if not isinstance(branches, list) or not branches:
+        raise WorkflowSchemaError("exact-score source draft is not independently projectable")
+    for branch in branches:
+        _mapping(branch, "properties")["score"] = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["state", "points"],
+            "properties": {
+                "state": {"type": "string", "const": "PRINTED"},
+                "points": {
+                    "type": "string" if isinstance(score.points, str) else "integer",
+                    "const": score.points,
+                },
+            },
+        }
+
+
 def validate_material_learning_role_result(
-    request: MaterialLearningWorkerRequestV2, result: MaterialLearningRoleResultV2
+    request: MaterialLearningWorkerRequestV2 | MaterialLearningWorkerRequestV3,
+    result: MaterialLearningRoleResultV2 | MaterialLearningRoleResultV3,
 ) -> None:
     """Validate the future envelope against exact input; never reinterpret historical results."""
     learning = result.output.learning_result
+    if isinstance(request, MaterialLearningWorkerRequestV3) != isinstance(
+        result, MaterialLearningRoleResultV3
+    ):
+        raise ValueError("MATERIAL_LEARNING_RESULT_PROTOCOL_MISMATCH")
     discovery = request.work_input.task_kind == "DISCOVER"
     if (
         isinstance(learning, MaterialDiscoveryResult) != discovery
@@ -3250,10 +3297,19 @@ def validate_material_learning_role_result(
     if scope is None:
         if coverage is not None:
             raise ValueError("MATERIAL_LEARNING_NATIVE_COVERAGE_UNEXPECTED")
-    elif coverage is None or not isinstance(learning, MaterialExtractionResult):
+    elif coverage is None or not isinstance(
+        learning, (MaterialExtractionResult, MaterialExtractionResultV2)
+    ):
         raise ValueError("MATERIAL_LEARNING_NATIVE_COVERAGE_REQUIRED")
     else:
         validate_material_native_visual_coverage(coverage, scope=scope, result=learning)
+    if (
+        isinstance(request, MaterialLearningWorkerRequestV3)
+        and request.native_printed_score is not None
+        and isinstance(learning, MaterialExtractionResultV2)
+        and learning.proposal is not None
+    ):
+        require_source_score_matches(request.native_printed_score, learning.proposal.content.score)
 
 
 def validate_role_result_for_request(
@@ -3261,16 +3317,19 @@ def validate_role_result_for_request(
 ) -> RoleResult:
     """Preserve historical validation and enforce explicitly versioned input-aware rules."""
     result = validate_role_result(value, role, schema_id)
-    material_v2 = schema_id == "material-learning-result@2.0"
-    if _is_registered_item_reference_request(schema_id, worker_input) or material_v2:
+    material_successor = schema_id in {
+        "material-learning-result@2.0",
+        "material-learning-result@3.0",
+    }
+    if _is_registered_item_reference_request(schema_id, worker_input) or material_successor:
         validate_schema_message(
             constrained_result_schema(schema_id, worker_input),
             result.model_dump(mode="json"),
             schema_id,
         )
-    if material_v2:
+    if material_successor:
         if not isinstance(worker_input.request, MaterialLearningWorkerRequestV2) or not isinstance(
-            result, MaterialLearningRoleResultV2
+            result, (MaterialLearningRoleResultV2, MaterialLearningRoleResultV3)
         ):
             raise WorkflowSchemaError("material result v2 requires its exact future envelope")
         try:
@@ -3312,18 +3371,34 @@ def constrained_result_schema(
         resolved_evidence_plan=resolved_evidence_plan,
         material_requirement=material_requirement,
     )
-    if schema_id in {"material-learning-result@1.0", "material-learning-result@2.0"}:
-        expected_material_request = (
-            MaterialLearningWorkerRequestV2
-            if schema_id == "material-learning-result@2.0"
-            else MaterialLearningWorkerRequest
-        )
-        if not isinstance(worker_input.request, expected_material_request):
+    if schema_id in {
+        "material-learning-result@1.0",
+        "material-learning-result@2.0",
+        "material-learning-result@3.0",
+    }:
+        expected_material_request = {
+            "material-learning-result@1.0": MaterialLearningWorkerRequest,
+            "material-learning-result@2.0": MaterialLearningWorkerRequestV2,
+            "material-learning-result@3.0": MaterialLearningWorkerRequestV3,
+        }[schema_id]
+        if (
+            not isinstance(
+                worker_input.request,
+                (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2),
+            )
+            or type(worker_input.request) is not expected_material_request
+        ):
             raise WorkflowSchemaError("material result requires its exact task input")
         material_work = worker_input.request.work_input
         output = _mapping(_mapping(properties, "output"), "properties")
         discovery = material_work.task_kind == "DISCOVER"
-        name = "MaterialDiscoveryResult" if discovery else "MaterialExtractionResult"
+        name = (
+            "MaterialDiscoveryResult"
+            if discovery
+            else "MaterialExtractionResultV2"
+            if schema_id == "material-learning-result@3.0"
+            else "MaterialExtractionResult"
+        )
         output["learning_result"] = {"$ref": f"#/$defs/{name}"}
         result_properties = _mapping(_mapping(definitions, name), "properties")
         result_properties["input_sha256"] = {"type": "string", "const": material_work.input_sha256}
@@ -3364,6 +3439,11 @@ def constrained_result_schema(
                     _mapping(definitions, "MaterialNativeVisualCoverage_pictureUseId")["enum"] = (
                         list(scope.allowed_picture_use_ids)
                     )
+        if (
+            isinstance(worker_input.request, MaterialLearningWorkerRequestV3)
+            and worker_input.request.native_printed_score is not None
+        ):
+            _constrain_native_source_score(schema, worker_input.request)
         _prune_unreferenced_definitions(schema)
     if schema_id in {
         "item-inference-transfer-pair-result@1.0",
@@ -4791,15 +4871,35 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         )
         _project_creative_answer_representations(schema)
         _prune_unreferenced_definitions(schema)
-    if schema_id in {"material-learning-result@1.0", "material-learning-result@2.0"}:
+    if schema_id in {
+        "material-learning-result@1.0",
+        "material-learning-result@2.0",
+        "material-learning-result@3.0",
+    }:
         _project_external_item_learning_codex_contract(
             schema, result_definition="ExternalItemLearningResultV2"
         )
-        _project_creative_answer_representations(schema)
+        _project_creative_answer_representations(
+            schema,
+            draft_definition=(
+                "CreativeSourceItemDraftV2"
+                if schema_id == "material-learning-result@3.0"
+                else "CreativeSourceItemDraft"
+            ),
+        )
+        if schema_id == "material-learning-result@3.0":
+            # Codex cannot express the canonical end-of-string lookahead.
+            # Keep it in JSON Schema/Pydantic admission; generation uses the
+            # equivalent closed set of actual supported half-point values.
+            points = _mapping(_mapping(schema, "$defs"), "SourceScoreV2_printedPoints")
+            points["oneOf"][1] = {
+                "type": "string",
+                "enum": [f"{value}.5" for value in range(1, 100)],
+            }
         result = _mapping(_mapping(_mapping(schema, "properties"), "output"), "properties")
         variants = _mapping(result, "learning_result")
         variants["anyOf"] = variants.pop("oneOf")
-        if schema_id == "material-learning-result@2.0":
+        if schema_id in {"material-learning-result@2.0", "material-learning-result@3.0"}:
             _mapping(_mapping(schema, "properties"), "output").pop("allOf", None)
             for definition_name in ("MaterialNativeVisualCoverage_evidence",):
                 _mapping(_mapping(schema, "$defs"), definition_name).pop("allOf", None)
@@ -5532,6 +5632,10 @@ def _inline_catalog_schema(
             ("legacy-assessment-types", "MaterialSourceTypes"),
             ("item-origin-types", "MaterialOriginTypes"),
         )
+        if "eom://schemas/material-learning/extraction-result/2.0" in serialized:
+            material_contracts += (
+                ("material-learning-extraction-result-v2", "MaterialExtractionResultV2"),
+            )
         # Only the explicit successor references these resources. Adding their definitions
         # to historical messages would change the released schema-bundle hashes.
         if "eom://schemas/material-learning/prepared/3.0" in serialized:
@@ -5843,7 +5947,7 @@ def _inline_external_item_learning_result_v2_contract(schema: dict[str, Any]) ->
     """Successor only: reuse historical region types without changing their bytes."""
     from eom_catalog_contracts import load_schema
 
-    references = (
+    references: tuple[tuple[str, str, str], ...] = (
         (
             "eom://schemas/external-item/learning-result/2.0",
             "external-item-learning-result-v2",
@@ -5865,6 +5969,22 @@ def _inline_external_item_learning_result_v2_contract(schema: dict[str, Any]) ->
             "AssessmentItemContent",
         ),
     )
+    serialized = json.dumps(schema, ensure_ascii=True)
+    if "eom://schemas/external-item/source-item-draft/2.0" in serialized:
+        references += (
+            (
+                "eom://schemas/external-item/source-item-draft/2.0",
+                "creative-source-item-draft-v2",
+                "CreativeSourceItemDraftV2",
+            ),
+        )
+    if (
+        "eom://schemas/external-item/source-score/2.0" in serialized
+        or "eom://schemas/external-item/source-item-draft/2.0" in serialized
+    ):
+        references += (
+            ("eom://schemas/external-item/source-score/2.0", "source-score-v2", "SourceScoreV2"),
+        )
     return _inline_contract_sources(
         schema,
         tuple(
@@ -5880,8 +6000,47 @@ def _inline_contract_sources(
 ) -> dict[str, Any]:
     """Bundle exact Catalog schemas with collision-free local definition names."""
 
+    def fragment_node(source: dict[str, Any], fragment: str) -> object:
+        node: object = source
+        for raw_token in fragment.removeprefix("#/").split("/"):
+            token = raw_token.replace("~1", "/").replace("~0", "~")
+            if isinstance(node, dict) and token in node:
+                node = node[token]
+            elif (
+                isinstance(node, list)
+                and re.fullmatch(r"0|[1-9][0-9]*", token)
+                and int(token) < len(node)
+            ):
+                node = node[int(token)]
+            else:
+                raise WorkflowSchemaError("Catalog schema fragment does not resolve")
+        return node
+
     def rewrite(value: object, *, local_prefix: str | None = None) -> object:
         if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str):
+                for source_id, prefix, source in sources:
+                    start = source_id + "#/"
+                    definition_start = source_id + "#/$defs/"
+                    nested_definition = reference.startswith(
+                        definition_start
+                    ) and "/" in reference.removeprefix(definition_start)
+                    if reference.startswith(start) and (
+                        not reference.startswith(definition_start) or nested_definition
+                    ):
+                        # Inline only the requested small subschema. Keeping a
+                        # pointer into the entire predecessor would retain its
+                        # unrelated proposal/score branches in strict output.
+                        target = rewrite(
+                            fragment_node(source, reference.removeprefix(source_id)),
+                            local_prefix=prefix,
+                        )
+                        siblings = rewrite(
+                            {key: child for key, child in value.items() if key != "$ref"},
+                            local_prefix=local_prefix,
+                        )
+                        return {"allOf": [target, siblings]} if siblings else target
             rewritten: dict[str, Any] = {}
             for key, item in value.items():
                 if key == "$ref" and isinstance(item, str):
@@ -6159,7 +6318,9 @@ def _validate_local_reference_closure(schema: dict[str, Any]) -> None:
     visit(schema)
 
 
-def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
+def _project_creative_answer_representations(
+    schema: dict[str, Any], *, draft_definition: str = "CreativeSourceItemDraft"
+) -> None:
     """Make the existing answer XOR rules visible to generation, not just admission.
 
     Copy only the small schema nodes, never source/results. Canonical contracts
@@ -6171,7 +6332,7 @@ def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
     )
 
     definitions = _mapping(schema, "$defs")
-    draft = _mapping(definitions, "CreativeSourceItemDraft")
+    draft = _mapping(definitions, draft_definition)
     solution = _mapping(definitions, "AssessmentItemContent_solution")
     branches = []
     for interaction, used, unused, maximum in (

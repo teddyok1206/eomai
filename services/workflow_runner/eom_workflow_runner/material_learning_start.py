@@ -10,9 +10,11 @@ from eom_orchestrator.material_learning_plan_resolution import (
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     MaterialLearningWorkflowRequest,
     MaterialLearningWorkflowRequestFamily,
     MaterialLearningWorkflowRequestV2,
+    MaterialLearningWorkflowRequestV3,
     material_learning_contract_for_definition,
 )
 from sqlalchemy import select
@@ -60,7 +62,19 @@ def submit_material_learning_workflow(
         raise ValueError("material submission requires a caller-owned root transaction")
     profile = material_learning_contract_for_definition(definition.definition_version)
     request: MaterialLearningWorkflowRequestFamily
-    if profile.definition_version == "2.0.0":
+    if profile.definition_version == "3.0.0":
+        exact = source_authorizer.authorize_exact_score_input(
+            session, operator_id=operator_id, work=work
+        )
+        exact = MaterialLearningWorkerRequestV3.model_validate(exact.model_dump(mode="json"))
+        if exact.work_input != work:
+            raise ValueError("MATERIAL_LEARNING_AUTHORIZED_INPUT_MISMATCH")
+        request = MaterialLearningWorkflowRequestV3(
+            work_input=work,
+            native_visual_scope=exact.native_visual_scope,
+            native_printed_score=exact.native_printed_score,
+        )
+    elif profile.definition_version == "2.0.0":
         authorized = source_authorizer.authorize_future_input(
             session, operator_id=operator_id, work=work
         )

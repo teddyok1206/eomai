@@ -35,6 +35,7 @@ from eom_catalog_contracts.material_native_visual_preparation import (
     MaterialNativeQuestionVisualScope,
 )
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
+from eom_catalog_contracts.source_score import PrintedSourceScoreV2
 from eom_identifiers import content_sha256
 from pydantic import (
     AfterValidator,
@@ -47,7 +48,10 @@ from pydantic import (
 )
 
 from eom_workflow.document_review import PairedReviewDocument
-from eom_workflow.material_learning_request import require_material_learning_native_scope
+from eom_workflow.material_learning_request import (
+    require_material_learning_native_scope,
+    require_material_native_printed_score,
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -1417,6 +1421,20 @@ class ResolvedExecutionPlanV40(ResolvedExecutionPlanV33):
     @model_validator(mode="after")
     def exact_native_scope(self) -> ResolvedExecutionPlanV40:
         require_material_learning_native_scope(self.work_input, self.native_visual_scope)
+        return self
+
+
+class ResolvedExecutionPlanV41(ResolvedExecutionPlanV40):
+    """Same isolated task, with the exact score bound to the existing Native question pin."""
+
+    schema_version: Literal["resolved-execution-plan/41.0"] = "resolved-execution-plan/41.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["3.0.0"] = "3.0.0"  # type: ignore[assignment]
+    native_printed_score: PrintedSourceScoreV2 | None
+    resolver_version: Literal["41.0.0"] = "41.0.0"  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def exact_native_score(self) -> ResolvedExecutionPlanV41:
+        require_material_native_printed_score(self.native_visual_scope, self.native_printed_score)
         return self
 
 

@@ -574,6 +574,8 @@ if [[ "${action}" == "material-learning-tests" ]]; then
   # old bootstrap fixtures must never reset published current policy to ROLE1.37.
   EOM_RUN_MATERIAL_COVERAGE_UPGRADE_TESTS=1 "${PYTHON}" -m pytest -q \
     tests/integration/test_material_learning_coverage_controls_storage.py
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_material_learning_exact_score_workflow_storage.py
   printf 'Disposable mixed-material learning persistence tests passed.\n'
   exit 0
 fi

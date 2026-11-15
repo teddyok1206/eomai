@@ -61,7 +61,11 @@ from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemL
 from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
-from eom_catalog_contracts.material_learning import MaterialDiscoveryResult, MaterialLearningResult
+from eom_catalog_contracts.material_learning import (
+    MaterialDiscoveryResult,
+    MaterialExtractionResultV2,
+    MaterialLearningResult,
+)
 from eom_catalog_contracts.material_native_visual_coverage import MaterialNativeVisualCoverage
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from eom_catalog_contracts.office_item_learning import (
@@ -103,6 +107,7 @@ from eom_workflow.inference_transfer import (
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     parse_material_learning_worker_request,
 )
 
@@ -1145,6 +1150,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.37.0",
         "workflow-role/1.38.0",
         "workflow-role/1.39.0",
+        "workflow-role/1.40.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1158,6 +1164,7 @@ class RoleWorkerInput(FrozenModel):
         | ExternalItemLearningWorkerRequest
         | MaterialLearningWorkerRequest
         | MaterialLearningWorkerRequestV2
+        | MaterialLearningWorkerRequestV3
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1182,6 +1189,7 @@ class RoleWorkerInput(FrozenModel):
         | ExternalItemLearningWorkerRequest
         | MaterialLearningWorkerRequest
         | MaterialLearningWorkerRequestV2
+        | MaterialLearningWorkerRequestV3
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1243,12 +1251,21 @@ class RoleWorkerInput(FrozenModel):
             is_material and (self.role != "support" or self.upstream_artifacts)
         ):
             raise ValueError("material learning requires its isolated support protocol and input")
-        is_material_v2 = isinstance(self.request, MaterialLearningWorkerRequestV2)
+        is_material_v2 = isinstance(
+            self.request, MaterialLearningWorkerRequestV2
+        ) and not isinstance(self.request, MaterialLearningWorkerRequestV3)
         if is_material_v2 != (self.protocol_version == "workflow-role/1.39.0") or (
             is_material_v2 and (self.role != "support" or self.upstream_artifacts)
         ):
             raise ValueError(
                 "material learning v2 requires its isolated support protocol and input"
+            )
+        is_material_v3 = isinstance(self.request, MaterialLearningWorkerRequestV3)
+        if is_material_v3 != (self.protocol_version == "workflow-role/1.40.0") or (
+            is_material_v3 and (self.role != "support" or self.upstream_artifacts)
+        ):
+            raise ValueError(
+                "material learning v3 requires its isolated support protocol and input"
             )
         is_transfer = isinstance(self.request, InferenceTransferPairWorkerRequest)
         expected_protocol = (
@@ -1363,6 +1380,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.37.0",
         "workflow-role/1.38.0",
         "workflow-role/1.39.0",
+        "workflow-role/1.40.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -3029,6 +3047,29 @@ class MaterialLearningRoleResultV2(RoleResultBase):
     output: MaterialLearningOutputV2
 
 
+class MaterialLearningOutputV3(FrozenModel):
+    learning_result: Annotated[
+        MaterialDiscoveryResult | MaterialExtractionResultV2, Field(discriminator="schema_version")
+    ]
+    native_visual_coverage: MaterialNativeVisualCoverage | None
+
+    @model_validator(mode="after")
+    def coherent_native_coverage(self) -> MaterialLearningOutputV3:
+        coverage = self.native_visual_coverage
+        if coverage is not None and (
+            isinstance(self.learning_result, MaterialDiscoveryResult)
+            or coverage.input_sha256 != self.learning_result.input_sha256
+        ):
+            raise ValueError("MATERIAL_LEARNING_NATIVE_COVERAGE_INPUT_MISMATCH")
+        return self
+
+
+class MaterialLearningRoleResultV3(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.40.0"] = "workflow-role/1.40.0"
+    role: Literal["support"] = "support"
+    output: MaterialLearningOutputV3
+
+
 class LegacyItemEditorialCompatibilityOutput(FrozenModel):
     proposal: LegacyItemEditorialCompatibilityProposal
 
@@ -3199,6 +3240,7 @@ RoleResult = (
     | ExternalItemLearningRoleResultV3
     | MaterialLearningRoleResult
     | MaterialLearningRoleResultV2
+    | MaterialLearningRoleResultV3
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | InferenceTransferPairRoleResult

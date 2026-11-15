@@ -89,6 +89,7 @@
         "tests/unit/test_material_native_preparation.py",
         "tests/unit/test_material_native_score.py",
         "tests/unit/test_material_extraction_exact_score.py",
+        "tests/unit/test_material_learning_execution_v3.py",
         "tests/unit/test_material_task_results.py",
         "tests/unit/test_material_item_registration_versions.py",
         "tests/unit/test_material_result_pointer_successors.py",

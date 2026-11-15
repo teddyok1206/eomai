@@ -40,6 +40,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:37cdf2444f45ccf30fc8c09d84075447c3c111ff687a6152407f59ff4d25e4b1",
         ),
+        "material-learning-role-receipt-v3": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-role-receipt-v3.schema.json",
+            "resources/material-learning/material-learning-role-receipt-v3.schema.json",
+            "3.0",
+            "sha256:a6790646499011eeb2e458e2cd6bafbb02f27011a7c431b5912bd1e0ffc9dc2d",
+        ),
         "material-learning-role-receipt-v2": CatalogSchemaResource(
             "schemas/material-learning/material-learning-role-receipt-v2.schema.json",
             "resources/material-learning/material-learning-role-receipt-v2.schema.json",

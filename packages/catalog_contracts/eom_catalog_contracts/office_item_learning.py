@@ -12,7 +12,7 @@ from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.external_item_learning_pages import ExternalItemLearningPageSet
 from eom_catalog_contracts.external_item_learning_result_v2 import (
     ExternalItemLearningResultV2,
-    SourceItemLearningObservation,
+    SourceItemLearningObservationFamily,
 )
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.external_item_learning_work import (
@@ -143,7 +143,7 @@ def validate_office_visual_bindings(
 def validate_source_office_visual_bindings(
     selection: OfficeVisualBindings,
     *,
-    result: SourceItemLearningObservation,
+    result: SourceItemLearningObservationFamily,
     catalog: OfficePictureUseCatalog,
     expected_catalog_sha256: str,
     expected_source_sha256: str,

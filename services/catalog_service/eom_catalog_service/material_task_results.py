@@ -7,6 +7,7 @@ from eom_catalog_contracts.material_learning import (
     MaterialDiscoveryResult,
     MaterialDiscoveryWork,
     MaterialExtractionResult,
+    MaterialExtractionResultV2,
     MaterialExtractionWork,
     MaterialLearningWork,
     validate_material_discovery,
@@ -33,6 +34,7 @@ from eom_workflow.models import (
     ArtifactPointer,
     MaterialLearningRoleResult,
     MaterialLearningRoleResultV2,
+    MaterialLearningRoleResultV3,
 )
 from eom_workflow.schemas import validate_role_input, validate_role_result_for_request
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
@@ -60,7 +62,7 @@ class ResolvedMaterialTask:
     selection: MaterialLearningAuthorizationRequest
     work: MaterialLearningWork
     work_pointer: MaterialArtifactMember
-    role: MaterialLearningRoleResult | MaterialLearningRoleResultV2
+    role: MaterialLearningRoleResult | MaterialLearningRoleResultV2 | MaterialLearningRoleResultV3
     result_pointer: ArtifactMemberPointer
     result_bytes: int
 
@@ -280,7 +282,10 @@ def resolve_completed_material_task(
     if len(raw) != revision.content_bytes or sha256_bytes(raw) != result_pointer.sha256:
         raise ValueError("MATERIAL_LEARNING_RESULT_SIZE_DIFFERS")
     role = validate_role_result_for_request(payload, "support", profile.result_schema, original)
-    if not isinstance(role, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)) or (
+    if not isinstance(
+        role,
+        (MaterialLearningRoleResult, MaterialLearningRoleResultV2, MaterialLearningRoleResultV3),
+    ) or (
         role.workflow_id,
         role.step_run_id,
         role.job_id,
@@ -308,7 +313,9 @@ def resolve_completed_material_task(
             raise ValueError("MATERIAL_LEARNING_RESULT_KIND_DIFFERS")
         validate_material_discovery(role.output.learning_result, work)
     else:
-        if not isinstance(role.output.learning_result, MaterialExtractionResult):
+        if not isinstance(
+            role.output.learning_result, (MaterialExtractionResult, MaterialExtractionResultV2)
+        ):
             raise ValueError("MATERIAL_LEARNING_RESULT_KIND_DIFFERS")
         validate_material_extraction(role.output.learning_result, work)
     return ResolvedMaterialTask(

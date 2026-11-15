@@ -5,6 +5,49 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 정확한 배점 실행 family와 임시 DB 검증, 등록/배포 연결은 계속
+
+Workflow3 / ROLE1.40 / request3 / result3 / plan41 / receipt3의 source 후보를 연결했다.
+work1의 문항·페이지 선택은 그대로다. Catalog의 기존 source owner가 같은 Native question
+descriptor를 읽어 `native_printed_score`를 만들고, 제출·재인가·plan replay·결과 수신에서
+이 값을 확인한다. 모델이 이 값이나 operator를 고르지 않는다. Native가 아니면 명시적 null,
+진짜 unreadable/UNRESOLVED는 관측 기록으로 보존하며 무조건 WORKER_RESULT_INVALID로
+바꾸지 않는다. 원문에서 확인한 점수를 proposal이0/15/다른 반점으로 내면 거절한다.
+
+실제 Orchestrator 구성의 source tests에서 stage/commit 후 DB 값은 receipt3의 다섯 작은
+필드뿐이고 전체 결과·coverage는 Artifact에 남는 것을 확인했다. sourceScore generation은
+canonical의 엄밀한 끝문자 검증을 완화하지 않고, Codex 양식에서만 동일한 반점99개 enum으로
+표현한다. Native 입력의 값은 다시 exact constant로 제한한다. 새 resource의 property/array
+fragment는 기존 inliner에서 요청한 작은 subschema만 읽어 unrelated old proposal을 붙이지 않는다.
+
+검증: Material 계열72개 파일과 기존 Office/외부 role/score/context source 회귀1339 PASS,
+후속 exact-score chain47 PASS. 기존40개 protocol의 schema bundle hash를 baseline6607eed1과
+대조해 변경0을 확인했다. source21개 focused mypy PASS와 wire audit1415/1066/12068도 확인했다.
+최종 실행/role/결과 읽기/context 회귀62 PASS와 source21개 mypy PASS,
+Ruff/format/diff-check PASS는 `native-score-execution-final-*` 로그에 남겼다.
+
+운영 DB를 사용하지 않고 공식 guarded 임시 PostgreSQL을 준비해 migration 왕복·제한 계정
+reconcile을 수행했다. 첫 DB에서 기존118개와 coverage upgrade1개는 통과했으나, 새4개 검사
+중3개가 새 definition의 admitted 목록 누락을 발견했다. source의 중앙 admission에 정확한
+3.0/1.40 쌍을 추가했고, late-denial 검사도 실제4번째 authorization까지 도달해야 PASS로
+강화했다. inactive row를 직접 UPDATE하지 않고 첫 임시 DB를 공식 cleanup했다.
+
+새 임시 DB에서 같은 경로를 다시 실행해 **118 PASS + upgrade1 PASS + 새4 PASS**를 확인했다.
+새4개는 actual Workflow/READY/command transaction·동시 동일 요청·재전송·late denial rollback·
+배점이 달라진 source의 거절을 검사한다. source와 plan port는 합성이라 live 인가·실제 released
+preset/plan의 DB 저장·모델 실행 증거로 확대하지 않는다. 두 실행의 실패/성공 로그는 보존한다.
+증거: `staging/native-score-disposable-material-tests{,-r2}-20261115.log`,
+`staging/native-score-all-historical-protocol-hashes-20261115.json`.
+검증용 두 DB는 공식 `testdb_cleanup.sh --confirm`으로 제거했고 각 cleanup 로그를 보존했다.
+운영 DB·원문·기등록 Item·accepted 분석·실패 이력에는 이번 단계의 쓰기가 없다.
+
+**아직 미배포**다. 다음 경계는 새 lineage/등록 Pack과 canonical1.1 등록·HTTP 읽기 및
+실제 소비 SDK의 호환 연결이다. 기존 Pack1.3은 ROLE<1.40 / Workflow2를 명시하므로
+metadata가 같다는 이유로 재사용하지 않는다. 기등록 원본 배점 오류 target만 새 linked 추출과
+기존 logical Item의 successor Revision으로 보정하는 경로를 우선 검증한다. old accepted result나
+분석의 hash/source pin만 고쳐 성공으로 꾸미지 않는다. Material owner와 우리가 PAUSE한 두 run은
+아직 재개하지 않았고,450개 등록·Graph·임베딩 완료는 아니다. 전체 goal은 ACTIVE다.
+
 ## 2026-11-15 — 배점 보존 기초 구현·검증, 운영 재개는 미완료
 
 새 `source-score/2.0`, source draft2, material extraction2와 canonical block content1.1을

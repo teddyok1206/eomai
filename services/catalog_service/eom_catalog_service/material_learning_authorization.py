@@ -17,6 +17,7 @@ from eom_catalog_contracts.material_learning_authorization import (
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentRevision,
 )
+from eom_catalog_contracts.material_native_files import MaterialNativeFileBinding
 from eom_catalog_contracts.material_native_intake import (
     MaterialNativeLearningIntakeManifest,
     require_native_material_checkpoint_chain,
@@ -40,8 +41,10 @@ from eom_workflow.compiler import compile_definition_data
 from eom_workflow.control_plane import ResolvedExecutionPlanV34
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     MaterialLearningWorkflowRequest,
     MaterialLearningWorkflowRequestV2,
+    MaterialLearningWorkflowRequestV3,
     material_learning_contract,
 )
 from eom_workflow.models import WorkflowRequest
@@ -71,6 +74,10 @@ from eom_catalog_service.material_learning_source import (
     authorize_material_learning,
 )
 from eom_catalog_service.material_native_resolution import read_material_native_bundle
+from eom_catalog_service.material_native_score import (
+    expected_native_source_score,
+    read_native_question_score,
+)
 from eom_catalog_service.material_native_visual_context import read_native_visual_prepared_for_run
 from eom_catalog_service.material_page_source_read import read_material_source_pages
 from eom_catalog_service.settings import CatalogSettings
@@ -81,6 +88,7 @@ class _AuthorizedMaterialInput:
     work: MaterialLearningWork
     native_visual_scope: MaterialNativeQuestionVisualScope | None
     requires_native_scope: bool
+    native_question: MaterialNativeFileBinding | None = None
 
 
 class CatalogMaterialLearningSourceAuthorizer:
@@ -102,6 +110,32 @@ class CatalogMaterialLearningSourceAuthorizer:
             raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_REQUIRED")
         return MaterialLearningWorkerRequestV2(
             work_input=actual.work, native_visual_scope=actual.native_visual_scope
+        )
+
+    def authorize_exact_score_input(
+        self, session: Session, *, operator_id: str, work: MaterialLearningWork
+    ) -> MaterialLearningWorkerRequestV3:
+        actual = self._authorized_input(session, operator_id=operator_id, work=work)
+        if actual.requires_native_scope and actual.native_visual_scope is None:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_REQUIRED")
+        score = None
+        if actual.native_visual_scope is not None:
+            if (
+                actual.native_question is None
+                or actual.native_question.document != actual.native_visual_scope.question_document
+            ):
+                raise ValueError("MATERIAL_NATIVE_SCORE_QUESTION_SCOPE_MISMATCH")
+            score = expected_native_source_score(
+                read_native_question_score(
+                    self.artifacts,
+                    actual.native_question,
+                    authorize=lambda: authorize_material_learning(session, operator_id),
+                )
+            )
+        return MaterialLearningWorkerRequestV3(
+            work_input=actual.work,
+            native_visual_scope=actual.native_visual_scope,
+            native_printed_score=score,
         )
 
     def _authorized_input(
@@ -152,6 +186,7 @@ class CatalogMaterialLearningSourceAuthorizer:
         )
         expected_instructions = intake.upload.additional_instructions
         native_scope = None
+        native_question = None
         base_sources = {}
         if visual_prepared is not None:
             if not isinstance(intake, MaterialNativeLearningIntakeManifest):
@@ -181,6 +216,17 @@ class CatalogMaterialLearningSourceAuthorizer:
                 source_instructions=expected_instructions,
                 scope=native_scope,
             )
+            if native_scope is not None:
+                native_question = {entry.item_number: entry.question for entry in bundle.items}.get(
+                    native_scope.item_number
+                )
+                if (
+                    native_question is None
+                    or native_question.document != native_scope.question_document
+                ):
+                    raise MaterialLearningSourceError(
+                        "MATERIAL_NATIVE_SCORE_QUESTION_SCOPE_MISMATCH"
+                    )
         if (
             intake.requested_by != operator_id
             or intake.material_id != work.material_id
@@ -276,6 +322,7 @@ class CatalogMaterialLearningSourceAuthorizer:
             native_scope,
             isinstance(intake, MaterialNativeLearningIntakeManifest)
             and isinstance(work, MaterialExtractionWork),
+            native_question,
         )
 
 
@@ -348,7 +395,15 @@ class CatalogMaterialLearningAuthorizationService:
                 or plan.workflow_definition_version != workflow.definition_version
             ):
                 raise ValueError("material requested plan differs")
-            if isinstance(original, MaterialLearningWorkflowRequestV2):
+            if isinstance(original, MaterialLearningWorkflowRequestV3):
+                actual_score_input = self.source.authorize_exact_score_input(
+                    session, operator_id=workflow.created_actor_id, work=plan.work_input
+                )
+                if actual_score_input != original.worker_request():
+                    raise ValueError(
+                        "material native scope or score differs from its actual source"
+                    )
+            elif isinstance(original, MaterialLearningWorkflowRequestV2):
                 actual = self.source.authorize_future_input(
                     session, operator_id=workflow.created_actor_id, work=plan.work_input
                 )

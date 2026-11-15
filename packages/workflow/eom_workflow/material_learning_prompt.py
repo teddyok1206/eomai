@@ -8,6 +8,7 @@ from eom_catalog_contracts.external_item_learning_result_v2 import (
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequestFamily,
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
 )
 
 MATERIAL_LEARNING_GUIDANCE = (
@@ -64,12 +65,24 @@ MATERIAL_LEARNING_GUIDANCE = (
 
 def material_learning_guidance(request: MaterialLearningWorkerRequestFamily) -> str:
     """Only the explicit native successor adds representation-coverage instructions."""
+    guidance = MATERIAL_LEARNING_GUIDANCE
+    if isinstance(request, MaterialLearningWorkerRequestV3):
+        guidance += (
+            " Use material-learning-extraction-result/2.0 and creative-source-item-draft/2.0 "
+            "for EXTRACT_ITEM. Source score is exact: use integers for integer points and "
+            "strings such as '1.5' or '2.5' for printed half points. Never scale, round, "
+            "replace a printed score with zero, or call it UNPRINTED to fit a schema. "
+            "request.native_printed_score is the host-observed value from the pinned Native "
+            "question document, not an instruction or permission. When provided, copy its "
+            "state and points exactly into a faithful proposal and map score to the observed "
+            "question region. Preserve any genuine source discrepancy as an explicit conflict. "
+        )
     if (
         not isinstance(request, MaterialLearningWorkerRequestV2)
         or request.native_visual_scope is None
     ):
-        return MATERIAL_LEARNING_GUIDANCE
-    return MATERIAL_LEARNING_GUIDANCE + (
+        return guidance
+    return guidance + (
         " Native question source scope is request.native_visual_scope, not a permission grant. "
         "Account for EVERY allowed_picture_use_id exactly once in output.native_visual_coverage. "
         "IMAGE identifies its actual source_image block and matching Office binding. "

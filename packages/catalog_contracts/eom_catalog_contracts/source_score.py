@@ -52,3 +52,11 @@ def parse_source_score_v2(value: object) -> PrintedSourceScoreV2 | UnprintedSour
 def source_score_decimal(score: PrintedSourceScoreV2 | UnprintedSourceScoreV2) -> Decimal | None:
     """None means not printed, never zero; a printed value is never rescaled."""
     return Decimal(str(score.points)) if isinstance(score, PrintedSourceScoreV2) else None
+
+
+def require_source_score_matches(expected: PrintedSourceScoreV2, proposed: SourceScoreV2) -> None:
+    """The shared numerical equality rule; callers separately own source authorization."""
+    expected = PrintedSourceScoreV2.model_validate(expected.model_dump(mode="json"))
+    proposed = parse_source_score_v2(proposed.model_dump(mode="json"))
+    if source_score_decimal(proposed) != source_score_decimal(expected):
+        raise ValueError("SOURCE_SCORE_MISMATCH")

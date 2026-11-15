@@ -6,12 +6,19 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_contracts.material_learning import MaterialLearningRoleReceipt
 from eom_catalog_contracts.material_learning_authorization import MaterialLearningAuthorizationReply
-from eom_catalog_contracts.material_learning_role_receipt import MaterialLearningRoleReceiptV2
+from eom_catalog_contracts.material_learning_role_receipt import (
+    MaterialLearningRoleReceiptV2,
+    MaterialLearningRoleReceiptV3,
+)
 from eom_catalog_service import material_task_results as owner
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_workflow.control_plane import ResolvedExecutionPlanV33, ResolvedExecutionPlanV40
+from eom_workflow.control_plane import (
+    ResolvedExecutionPlanV33,
+    ResolvedExecutionPlanV40,
+    ResolvedExecutionPlanV41,
+)
 from eom_workflow.schemas import validate_role_input, validate_role_result
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
@@ -19,10 +26,14 @@ from tests.unit.test_material_learning_contracts import discovery
 from tests.unit.test_material_learning_execution import record
 from tests.unit.test_material_learning_role_contracts import material_plan, worker_input
 from tests.unit.test_material_learning_role_v2 import request_input
+from tests.unit.test_material_learning_role_v3 import request_v3
 
 
-def case(monkeypatch, *, successor=False, native=False):
-    if successor or native:
+def case(monkeypatch, *, successor=False, native=False, exact_score=False):
+    if exact_score:
+        successor = True
+        input_doc, body = request_v3("native" if native else "discovery")
+    elif successor or native:
         input_doc, body = request_input("native" if native else "discovery")
         if not successor:
             input_doc["protocol_version"] = body["protocol_version"] = "workflow-role/1.37.0"
@@ -34,8 +45,20 @@ def case(monkeypatch, *, successor=False, native=False):
                     region["physical_page"] = 2
     else:
         input_doc = worker_input()
-    protocol = "workflow-role/1.39.0" if successor else "workflow-role/1.37.0"
-    result_schema = "material-learning-result@2.0" if successor else "material-learning-result@1.0"
+    protocol = (
+        "workflow-role/1.40.0"
+        if exact_score
+        else "workflow-role/1.39.0"
+        if successor
+        else "workflow-role/1.37.0"
+    )
+    result_schema = (
+        "material-learning-result@3.0"
+        if exact_score
+        else "material-learning-result@2.0"
+        if successor
+        else "material-learning-result@1.0"
+    )
     source = validate_role_input(input_doc, "support", protocol)
     work = source.request.work_input
     plan_doc = material_plan()
@@ -47,10 +70,23 @@ def case(monkeypatch, *, successor=False, native=False):
             workflow_definition_version="2.0.0",
             native_visual_scope=input_doc["request"]["native_visual_scope"],
         )
+    if exact_score:
+        plan_doc.update(
+            schema_version="resolved-execution-plan/41.0",
+            resolver_version="41.0.0",
+            workflow_definition_version="3.0.0",
+            native_printed_score=input_doc["request"]["native_printed_score"],
+        )
     plan_doc["plan_sha256"] = content_sha256(
         {key: value for key, value in plan_doc.items() if key != "plan_sha256"}
     )
-    plan_type = ResolvedExecutionPlanV40 if successor else ResolvedExecutionPlanV33
+    plan_type = (
+        ResolvedExecutionPlanV41
+        if exact_score
+        else ResolvedExecutionPlanV40
+        if successor
+        else ResolvedExecutionPlanV33
+    )
     plan = plan_type.model_validate(plan_doc)
     if not successor and not native:
         body = {
@@ -110,7 +146,13 @@ def case(monkeypatch, *, successor=False, native=False):
         task_type="workflow_support",
         request=input_doc,
     )
-    receipt_type = MaterialLearningRoleReceiptV2 if successor else MaterialLearningRoleReceipt
+    receipt_type = (
+        MaterialLearningRoleReceiptV3
+        if exact_score
+        else MaterialLearningRoleReceiptV2
+        if successor
+        else MaterialLearningRoleReceipt
+    )
     receipt = receipt_type(
         task_kind=work.task_kind,
         input_sha256=work.input_sha256,
@@ -135,7 +177,7 @@ def case(monkeypatch, *, successor=False, native=False):
         workflow_id=source.workflow_id,
         state="COMPLETED",
         definition_key="material-learning",
-        definition_version="2.0.0" if successor else "1.0.0",
+        definition_version=plan.workflow_definition_version,
         role_schema_version=protocol,
         created_actor_type="human",
         created_actor_id=actor,
@@ -235,6 +277,27 @@ def case(monkeypatch, *, successor=False, native=False):
         plan=plan,
         replace_result=replace_result,
     )
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_result3_reads_exact_plan_score_and_only_the_pinned_artifact(monkeypatch, native):
+    value = case(monkeypatch, exact_score=True, native=native)
+    result = owner.resolve_completed_material_task(
+        value.session, value.artifacts, task_id=value.task.task_id, operator_id=value.actor
+    )
+    assert result.role == value.role
+    assert result.result_pointer.schema_ref == "material-learning-result@3.0"
+    assert value.reads == ["material/work.json", "result.json"]
+    assert set(value.revision.result) == {
+        "schema_version",
+        "result_schema",
+        "task_kind",
+        "input_sha256",
+        "result_sha256",
+    }
+    if native:
+        assert result.role.output.learning_result.proposal.content.score.points == "1.5"
+        assert value.plan.native_printed_score.points == "1.5"
 
 
 def test_completed_result_reads_canonical_members_not_the_small_db_receipt(monkeypatch):

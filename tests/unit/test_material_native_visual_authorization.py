@@ -214,6 +214,51 @@ def test_actual_source_owner_accepts_exact_instructions_and_reads_only_base_page
     assert all(operator == actor for operator in permissions)
 
 
+@pytest.mark.parametrize("points", ["1.5", "2.5", "2"])
+def test_exact_score_input_reads_only_the_authorized_native_question(monkeypatch, points):
+    from decimal import Decimal
+
+    from eom_hwpx_contracts.native_item_score import (
+        NativePrintedScore,
+        NativePrintedScoreObservation,
+    )
+    from eom_workflow.material_learning_request import MaterialLearningWorkerRequestV3
+
+    authorizer, session, actor, work, state, _, _, permissions = authorization_case(monkeypatch, 3)
+    scope = material_native_question_visual_scope(
+        state["prepared"], printed_label=work.question.printed_label
+    )
+    reads = []
+
+    def read_score(artifacts, question, *, authorize):
+        assert artifacts is authorizer.artifacts
+        assert question.source_role == "MAIN"
+        assert question.document == scope.question_document
+        authorize()
+        reads.append(question.document)
+        authorize()
+        return NativePrintedScoreObservation((NativePrintedScore(points, Decimal(points)),))
+
+    monkeypatch.setattr(owner, "read_native_question_score", read_score)
+    actual = authorizer.authorize_exact_score_input(session, operator_id=actor, work=work)
+    assert type(actual) is MaterialLearningWorkerRequestV3
+    assert actual.work_input == work and actual.native_visual_scope == scope
+    assert actual.native_printed_score.points == (int(points) if points == "2" else points)
+    assert reads == [scope.question_document]
+    assert all(operator == actor for operator in permissions)
+
+
+def test_exact_score_input_does_not_hide_descriptor_validation_failure(monkeypatch):
+    authorizer, session, actor, work, _, _, _, _ = authorization_case(monkeypatch, 3)
+
+    def fail(*args, **kwargs):
+        raise ValueError("TEST_NATIVE_SCORE_ARTIFACT_HASH_MISMATCH")
+
+    monkeypatch.setattr(owner, "read_native_question_score", fail)
+    with pytest.raises(ValueError, match="TEST_NATIVE_SCORE_ARTIFACT_HASH_MISMATCH"):
+        authorizer.authorize_exact_score_input(session, operator_id=actor, work=work)
+
+
 def test_future_input_derives_exact_scope_from_authorized_prepared_source(monkeypatch):
     authorizer, session, actor, work, state, pages, sources, permissions = authorization_case(
         monkeypatch, 3

@@ -14,7 +14,11 @@ from pydantic import AfterValidator, Field, model_validator
 
 from eom_catalog_contracts.assessment_item import EquationBlock, TableBlock
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
-from eom_catalog_contracts.material_learning import MaterialExtractionResult
+from eom_catalog_contracts.material_learning import (
+    MaterialExtractionResult,
+    MaterialExtractionResultFamily,
+    MaterialExtractionResultV2,
+)
 from eom_catalog_contracts.material_native_visual_preparation import (
     MaterialNativeQuestionVisualScope,
 )
@@ -109,7 +113,7 @@ def validate_material_native_visual_coverage(
     coverage: MaterialNativeVisualCoverage,
     *,
     scope: MaterialNativeQuestionVisualScope,
-    result: MaterialExtractionResult,
+    result: MaterialExtractionResultFamily,
 ) -> None:
     """O(U + B + regions/bindings), U<=64; no pixels, paths, DB or implicit latest.
 
@@ -119,7 +123,12 @@ def validate_material_native_visual_coverage(
     # Typed copies can bypass nested validators; this is an admission boundary.
     coverage = MaterialNativeVisualCoverage.model_validate(coverage.model_dump(mode="json"))
     scope = MaterialNativeQuestionVisualScope.model_validate(scope.model_dump(mode="json"))
-    result = MaterialExtractionResult.model_validate(result.model_dump(mode="json"))
+    model = (
+        MaterialExtractionResultV2
+        if result.schema_version == "material-learning-extraction-result/2.0"
+        else MaterialExtractionResult
+    )
+    result = model.model_validate(result.model_dump(mode="json"))
     if coverage.input_sha256 != result.input_sha256:
         raise ValueError("MATERIAL_NATIVE_VISUAL_COVERAGE_INPUT_MISMATCH")
     if coverage.scope_sha256 != content_sha256(scope.model_dump(mode="json")):

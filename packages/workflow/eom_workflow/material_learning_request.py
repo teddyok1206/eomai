@@ -13,6 +13,7 @@ from eom_catalog_contracts.material_native_visual_preparation import (
     MaterialNativeQuestionVisualScope,
 )
 from eom_catalog_contracts.models import FrozenModel
+from eom_catalog_contracts.source_score import PrintedSourceScoreV2
 from pydantic import model_validator
 
 
@@ -79,17 +80,56 @@ class MaterialLearningWorkflowRequestV2(FrozenModel):
         )
 
 
+def require_material_native_printed_score(
+    scope: MaterialNativeQuestionVisualScope | None, score: PrintedSourceScoreV2 | None
+) -> None:
+    """A small observed value must be tied to a Native question, never inferred for a PDF."""
+    if (scope is None) != (score is None):
+        raise ValueError("MATERIAL_LEARNING_NATIVE_SCORE_SCOPE_MISMATCH")
+
+
+class MaterialLearningWorkerRequestV3(MaterialLearningWorkerRequestV2):
+    native_printed_score: PrintedSourceScoreV2 | None
+
+    @model_validator(mode="after")
+    def coherent_score(self) -> Self:
+        require_material_native_printed_score(self.native_visual_scope, self.native_printed_score)
+        return self
+
+
+class MaterialLearningWorkflowRequestV3(MaterialLearningWorkflowRequestV2):
+    native_printed_score: PrintedSourceScoreV2 | None
+
+    @model_validator(mode="after")
+    def coherent_score(self) -> Self:
+        require_material_native_printed_score(self.native_visual_scope, self.native_printed_score)
+        return self
+
+    def worker_request(self) -> MaterialLearningWorkerRequestV3:
+        return MaterialLearningWorkerRequestV3(
+            work_input=self.work_input,
+            native_visual_scope=self.native_visual_scope,
+            native_printed_score=self.native_printed_score,
+        )
+
+
 type MaterialLearningWorkerRequestFamily = (
-    MaterialLearningWorkerRequest | MaterialLearningWorkerRequestV2
+    MaterialLearningWorkerRequest
+    | MaterialLearningWorkerRequestV2
+    | MaterialLearningWorkerRequestV3
 )
 type MaterialLearningWorkflowRequestFamily = (
-    MaterialLearningWorkflowRequest | MaterialLearningWorkflowRequestV2
+    MaterialLearningWorkflowRequest
+    | MaterialLearningWorkflowRequestV2
+    | MaterialLearningWorkflowRequestV3
 )
 
 
 def parse_material_learning_worker_request(value: object) -> MaterialLearningWorkerRequestFamily:
     if isinstance(value, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)):
         value = value.model_dump(mode="json")
+    if isinstance(value, Mapping) and "native_printed_score" in value:
+        return MaterialLearningWorkerRequestV3.model_validate(value)
     if isinstance(value, Mapping) and "native_visual_scope" in value:
         return MaterialLearningWorkerRequestV2.model_validate(value)
     return MaterialLearningWorkerRequest.model_validate(value)
@@ -100,6 +140,8 @@ def parse_material_learning_workflow_request(
 ) -> MaterialLearningWorkflowRequestFamily:
     if isinstance(value, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)):
         value = value.model_dump(mode="json")
+    if isinstance(value, Mapping) and "native_printed_score" in value:
+        return MaterialLearningWorkflowRequestV3.model_validate(value)
     if isinstance(value, Mapping) and "native_visual_scope" in value:
         return MaterialLearningWorkflowRequestV2.model_validate(value)
     return MaterialLearningWorkflowRequest.model_validate(value)
@@ -133,6 +175,14 @@ _MATERIAL_CONTRACTS = MappingProxyType(
             "resolved-execution-plan-v40",
             "40.0.0",
         ),
+        "3.0.0": MaterialLearningContractProfile(
+            "3.0.0",
+            "workflow-role/1.40.0",
+            "material-learning-result@3.0",
+            "resolved-execution-plan/41.0",
+            "resolved-execution-plan-v41",
+            "41.0.0",
+        ),
     }
 )
 
@@ -147,6 +197,8 @@ def material_learning_contract_for_definition(version: str) -> MaterialLearningC
 def material_learning_contract(
     request: MaterialLearningWorkerRequestFamily | MaterialLearningWorkflowRequestFamily,
 ) -> MaterialLearningContractProfile:
+    if isinstance(request, (MaterialLearningWorkerRequestV3, MaterialLearningWorkflowRequestV3)):
+        return _MATERIAL_CONTRACTS["3.0.0"]
     if isinstance(request, (MaterialLearningWorkerRequestV2, MaterialLearningWorkflowRequestV2)):
         return _MATERIAL_CONTRACTS["2.0.0"]
     if isinstance(request, (MaterialLearningWorkerRequest, MaterialLearningWorkflowRequest)):

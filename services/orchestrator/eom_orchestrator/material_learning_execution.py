@@ -11,13 +11,22 @@ from eom_catalog_contracts.material_learning import (
 )
 from eom_catalog_contracts.office_item_learning import validate_source_office_visual_bindings
 from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog
-from eom_workflow.control_plane import ResolvedExecutionPlanV33, ResolvedExecutionPlanV40
+from eom_workflow.control_plane import (
+    ResolvedExecutionPlanV33,
+    ResolvedExecutionPlanV40,
+    ResolvedExecutionPlanV41,
+)
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequestFamily,
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     material_learning_contract,
 )
-from eom_workflow.models import MaterialLearningRoleResult, MaterialLearningRoleResultV2
+from eom_workflow.models import (
+    MaterialLearningRoleResult,
+    MaterialLearningRoleResultV2,
+    MaterialLearningRoleResultV3,
+)
 from eom_workflow.schemas import validate_material_learning_role_result
 
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
@@ -41,12 +50,14 @@ class MaterialLearningExecutionContext:
     def validate_result(
         self,
         request: MaterialLearningWorkerRequestFamily,
-        result: MaterialLearningRoleResult | MaterialLearningRoleResultV2,
+        result: MaterialLearningRoleResult
+        | MaterialLearningRoleResultV2
+        | MaterialLearningRoleResultV3,
     ) -> None:
         if result.protocol_version != material_learning_contract(request).role_protocol:
             raise ValueError("MATERIAL_LEARNING_RESULT_PROTOCOL_MISMATCH")
         if isinstance(request, MaterialLearningWorkerRequestV2):
-            if not isinstance(result, MaterialLearningRoleResultV2):
+            if not isinstance(result, (MaterialLearningRoleResultV2, MaterialLearningRoleResultV3)):
                 raise ValueError("MATERIAL_LEARNING_RESULT_PROTOCOL_MISMATCH")
             validate_material_learning_role_result(request, result)
         observed = result.output.learning_result
@@ -88,9 +99,19 @@ def validate_material_learning_execution_plan(
     try:
         if record is None:
             raise ValueError("material plan missing")
-        successor = isinstance(request, MaterialLearningWorkerRequestV2)
-        model = ResolvedExecutionPlanV40 if successor else ResolvedExecutionPlanV33
+        model = (
+            ResolvedExecutionPlanV41
+            if isinstance(request, MaterialLearningWorkerRequestV3)
+            else ResolvedExecutionPlanV40
+            if isinstance(request, MaterialLearningWorkerRequestV2)
+            else ResolvedExecutionPlanV33
+        )
         plan = model.model_validate(record.canonical_document)
+        if isinstance(request, MaterialLearningWorkerRequestV3) and (
+            not isinstance(plan, ResolvedExecutionPlanV41)
+            or plan.native_printed_score != request.native_printed_score
+        ):
+            raise ValueError("material source score differs from the pinned request")
         if isinstance(request, MaterialLearningWorkerRequestV2) and (
             not isinstance(plan, ResolvedExecutionPlanV40)
             or plan.native_visual_scope != request.native_visual_scope

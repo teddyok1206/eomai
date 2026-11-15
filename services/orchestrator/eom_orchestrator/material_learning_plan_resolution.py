@@ -8,6 +8,7 @@ from eom_workflow.control_plane import (
     ExecutionPresetRevision,
     ResolvedExecutionPlanV33,
     ResolvedExecutionPlanV40,
+    ResolvedExecutionPlanV41,
     ResolvedStepExecution,
 )
 from eom_workflow.control_schemas import validate_control_contract
@@ -15,6 +16,7 @@ from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestFamily,
     MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkerRequestV3,
     material_learning_contract,
 )
 from sqlalchemy import select
@@ -137,10 +139,15 @@ def resolve_material_learning_plan_for_request(
     if isinstance(request, MaterialLearningWorkerRequestV2):
         scope = request.native_visual_scope
         body["native_visual_scope"] = None if scope is None else scope.model_dump(mode="json")
+    if isinstance(request, MaterialLearningWorkerRequestV3):
+        score = request.native_printed_score
+        body["native_printed_score"] = None if score is None else score.model_dump(mode="json")
     document = {**body, "plan_sha256": content_sha256(body)}
     validate_control_contract(profile.plan_schema_key, document)
     model = (
-        ResolvedExecutionPlanV40
+        ResolvedExecutionPlanV41
+        if isinstance(request, MaterialLearningWorkerRequestV3)
+        else ResolvedExecutionPlanV40
         if isinstance(request, MaterialLearningWorkerRequestV2)
         else ResolvedExecutionPlanV33
     )

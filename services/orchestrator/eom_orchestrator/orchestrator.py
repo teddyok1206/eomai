@@ -16,7 +16,10 @@ from eom_catalog_contracts.external_item_learning_work import (
 )
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import MaterialLearningRoleReceipt
-from eom_catalog_contracts.material_learning_role_receipt import MaterialLearningRoleReceiptV2
+from eom_catalog_contracts.material_learning_role_receipt import (
+    MaterialLearningRoleReceiptV2,
+    MaterialLearningRoleReceiptV3,
+)
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -121,6 +124,7 @@ from eom_workflow.models import (
     LegacyItemExtractionWorkerRequest,
     MaterialLearningRoleResult,
     MaterialLearningRoleResultV2,
+    MaterialLearningRoleResultV3,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewRoleResultV4,
@@ -1339,7 +1343,14 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
-            if isinstance(result, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)):
+            if isinstance(
+                result,
+                (
+                    MaterialLearningRoleResult,
+                    MaterialLearningRoleResultV2,
+                    MaterialLearningRoleResultV3,
+                ),
+            ):
                 if (
                     not isinstance(
                         worker_input.request,
@@ -1764,13 +1775,22 @@ class Orchestrator:
                 content_bytes = staged.manifest.content_bytes
                 manifest_document = staged.manifest.model_dump(mode="json")
                 database_result = result_document
-                if isinstance(result, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)):
+                if isinstance(
+                    result,
+                    (
+                        MaterialLearningRoleResult,
+                        MaterialLearningRoleResultV2,
+                        MaterialLearningRoleResultV3,
+                    ),
+                ):
                     assert isinstance(
                         worker_input.request,
                         (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2),
                     )
                     receipt_type = (
-                        MaterialLearningRoleReceiptV2
+                        MaterialLearningRoleReceiptV3
+                        if isinstance(result, MaterialLearningRoleResultV3)
+                        else MaterialLearningRoleReceiptV2
                         if isinstance(result, MaterialLearningRoleResultV2)
                         else MaterialLearningRoleReceipt
                     )
