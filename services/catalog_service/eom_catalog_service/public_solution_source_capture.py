@@ -43,6 +43,10 @@ from eom_catalog_service.inference_transfer_service import (
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     CatalogInferenceTransferSnapshotSourceAdapter,
 )
+from eom_catalog_service.knowledge_analysis_sources import (
+    KnowledgeAnalysisSourceError,
+    require_historically_approved_item_revision,
+)
 from eom_catalog_service.knowledge_retrieval_service import (
     ReadOnlyCandidatePoolScope,
     ReadOnlyKnowledgeCandidatePool,
@@ -342,10 +346,16 @@ class CatalogPublicSolutionSourceCapture:
             )
         }
         if set(revisions) != set(keys) or any(
-            row.revision_state != "APPROVED" or row.item_id != sources[key].item_id
-            for key, row in revisions.items()
+            row.item_id != sources[key].item_id for key, row in revisions.items()
         ):
             raise ValueError("PUBLIC_SOLUTION_SOURCE_SET_INVALID")
+        try:
+            # The admitted Graph pins historical revisions, not the mutable
+            # current Item. Keep the canonical owner's approval-history fence.
+            for row in revisions.values():
+                require_historically_approved_item_revision(row)
+        except KnowledgeAnalysisSourceError as error:
+            raise ValueError("PUBLIC_SOLUTION_SOURCE_SET_INVALID") from error
         creative_keys = tuple(
             key
             for key in keys

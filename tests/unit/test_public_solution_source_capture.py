@@ -84,8 +84,15 @@ def run(value):
 
 
 @pytest.mark.parametrize("creative", [False, True])
-def test_both_families_use_real_pool_pins_and_keep_original_public_content(monkeypatch, creative):
+@pytest.mark.parametrize("revision_state", ["APPROVED", "SUPERSEDED", "RETIRED"])
+def test_both_families_use_real_pool_pins_and_keep_original_public_content(
+    monkeypatch, creative, revision_state
+):
     value = capture_case(monkeypatch, creative=creative)
+    value.revision.revision_state = revision_state
+    value.revision.approved_at = value.revision.superseded_at = object()
+    value.revision.approved_by = "operator_approver"
+    value.revision.superseded_by_revision_id = "itemrev_" + "f" * 32
     before = canonical_json_bytes(value.original_report)
     result = run(value)
     assert result.source_revision_ids == (value.source.item_revision_id,)
@@ -145,10 +152,17 @@ def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(
 
 
 @pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED", "MATERIAL_EXTERNAL"])
-def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkeypatch, source_kind):
+@pytest.mark.parametrize("revision_state", ["APPROVED", "SUPERSEDED", "RETIRED"])
+def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(
+    monkeypatch, source_kind, revision_state
+):
     # Synthetic V11 read port; actual accepted bytes/receipt validation is covered
     # by the separate disposable registered-solution application suite.
     value = capture_case(monkeypatch)
+    value.revision.revision_state = revision_state
+    value.revision.approved_at = value.revision.superseded_at = object()
+    value.revision.approved_by = "operator_approver"
+    value.revision.superseded_by_revision_id = "itemrev_" + "f" * 32
     past = run(value).entries[0]
     source = ApprovedItemKnowledgeSourceV2.model_validate(
         value.source.model_dump(mode="json") | {"source_class": "APPROVED_ITEM"}
@@ -198,6 +212,40 @@ def test_current_source_eligibility_is_not_inferred_from_a_typed_candidate(monke
         value.pool.candidates *= 2
     with pytest.raises(ValueError, match="SOURCE_SET_INVALID"):
         run(value)
+
+
+@pytest.mark.parametrize(
+    ("revision_state", "missing"),
+    [
+        ("SUPERSEDED", "approved_at"),
+        ("SUPERSEDED", "approved_by"),
+        ("SUPERSEDED", "superseded_at"),
+        ("SUPERSEDED", "superseded_by_revision_id"),
+        ("RETIRED", "approved_at"),
+        ("RETIRED", "approved_by"),
+    ],
+)
+def test_historical_source_still_requires_complete_canonical_approval_history(
+    monkeypatch, revision_state, missing
+):
+    value = capture_case(monkeypatch)
+    value.revision.revision_state = revision_state
+    value.revision.approved_at = value.revision.superseded_at = object()
+    value.revision.approved_by = "operator_approver"
+    value.revision.superseded_by_revision_id = "itemrev_" + "f" * 32
+    setattr(value.revision, missing, None)
+    with pytest.raises(ValueError, match="PUBLIC_SOLUTION_SOURCE_SET_INVALID") as raised:
+        run(value)
+    assert isinstance(raised.value.__cause__, capture_module.KnowledgeAnalysisSourceError)
+    value.solutions.assert_not_called()
+    value.registered_solutions.assert_not_called()
+    value.batches.assert_not_called()
+
+
+def test_approved_source_keeps_existing_state_only_approval_eligibility(monkeypatch):
+    value = capture_case(monkeypatch)
+    assert not hasattr(value.revision, "approved_at")
+    assert len(run(value).entries) == 1
 
 
 def test_registered_source_never_borrows_a_past_exam_report_when_real_v11_is_missing(monkeypatch):

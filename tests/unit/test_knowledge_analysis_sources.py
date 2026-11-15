@@ -6,6 +6,7 @@ from typing import Any, cast
 import pytest
 from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
+    require_historically_approved_item_revision,
     resolve_approved_item_source,
     resolve_content_intake_source,
     resolve_historically_approved_item_source,
@@ -264,7 +265,10 @@ def test_approved_content_team_item_revision_resolves_for_analysis(schema_ref: s
     assert source.artifact_member.sha256 == SOURCE_SHA256
 
 
-def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revision() -> None:
+@pytest.mark.parametrize("revision_state", ("APPROVED", "SUPERSEDED", "RETIRED"))
+def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revision(
+    revision_state: str,
+) -> None:
     content_bytes = 512
     component = SimpleNamespace(
         required=True,
@@ -280,7 +284,7 @@ def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revis
         _FakeSession(
             {
                 (ItemRevisionRecord, ITEM_REVISION_ID): SimpleNamespace(
-                    revision_state="SUPERSEDED",
+                    revision_state=revision_state,
                     item_id=ITEM_ID,
                     approved_at=object(),
                     approved_by="operator_approver",
@@ -318,6 +322,48 @@ def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revis
     assert source.item_id == ITEM_ID
     assert source.item_revision_id == ITEM_REVISION_ID
     assert source.artifact_member.sha256 == SOURCE_SHA256
+
+
+@pytest.mark.parametrize("state", ("DRAFT", "IN_REVIEW", "REJECTED", "UNKNOWN"))
+def test_historical_item_eligibility_rejects_unapproved_states(state: str) -> None:
+    row = cast(ItemRevisionRecord, SimpleNamespace(revision_state=state))
+    with pytest.raises(KnowledgeAnalysisSourceError) as raised:
+        require_historically_approved_item_revision(row)
+    assert raised.value.code == "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE"
+
+
+@pytest.mark.parametrize(
+    ("state", "missing"),
+    (
+        ("SUPERSEDED", "approved_at"),
+        ("SUPERSEDED", "approved_by"),
+        ("SUPERSEDED", "superseded_at"),
+        ("SUPERSEDED", "superseded_by_revision_id"),
+        ("RETIRED", "approved_at"),
+        ("RETIRED", "approved_by"),
+    ),
+)
+def test_historical_item_eligibility_rejects_incomplete_history(state: str, missing: str) -> None:
+    row = SimpleNamespace(
+        revision_state=state,
+        approved_at=object(),
+        approved_by="operator_approver",
+        superseded_at=object(),
+        superseded_by_revision_id="itemrev_" + "8" * 32,
+    )
+    setattr(row, missing, None)
+    session = cast(Session, _FakeSession({(ItemRevisionRecord, ITEM_REVISION_ID): row}))
+    with pytest.raises(KnowledgeAnalysisSourceError) as raised:
+        resolve_historically_approved_item_source(
+            session, item_revision_id=ITEM_REVISION_ID, source_class="APPROVED_ITEM"
+        )
+    assert raised.value.code == "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE"
+
+
+def test_approved_historical_item_eligibility_does_not_add_a_new_history_requirement() -> None:
+    require_historically_approved_item_revision(
+        cast(ItemRevisionRecord, SimpleNamespace(revision_state="APPROVED"))
+    )
 
 
 def test_new_analysis_does_not_accept_a_superseded_item_revision() -> None:

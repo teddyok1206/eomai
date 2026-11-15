@@ -5,6 +5,31 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 02:51 UTC — 22번 새 풀이·Graph 완료 / INDEX 이력 조건 수정 후보
+
+22번의 image-only 새 revision에 대한 base `analysisrun_790cb7b9e71f4d1c8a8e6833c60ffadf`와
+공개 풀이 `analysisrun_16dd0cfa385d45418f7307fdcbe7991f`가 모두 ACCEPTED다. 02:38:37 UTC
+관측에서 `graphrev_54f1af9a585a980475e784e30376e094` publication을 확인했다. 원래 task와
+구 revision·풀이·Graph는 보존한다. 실제 HTTP Native 다운로드 검증은 별도이며 현재 frozen
+driver r4는 같은 checkpoint로 Studio 로그인 입력을 기다린다. 나머지17회차는 아직 미제출이다.
+
+INDEX는 02:14 UTC `EMBEDDING_REGISTRY_POINTER_INVALID`로 종료됐다. 원래 CPU 수치 명령은
+SUCCEEDED이며, 실패 위치는 `public_solution_source_capture`의 APPROVED-only row 검사다.
+원래 Graph pool/resolver는 완전한 승인 이력이 있는 SUPERSEDED/RETIRED도 정확히 pin하지만
+capture만 거부했다. 이는 모델/GPU 계산 실패가 아니다. 기존 resolver의 이력 조건을 공통
+함수로 추출해 capture에서 재사용하는 최소 후보를 만들었다. latest 대체·과거 source 제외·
+DB row 수정·완료 벡터 삭제는 하지 않는다. 설계는
+`../architecture/PUBLIC_SOLUTION_HISTORICAL_REVISION_CAPTURE.md`다.
+
+source 집중62 PASS와 추가 인접151 PASS, formatter/linter/type checker가 통과했다.
+별도 guarded disposable DB의 새 실제 row-lock 회귀12 PASS, 정식 chat-knowledge 전체
+140 PASS(위12개 포함)다. 원본 source/report/Artifact admission은 일부 synthetic port이므로
+이를 live NAS/수치 성공으로 해석하지 않는다. 로그는
+`staging/native-index-history-{root-source-gate,disposable,full-disposable}-20261115.log`다.
+현재 후보는 미배포이며, 물리 controller·CPU/CUDA/model/recipe와 QUERY/API/Web/Material을
+보존하는 INDEX metadata SDK/Identity successor의 안전한 경계 확인·반영·재개가 남았다.
+전체450개 목표는 ACTIVE다.
+
 ## 2026-11-15 02:22 UTC — 22번 그림 보완 실제 등록·새 분석 실행
 
 공식 correction owner의 prepare/import/validate_applied를 실제 원본에 적용했다.

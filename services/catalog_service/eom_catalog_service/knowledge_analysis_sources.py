@@ -506,22 +506,9 @@ def resolve_content_intake_source(
         ) from exc
 
 
-def _resolve_item_source(
-    session: Session,
-    *,
-    artifacts: CatalogArtifactReader | None,
-    item_revision_id: str,
-    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
-    eligible_revision_states: frozenset[str],
-    past_exam_cache: PastExamSourceResolutionCache | None = None,
-    read_relations: ItemSourceReadRelations | None = None,
-) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
-    revision = session.get(ItemRevisionRecord, item_revision_id)
-    if revision is None:
-        raise KnowledgeAnalysisSourceError(
-            "KNOWLEDGE_ANALYSIS_SOURCE_MISSING", "Item Revision source does not exist"
-        )
-    if revision.revision_state not in eligible_revision_states:
+def require_historically_approved_item_revision(revision: ItemRevisionRecord) -> None:
+    """Check the existing published-source lifecycle without selecting a successor."""
+    if revision.revision_state not in {"APPROVED", "SUPERSEDED", "RETIRED"}:
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "Item Revision source is not approved",
@@ -543,6 +530,29 @@ def _resolve_item_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "retired Item Revision has incomplete approval history",
         )
+
+
+def _resolve_item_source(
+    session: Session,
+    *,
+    artifacts: CatalogArtifactReader | None,
+    item_revision_id: str,
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+    eligible_revision_states: frozenset[str],
+    past_exam_cache: PastExamSourceResolutionCache | None = None,
+    read_relations: ItemSourceReadRelations | None = None,
+) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
+    revision = session.get(ItemRevisionRecord, item_revision_id)
+    if revision is None:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_MISSING", "Item Revision source does not exist"
+        )
+    if revision.revision_state not in eligible_revision_states:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+            "Item Revision source is not approved",
+        )
+    require_historically_approved_item_revision(revision)
     scoped_components = (
         None if read_relations is None else read_relations.components(session, item_revision_id)
     )
