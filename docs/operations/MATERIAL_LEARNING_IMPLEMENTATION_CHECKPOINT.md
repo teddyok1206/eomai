@@ -5,6 +5,29 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 03:37 UTC — 동일 완료 재조회 PASS·INDEX 재개
+
+같은 publication command의 APPLY replay는 원래 Workflow/index/hash/binding1384를 반환했다.
+resumed_commands0, model_calls0, encoding4개와 전체 cutoff fingerprint 불변이다. completion
+영수증도 같은 bytes를 유지했다. replay 로그는
+`staging/native-index-history-publication-replay-20261115.log`다.
+
+공식 read-only observer에서 기존 GPU head1384/1581, CPU head1324/1581, 두 head의 approved
+Artifact와 첫 Native canary3개의 accepted 공개 풀이 및 양 space binding metadata를 확인했다.
+이 분모는 원래 Graph `graphrev_b5ddf74ca106b2bb2725477931fcd183`의 published scope이며
+450개 신규 문항의 완료 수가 아니다. 새 service revision의 처리 건수0은 기존 encoding 삭제를
+뜻하지 않는다. 구 revision의 별도 nonterminal 역사12건은 이번 복구 범위에 넣지 않고 보존했다.
+근거는 `staging/native-index-history-stored-progress-before-start-20261115.json`이다.
+
+03:36:16 UTC INDEX source0a56를 시작했다. PID322043, invocation
+`f691e972135246cab5304a4a2adaee19`이며 CPU overlap과 CONCRETE_FACETS reconciliation을 확인했다.
+03:37의 실제 source admission에서 과거 실패 위치 PUBLIC_SOLUTION_REPORTS와 population
+revalidation이 COMPLETED로 통과했다. 이는 단순 active/READY보다 강한 실제 읽기 증거지만,
+재개 후 다음 새 CUDA 수치 실행·새 head 저장까지 완료했다는 뜻은 아니다. API/Web/QUERY/
+Material PID는 각각3297861/3299009/3528016/222919로 보존했다. 원래 first25/22번 보완은
+완료 상태이며, 나머지17회차 HTTP 입력은 같은 EOM2 `native-import` 숨김 인증 대기다.
+전체450개 목표는 ACTIVE이며 새로운 비밀번호 파일이나 요청 identity를 만들지 않았다.
+
 ## 2026-11-15 03:30 UTC — 원래 GPU 요청 완료·기존 벡터 보존 확인
 
 INDEX metadata SDK `0a56aaf1`의 공식 PREPARE/PUBLISH/ACTIVATE를 통과했다. 새 Identity는
