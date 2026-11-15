@@ -5,6 +5,34 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 02:22 UTC — 22번 그림 보완 실제 등록·새 분석 실행
+
+공식 correction owner의 prepare/import/validate_applied를 실제 원본에 적용했다.
+같은 logical Item `item_c69276cbeac64a03bc1ab0b2c00f45cd`의 새 approved revision은
+`itemrev_e57436ab7cd54095843618f8133b3e9a`다. 검토한 source use/PNG를 `block_x_table`
+다음에 삽입했으며, 새 영수증 SHA는
+`6e7a939d468b1dfb4de39d6c65c0fdce8811126ead829f30cb555206ba55c31c`다.
+old revision·task·분석·원본 Native 문제/해설과 비본문 component5개는 보존한다. 25번은
+수정하지 않았다. actual owner가 읽은 Native 파일·현재 권한·원본 scope/PNG hash와
+image-only content 변경 검증은 PASS다. 이는 HTTPS/브라우저 육안 검증의 대체물이 아니다.
+
+새 base는 `analysisrun_790cb7b9e71f4d1c8a8e6833c60ffadf`, Workflow는
+`workflow_27af92742ced4f1fbad3e85ab15fca25`이며 02:21 관측에서 RUNNING이다.
+실제 worker는 slot03/job_d7e86d32e06846a5b34772cd71b7b904다. 공개 풀이와 새 Graph는
+아직 완료를 주장하지 않는다. 공식 owner의 같은 key를 읽는15분 bounded watch가 진행
+중이며 FAILED는 자동으로 새 요청을 만들지 않는다. helper는
+`/usr/local/libexec/eom-native-question22-visual-correction-20261115/apply.py`,
+SHA `eeab6ce4bba9a845087ea1f79cca9fad10930b70b18224738c68dbaa33f15347`이다.
+준비/등록/학습의 별도 로그는 staging의 `native-question22-correction-*-20261115.log`다.
+
+원래450개 checkpoint와4개 공식 복구 영수증을 그대로 사용하는 frozen HTTP driver r4를
+EOM2 `native-import`에서 시작했다. 현재 Studio guiadmin의 숨김 로그인 입력을 기다리며
+나머지17회차는 아직 제출하지 않았다. 새 요청 identity나 비밀번호 파일은 만들지 않는다.
+인증 후 실제 첫 회차 Native 다운로드/해시 gate를 수행하고,22번 새 Graph까지 확인한 뒤
+같은 driver에서 나머지를 이어간다. root 운영 명령의 성공을 이 HTTP 로그인 성공으로
+대체 해석하지 않는다. 이전 Source70 전용 status helper의 post-release 호출은 Source pin
+guard가 올바르게 거절했으며 실패 로그를 보존했다. 이를 운영 run 실패로 분류하지 않는다.
+
 ## 2026-11-15 02:02 UTC — coverage 후보 운영 반영·수치 runtime 보존
 
 `1b30a5805cfb04ddbff40cd1aeb59990f018ad56`(tree
