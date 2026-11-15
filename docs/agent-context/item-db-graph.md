@@ -70,6 +70,10 @@ task를 만들며, 정상 checkpoint는 상속한다. fresh result3만 같은 lo
 REVISE_ITEM/base CAS로 등록한다. Lineage4는 proof를 pin하고 보통 result3의 Lineage3는
 유지한다. exact Pack이 설정된 runtime의 *새* old-role 등록은 명시적 reanalysis 필요로 기록하되
 historical replay는 유지한다. 이는 후보 구현이며 실제 보정·배포는 운영 checkpoint를 확인한다.
+상속 task의 분석 FK는 복사하지 않는다. accepted child의 unique 소유 관계는 원래 task에
+남기고 `MaterialTaskHistory.analysis_owner`로 base/public을 읽는다. transaction 전에 게시한
+proof는 기존 indexed publication owner와 byte/hash 검증으로 재사용한다. SDK source 변경을
+원래 proof provenance 변경으로 취급하지 않는다.
 
 ## 출처와 상태를 분리
 

@@ -153,7 +153,11 @@ proof는 문항별 Artifact이며 work/result/native question/기등록 content�
 최종 확인한 한 transaction에서 기존 linked run/task를 만든다. first event는 명시적
 MATERIAL_NATIVE_SCORE_REANALYSIS_STARTED이며 기존 predecessor FK가 대상 관계를 고정한다.
 선정 target의 새 task만 PENDING이고 입력/출력/분석/Item pin을 상속하지 않는다. 정상 완료
-target은 원래 Item/base/public/Graph checkpoint를 모두 유지한다. old task/result/Graph는 수정하지 않는다.
+target은 원래 Item/Graph checkpoint와 predecessor 이력으로 base/public 참조를 유지한다.
+분석 run FK는 child task의 unique 소유 관계이므로 새 task에 복사하지 않는다. 기존
+`MaterialTaskHistory.analysis_owner`와 공식 읽기 projection이 정확한 원래 분석을 찾는다.
+게시 뒤 transaction 실패 시 proof는 원래 publication key로 조회·hash/내용을 검증하여
+재사용하며, SDK가 갱신돼도 최초 source provenance를 바꾸지 않는다. old task/result/Graph는 수정하지 않는다.
 초기 command의 run/timestamp/idempotency key hash가 동일하면 새 작업을 만들지 않고 같은 successor를 읽는다.
 
 새 target의 result3 등록은 같은 source key advisory lock 안에서 proof의 기존 Item에 대해

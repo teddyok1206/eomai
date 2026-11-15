@@ -212,8 +212,10 @@ def batch_case(guarded_engine):
     owner.sessions = build_session_factory(engine)
     owner.coordinator = SimpleNamespace(authorize=Mock())
 
-    def analysis(session, item, predecessor=None):
+    def analysis(session, item, predecessor=None, *, actor_id=None):
         workflow = controls._workflow(session)
+        if actor_id is not None:
+            workflow.created_actor_id = actor_id
         workflow.state, workflow.stage = "COMPLETED", "COMPLETED"
         run_id = identity("analysisrun_")
         row = KnowledgeAnalysisRunRecord(

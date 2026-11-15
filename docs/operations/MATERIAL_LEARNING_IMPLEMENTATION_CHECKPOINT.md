@@ -5,6 +5,42 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 23:07 UTC — exact-score 호환 운영 반영과 후속 등록 소유 관계 수정
+
+73ea7068의 Material ROLE1.40/Workflow3/Pack1.4·1.5를 기존 control owner로 release하고
+Catalog·네 ROLE runner 및 API/Web/Chat/QUERY의 호환 SDK를 반영했다. 모델·추론·capacity,
+Office CPU70과 GPU 수치 controller/model/recipe/space는 유지했다. 자료 학습 서비스는
+후속 등록 검증이 끝날 때까지 inactive로 두었다. migration head는0079이며 변경 없음이다.
+
+공유 배포의 첫 QUERY 시작은 typed configuration의 owner_source_commit이 이전 SDK를
+가리켜 SOURCE_MISMATCH로 거절됐다. 기록은 보존하고, 이미 설치된 패키지를 재설치하지
+않았다. 기존 typed serializer로 owner source만73ea7068로 갱신한 configuration successor와
+관련 reference/hash를 반영한 뒤 QUERY를 시작했다. numerical 설정·검색 권한은 변경하지
+않았다. 공유 배포의 aggregate 기록은 이 명시적 successor를 참조한다. HTTPS asset5개
+byte 비교·비인증401 거부 및 관련 장기 서비스 활성 상태가 PASS다. 새 자료를 실제 로그인으로
+읽었다는 증거는 아니며 shared postdeploy의 authenticated_ui는 PENDING_REAL_USER_LOGIN이다.
+운영 evidence는 `/var/lib/eom-native-exact-score-shared-release-20261115/postdeploy.json`과
+`/var/lib/eom-native-exact-score-query-metadata-20261115`에 있다.
+
+첫 회차16개를 보정할 같은 command/key로 proof16개를 게시했으나 linked task 저장이
+`uq_material_learning_child_analysis`에 거절됐다. 정상 문항의 분석 FK까지 새 task에
+복사한 application 버그다. run/task/event transaction은 rollback되어 원래 completed run,
+Item·풀이·Graph는 그대로이며, 게시된 proof는 실패 기록과 함께 보존한다. 제약을 완화하지
+않고 기존 clone 규칙으로 돌아가 predecessor 이력에서 accepted base/public을 재사용하도록
+수정한다. SDK 변경 뒤 동일 proof의 최초 provenance가 달라지지 않도록 기존 publication
+lookup에서 bytes/hash/target을 검증해 재사용한다. 새 identity로 우회하지 않는다.
+
+새 disposable 회귀는 원래 분석 FK가 null인 fixture를 보강해 accepted base/public·Item·Graph가
+연결된 completed task의 동일 요청/동시 상속을 검사한다. 첫 실행의 fixture가 terminal 입력을
+늦게 추가하려다 immutable trigger에 거절된 로그도 보존했으며, fixture를 insert 전에 준비하도록
+수정하고 재검사했다. production row/trigger/unique constraint는 바꾸지 않는다.
+같은 disposable DB의 최종 Material/동시성 회귀142 PASS, control upgrade2 PASS,
+score Workflow4 PASS다(`native-score-inheritance-storage-r2-20261115.log`). source의 관련
+단위 회귀124 PASS, mypy/Ruff/format PASS다. 실제 correction run 등록·
+회차2/3 재개·나머지 회차 처리 및 INDEX 소비 SDK/실제 벡터 완료는 아직 남았다.
+INDEX는 기존 실패 invocation677a2051…/PID0를 보존 중이며 GPU가 실행 중이라고 보고하지 않는다.
+전체450개 goal은 ACTIVE다.
+
 ## 2026-11-15 22:07 UTC — 최종 설치 후보와 실제 원본 보정 대상 확인
 
 source73ea7068을 커밋·push했다. 공식 API build-only의 RECORD/source-free installed

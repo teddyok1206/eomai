@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_contracts.material_item_lineage import MaterialItemLineageV4
+from eom_catalog_contracts.material_learning_intake import GetMaterialLearningRunQuery
 from eom_catalog_contracts.material_native_score_reanalysis import (
     NATIVE_SCORE_REANALYSIS_ARTIFACT,
     NATIVE_SCORE_REANALYSIS_EVENT,
@@ -36,8 +37,11 @@ from eom_catalog_service.material_learning_models import (
     MaterialLearningRunRecord,
     MaterialLearningTaskRecord,
 )
+from eom_catalog_service.material_learning_read import MaterialLearningReadService
+from eom_catalog_service.material_task_history import read_material_task_histories
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.settings import Settings
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -50,6 +54,7 @@ from tests.integration.test_material_learning_intake_storage import (
     material_intake as material_intake,
 )
 from tests.integration.test_material_learning_page_preparation import InterruptibleExtractor
+from tests.integration.test_material_native_graph_batch_storage import batch_case as batch_case
 from tests.integration.test_material_native_registration_storage import ROOT
 from tests.integration.test_material_native_registration_storage import (
     native_registration_case as native_registration_case,
@@ -68,7 +73,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
 @pytest.fixture
-def score_recovery(creative_engine, coordinator_case, monkeypatch, request):
+def score_recovery(creative_engine, coordinator_case, batch_case, monkeypatch, request):
     options = getattr(request, "param", {})
     accepted, settings, restart = coordinator_case
     extractor = InterruptibleExtractor()
@@ -81,10 +86,18 @@ def score_recovery(creative_engine, coordinator_case, monkeypatch, request):
     service = owner.NativeMaterialScoreReanalysisService(
         creative_engine, settings=settings, publisher=publisher, source_commit="a" * 40
     )
+    seeded = batch_case.make(("COMPLETED",), accepted=True) if options.get("analyses") else None
     with Session(creative_engine) as session, session.begin():
         run = session.get(MaterialLearningRunRecord, accepted.run_id)
         revision = session.get(LearningMaterialRevisionRecord, run.material_revision_id)
         material_id = revision.material_id
+        if seeded is not None:
+            seed = session.get(MaterialLearningTaskRecord, seeded.task_ids[0])
+            item = session.get(ItemRevisionRecord, seed.item_revision_id)
+            base = batch_case.analysis(session, item, actor_id=run.created_by)
+            public = batch_case.analysis(
+                session, item, base.analysis_run_id, actor_id=run.created_by
+            )
         rows = list(
             session.scalars(
                 select(MaterialLearningTaskRecord)
@@ -116,6 +129,20 @@ def score_recovery(creative_engine, coordinator_case, monkeypatch, request):
                 setattr(row, prefix + "_artifact_revision_id", run.prepared_artifact_revision_id)
                 setattr(row, prefix + "_sha256", run.prepared_sha256)
         selected_ids = frozenset({rows[2].task_id, rows[4].task_id})
+        inherited = None
+        if seeded is not None:
+            normal = rows[3]
+            normal.item_revision_id = item.item_revision_id
+            normal.analysis_run_id = base.analysis_run_id
+            normal.solution_analysis_run_id = public.analysis_run_id
+            normal.graph_snapshot_revision_id = seeded.revision
+            inherited = (
+                normal.task_id,
+                item.item_revision_id,
+                base.analysis_run_id,
+                public.analysis_run_id,
+                seeded.revision,
+            )
         run.state = options.get("phase", "COMPLETED")
         if options.get("lease"):
             run.lease_owner = "synthetic-score-owner"
@@ -168,6 +195,7 @@ def score_recovery(creative_engine, coordinator_case, monkeypatch, request):
         selected=selected_ids,
         original=original,
         capture=capture,
+        inherited=inherited,
     )
 
 
@@ -220,6 +248,7 @@ def test_score_successor_preserves_original_and_replays_after_progress(
     assert replay.replayed and replay.run_id == reply.run_id
 
 
+@pytest.mark.parametrize("score_recovery", [{"analyses": True}], indirect=True)
 def test_concurrent_score_successor_has_one_identity(creative_engine, score_recovery, monkeypatch):
     case = score_recovery
     gate = Barrier(2)
@@ -243,6 +272,47 @@ def test_concurrent_score_successor_has_one_identity(creative_engine, score_reco
             )
             == 1
         )
+    _assert_inherited_analyses(creative_engine, case, replies[0].run_id)
+
+
+def _assert_inherited_analyses(engine, case, successor_id):
+    source_id, item_id, base_id, public_id, graph_id = case.inherited
+    with Session(engine) as session:
+        clone = session.scalar(
+            select(MaterialLearningTaskRecord).where(
+                MaterialLearningTaskRecord.run_id == successor_id,
+                MaterialLearningTaskRecord.predecessor_task_id == source_id,
+            )
+        )
+        assert clone.state == "COMPLETED"
+        assert clone.item_revision_id == item_id and clone.graph_snapshot_revision_id == graph_id
+        assert clone.analysis_run_id is None and clone.solution_analysis_run_id is None
+        history = read_material_task_histories(session, (clone,))[clone.task_id]
+        assert history.analysis_owner().analysis_run_id == base_id
+        assert history.analysis_owner(solution=True).solution_analysis_run_id == public_id
+        assert session.get(KnowledgeAnalysisRunRecord, base_id).state == "ACCEPTED"
+        assert session.get(KnowledgeAnalysisRunRecord, public_id).state == "ACCEPTED"
+    detail = MaterialLearningReadService(engine, case.service.settings).inspect(
+        GetMaterialLearningRunQuery(actor_id=case.command.actor_id, run_id=successor_id)
+    )
+    assert (
+        next(row for row in detail.tasks if row.item_revision_id == item_id).analysis_run_id
+        == base_id
+    )
+
+
+@pytest.mark.parametrize("score_recovery", [{"analyses": True}], indirect=True)
+def test_completed_analyses_are_reused_through_history_not_duplicated(
+    creative_engine, score_recovery
+):
+    case = score_recovery
+    with Session(creative_engine) as session:
+        count = session.scalar(select(func.count()).select_from(KnowledgeAnalysisRunRecord))
+    result = case.service.reanalyze(case.command)
+    _assert_inherited_analyses(creative_engine, case, result.run_id)
+    assert case.service.reanalyze(case.command).replayed
+    with Session(creative_engine) as session:
+        assert session.scalar(select(func.count()).select_from(KnowledgeAnalysisRunRecord)) == count
 
 
 def test_score_transaction_interruption_keeps_proof_and_rolls_back_linked_rows(
@@ -271,6 +341,9 @@ def test_score_transaction_interruption_keeps_proof_and_rolls_back_linked_rows(
                 MaterialLearningEventRecord.run_id == native_score_reanalysis_run_id(case.command),
             )
         )
+    # An installed SDK fix must reuse the first successful proof publication,
+    # not replace its source provenance or conflict on the same idempotency key.
+    case.service.source_commit = "b" * 40
     assert case.service.reanalyze(case.command).retried_tasks == 2
 
 

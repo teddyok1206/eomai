@@ -383,6 +383,28 @@ class NativeMaterialScoreReanalysisService:
         return _ScoreSnapshot(tuple(targets), checksum, prepared)
 
     def _publish(self, target: NativeScoreReanalysisTarget) -> None:
+        # A transaction may roll back after publication. Reuse the validated
+        # original proof across SDK releases, preserving its original provenance.
+        existing = find_material_publication(
+            self.publisher,
+            idempotency_key=native_score_reanalysis_target_key(
+                target.successor_run_id, target.source_task_id
+            ),
+            artifact_type=NATIVE_SCORE_REANALYSIS_ARTIFACT,
+        )
+        if existing is not None:
+            with self.sessions() as session:
+                pointer = pin_material_primary(session, existing).pointer
+            original = read_material_metadata(
+                self.artifacts,
+                pointer,
+                NativeScoreReanalysisTarget,
+                schema_ref=NATIVE_SCORE_REANALYSIS_REF,
+                member_path=NATIVE_SCORE_REANALYSIS_MEMBER,
+            )
+            if original != target:
+                raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_CHECKPOINT_CHANGED")
+            return
         raw = canonical_json_bytes(target.model_dump(mode="json"))
         with TemporaryDirectory(
             prefix="native-score-target.", dir=self.settings.staging_root
@@ -502,9 +524,8 @@ class NativeMaterialScoreReanalysisService:
                     now=now,
                     checkpoint_state="PENDING" if selected else None,
                 )
-                if not selected:
-                    clone.analysis_run_id = task.analysis_run_id
-                    clone.solution_analysis_run_id = task.solution_analysis_run_id
+                # Accepted analyses have one child-task owner. Completed tasks
+                # resolve those pins through their immutable predecessor history.
                 session.add(clone)
                 session.flush()
                 append_material_event(
