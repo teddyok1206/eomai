@@ -5,6 +5,32 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 03:30 UTC — 원래 GPU 요청 완료·기존 벡터 보존 확인
+
+INDEX metadata SDK `0a56aaf1`의 공식 PREPARE/PUBLISH/ACTIVATE를 통과했다. 새 Identity는
+`localindexservicerev_3f43091e7e8948159f94216abd4f4908`, runtime SHA는
+`f1a63a33409e324d21a1749ff36157a8cafb89affa02672255ffe09dde173407`다. 물리 controller0f282,
+모델·recipe·CPU/CUDA bundle/space와 API/Web/QUERY/Material·ROLE Runner는 보존했다. 고정 cutoff의
+완료 encoding metadata와 보존 대상 config/peer 상태를 각 phase 전후 대조했다. 아직 INDEX
+service는 시작하지 않았다. exact carry guard의 오프라인18개와 기존 publication source17개도
+통과했다(실제 source PYTHONPATH 재실행 로그 r2를 기준으로 한다).
+
+기존 `recover_prepared_index_publication`으로 원래 CUDA 요청을 완료했다. 결과는
+`workflow_9713c7afeb0047e7b5aacd0c5bf738a8` COMPLETED, 원래 index revision
+`embeddingindexrev_bfcc7f7a5b1831d9f6a2f7529f8798e7`, hash
+`33193f6924f4afcdcc0e579404a2d6198ce7cfe24705f790e4213696f05cac6c`, binding1384다.
+원래 command1개만 재claim했고 encoding4개/ownership/completion과 전체 기존 encoding
+fingerprint는 그대로다. 새 모델 실행은0이다. 03:19 시작해03:30:37 관측에서 완료했고,
+그 사이의 시간을 새 GPU 계산으로 해석하지 않는다. 공식 owner의 source/등록/영수증
+무결성 검증을 수행했다. 원래 실패 이력·CPU 성공 command·기출/창작/Native 정본을 보존했다.
+
+운영 명령/결과는 `/var/lib/eom-native-index-registered-publication-recovery-20261115`,
+로그는 `staging/native-index-history-publication-{prepare,complete}-20261115.log`다.
+배포 helper SHA는 `cae44fa94373e2aaf84bdb4732eebaeda5477ed4427f2d4e1dee42b10c872848`,
+완료 helper SHA는 `472548cb6e9223e538d164836155df4780cfe5b91055299fd7189606b7499db9`다.
+다음은 동일 command replay/저장 head 관측 후 INDEX 재개다. HTTP driver는 여전히 같은
+2번 창의 Studio 입력을 기다리며 나머지17회차는 미제출이다. 전체450개 목표는 ACTIVE다.
+
 ## 2026-11-15 03:07 UTC — INDEX 실제 저장 성공·미완료 영수증 한 건 식별
 
 `0a56aaf1ff82051fa7cd4c40eef8ddd163ed93ec` 후보를 커밋·푸시하고 build-only/RECORD 및 공식
