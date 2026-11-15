@@ -41,6 +41,23 @@ score Workflow4 PASS다(`native-score-inheritance-storage-r2-20261115.log`). sou
 INDEX는 기존 실패 invocation677a2051…/PID0를 보존 중이며 GPU가 실행 중이라고 보고하지 않는다.
 전체450개 goal은 ACTIVE다.
 
+### 23:13 UTC 후속 — 같은 보정 요청 등록·재조회 성공, 공통 materializer 연결 보완
+
+5745f2a5를 commit/push하고 공식 API build-only 및 별도 immutable SDK 설치를 통과했다.
+같은 command/key의16개 proof를 그대로 재사용해 correction run을 만들었다. retried16/
+reused16이며 즉시 replay는 같은 run과 `replayed=true`다. 원래 completed run·원문·기존
+분석은 보존했다. 회차2/3은 공식 RESUME으로 DISCOVERING/PROCESSING이 됐다.
+`native-score-create-correction-r2-20261115.log`와 `native-score-resume-runs-20261115.log`.
+
+Material 재개 후 새 ROLE 작업이 모델 실행 전 `execution_materializer:1275`에서 실패했다.
+공통 Artifact allowlist reader와 workspace materializer의 dispatch에 plan41이 빠져
+기본 구 plan validator가 새 문서를 거절하는 것이 확인됐다. 신규 제출을 멈췄고 실패 이력은
+보존했다. 두 기존 진입점에 exact plan41 parser를 연결하며, 기존33/40의 권한·페이지 검증과
+analysis 크기 한도를 재사용한다. 새 schema/실행 권한/우회 validator는 없다.
+mocked Orchestrator 내부 결과만 확인하던 검사에 실제 두 진입점의 plan40/41 페이지
+materialization을 보강했다. 관련 실제 source materializer 회귀72 PASS, mypy PASS다.
+수정 ROLE 설치/실제 재개와 남은450개 처리 검증은 계속 진행한다.
+
 ## 2026-11-15 22:07 UTC — 최종 설치 후보와 실제 원본 보정 대상 확인
 
 source73ea7068을 커밋·push했다. 공식 API build-only의 RECORD/source-free installed

@@ -499,13 +499,31 @@ def test_actual_runner_executor_selects_new_context_and_native_only_guidance(mon
     )
 
 
-def test_v40_materialization_reuses_verified_base_pages_and_analysis_size_limits(
-    monkeypatch, tmp_path
+@pytest.mark.parametrize("exact_score", [False, True])
+def test_materialization_reuses_verified_base_pages_and_analysis_size_limits(
+    monkeypatch, tmp_path, exact_score
 ):
     work, root, session, _ = page_fixture(tmp_path)
     worker = MaterialLearningWorkerRequestV2(work_input=work, native_visual_scope=None)
     selected = plan_for(worker)
+    if exact_score:
+        from eom_workflow.material_learning_request import MaterialLearningWorkerRequestV3
+
+        from tests.unit.test_material_learning_execution_v3 import plan_for as score_plan
+
+        worker = MaterialLearningWorkerRequestV3(
+            work_input=work, native_visual_scope=None, native_printed_score=None
+        )
+        selected = score_plan(worker)
     session.records[(materializer.ResolvedExecutionPlanRecord, selected.plan_id)] = record(selected)
+    monkeypatch.setattr(materializer, "_authorized_step_bundle_revisions", lambda *_: frozenset())
+    expected = frozenset(page.image.artifact_revision_id for page in work.pages)
+    assert (
+        materializer.authorized_execution_artifact_revisions(
+            session, plan_id=selected.plan_id, step_key="learn"
+        )
+        == expected
+    )
     monkeypatch.setattr(
         materializer,
         "_instruction_manifest",
@@ -536,9 +554,7 @@ def test_v40_materialization_reuses_verified_base_pages_and_analysis_size_limits
         workspace=workspace,
         canonical_artifact_root=root,
         worker_group_id=os.getgid(),
-        authorized_artifact_revision_ids=frozenset(
-            page.image.artifact_revision_id for page in work.pages
-        ),
+        authorized_artifact_revision_ids=expected,
     )
     assert result.plan_sha256 == selected.plan_sha256
     assert (workspace / "source/material/main/page-000031.png").is_file()

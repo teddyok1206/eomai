@@ -92,6 +92,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV33,
     ResolvedExecutionPlanV34,
     ResolvedExecutionPlanV40,
+    ResolvedExecutionPlanV41,
     ResolvedStepExecution,
 )
 from eom_workflow.inference_transfer_control import (
@@ -280,6 +281,7 @@ def materialize_execution_step(
         "resolved-execution-plan/32.0",
         "resolved-execution-plan/33.0",
         "resolved-execution-plan/40.0",
+        "resolved-execution-plan/41.0",
         "resolved-execution-plan/34.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
@@ -352,6 +354,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/41.0":
+        plan = ResolvedExecutionPlanV41.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/40.0":
         plan = ResolvedExecutionPlanV40.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/33.0":
@@ -1233,6 +1237,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/41.0":
+        plan = ResolvedExecutionPlanV41.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/40.0":
         plan = ResolvedExecutionPlanV40.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/33.0":
