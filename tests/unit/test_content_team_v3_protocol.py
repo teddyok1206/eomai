@@ -382,7 +382,9 @@ def test_v9_unsafe_svg_is_rejected_by_schema_and_typed_acceptance() -> None:
     assert "not" not in projected_svg
 
     acceptance_source = inspect.getsource(Orchestrator.submit_workflow_role)
-    validation_offset = acceptance_source.index("result = validate_role_result(")
+    # The material successor adds request/score binding to this same typed
+    # acceptance boundary; unsafe SVG must still be rejected before any commit.
+    validation_offset = acceptance_source.index("result = validate_role_result_for_request(")
     assert validation_offset < acceptance_source.index("commit_file_set_artifact(")
     assert validation_offset < acceptance_source.index("commit_artifact(")
 

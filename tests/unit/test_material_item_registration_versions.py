@@ -4,11 +4,14 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.material_item_lineage import (
     MATERIAL_ITEM_LINEAGE_REF,
     MATERIAL_ITEM_LINEAGE_V2_REF,
+    MATERIAL_ITEM_LINEAGE_V3_REF,
     MaterialItemLineage,
     MaterialItemLineageV2,
+    MaterialItemLineageV3,
 )
 from eom_catalog_contracts.material_native_files import MaterialNativeItemBinding
 from eom_catalog_service import material_item_registration as owner
@@ -16,29 +19,43 @@ from eom_catalog_service.creative_source_content import materialize_source_obser
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_operator_identity import PermissionKey
 
+from tests.unit.test_creative_source_draft import resolved_image
 from tests.unit.test_material_native_files import binding_data
 from tests.unit.test_material_task_results import case
 
 
-def resolved_case(monkeypatch, *, successor):
-    fixture = case(monkeypatch, successor=successor, native=True)
+def resolved_case(monkeypatch, *, successor=False, exact_score=False):
+    fixture = case(monkeypatch, successor=successor, native=True, exact_score=exact_score)
     resolved = owner.resolve_completed_material_task(
         fixture.session,
         fixture.artifacts,
         task_id=fixture.task.task_id,
         operator_id=fixture.actor,
     )
-    content = materialize_source_observation_content(
-        resolved.role.output.learning_result, resolved_images={}
-    )
+    result = resolved.role.output.learning_result
+    images = {
+        block.block_id: resolved_image().model_copy(
+            update={
+                "block_id": block.block_id,
+                "purpose": block.purpose,
+                "alt_text": block.alt_text,
+            }
+        )
+        for block in result.proposal.content.body
+        if isinstance(block, SourceImageBlock)
+    }
+    content = materialize_source_observation_content(result, resolved_images=images)
     return resolved, content
 
 
-@pytest.mark.parametrize("successor", [False, True])
-def test_lineage_construction_selects_only_the_exact_actual_result_family(monkeypatch, successor):
-    resolved, content = resolved_case(monkeypatch, successor=successor)
+@pytest.mark.parametrize("family", [1, 2, 3])
+def test_lineage_construction_selects_only_the_exact_actual_result_family(monkeypatch, family):
+    resolved, content = resolved_case(monkeypatch, successor=family == 2, exact_score=family == 3)
     lineage = owner.material_item_lineage(resolved, content)
-    assert isinstance(lineage, MaterialItemLineageV2 if successor else MaterialItemLineage)
+    assert (
+        type(lineage)
+        is {1: MaterialItemLineage, 2: MaterialItemLineageV2, 3: MaterialItemLineageV3}[family]
+    )
     assert lineage.role_result == resolved.result_pointer
     assert lineage.result_sha256 == content_sha256(
         resolved.role.output.learning_result.model_dump(mode="json")
@@ -50,28 +67,34 @@ def test_lineage_construction_selects_only_the_exact_actual_result_family(monkey
 
 
 @pytest.mark.parametrize(
-    "successor,native,version",
+    "family,native,version",
     [
-        (False, False, "1.0.0"),
-        (False, True, "1.1.0"),
-        (True, False, "1.2.0"),
-        (True, True, "1.3.0"),
+        (1, False, "1.0.0"),
+        (1, True, "1.1.0"),
+        (2, False, "1.2.0"),
+        (2, True, "1.3.0"),
+        (3, False, "1.4.0"),
+        (3, True, "1.5.0"),
     ],
 )
 def test_authorization_selects_four_exact_released_pack_profiles_not_latest(
-    monkeypatch, successor, native, version
+    monkeypatch, family, native, version
 ):
-    resolved, _ = resolved_case(monkeypatch, successor=successor)
+    resolved, _ = resolved_case(monkeypatch, successor=family == 2, exact_score=family == 3)
     service = object.__new__(owner.MaterialItemRegistrationService)
     service.pack_release_id, service.native_pack_release_id = "generic", "native"
     service.coverage_pack_release_id = "coverage"
     service.native_coverage_pack_release_id = "native-coverage"
+    service.exact_score_pack_release_id = "score"
+    service.native_exact_score_pack_release_id = "native-score"
     service.sources = SimpleNamespace(reauthorize=lambda *args, **kwargs: None)
     release = SimpleNamespace(content_pack_id="pack", state="RELEASED", version=version)
     logical = SimpleNamespace(pack_key="uploaded-material-item")
     expected_id = (
-        ("native-coverage" if native else "coverage")
-        if successor
+        ("native-score" if native else "score")
+        if family == 3
+        else ("native-coverage" if native else "coverage")
+        if family == 2
         else ("native" if native else "generic")
     )
 
@@ -97,18 +120,19 @@ def test_authorization_selects_four_exact_released_pack_profiles_not_latest(
     )
     binding = MaterialNativeItemBinding.model_validate(binding_data()) if native else None
     service._authorize(session, resolved, binding)
-    for wrong in {"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.99.0"} - {version}:
+    for wrong in {"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.99.0"} - {version}:
         release.version = wrong
         with pytest.raises(ValueError, match="NOT_AUTHORIZED"):
             service._authorize(session, resolved, binding)
 
 
-def replay_case(monkeypatch, *, successor):
-    resolved, content = resolved_case(monkeypatch, successor=successor)
+def replay_case(monkeypatch, *, successor=False, exact_score=False):
+    resolved, content = resolved_case(monkeypatch, successor=successor, exact_score=exact_score)
     lineage = owner.material_item_lineage(resolved, content)
     service = object.__new__(owner.MaterialItemRegistrationService)
     service.pack_release_id = "pack"
     service.coverage_pack_release_id = "pack"
+    service.exact_score_pack_release_id = "pack"
     item = SimpleNamespace(lifecycle_state="ACTIVE", current_revision_id="itemrev_" + "a" * 32)
     revision = SimpleNamespace(
         item_id="item_" + "a" * 32,
@@ -124,7 +148,13 @@ def replay_case(monkeypatch, *, successor):
         ordinal=0,
         artifact_id="artifact_" + "f" * 32,
         artifact_revision_id="rev_" + "e" * 32,
-        schema_ref=MATERIAL_ITEM_LINEAGE_V2_REF if successor else MATERIAL_ITEM_LINEAGE_REF,
+        schema_ref=(
+            MATERIAL_ITEM_LINEAGE_V3_REF
+            if exact_score
+            else MATERIAL_ITEM_LINEAGE_V2_REF
+            if successor
+            else MATERIAL_ITEM_LINEAGE_REF
+        ),
         logical_name="lineage.json",
         sha256=content_sha256(lineage.model_dump(mode="json")),
     )
@@ -134,6 +164,11 @@ def replay_case(monkeypatch, *, successor):
         artifact_id="artifact_" + "d" * 32,
         artifact_revision_id="rev_" + "c" * 32,
         logical_name="item-content.json",
+        schema_ref=(
+            owner.ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF
+            if exact_score
+            else owner.ASSESSMENT_ITEM_CONTENT_SCHEMA_REF
+        ),
         sha256=lineage.registered_content_sha256,
     )
     report = SimpleNamespace(
@@ -161,12 +196,10 @@ def replay_case(monkeypatch, *, successor):
     return service, session, revision, resolved, lineage, source, payload, reads
 
 
-@pytest.mark.parametrize("successor", [False, True])
-def test_registration_replay_parses_exact_lineage_version_and_keeps_all_pins(
-    monkeypatch, successor
-):
+@pytest.mark.parametrize("family", [1, 2, 3])
+def test_registration_replay_parses_exact_lineage_version_and_keeps_all_pins(monkeypatch, family):
     service, session, revision, resolved, expected, _, _, reads = replay_case(
-        monkeypatch, successor=successor
+        monkeypatch, successor=family == 2, exact_score=family == 3
     )
     assert service._verify_registered(session, revision, resolved) == expected
     assert len(reads) == 1 and reads[0]["max_bytes"] == 64 * 1024

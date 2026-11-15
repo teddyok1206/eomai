@@ -60,6 +60,12 @@ class MaterialLearningRuntimePins(BaseModel):
     native_coverage_content_pack_release_id: str | None = Field(
         default=None, min_length=1, max_length=128
     )
+    exact_score_content_pack_release_id: str | None = Field(
+        default=None, min_length=1, max_length=128
+    )
+    native_exact_score_content_pack_release_id: str | None = Field(
+        default=None, min_length=1, max_length=128
+    )
     definition_id: str = Field(min_length=1, max_length=128)
 
     @classmethod
@@ -96,6 +102,11 @@ def build_material_learning_runtime(
             or pins.native_coverage_content_pack_release_id is None
         ):
             raise ValueError("MATERIAL_LEARNING_RUNTIME_COVERAGE_PACK_REQUIRED")
+        if learning_contract.definition_version == "3.0.0" and (
+            pins.exact_score_content_pack_release_id is None
+            or pins.native_exact_score_content_pack_release_id is None
+        ):
+            raise ValueError("MATERIAL_LEARNING_RUNTIME_EXACT_SCORE_PACK_REQUIRED")
         for key, revision, protocol in (
             (
                 "material-learning",
@@ -201,6 +212,8 @@ def build_material_learning_runtime(
             native_content_pack_release_id=pins.native_content_pack_release_id,
             coverage_content_pack_release_id=pins.coverage_content_pack_release_id,
             native_coverage_content_pack_release_id=pins.native_coverage_content_pack_release_id,
+            exact_score_content_pack_release_id=pins.exact_score_content_pack_release_id,
+            native_exact_score_content_pack_release_id=pins.native_exact_score_content_pack_release_id,
             publisher=publisher,
             source_commit=platform.runtime_source_commit,
             settings=catalog,

@@ -1,7 +1,7 @@
 """Small source-fidelity references for a registered uploaded question."""
 
 from collections.abc import Mapping
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -16,6 +16,7 @@ from eom_catalog_contracts.validation import validate_contract
 
 MATERIAL_ITEM_LINEAGE_REF = "eom://schemas/material-learning/item-lineage/1.0"
 MATERIAL_ITEM_LINEAGE_V2_REF = "eom://schemas/material-learning/item-lineage/2.0"
+MATERIAL_ITEM_LINEAGE_V3_REF = "eom://schemas/material-learning/item-lineage/3.0"
 MATERIAL_ITEM_TYPE = "uploaded-material-item"
 MATERIAL_ITEM_PACK = "uploaded-material-item"
 
@@ -101,7 +102,7 @@ def material_item_registration_key(material_revision_id: str, unit_key: str) -> 
     )
 
 
-class MaterialItemLineageV2(FrozenModel):
+class _CoverageMaterialItemLineage(FrozenModel):
     """Same source-fidelity values with an exact V2 role-result pointer.
 
     role_result.sha256 pins the complete envelope, including visual coverage.
@@ -109,9 +110,8 @@ class MaterialItemLineageV2(FrozenModel):
     of that coverage or the role envelope in the database.
     """
 
-    schema_version: Literal["material-learning-item-lineage/2.0"] = (
-        "material-learning-item-lineage/2.0"
-    )
+    _schema_resource: ClassVar[str]
+    _role_result_ref: ClassVar[str]
     material_id: str = Field(pattern=r"^material_[0-9a-f]{32}$")
     material_revision_id: str = Field(pattern=r"^materialrev_[0-9a-f]{32}$")
     task_id: str = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
@@ -134,13 +134,13 @@ class MaterialItemLineageV2(FrozenModel):
 
     @model_validator(mode="after")
     def exact_source_fidelity(self) -> Self:
-        validate_contract("material-learning-item-lineage-v2", self.model_dump(mode="json"))
+        validate_contract(self._schema_resource, self.model_dump(mode="json"))
         if (
             self.selection.input_sha256 != self.input_sha256
             or self.work_input.schema_ref != "eom://schemas/material-learning/extraction-work/1.0"
             or self.work_input.member_path != "material/work.json"
             or self.work_input.media_type != "application/json"
-            or self.role_result.schema_ref != "material-learning-result@2.0"
+            or self.role_result.schema_ref != self._role_result_ref
             or self.role_result.member_path != "result.json"
             or self.role_result.media_type != "application/json"
             or self.warning_codes != tuple(sorted(set(self.warning_codes)))
@@ -151,12 +151,28 @@ class MaterialItemLineageV2(FrozenModel):
         return self
 
 
-type MaterialItemLineageFamily = MaterialItemLineage | MaterialItemLineageV2
+class MaterialItemLineageV2(_CoverageMaterialItemLineage):
+    schema_version: Literal["material-learning-item-lineage/2.0"] = (
+        "material-learning-item-lineage/2.0"
+    )
+    _schema_resource = "material-learning-item-lineage-v2"
+    _role_result_ref = "material-learning-result@2.0"
+
+
+class MaterialItemLineageV3(_CoverageMaterialItemLineage):
+    schema_version: Literal["material-learning-item-lineage/3.0"] = (
+        "material-learning-item-lineage/3.0"
+    )
+    _schema_resource = "material-learning-item-lineage-v3"
+    _role_result_ref = "material-learning-result@3.0"
+
+
+type MaterialItemLineageFamily = MaterialItemLineage | MaterialItemLineageV2 | MaterialItemLineageV3
 
 
 def parse_material_item_lineage(value: object) -> MaterialItemLineageFamily:
     """Dispatch pinned JSON values explicitly, without latest or parse-error fallback."""
-    if isinstance(value, (MaterialItemLineage, MaterialItemLineageV2)):
+    if isinstance(value, (MaterialItemLineage, MaterialItemLineageV2, MaterialItemLineageV3)):
         value = value.model_dump(mode="json")
     if not isinstance(value, Mapping):
         raise ValueError("MATERIAL_ITEM_LINEAGE_DOCUMENT_INVALID")
@@ -165,4 +181,6 @@ def parse_material_item_lineage(value: object) -> MaterialItemLineageFamily:
         return MaterialItemLineage.model_validate(value)
     if version == "material-learning-item-lineage/2.0":
         return MaterialItemLineageV2.model_validate(value)
+    if version == "material-learning-item-lineage/3.0":
+        return MaterialItemLineageV3.model_validate(value)
     raise ValueError("MATERIAL_ITEM_LINEAGE_SCHEMA_UNSUPPORTED")

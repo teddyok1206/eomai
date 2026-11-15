@@ -21,8 +21,11 @@ from eom_catalog_service.models import ItemComponentRecord, ItemRevisionRecord
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.compiler import compile_definition
-from eom_workflow.material_learning_request import MaterialLearningWorkflowRequestV2
-from eom_workflow.models import MaterialLearningRoleResultV2
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkflowRequestV2,
+    MaterialLearningWorkflowRequestV3,
+)
+from eom_workflow.models import MaterialLearningRoleResultV2, MaterialLearningRoleResultV3
 from eom_workflow_runner.repository import (
     create_step_run,
     create_workflow_instance,
@@ -57,20 +60,42 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
 @pytest.fixture
-def coverage_registration(creative_engine, registration_case, tmp_path, monkeypatch):
+def coverage_registration(creative_engine, registration_case, tmp_path, monkeypatch, request):
+    options = getattr(request, "param", {})
+    return build_family_registration(
+        creative_engine, registration_case, tmp_path, monkeypatch, **options
+    )
+
+
+def build_family_registration(
+    creative_engine, registration_case, tmp_path, monkeypatch, *, family=2, points=2
+):
+    """Real Registry inputs around a synthetic admitted/completed worker port."""
     create, prior = registration_case
+    exact = family == 3
     prototype = create()
     packs = ContentPackService(creative_engine, prototype.settings)
-    pack = packs.import_source(ROOT / "content/packs/uploaded-material-item/1.2.0")
+    pack = packs.import_source(
+        ROOT / "content/packs/uploaded-material-item" / ("1.4.0" if exact else "1.2.0")
+    )
     pack = packs.release(pack.content_pack_release_id, actor_id=prior.operator_id)
-    request = MaterialLearningWorkflowRequestV2(work_input=prior.work, native_visual_scope=None)
+    request = (
+        MaterialLearningWorkflowRequestV3(
+            work_input=prior.work, native_visual_scope=None, native_printed_score=None
+        )
+        if exact
+        else MaterialLearningWorkflowRequestV2(work_input=prior.work, native_visual_scope=None)
+    )
     authorizer = SimpleNamespace(
-        authorize_future_input=lambda *args, **kwargs: request.worker_request()
+        authorize_future_input=lambda *args, **kwargs: request.worker_request(),
+        authorize_exact_score_input=lambda *args, **kwargs: request.worker_request(),
     )
     with Session(creative_engine) as session, session.begin():
         definition, _ = import_workflow_definition(
             session,
-            compile_definition(ROOT / "config/workflows/material-learning.v2.yaml", {"support"}),
+            compile_definition(
+                ROOT / f"config/workflows/material-learning.v{family}.yaml", {"support"}
+            ),
         )
         workflow, _ = create_workflow_instance(
             session,
@@ -96,7 +121,7 @@ def coverage_registration(creative_engine, registration_case, tmp_path, monkeypa
             step_key="learn",
             step_type="agent",
             worker_role="support",
-            result_schema="material-learning-result@2.0",
+            result_schema=f"material-learning-result@{family}.0",
             input_pointer_manifest={},
             max_attempts=1,
         )
@@ -116,12 +141,21 @@ def coverage_registration(creative_engine, registration_case, tmp_path, monkeypa
         )
     body = prior.role.model_dump(mode="json")
     body.update(
-        protocol_version="workflow-role/1.39.0",
+        protocol_version="workflow-role/1.40.0" if exact else "workflow-role/1.39.0",
         workflow_id=selection.workflow_id,
         step_run_id=selection.step_run_id,
     )
     body["output"]["native_visual_coverage"] = None
-    role = MaterialLearningRoleResultV2.model_validate(body)
+    if exact:
+        extraction = body["output"]["learning_result"]
+        extraction["schema_version"] = "material-learning-extraction-result/2.0"
+        extraction["proposal"]["content"].update(
+            schema_version="creative-source-item-draft/2.0",
+            score={"state": "PRINTED", "points": points},
+        )
+    role = (MaterialLearningRoleResultV3 if exact else MaterialLearningRoleResultV2).model_validate(
+        body
+    )
     encoded = canonical_json_bytes(role.model_dump(mode="json"))
     path = tmp_path / "coverage-result.json"
     path.write_bytes(encoded)
@@ -134,7 +168,7 @@ def coverage_registration(creative_engine, registration_case, tmp_path, monkeypa
         result={"fixture": True},
         file_metadata={
             "result.json": {
-                "schema_ref": "material-learning-result@2.0",
+                "schema_ref": f"material-learning-result@{family}.0",
                 "media_type": "application/json",
             }
         },
@@ -148,7 +182,7 @@ def coverage_registration(creative_engine, registration_case, tmp_path, monkeypa
             artifact_id=committed.artifact_id,
             artifact_revision_id=committed.revision_id,
             member_path="result.json",
-            schema_ref="material-learning-result@2.0",
+            schema_ref=f"material-learning-result@{family}.0",
             media_type="application/json",
             sha256=sha256_bytes(encoded),
         ),
@@ -158,7 +192,10 @@ def coverage_registration(creative_engine, registration_case, tmp_path, monkeypa
 
     def service():
         value = create()
-        value.coverage_pack_release_id = pack.content_pack_release_id
+        if exact:
+            value.exact_score_pack_release_id = pack.content_pack_release_id
+        else:
+            value.coverage_pack_release_id = pack.content_pack_release_id
         return value
 
     return service, resolved

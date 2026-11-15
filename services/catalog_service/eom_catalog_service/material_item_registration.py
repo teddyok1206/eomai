@@ -10,22 +10,27 @@ import yaml
 from eom_catalog_contracts.assessment_item import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF,
+    AssessmentItemContentV1_1,
 )
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.material_item_lineage import (
     MATERIAL_ITEM_LINEAGE_REF,
     MATERIAL_ITEM_LINEAGE_V2_REF,
+    MATERIAL_ITEM_LINEAGE_V3_REF,
     MATERIAL_ITEM_PACK,
     MATERIAL_ITEM_TYPE,
     MaterialItemLineage,
     MaterialItemLineageFamily,
     MaterialItemLineageV2,
+    MaterialItemLineageV3,
     material_item_registration_key,
     parse_material_item_lineage,
 )
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
     MaterialExtractionResult,
+    MaterialExtractionResultV2,
     MaterialExtractionWork,
 )
 from eom_catalog_contracts.material_native_files import (
@@ -50,11 +55,17 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.material_source_visual_publication import publish_material_pdf_visuals
 from eom_orchestrator.office_picture_use_publication import resolve_material_office_source_images
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_workflow.models import MaterialLearningRoleResultV2
+from eom_workflow.models import MaterialLearningRoleResultV2, MaterialLearningRoleResultV3
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CATALOG_ITEM_EXACT_SCORE_PROTOCOL_VERSION,
+    CATALOG_ITEM_EXACT_SCORE_SCHEMA_HASH,
+    CATALOG_PROTOCOL_VERSION,
+    CATALOG_SCHEMA_HASH,
+    CatalogArtifactService,
+)
 from eom_catalog_service.creative_source_content import (
     CreativeSourceContent,
     materialize_source_observation_content,
@@ -76,6 +87,10 @@ from eom_catalog_service.material_native_item_registration import (
     verify_registered_native_material,
 )
 from eom_catalog_service.material_native_resolution import verify_material_native_item_files
+from eom_catalog_service.material_native_score import (
+    read_native_question_score,
+    require_native_source_score,
+)
 from eom_catalog_service.material_native_visual_context import read_native_visual_prepared_for_run
 from eom_catalog_service.material_native_visual_preparation import (
     MaterialNativeVisualPreparationService,
@@ -118,6 +133,8 @@ class MaterialItemRegistrationService:
         native_content_pack_release_id: str | None = None,
         coverage_content_pack_release_id: str | None = None,
         native_coverage_content_pack_release_id: str | None = None,
+        exact_score_content_pack_release_id: str | None = None,
+        native_exact_score_content_pack_release_id: str | None = None,
         publisher: ControlFileSetPublisher,
         source_commit: str,
         settings: CatalogSettings | None = None,
@@ -129,6 +146,8 @@ class MaterialItemRegistrationService:
         self.native_pack_release_id = native_content_pack_release_id
         self.coverage_pack_release_id = coverage_content_pack_release_id
         self.native_coverage_pack_release_id = native_coverage_content_pack_release_id
+        self.exact_score_pack_release_id = exact_score_content_pack_release_id
+        self.native_exact_score_pack_release_id = native_exact_score_content_pack_release_id
         self.publisher, self.source_commit = publisher, source_commit
         self.artifacts = CatalogArtifactService(engine, self.settings)
         self.registry = RegistryService(engine, self.settings)
@@ -140,6 +159,12 @@ class MaterialItemRegistrationService:
         self, resolved: ResolvedMaterialTask, native: MaterialNativeItemBinding | None
     ) -> str | None:
         """Keep historical registrations replayable; a missing successor is not a fallback."""
+        if isinstance(resolved.role, MaterialLearningRoleResultV3):
+            return (
+                self.native_exact_score_pack_release_id
+                if native
+                else self.exact_score_pack_release_id
+            )
         if isinstance(resolved.role, MaterialLearningRoleResultV2):
             return self.native_coverage_pack_release_id if native else self.coverage_pack_release_id
         return self.native_pack_release_id if native else self.pack_release_id
@@ -159,7 +184,9 @@ class MaterialItemRegistrationService:
         )
         logical = session.get(ContentPackRecord, release.content_pack_id) if release else None
         expected_version = (
-            ("1.3.0" if native else "1.2.0")
+            ("1.5.0" if native else "1.4.0")
+            if isinstance(resolved.role, MaterialLearningRoleResultV3)
+            else ("1.3.0" if native else "1.2.0")
             if isinstance(resolved.role, MaterialLearningRoleResultV2)
             else ("1.1.0" if native else "1.0.0")
         )
@@ -214,7 +241,8 @@ class MaterialItemRegistrationService:
             native = self._native_binding(session, resolved)
             self._authorize(session, resolved, native)
         if not isinstance(resolved.work, MaterialExtractionWork) or not isinstance(
-            resolved.role.output.learning_result, MaterialExtractionResult
+            resolved.role.output.learning_result,
+            (MaterialExtractionResult, MaterialExtractionResultV2),
         ):
             raise ValueError("MATERIAL_ITEM_QUESTION_TASK_REQUIRED")
         if native is not None:
@@ -246,6 +274,18 @@ class MaterialItemRegistrationService:
             if self._native_binding(guard, current) != native:
                 raise ValueError("MATERIAL_ITEM_INPUT_CHANGED")
             self._authorize(guard, current, native)
+            if native is not None and isinstance(current.role, MaterialLearningRoleResultV3):
+                result = current.role.output.learning_result
+                if not isinstance(result, MaterialExtractionResultV2) or result.proposal is None:
+                    raise ValueError("MATERIAL_ITEM_SOURCE_UNREADABLE")
+                # The request/result pin is not independent source authority. Read the
+                # exact question again at registration, including idempotent replay.
+                observation = read_native_question_score(
+                    self.artifacts,
+                    native.question,
+                    authorize=lambda: self._authorize(guard, current, native),
+                )
+                require_native_source_score(observation, result.proposal.content.score)
             existing = guard.scalar(
                 select(ItemRevisionRecord).where(ItemRevisionRecord.registration_key == key)
             )
@@ -266,10 +306,11 @@ class MaterialItemRegistrationService:
                 )
             content = self._prepare_content(current)
             lineage = material_item_lineage(current, content)
-            lineage_ref = (
-                MATERIAL_ITEM_LINEAGE_V2_REF
-                if isinstance(lineage, MaterialItemLineageV2)
-                else MATERIAL_ITEM_LINEAGE_REF
+            lineage_ref = _lineage_ref(current)
+            content_ref = (
+                ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF
+                if isinstance(content.content, AssessmentItemContentV1_1)
+                else ASSESSMENT_ITEM_CONTENT_SCHEMA_REF
             )
             staged, digest = stage_registry_item_content(
                 self.settings, content.content.model_dump(mode="json")
@@ -285,11 +326,21 @@ class MaterialItemRegistrationService:
                 result={"content_sha256": digest},
                 file_metadata={
                     ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
-                        "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                        "schema_ref": content_ref,
                         "media_type": "application/json",
                     }
                 },
                 expected_file_sha256={ASSESSMENT_ITEM_CONTENT_FILE_NAME: digest},
+                protocol_version=(
+                    CATALOG_ITEM_EXACT_SCORE_PROTOCOL_VERSION
+                    if isinstance(content.content, AssessmentItemContentV1_1)
+                    else CATALOG_PROTOCOL_VERSION
+                ),
+                protocol_schema_hash=(
+                    CATALOG_ITEM_EXACT_SCORE_SCHEMA_HASH
+                    if isinstance(content.content, AssessmentItemContentV1_1)
+                    else CATALOG_SCHEMA_HASH
+                ),
             )
             source = publish_material_metadata(
                 self.artifacts,
@@ -349,7 +400,9 @@ class MaterialItemRegistrationService:
                     workflow_id=current.selection.workflow_id,
                     workflow_definition_key="material-learning",
                     workflow_definition_version=(
-                        "2.0.0"
+                        "3.0.0"
+                        if isinstance(current.role, MaterialLearningRoleResultV3)
+                        else "2.0.0"
                         if isinstance(current.role, MaterialLearningRoleResultV2)
                         else "1.0.0"
                     ),
@@ -366,7 +419,7 @@ class MaterialItemRegistrationService:
                         ComponentPointer(
                             component_type="ITEM_CONTENT",
                             ordinal=0,
-                            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                            schema_ref=content_ref,
                             media_type="application/json",
                             artifact_id=artifact.artifact_id,
                             artifact_revision_id=artifact.revision_id,
@@ -471,14 +524,14 @@ class MaterialItemRegistrationService:
         if actual != scope:
             raise ValueError("MATERIAL_NATIVE_VISUAL_QUESTION_SCOPE_MISMATCH")
         result = resolved.role.output.learning_result
-        assert isinstance(result, MaterialExtractionResult)
+        assert isinstance(result, (MaterialExtractionResult, MaterialExtractionResultV2))
         if result.office_bindings is not None:
             validate_material_native_visual_bindings(result.office_bindings, scope=scope)
 
     def _prepare_content(self, resolved: ResolvedMaterialTask) -> CreativeSourceContent:
         work, result = resolved.work, resolved.role.output.learning_result
         assert isinstance(work, MaterialExtractionWork)
-        assert isinstance(result, MaterialExtractionResult)
+        assert isinstance(result, (MaterialExtractionResult, MaterialExtractionResultV2))
         if result.proposal is None:
             raise ValueError("MATERIAL_ITEM_SOURCE_UNREADABLE")
         if not any(isinstance(block, SourceImageBlock) for block in result.proposal.content.body):
@@ -546,11 +599,7 @@ class MaterialItemRegistrationService:
         components = {(row.component_type, row.ordinal): row for row in rows}
         item = session.get(ItemRecord, revision.item_id, populate_existing=True)
         source = components.get(("SOURCE_REFERENCE", 0))
-        lineage_ref = (
-            MATERIAL_ITEM_LINEAGE_V2_REF
-            if isinstance(resolved.role, MaterialLearningRoleResultV2)
-            else MATERIAL_ITEM_LINEAGE_REF
-        )
+        lineage_ref = _lineage_ref(resolved)
         if (
             len(rows) != (6 if native else 3)
             or set(components)
@@ -583,6 +632,14 @@ class MaterialItemRegistrationService:
             )
         )
         content, report = components[("ITEM_CONTENT", 0)], components[("REVIEW_REPORT", 0)]
+        result = resolved.role.output.learning_result
+        content_ref = (
+            ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF
+            if isinstance(result, MaterialExtractionResultV2)
+            and result.proposal is not None
+            and isinstance(result.proposal.content.score.points, str)
+            else ASSESSMENT_ITEM_CONTENT_SCHEMA_REF
+        )
         if (
             lineage.work_input != resolved.work_pointer
             or lineage.selection != resolved.selection
@@ -593,6 +650,7 @@ class MaterialItemRegistrationService:
             or lineage.task_id != resolved.task_id
             or lineage.unit_key != resolved.unit_key
             or content.sha256 != lineage.registered_content_sha256
+            or content.schema_ref != content_ref
             or revision.metadata_json.get("lineage_sha256") != lineage.lineage_sha256
             or revision.metadata_json.get("source_kind") != "EXTERNAL"
             or (report.artifact_id, report.artifact_revision_id, report.sha256)
@@ -608,7 +666,7 @@ class MaterialItemRegistrationService:
             revision_id=content.artifact_revision_id,
             member_path=content.logical_name,
             sha256=content.sha256,
-            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            schema_ref=content_ref,
             media_type="application/json",
             max_bytes=2 * 1024 * 1024,
         )
@@ -623,17 +681,16 @@ def material_item_lineage(
     work = resolved.work
     if not isinstance(work, MaterialExtractionWork):
         raise ValueError("MATERIAL_ITEM_QUESTION_TASK_REQUIRED")
-    model = (
-        MaterialItemLineageV2
-        if isinstance(resolved.role, MaterialLearningRoleResultV2)
-        else MaterialItemLineage
-    )
+    model: type[MaterialItemLineage] | type[MaterialItemLineageV2] | type[MaterialItemLineageV3]
+    version: str
+    if isinstance(resolved.role, MaterialLearningRoleResultV3):
+        model, version = MaterialItemLineageV3, "3.0"
+    elif isinstance(resolved.role, MaterialLearningRoleResultV2):
+        model, version = MaterialItemLineageV2, "2.0"
+    else:
+        model, version = MaterialItemLineage, "1.0"
     value = dict(
-        schema_version=(
-            "material-learning-item-lineage/2.0"
-            if model is MaterialItemLineageV2
-            else "material-learning-item-lineage/1.0"
-        ),
+        schema_version="material-learning-item-lineage/" + version,
         material_id=work.material_id,
         material_revision_id=work.material_revision_id,
         task_id=resolved.task_id,
@@ -652,3 +709,11 @@ def material_item_lineage(
         created_at=resolved.role.completed_at.isoformat().replace("+00:00", "Z"),
     )
     return model.model_validate({**value, "lineage_sha256": content_sha256(value)})
+
+
+def _lineage_ref(resolved: ResolvedMaterialTask) -> str:
+    if isinstance(resolved.role, MaterialLearningRoleResultV3):
+        return MATERIAL_ITEM_LINEAGE_V3_REF
+    if isinstance(resolved.role, MaterialLearningRoleResultV2):
+        return MATERIAL_ITEM_LINEAGE_V2_REF
+    return MATERIAL_ITEM_LINEAGE_REF

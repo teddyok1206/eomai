@@ -53,6 +53,14 @@ successor이며 기존 정수 계약의 bytes/의미는 유지한다. 원문과 
 그림 coverage는 기존 Artifact다. 제출/재인가/결과 읽기는 exact request/plan/receipt를
 비교하고 다른 배점·구 role로의 재전송을 거절한다. Source 구현이 등록·HTTP 소비 경계와
 운영 활성화를 대신하지는 않는다. `test_material_learning_execution_v3.py`가 owner 구성을 검증한다.
+등록의 exact family는 `material_item_registration.py`의 Pack1.4/Native1.5와 Lineage3이며,
+같은 Registry key 잠금 안에서 Native 원문 배점을 다시 확인한다. content1.1의 canonical GET은
+기존 request10/new response19, 표시 읽기는 visual response2를 사용한다. 정수/미인쇄는 content1.0을
+유지하고 원문 문제·해설 OTHER pointer/metadata는 그대로다. 모델·추론·권한·capacity를 바꾸지 않는
+1.39→1.40 설정 갱신은 기존 `material_learning_coverage_controls.py`의 exact-score 진입점이 맡는다.
+이는 source 후보이며 설치·실제 canary와 구 오류 Revision 복구는 운영 checkpoint에서 따로 확인한다.
+`test_material_exact_score_read.py`와 guarded `test_material_exact_score_registration_storage.py`가
+새 조회·source mismatch·등록·동시 재전송·중단 복구를 검사한다.
 
 ## 출처와 상태를 분리
 

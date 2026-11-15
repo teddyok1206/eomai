@@ -88,8 +88,14 @@ def _row(value):
 
 
 @pytest.fixture
-def upgrade(monkeypatch):
+def upgrade(monkeypatch, request):
     base = _base()
+    exact_score = getattr(request, "param", None) == "exact-score"
+    target = "workflow-role/1.40.0" if exact_score else "workflow-role/1.39.0"
+    if exact_score:
+        value = base.model_dump(mode="json")
+        value["compatible_workflow_protocols"] = ["workflow-role/1.39.0"]
+        base = ExecutionPresetRevision.model_validate(_hashed(value))
     state = SimpleNamespace(
         base=base,
         rows={base.preset_revision_id: _row(base)},
@@ -135,8 +141,7 @@ def upgrade(monkeypatch):
                 row
                 for row in state.rows.values()
                 if row.state == "DRAFT"
-                and row.canonical_document["compatible_workflow_protocols"]
-                == ["workflow-role/1.39.0"]
+                and row.canonical_document["compatible_workflow_protocols"] == [target]
             )
 
         def get(self, kind, key, **_kwargs):
@@ -184,6 +189,7 @@ def upgrade(monkeypatch):
             draft,
             number=max(row.revision_number for row in state.rows.values()) + 1,
             state="RELEASED",
+            protocol=target,
         )
         row = _row(value)
         state.rows[value.preset_revision_id] = row
@@ -280,6 +286,64 @@ def test_exact_replay_adds_no_draft_evaluation_artifact_or_revision(upgrade):
         owner.upgrade_material_learning_coverage_preset(sessions, publisher, **arguments) == first
     )
     assert state.drafts == state.releases == len(state.evaluations) == len(publisher.calls) == 1
+
+
+@pytest.mark.parametrize("upgrade", ["exact-score"], indirect=True)
+def test_exact_score_successor_preserves_models_authority_and_replays_without_work(upgrade):
+    sessions, publisher, arguments, state = upgrade
+    prior = deepcopy(state.rows[state.base.preset_revision_id].canonical_document)
+    value = owner.upgrade_material_learning_exact_score_preset(sessions, publisher, **arguments)
+    owner.require_material_learning_exact_score_successor(state.base, value)
+    assert value.preset_id == state.base.preset_id
+    assert value.compatible_workflow_protocols == ("workflow-role/1.40.0",)
+    assert value.role_policies == state.base.role_policies
+    assert value.capacity_policy_revision_id == state.base.capacity_policy_revision_id
+    assert state.rows[state.base.preset_revision_id].canonical_document == prior
+    assert (
+        owner.upgrade_material_learning_exact_score_preset(sessions, publisher, **arguments)
+        == value
+    )
+    assert state.drafts == state.releases == len(publisher.calls) == 1
+    assert state.protocol[0][0] == "workflow-role/1.40.0"
+
+
+@pytest.mark.parametrize("upgrade", ["exact-score"], indirect=True)
+def test_exact_score_unknown_publication_reuses_same_report_key_on_explicit_resume(upgrade):
+    sessions, publisher, arguments, state = upgrade
+    publisher.unknown_once = True
+    with pytest.raises(ControlPlaneError, match="lost response"):
+        owner.upgrade_material_learning_exact_score_preset(sessions, publisher, **arguments)
+    owner.upgrade_material_learning_exact_score_preset(
+        sessions, publisher, **(arguments | {"reviewed_at": NOW + timedelta(days=1)})
+    )
+    assert state.drafts == state.releases == 1
+    assert len(publisher.calls) == 2 and len(publisher.saved) == 1
+    assert publisher.calls[0]["payload"] == publisher.calls[1]["payload"]
+
+
+@pytest.mark.parametrize("field", ["model", "depth", "timeout", "capacity", "instruction"])
+def test_exact_score_upgrade_cannot_change_any_non_protocol_policy(field):
+    original = _base().model_dump(mode="json")
+    original["compatible_workflow_protocols"] = ["workflow-role/1.39.0"]
+    base = ExecutionPresetRevision.model_validate(_hashed(original))
+
+    def edit(body):
+        role = body["role_policies"][0]
+        if field == "model":
+            role["model_candidates"][0]["model"] = "gpt-6-astra"
+        elif field == "depth":
+            role["model_candidates"][0]["reasoning_effort"] = "high"
+        elif field == "timeout":
+            role["timeout_seconds"] -= 1
+        elif field == "capacity":
+            body["capacity_policy_revision_id"] = "capacityrev_" + "f" * 32
+        else:
+            role["instruction_bundle"]["manifest_sha256"] = "sha256:" + "f" * 64
+
+    successor = _revision(base, protocol="workflow-role/1.40.0", edit=edit)
+    with pytest.raises(ControlPlaneError) as error:
+        owner.require_material_learning_exact_score_successor(base, successor)
+    assert error.value.code == "CONTROL_MATERIAL_EXACT_SCORE_POLICY_CHANGED"
 
 
 def test_unknown_publication_is_not_automatically_resubmitted_and_explicit_resume_reuses_key(

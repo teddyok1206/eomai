@@ -11,6 +11,8 @@ from eom_catalog_contracts.creative_source_visuals import CREATIVE_SOURCE_VISUAL
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
     MaterialExtractionResult,
+    MaterialExtractionResultFamily,
+    MaterialExtractionResultV2,
     MaterialExtractionWork,
     SourceRole,
     validate_material_extraction,
@@ -18,7 +20,9 @@ from eom_catalog_contracts.material_learning import (
 from eom_catalog_contracts.material_learning_preparation import MaterialPreparedPage
 from eom_catalog_contracts.material_source_visuals import (
     MATERIAL_VISUAL_SET_REF,
+    MATERIAL_VISUAL_SET_V2_REF,
     MaterialPdfVisualSet,
+    MaterialPdfVisualSetV2,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -55,7 +59,7 @@ class MaterialVisualRecipe(TypedDict):
 
 def material_pdf_visual_recipes(
     work: MaterialExtractionWork,
-    result: MaterialExtractionResult,
+    result: MaterialExtractionResultFamily,
     pages: Mapping[tuple[SourceRole, int], MaterialPreparedPage],
 ) -> tuple[MaterialVisualRecipe, ...]:
     """O(pages + regions), preserve actual source role/page instead of input ordinal."""
@@ -113,7 +117,7 @@ def publish_material_pdf_visuals(
     publisher: ControlFileSetPublisher,
     *,
     work: MaterialExtractionWork,
-    result: MaterialExtractionResult,
+    result: MaterialExtractionResultFamily,
     role_result: ArtifactMemberPointer,
     pages: Mapping[tuple[SourceRole, int], MaterialPreparedPage],
     read_source: Callable[[MaterialArtifactMember], bytes],
@@ -123,12 +127,35 @@ def publish_material_pdf_visuals(
 ) -> Mapping[str, ImageBlock]:
     """Native Office input is rejected, never silently replaced with a PDF crop."""
     authorize()
+    family = {
+        "material-learning-result@1.0": (
+            MaterialExtractionResult,
+            MaterialPdfVisualSet,
+            MATERIAL_VISUAL_SET_REF,
+            "1.0",
+        ),
+        "material-learning-result@2.0": (
+            MaterialExtractionResult,
+            MaterialPdfVisualSetV2,
+            MATERIAL_VISUAL_SET_V2_REF,
+            "2.0",
+        ),
+        "material-learning-result@3.0": (
+            MaterialExtractionResultV2,
+            MaterialPdfVisualSetV2,
+            MATERIAL_VISUAL_SET_V2_REF,
+            "2.0",
+        ),
+    }.get(role_result.schema_ref)
+    if family is None or not isinstance(result, family[0]):
+        raise ValueError("MATERIAL_VISUAL_RESULT_SCHEMA_MISMATCH")
+    _, receipt_model, receipt_ref, receipt_version = family
     recipes = material_pdf_visual_recipes(work, result, pages)
     if not recipes:
         return MappingProxyType({})
     executable_sha = sha256_file(_trusted_executable(Path("/usr/bin/pdftoppm")))
     identity = dict(
-        schema_version="material-learning-visual-set/1.0",
+        schema_version="material-learning-visual-set/" + receipt_version,
         input_sha256=work.input_sha256,
         result_sha256=content_sha256(result.model_dump(mode="json")),
         role_result=role_result.model_dump(mode="json"),
@@ -178,9 +205,7 @@ def publish_material_pdf_visuals(
                 )
             )
         value = {**identity, "crops": crops}
-        receipt = MaterialPdfVisualSet.model_validate(
-            {**value, "manifest_sha256": content_sha256(value)}
-        )
+        receipt = receipt_model.model_validate({**value, "manifest_sha256": content_sha256(value)})
         payload = canonical_json_bytes(receipt.model_dump(mode="json"))
         path = workspace / _PRIMARY
         with path.open("xb") as stream:
@@ -191,7 +216,7 @@ def publish_material_pdf_visuals(
                 path,
                 sha256_bytes(payload),
                 len(payload),
-                MATERIAL_VISUAL_SET_REF,
+                receipt_ref,
                 "application/json",
             )
         )
@@ -215,13 +240,13 @@ def publish_material_pdf_visuals(
             artifact_id=actual.artifact_id,
             artifact_revision_id=actual.artifact_revision_id,
             member_path=_PRIMARY,
-            schema_ref=MATERIAL_VISUAL_SET_REF,
+            schema_ref=receipt_ref,
             media_type="application/json",
             sha256=actual.primary_sha256,
         ),
         maximum_bytes=512 * 1024,
     )
-    receipt = MaterialPdfVisualSet.model_validate_json(raw)
+    receipt = receipt_model.model_validate_json(raw)
     if (
         receipt.model_dump(mode="json", exclude={"crops", "manifest_sha256"}) != identity
         or tuple(

@@ -1076,7 +1076,7 @@ class CatalogApplicationClient:
         try:
             validate_contract("catalog-item-visual-presentation-request-v1", payload)
             value = self._raw_request(payload, timeout_seconds=RESPONSE_TIMEOUT_SECONDS)
-            validate_contract("catalog-item-visual-presentation-response-v1", value)
+            validate_contract("catalog-item-visual-presentation-response-v2", value)
             response = ItemVisualPresentationResponse.model_validate(value)
         except (JsonSchemaValidationError, ValidationError, ValueError) as exc:
             raise CatalogApplicationClientError(

@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/uploaded-material-item@2.0",
+  "title": "Imported native material item metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-imported-native-item-metadata/2.0"
+    },
+    "item_type_key": {
+      "const": "uploaded-material-item"
+    },
+    "source_kind": {
+      "const": "EXTERNAL"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "unit_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "source_filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "printed_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "section_path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "maxItems": 12
+    },
+    "physical_pages": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 2000
+      },
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "lineage_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "approval_basis": {
+      "const": "SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"
+    },
+    "native_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[A-Za-z0-9._()가-힣/-]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "bytes"
+      ]
+    },
+    "item_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "external_number": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{5}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "original_unit": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 32767
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "original_classification": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 32767
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 32767
+    }
+  },
+  "required": [
+    "schema_version",
+    "item_type_key",
+    "source_kind",
+    "material_id",
+    "material_revision_id",
+    "unit_key",
+    "title",
+    "source_filename",
+    "printed_label",
+    "section_path",
+    "physical_pages",
+    "lineage_sha256",
+    "approval_basis",
+    "native_binding",
+    "item_number",
+    "external_number",
+    "original_unit",
+    "original_classification",
+    "source_name"
+  ]
+}

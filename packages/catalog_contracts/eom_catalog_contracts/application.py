@@ -754,6 +754,12 @@ def catalog_application_schema_route(
         historical_route = CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
     except KeyError as exc:
         raise ValueError("unsupported catalog application operation") from exc
+    if operation == "GET_ITEM_CONTENT" and content_schema_version == "1.1":
+        # Read request/authority are unchanged. Only the explicitly identified
+        # canonical response needs the exact-score successor.
+        return CatalogApplicationSchemaRoute(
+            "catalog-application-request-v10", "catalog-application-response-v19"
+        )
     if (
         operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
         and retrieval_requirement_schema_version == "educational-retrieval-requirement/3.0"

@@ -23,6 +23,7 @@ from tests.unit.test_material_native_files import metadata_data
 ROOT = Path(__file__).resolve().parents[2]
 PACKS = ROOT / "content/packs/uploaded-material-item"
 PAIRS = (("1.0.0", "1.2.0"), ("1.1.0", "1.3.0"))
+SCORE_PAIRS = (("1.2.0", "1.4.0"), ("1.3.0", "1.5.0"))
 OLD_SHA256 = {
     "1.0.0/pack.yaml": "8ebd9262ca98db1e0e748eff17edb3ab893d06046f7d1ebed8cfbc914c7e85e3",
     "1.0.0/item-types/uploaded-material-item.yaml": (
@@ -58,7 +59,7 @@ def _metadata(native: bool) -> dict[str, object]:
     ).model_dump(mode="json")
 
 
-@pytest.mark.parametrize(("old", "successor"), PAIRS)
+@pytest.mark.parametrize(("old", "successor"), (*PAIRS, *SCORE_PAIRS))
 def test_successors_compile_with_only_release_and_compatibility_changes(
     old: str, successor: str
 ) -> None:
@@ -66,12 +67,13 @@ def test_successors_compile_with_only_release_and_compatibility_changes(
     after = compile_pack(PACKS / successor)
     expected = before.manifest.model_dump(mode="json")
     expected["pack"]["version"] = successor
+    score = (old, successor) in SCORE_PAIRS
     expected["compatibility"]["protocol"] = {
-        "minimum": "1.39.0",
-        "maximum_exclusive": "1.40.0",
+        "minimum": "1.40.0" if score else "1.39.0",
+        "maximum_exclusive": "1.41.0" if score else "1.40.0",
     }
     expected["compatibility"]["workflow_definitions"] = [
-        {"key": "material-learning", "versions": ["2.0.0"]}
+        {"key": "material-learning", "versions": ["3.0.0" if score else "2.0.0"]}
     ]
     assert after.manifest.model_dump(mode="json") == expected
     assert after.manifest.pack.key == before.manifest.pack.key == "uploaded-material-item"
@@ -83,7 +85,7 @@ def test_successors_compile_with_only_release_and_compatibility_changes(
     }
 
 
-@pytest.mark.parametrize(("old", "successor"), PAIRS)
+@pytest.mark.parametrize(("old", "successor"), (*PAIRS, *SCORE_PAIRS))
 @pytest.mark.parametrize(
     "relative",
     ["item-types/uploaded-material-item.yaml", "metadata-schemas/item-metadata.schema.json"],
@@ -99,6 +101,8 @@ def test_item_type_and_metadata_schema_bytes_are_historical_exact_copies(
     [
         ("1.2.0", False, "eom://metadata/uploaded-material-item@1.0"),
         ("1.3.0", True, "eom://metadata/uploaded-material-item@2.0"),
+        ("1.4.0", False, "eom://metadata/uploaded-material-item@1.0"),
+        ("1.5.0", True, "eom://metadata/uploaded-material-item@2.0"),
     ],
 )
 def test_successor_metadata_ids_sources_and_closed_schema_are_unchanged(
@@ -148,7 +152,7 @@ def test_existing_pack_compatibility_owner_rejects_mixed_definition_families(
     }
 
 
-@pytest.mark.parametrize("version", ["1.2.0", "1.3.0"])
+@pytest.mark.parametrize("version", ["1.2.0", "1.3.0", "1.4.0", "1.5.0"])
 def test_successor_bundles_are_deterministic_and_complete(version: str, tmp_path: Path) -> None:
     first = build_pack(PACKS / version, tmp_path / "first")
     second = build_pack(PACKS / version, tmp_path / "second")

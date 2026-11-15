@@ -39,6 +39,7 @@ from eom_identifiers import content_sha256, sha256_bytes
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from tests.integration.test_material_coverage_registration_storage import build_family_registration
 from tests.integration.test_material_item_registration_storage import (
     ROOT,
 )
@@ -63,11 +64,19 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
 @pytest.fixture
-def native_registration_case(creative_engine, registration_case, tmp_path, monkeypatch):
+def native_registration_case(creative_engine, registration_case, tmp_path, monkeypatch, request):
+    options = getattr(request, "param", {})
+    exact = options.get("family") == 3
     create, resolved = registration_case
+    if exact:
+        create, resolved = build_family_registration(
+            creative_engine, registration_case, tmp_path, monkeypatch, **options
+        )
     service = create()
     packs = ContentPackService(creative_engine, service.settings)
-    pack = packs.import_source(ROOT / "content/packs/uploaded-material-item/1.1.0")
+    pack = packs.import_source(
+        ROOT / "content/packs/uploaded-material-item" / ("1.5.0" if exact else "1.1.0")
+    )
     pack = packs.release(pack.content_pack_release_id, actor_id=resolved.operator_id)
     data = binding_data()
     data.update(
@@ -77,6 +86,10 @@ def native_registration_case(creative_engine, registration_case, tmp_path, monke
     )
     for role in ("question", "solution"):
         raw = b"PK\x03\x04synthetic-native-registry-document-" + role.encode()
+        if exact:
+            from tests.unit.test_material_native_score import package, section
+
+            raw = package(section(f"[{options['points']}점]" if role == "question" else "해설"))
         path = tmp_path / (role + ".hwpx")
         path.write_bytes(raw)
         member = role + ".hwpx"
@@ -133,7 +146,10 @@ def native_registration_case(creative_engine, registration_case, tmp_path, monke
 
     def factory():
         selected = create()
-        selected.native_pack_release_id = pack.content_pack_release_id
+        if exact:
+            selected.native_exact_score_pack_release_id = pack.content_pack_release_id
+        else:
+            selected.native_pack_release_id = pack.content_pack_release_id
         # The parent fixture substitutes completed AI/source admission and has no
         # Material run/task rows. This port is synthetic here too: these cases
         # test Registry commit/replay/metadata, not native visual qualification.

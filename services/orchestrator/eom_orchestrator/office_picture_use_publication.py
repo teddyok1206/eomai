@@ -9,7 +9,7 @@ from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.creative_source_visuals import CREATIVE_SOURCE_VISUAL_IMAGE_REF
 from eom_catalog_contracts.external_item_learning_result_v2 import (
     ExternalItemLearningResultV2,
-    SourceItemLearningObservation,
+    SourceItemLearningObservationFamily,
 )
 from eom_catalog_contracts.office_item_learning import (
     OfficeItemLearningWorkInput,
@@ -189,7 +189,7 @@ def resolve_office_source_images(
 
 def resolve_material_office_source_images(
     *,
-    result: SourceItemLearningObservation,
+    result: SourceItemLearningObservationFamily,
     selection: OfficeVisualBindings,
     catalog: OfficePictureUseCatalog,
     catalog_pointer: ArtifactMemberPointer,
@@ -216,7 +216,7 @@ def resolve_material_office_source_images(
 
 def _office_picture_image_blocks(
     *,
-    result: SourceItemLearningObservation,
+    result: SourceItemLearningObservationFamily,
     selection: OfficeVisualBindings,
     catalog: OfficePictureUseCatalog,
     artifact_id: str,

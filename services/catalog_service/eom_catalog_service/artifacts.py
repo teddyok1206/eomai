@@ -93,6 +93,13 @@ CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH = content_sha256(
     }
 )
 MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
+CATALOG_ITEM_EXACT_SCORE_PROTOCOL_VERSION = "catalog/1.28"
+CATALOG_ITEM_EXACT_SCORE_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": CATALOG_ITEM_EXACT_SCORE_PROTOCOL_VERSION,
+        "contracts": ["item-revision-manifest-v1", "assessment-item-content-v1_1"],
+    }
+)
 MAX_JSON_REVISION_BATCH = 3072
 MAX_JSON_REVISION_BATCH_BYTES = 256 * 1024 * 1024
 _CATALOG_FILE_SET_LOCK = threading.Lock()

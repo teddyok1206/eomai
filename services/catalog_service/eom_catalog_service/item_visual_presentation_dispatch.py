@@ -39,7 +39,7 @@ def dispatch_item_visual_presentation(reader: ItemVisualPresentationReader, raw:
                 status="ERROR", error_code="ITEM_VISUAL_PRESENTATION_UNAVAILABLE"
             )
     payload = response.model_dump(mode="json")
-    validate_contract("catalog-item-visual-presentation-response-v1", payload)
+    validate_contract("catalog-item-visual-presentation-response-v2", payload)
     encoded = canonical_json_bytes(payload) + b"\n"
     if len(encoded) > 4 * 1024 * 1024:
         response = ItemVisualPresentationResponse(

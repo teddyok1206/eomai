@@ -52,6 +52,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:e0e6a589b0d38dcfcc4766bebba090594c8e9ed60915c1eda6e8de234c646cc5",
         ),
+        "material-learning-item-lineage-v3": CatalogSchemaResource(
+            "schemas/material-learning/item-lineage-v3.schema.json",
+            "resources/material-learning/item-lineage-v3.schema.json",
+            "3.0",
+            "sha256:bd5210b25f0021fda103ca458a535f6a1e84ff63bd4c6ce99792d548ea9aad86",
+        ),
         "material-learning-item-lineage-v2": CatalogSchemaResource(
             "schemas/material-learning/item-lineage-v2.schema.json",
             "resources/material-learning/item-lineage-v2.schema.json",
@@ -580,6 +586,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5855cb596e7d3e63f8b201d4646ee0bbbcde23d89ac2821b7a43b4e1d2ab302e",
         ),
+        "catalog-item-visual-presentation-response-v2": CatalogSchemaResource(
+            "schemas/item-registry/catalog-item-visual-presentation-response-v2.schema.json",
+            "resources/item-registry/catalog-item-visual-presentation-response-v2.schema.json",
+            "2.0",
+            "sha256:d8b4a0906793fd72b6d708ecf7ef03bc5234612821a397c4488724349ab327e0",
+        ),
         "catalog-item-visual-presentation-response-v1": CatalogSchemaResource(
             "schemas/item-registry/catalog-item-visual-presentation-response-v1.schema.json",
             "resources/item-registry/catalog-item-visual-presentation-response-v1.schema.json",
@@ -651,6 +663,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/material-learning/item-lineage-v1.schema.json",
             "1.0",
             "sha256:854591eeba9d663576ad69386d1938a05f651f3d183e370116a4d7953d4ecbe8",
+        ),
+        "material-learning-visual-set-v2": CatalogSchemaResource(
+            "schemas/material-learning/visual-set-v2.schema.json",
+            "resources/material-learning/visual-set-v2.schema.json",
+            "2.0",
+            "sha256:b7bfce7a224b5e1e30673e6a99ec8faabd6975336cdd7413d83c69c6a4d6b2c7",
         ),
         "material-learning-visual-set-v1": CatalogSchemaResource(
             "schemas/material-learning/visual-set-v1.schema.json",
@@ -2856,6 +2874,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v12.schema.json",
             "12.0",
             "sha256:81d158d1f74da6ca3150c2d44a4cb91eb9785575a3d508688df6c537ad93d800",
+        ),
+        "catalog-application-response-v19": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v19.schema.json",
+            "resources/catalog-application/catalog-application-response-v19.schema.json",
+            "19.0",
+            "sha256:0139914dea3ac2e5f909c97650bd15b0aad6fbebd8fbe161b1a3fa2564ed26e3",
         ),
         "catalog-application-response-v13": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v13.schema.json",

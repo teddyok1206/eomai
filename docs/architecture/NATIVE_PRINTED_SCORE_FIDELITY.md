@@ -75,10 +75,36 @@ archive/result1은 새 draft를 수용하지 않는다. block1.1의 Preview는 e
 schema_version을 확인하고 template 재생성 가능 여부는 false다. 실제 원문 전달/합본은 별개다.
 같은 문항에서 배점만 바뀌어도 question embedding text/hash는 동일하다는 회귀를 추가했다.
 
-후속 source에서는 ROLE1.40/request3/result3/plan41과 receipt3까지 연결했다. 그러나
-등록/HTTP 응답에는 이전 형식만 허용된 곳이 남아 있으므로 이를 운영 지원으로 선언하거나
-Material owner를 다시 켜지 않는다. 해당 소비 경계의 필요한 successor를 호환 묶음으로
-연결하고 기존 등록의 reviewed correction까지 검증해야 한다.
+후속 source에서는 ROLE1.40/request3/result3/plan41과 receipt3, 등록·HTTP 응답까지 연결했다.
+설치·활성화와 실제 Native canary, 기존 등록의 reviewed correction은 별도 gate다.
+source 후보의 통과만으로 운영 지원을 선언하거나 Material owner를 다시 켜지 않는다.
+
+### 등록·조회 및 현재 실행 설정의 연결
+
+- `item-lineage/3.0`은 result@3의 exact Artifact와 별도 learning-result hash를 pin한다.
+  기존1/2 lineage bytes와 replay 의미를 바꾸지 않는다. 공통 필드 검증만 공유한다.
+- 일반 Pack1.4 / Native Pack1.5는 ROLE1.40·Workflow3 전용이다. metadata와 item-type은
+  각각1.2/1.3과 byte-identical하다. Native 문제·해설·Excel의 기존6 component 구조를 유지한다.
+  Runtime에는 두 explicit release ID를 추가하고 누락 시 구 Pack/latest로 대체하지 않는다.
+- 등록은 기존 advisory key·Registry transaction 안에서 완료 task/source를 재인가하고,
+  result3 Native의 원문 question descriptor 배점을 다시 읽어 비교한다. 같은 요청의 replay도
+  이 경계를 통과한다. integer/UNPRINTED content1.0과 exact half content1.1을 실제 compiler
+  결과대로 구분하며 Artifact protocol1.28은1.1에만 사용한다. old protocol hash는 바꾸지 않는다.
+- GET_ITEM_CONTENT의 request10·권한은 그대로이고 content1.1 응답만 response19로 읽는다.
+  visual presentation response2는 기존 응답 전체와 새1.1 표시만 수용한다. API/SDK 양쪽을
+  호환 배포해야 한다. 수동 reviewed import와 구형 template renderer 지원을 묵시적으로 넓히지 않는다.
+- 기존 Office picture-use publisher는 두 실제 draft family를 같은 image pointer로 처리한다.
+  일반 PDF의 visual-set2는 result2/3 pointer를 pin하며 기존1은 유지한다. 이는 PDF 원본의
+  기존 렌더 경계만 잇는 것이고 Native HWPX 그림을 PDF crop으로 바꾸는 경로가 아니다.
+- 실행 설정은 기존 protocol-only upgrade owner를 재사용해1.39→1.40의 명시적 후속 release를
+  만든다. 실제 관리자의 현재 모델 순서·추론 깊이·instruction·capacity·권한·표시명은 동일해야 한다.
+  같은 logical preset/row lock과 evaluation/publication/release를 사용하고 source hash/CAS가
+  달라지면 거절한다. 새 preset family/queue/DB migration은 없다.
+
+새 등록과 조회 자체의 검증이 기존 오류 문항의 복구 완료를 뜻하지는 않는다. 운영 전환 전에는
+아직 제출된 구 Native extraction·lease를 따로 확인하고, 소수 배점을 표현할 수 없는 결과를
+그대로 신규 등록하지 않도록 supported linked reanalysis 대상으로 분리한다. 기존16개 오류는
+후속 Item Revision과 그에 맞는 공개 풀이/Graph 처리까지 확인해야 한다.
 
 ### 실행 연결의 최소 successor
 

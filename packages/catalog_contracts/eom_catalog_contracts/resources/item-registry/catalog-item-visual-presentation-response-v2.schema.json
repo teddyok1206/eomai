@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-registry/catalog-item-visual-presentation-response/2.0",
+  "title": "EOM exact-score Item visual presentation response",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/item-registry/catalog-item-visual-presentation-response/1.0"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "const": "GET_ITEM_VISUAL_PRESENTATION"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "presentation": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v1_1"
+            },
+            "display_content": {
+              "$ref": "eom://schemas/item-registry/catalog-item-visual-presentation-response/1.0#/$defs/ArtifactMemberPointer"
+            },
+            "item_id": {
+              "pattern": "^item_[a-z0-9]{8,59}$",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "item_revision_id": {
+              "pattern": "^itemrev_[a-z0-9]{8,55}$",
+              "title": "Item Revision Id",
+              "type": "string"
+            },
+            "recovery_manifest": {
+              "anyOf": [
+                {
+                  "$ref": "eom://schemas/item-registry/catalog-item-visual-presentation-response/1.0#/$defs/ArtifactMemberPointer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "source_content": {
+              "$ref": "eom://schemas/item-registry/catalog-item-visual-presentation-response/1.0#/$defs/ArtifactMemberPointer"
+            }
+          },
+          "required": [
+            "item_id",
+            "item_revision_id",
+            "source_content",
+            "display_content",
+            "content"
+          ],
+          "title": "ItemVisualPresentation",
+          "type": "object"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "status",
+        "presentation"
+      ]
+    }
+  ]
+}

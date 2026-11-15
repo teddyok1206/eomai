@@ -32,6 +32,8 @@ def test_runtime_reads_only_explicit_small_release_pins(monkeypatch):
         "native_content_pack_release_id": None,
         "coverage_content_pack_release_id": None,
         "native_coverage_content_pack_release_id": None,
+        "exact_score_content_pack_release_id": None,
+        "native_exact_score_content_pack_release_id": None,
     }
     monkeypatch.delenv("EOM_MATERIAL_ITEM_PRESET_REVISION_ID")
     with pytest.raises(ValueError):
@@ -39,10 +41,25 @@ def test_runtime_reads_only_explicit_small_release_pins(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "missing", ["coverage_content_pack_release_id", "native_coverage_content_pack_release_id"]
+    "version,first,second,code",
+    [
+        (
+            "2.0.0",
+            "coverage_content_pack_release_id",
+            "native_coverage_content_pack_release_id",
+            "COVERAGE",
+        ),
+        (
+            "3.0.0",
+            "exact_score_content_pack_release_id",
+            "native_exact_score_content_pack_release_id",
+            "EXACT_SCORE",
+        ),
+    ],
 )
+@pytest.mark.parametrize("missing_index", [0, 1])
 def test_future_runtime_requires_both_explicit_pack_profiles_before_composition(
-    monkeypatch, missing
+    monkeypatch, version, first, second, code, missing_index
 ):
     class Session:
         def __enter__(self):
@@ -53,16 +70,16 @@ def test_future_runtime_requires_both_explicit_pack_profiles_before_composition(
 
         def get(self, _model, identifier):
             assert identifier == pins()["definition_id"]
-            return SimpleNamespace(definition_key="material-learning", definition_version="2.0.0")
+            return SimpleNamespace(definition_key="material-learning", definition_version=version)
 
     monkeypatch.setattr(runtime_owner, "build_session_factory", lambda _engine: Session)
     values = {
         **pins(),
-        "coverage_content_pack_release_id": "packrel_" + "9" * 32,
-        "native_coverage_content_pack_release_id": "packrel_" + "a" * 32,
+        first: "packrel_" + "9" * 32,
+        second: "packrel_" + "a" * 32,
     }
-    values[missing] = None
-    with pytest.raises(ValueError, match="MATERIAL_LEARNING_RUNTIME_COVERAGE_PACK_REQUIRED"):
+    values[(first, second)[missing_index]] = None
+    with pytest.raises(ValueError, match=f"MATERIAL_LEARNING_RUNTIME_{code}_PACK_REQUIRED"):
         runtime_owner.build_material_learning_runtime(
             object(),
             MaterialLearningRuntimePins.model_validate(values),

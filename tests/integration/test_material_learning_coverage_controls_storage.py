@@ -1,7 +1,7 @@
 """Genuine disposable control lifecycle/locking/publication, no worker/model calls.
 
 Run LAST after ordinary Material fixture consumers. This intentional upgrade
-leaves the logical preset at1.39; the preserved INITIAL1.37 bootstrap must not be
+leaves the logical preset at1.40; the preserved INITIAL1.37 bootstrap must not be
 used to reset that state. The extra test opt-in prevents broad discovery from
 changing a shared disposable fixture's baseline midway through another suite.
 Operator authorization is an explicit fixture callback, not HTTP login evidence.
@@ -28,7 +28,9 @@ from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.material_learning_controls import release_material_learning_controls
 from eom_orchestrator.material_learning_coverage_controls import (
     require_material_learning_coverage_successor,
+    require_material_learning_exact_score_successor,
     upgrade_material_learning_coverage_preset,
+    upgrade_material_learning_exact_score_preset,
 )
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.preset_lifecycle import (
@@ -334,3 +336,83 @@ def test_upgrade_real_concurrency_parent_cas_lost_response_and_current_model_pre
                 == document
             )
     assert len(authorized) >= 10
+
+
+def test_exact_score_upgrade_current_coverage_policy_real_concurrency_and_replay(controls):
+    """Run after the coverage upgrade: never bootstrap/reset its published current policy."""
+    engine, catalog, _knowledge = controls
+    sessions = build_session_factory(engine)
+    publisher = ControlArtifactPublisher(
+        engine,
+        Settings(staging_root=catalog.staging_root, nas_artifact_root=catalog.nas_artifact_root),
+    )
+    with sessions() as session:
+        logical = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "material-learning"
+            )
+        )
+        base = validated_preset(
+            session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+        )
+        assert base.compatible_workflow_protocols == ("workflow-role/1.39.0",)
+        preserved = {
+            row.preset_revision_id: deepcopy(row.canonical_document)
+            for row in session.scalars(select(ExecutionPresetRevisionRecord))
+        }
+        other_current = {
+            row.preset_id: row.current_revision_id
+            for row in session.scalars(
+                select(ExecutionPresetRecord).where(
+                    ExecutionPresetRecord.preset_key != "material-learning"
+                )
+            )
+        }
+    arguments = dict(
+        expected_current_revision_id=base.preset_revision_id,
+        expected_current_sha256=base.content_sha256,
+        operator_id=OPERATOR_ID,
+        source_commit="b" * 40,
+        authorize=lambda actor: actor == OPERATOR_ID or pytest.fail("unexpected fixture actor"),
+        reviewed_at=datetime.now(UTC),
+    )
+    barrier = Barrier(2)
+
+    def upgrade(_):
+        barrier.wait(timeout=10)
+        return upgrade_material_learning_exact_score_preset(sessions, publisher, **arguments)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(upgrade, range(2))
+    assert first == second
+    require_material_learning_exact_score_successor(base, first)
+    assert first.role_policies == base.role_policies
+    assert first.capacity_policy_revision_id == base.capacity_policy_revision_id
+    assert upgrade_material_learning_exact_score_preset(sessions, publisher, **arguments) == first
+    with sessions() as session:
+        assert (
+            session.get(ExecutionPresetRecord, base.preset_id).current_revision_id
+            == first.preset_revision_id
+        )
+        for revision, prior in preserved.items():
+            assert session.get(ExecutionPresetRevisionRecord, revision).canonical_document == prior
+        for identity, revision in other_current.items():
+            assert session.get(ExecutionPresetRecord, identity).current_revision_id == revision
+        evaluations = tuple(
+            session.scalars(
+                select(ExecutionPresetEvaluationRecord).where(
+                    ExecutionPresetEvaluationRecord.preset_id == first.preset_id,
+                    ExecutionPresetEvaluationRecord.evaluated_policy_sha256
+                    == execution_preset_policy_sha256(first),
+                )
+            )
+        )
+        assert len(evaluations) == 1
+        jobs = tuple(
+            session.scalars(
+                select(JobRecord).where(
+                    JobRecord.idempotency_key.like("material-exact-score-eval:%")
+                )
+            )
+        )
+        assert len(jobs) == 1 and jobs[0].status == "SUCCEEDED"

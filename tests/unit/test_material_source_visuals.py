@@ -8,13 +8,17 @@ from eom_catalog_contracts.material_learning import (
     MaterialExtractionWork,
 )
 from eom_catalog_contracts.material_learning_preparation import MaterialPreparedPage
-from eom_catalog_contracts.material_source_visuals import MaterialPdfVisualSet
+from eom_catalog_contracts.material_source_visuals import (
+    MaterialPdfVisualSet,
+    MaterialPdfVisualSetV2,
+)
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_orchestrator.external_item_learning_page_render import (
     MaterialPdfRenderSource,
     render_material_pdf_visual,
 )
 from eom_orchestrator.material_source_visual_publication import material_pdf_visual_recipes
+from jsonschema.exceptions import ValidationError as SchemaError
 
 from tests.unit.test_creative_source_visual_render import visual_result
 from tests.unit.test_external_item_learning_page_render import (
@@ -126,3 +130,31 @@ def test_visual_receipt_closes_exact_recipe_and_immutable_hash():
     tampered["crops"][0]["physical_page"] = 1
     with pytest.raises(ValueError, match="INVALID"):
         MaterialPdfVisualSet.model_validate(tampered)
+
+
+@pytest.mark.parametrize("role", ["material-learning-result@2.0", "material-learning-result@3.0"])
+def test_successor_visual_receipt_keeps_original_recipe_and_exact_result_pointer(role):
+    work, result, pages = visual_case()
+    recipe = material_pdf_visual_recipes(work, result, pages)[0]
+    value = dict(
+        schema_version="material-learning-visual-set/2.0",
+        input_sha256=work.input_sha256,
+        result_sha256=content_sha256(result.model_dump(mode="json")),
+        role_result={**lineage()["role_result"], "schema_ref": role},
+        pdftoppm_sha256="sha256:" + "1" * 64,
+        crops=[{**recipe, "sha256": "sha256:" + "2" * 64, "bytes": 100}],
+    )
+    value["manifest_sha256"] = content_sha256(value)
+    parsed = MaterialPdfVisualSetV2.model_validate(value)
+    assert parsed.role_result.schema_ref == role
+    assert parsed.crops[0].physical_page == 31
+    assert parsed.crops[0].pixel_box == tuple(recipe["pixel_box"])
+    with pytest.raises(ValueError):
+        MaterialPdfVisualSet.model_validate(value)
+    tampered = deepcopy(value)
+    tampered["role_result"]["schema_ref"] = "material-learning-result@1.0"
+    tampered["manifest_sha256"] = content_sha256(
+        {k: v for k, v in tampered.items() if k != "manifest_sha256"}
+    )
+    with pytest.raises((ValueError, SchemaError)):
+        MaterialPdfVisualSetV2.model_validate(tampered)

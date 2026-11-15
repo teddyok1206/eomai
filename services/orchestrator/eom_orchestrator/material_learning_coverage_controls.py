@@ -1,4 +1,4 @@
-"""Explicit same-logical Material ROLE1.37 -> ROLE1.39 control upgrade.
+"""Explicit same-logical Material coverage and exact-score protocol upgrades.
 
 The initial bootstrap and ordinary administrator model-selection path are not
 changed. Only the protocol differs from the exact current administrator policy;
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -31,8 +32,25 @@ from eom_orchestrator.preset_policy import execution_preset_policy_sha256
 from eom_orchestrator.repository import ensure_protocol_version
 
 _KEY = "material-learning"
-_BASE_PROTOCOL = "workflow-role/1.37.0"
-_TARGET_PROTOCOL = "workflow-role/1.39.0"
+
+
+@dataclass(frozen=True, slots=True)
+class _ProtocolUpgrade:
+    base: str
+    target: str
+    key: str
+    case: str
+
+    def error(self, suffix: str) -> str:
+        return "CONTROL_MATERIAL_" + self.key.upper().replace("-", "_") + "_" + suffix
+
+
+_COVERAGE = _ProtocolUpgrade(
+    "workflow-role/1.37.0", "workflow-role/1.39.0", "coverage", "MATERIAL_NATIVE_USE_COVERAGE"
+)
+_EXACT_SCORE = _ProtocolUpgrade(
+    "workflow-role/1.39.0", "workflow-role/1.40.0", "exact-score", "MATERIAL_NATIVE_EXACT_SCORE"
+)
 
 
 def _preserved_policy(value: ExecutionPresetRevision) -> dict[str, Any]:
@@ -52,26 +70,42 @@ def _preserved_policy(value: ExecutionPresetRevision) -> dict[str, Any]:
 def require_material_learning_coverage_successor(
     base: ExecutionPresetRevision, successor: ExecutionPresetRevision
 ) -> None:
+    _require_successor(base, successor, _COVERAGE)
+
+
+def require_material_learning_exact_score_successor(
+    base: ExecutionPresetRevision, successor: ExecutionPresetRevision
+) -> None:
+    _require_successor(base, successor, _EXACT_SCORE)
+
+
+def _require_successor(
+    base: ExecutionPresetRevision, successor: ExecutionPresetRevision, upgrade: _ProtocolUpgrade
+) -> None:
     """Pure protocol-only rule, including model order, labels and every authority pin."""
     if (
         base.state != "RELEASED"
-        or base.compatible_workflow_protocols != (_BASE_PROTOCOL,)
+        or base.compatible_workflow_protocols != (upgrade.base,)
         or base.general_knowledge_policy != "DENY"
         or len(base.role_policies) != 1
         or base.role_policies[0].role != "support"
         or base.role_policies[0].worker_pool_key != "support"
         or successor.state not in {"DRAFT", "RELEASED"}
-        or successor.compatible_workflow_protocols != (_TARGET_PROTOCOL,)
+        or successor.compatible_workflow_protocols != (upgrade.target,)
         or _preserved_policy(base) != _preserved_policy(successor)
     ):
         raise ControlPlaneError(
-            "CONTROL_MATERIAL_COVERAGE_POLICY_CHANGED",
-            "only the Material coverage protocol may change",
+            upgrade.error("POLICY_CHANGED"),
+            "only the reviewed Material protocol may change",
         )
 
 
 def _locked_base(
-    session: Session, *, expected_revision_id: str, expected_sha256: str
+    session: Session,
+    *,
+    expected_revision_id: str,
+    expected_sha256: str,
+    upgrade: _ProtocolUpgrade,
 ) -> tuple[ExecutionPresetRevision, ExecutionPresetRevision | None]:
     session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
     logical = session.scalar(
@@ -88,12 +122,12 @@ def _locked_base(
         or base.preset_id != logical.preset_id
         or base.content_sha256 != expected_sha256
         or base.state != "RELEASED"
-        or base.compatible_workflow_protocols != (_BASE_PROTOCOL,)
+        or base.compatible_workflow_protocols != (upgrade.base,)
         or base.general_knowledge_policy != "DENY"
     ):
         raise ControlPlaneError(
-            "CONTROL_MATERIAL_COVERAGE_BASE_INVALID",
-            "exact released Material1.37 baseline required",
+            upgrade.error("BASE_INVALID"),
+            "exact released Material protocol baseline required",
         )
     if logical.current_revision_id == expected_revision_id:
         return base, None
@@ -107,7 +141,7 @@ def _locked_base(
     current = validated_preset(current_row) if current_row is not None else None
     if isinstance(current, ExecutionPresetRevision) and current.state == "RELEASED":
         try:
-            require_material_learning_coverage_successor(base, current)
+            _require_successor(base, current, upgrade)
         except ControlPlaneError:
             pass
         else:
@@ -115,7 +149,7 @@ def _locked_base(
     raise ControlPlaneError("CONTROL_PRESET_BASE_STALE", "Material current revision changed")
 
 
-def upgrade_material_learning_coverage_preset(
+def _upgrade_material_learning_preset(
     sessions: sessionmaker[Session],
     publisher: ControlArtifactPublisher,
     *,
@@ -125,6 +159,7 @@ def upgrade_material_learning_coverage_preset(
     source_commit: str,
     authorize: Callable[[str], None],
     reviewed_at: datetime,
+    upgrade: _ProtocolUpgrade,
 ) -> ExecutionPresetRevision:
     """Explicit reviewed upgrade, never startup/upload/polling or model invocation.
 
@@ -139,7 +174,7 @@ def upgrade_material_learning_coverage_preset(
         or reviewed_at.utcoffset() != timedelta(0)
     ):
         raise ControlPlaneError(
-            "CONTROL_MATERIAL_COVERAGE_INPUT_INVALID", "exact pins and UTC review time required"
+            upgrade.error("INPUT_INVALID"), "exact pins and UTC review time required"
         )
     authorize(operator_id)
     with sessions.begin() as session:
@@ -147,32 +182,29 @@ def upgrade_material_learning_coverage_preset(
             session,
             expected_revision_id=expected_current_revision_id,
             expected_sha256=expected_current_sha256,
+            upgrade=upgrade,
         )
         if replay is not None:
             return replay
-        ensure_protocol_version(
-            session, _TARGET_PROTOCOL, role_schema_bundle_hash(_TARGET_PROTOCOL)
-        )
-        load_role_input_schema("support", _TARGET_PROTOCOL)
+        ensure_protocol_version(session, upgrade.target, role_schema_bundle_hash(upgrade.target))
+        load_role_input_schema("support", upgrade.target)
         matching: list[ExecutionPresetRevision] = []
         for row in session.scalars(
             select(ExecutionPresetRevisionRecord).where(
                 ExecutionPresetRevisionRecord.preset_id == base.preset_id,
                 ExecutionPresetRevisionRecord.state == "DRAFT",
-                ExecutionPresetRevisionRecord.compatible_workflow_protocols == [_TARGET_PROTOCOL],
+                ExecutionPresetRevisionRecord.compatible_workflow_protocols == [upgrade.target],
             )
         ):
             value = validated_preset(row)
             if isinstance(value, ExecutionPresetRevision):
                 try:
-                    require_material_learning_coverage_successor(base, value)
+                    _require_successor(base, value, upgrade)
                 except ControlPlaneError:
                     continue  # Historical/administrator drafts are immutable, not commandeered.
                 matching.append(value)
         if len(matching) > 1:
-            raise ControlPlaneError(
-                "CONTROL_MATERIAL_COVERAGE_DRAFT_AMBIGUOUS", "matching drafts repeat"
-            )
+            raise ControlPlaneError(upgrade.error("DRAFT_AMBIGUOUS"), "matching drafts repeat")
         draft = (
             matching[0]
             if matching
@@ -185,19 +217,17 @@ def upgrade_material_learning_coverage_preset(
                     role_policies=[policy.model_dump(mode="json") for policy in base.role_policies],
                     capacity_policy_revision_id=base.capacity_policy_revision_id,
                     general_knowledge_policy=base.general_knowledge_policy,
-                    compatible_workflow_protocols=[_TARGET_PROTOCOL],
+                    compatible_workflow_protocols=[upgrade.target],
                     created_by=operator_id,
                     created_at=reviewed_at,
                 )
             )
         )
         if not isinstance(draft, ExecutionPresetRevision):
-            raise ControlPlaneError(
-                "CONTROL_MATERIAL_COVERAGE_BASE_INVALID", "Material preset schema differs"
-            )
-        require_material_learning_coverage_successor(base, draft)
+            raise ControlPlaneError(upgrade.error("BASE_INVALID"), "Material preset schema differs")
+        _require_successor(base, draft, upgrade)
     cases = (
-        "MATERIAL_NATIVE_USE_COVERAGE",
+        upgrade.case,
         "EXACT_CURRENT_ADMIN_POLICY_PRESERVED",
         *non_live_invocation_cases(draft),
     )
@@ -222,11 +252,11 @@ def upgrade_material_learning_coverage_preset(
     authorize(operator_id)
     artifact = publisher.publish_bytes(
         payload=canonical_json_bytes(report.model_dump(mode="json")) + b"\n",
-        logical_name="material-coverage-preset-evaluation.json",
+        logical_name=f"material-{upgrade.key}-preset-evaluation.json",
         schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
         media_type="application/json",
         artifact_type="control_preset_evaluation",
-        idempotency_key="material-coverage-eval:"
+        idempotency_key=f"material-{upgrade.key}-eval:"
         + content_sha256(
             {
                 "base": expected_current_revision_id,
@@ -243,11 +273,12 @@ def upgrade_material_learning_coverage_preset(
             session,
             expected_revision_id=expected_current_revision_id,
             expected_sha256=expected_current_sha256,
+            upgrade=upgrade,
         )
         authorize(operator_id)
         if replay is not None:
             return replay
-        require_material_learning_coverage_successor(final_base, draft)
+        _require_successor(final_base, draft, upgrade)
         record_execution_preset_evaluation(
             session,
             document=report.model_dump(mode="json"),
@@ -263,8 +294,56 @@ def upgrade_material_learning_coverage_preset(
             )
         )
         if not isinstance(released, ExecutionPresetRevision):
-            raise ControlPlaneError(
-                "CONTROL_MATERIAL_COVERAGE_BASE_INVALID", "released schema differs"
-            )
-        require_material_learning_coverage_successor(final_base, released)
+            raise ControlPlaneError(upgrade.error("BASE_INVALID"), "released schema differs")
+        _require_successor(final_base, released, upgrade)
         return released
+
+
+def upgrade_material_learning_coverage_preset(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    expected_current_revision_id: str,
+    expected_current_sha256: str,
+    operator_id: str,
+    source_commit: str,
+    authorize: Callable[[str], None],
+    reviewed_at: datetime,
+) -> ExecutionPresetRevision:
+    """Historical1.37 ->1.39 upgrade; exact prior policy and identity are preserved."""
+    return _upgrade_material_learning_preset(
+        sessions,
+        publisher,
+        expected_current_revision_id=expected_current_revision_id,
+        expected_current_sha256=expected_current_sha256,
+        operator_id=operator_id,
+        source_commit=source_commit,
+        authorize=authorize,
+        reviewed_at=reviewed_at,
+        upgrade=_COVERAGE,
+    )
+
+
+def upgrade_material_learning_exact_score_preset(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    expected_current_revision_id: str,
+    expected_current_sha256: str,
+    operator_id: str,
+    source_commit: str,
+    authorize: Callable[[str], None],
+    reviewed_at: datetime,
+) -> ExecutionPresetRevision:
+    """Reviewed1.39 ->1.40 upgrade; never resets models, effort, capacity or authority."""
+    return _upgrade_material_learning_preset(
+        sessions,
+        publisher,
+        expected_current_revision_id=expected_current_revision_id,
+        expected_current_sha256=expected_current_sha256,
+        operator_id=operator_id,
+        source_commit=source_commit,
+        authorize=authorize,
+        reviewed_at=reviewed_at,
+        upgrade=_EXACT_SCORE,
+    )

@@ -1,6 +1,6 @@
 """Exact PDF image derivations; native Hancom pictures use their original catalog."""
 
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -11,6 +11,7 @@ from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.validation import validate_contract
 
 MATERIAL_VISUAL_SET_REF = "eom://schemas/material-learning/visual-set/1.0"
+MATERIAL_VISUAL_SET_V2_REF = "eom://schemas/material-learning/visual-set/2.0"
 
 
 class MaterialPdfVisual(FrozenModel):
@@ -43,8 +44,9 @@ class MaterialPdfVisual(FrozenModel):
         return self
 
 
-class MaterialPdfVisualSet(FrozenModel):
-    schema_version: Literal["material-learning-visual-set/1.0"] = "material-learning-visual-set/1.0"
+class _MaterialPdfVisualSet(FrozenModel):
+    _schema_resource: ClassVar[str]
+    _role_result_refs: ClassVar[frozenset[str]]
     input_sha256: Sha256
     result_sha256: Sha256
     role_result: ArtifactMemberPointer
@@ -54,11 +56,11 @@ class MaterialPdfVisualSet(FrozenModel):
 
     @model_validator(mode="after")
     def exact_receipt(self) -> Self:
-        validate_contract("material-learning-visual-set-v1", self.model_dump(mode="json"))
+        validate_contract(self._schema_resource, self.model_dump(mode="json"))
         keys = tuple(crop.source_region_id for crop in self.crops)
         if (
             keys != tuple(sorted(set(keys)))
-            or self.role_result.schema_ref != "material-learning-result@1.0"
+            or self.role_result.schema_ref not in self._role_result_refs
             or self.role_result.member_path != "result.json"
             or self.role_result.media_type != "application/json"
             or self.manifest_sha256
@@ -66,3 +68,15 @@ class MaterialPdfVisualSet(FrozenModel):
         ):
             raise ValueError("MATERIAL_VISUAL_RECEIPT_INVALID")
         return self
+
+
+class MaterialPdfVisualSet(_MaterialPdfVisualSet):
+    schema_version: Literal["material-learning-visual-set/1.0"] = "material-learning-visual-set/1.0"
+    _schema_resource = "material-learning-visual-set-v1"
+    _role_result_refs = frozenset({"material-learning-result@1.0"})
+
+
+class MaterialPdfVisualSetV2(_MaterialPdfVisualSet):
+    schema_version: Literal["material-learning-visual-set/2.0"] = "material-learning-visual-set/2.0"
+    _schema_resource = "material-learning-visual-set-v2"
+    _role_result_refs = frozenset({"material-learning-result@2.0", "material-learning-result@3.0"})

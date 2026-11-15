@@ -5,6 +5,45 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 정확한 배점 등록·조회·설정 전환 후보 검증, 실제 활성화는 다음
+
+새 Lineage3 / 일반 Pack1.4 / Native Pack1.5를 기존 Registry owner에 연결했다. Native result3은
+등록 잠금 안에서 exact question Artifact 배점을 다시 읽어 proposal과 비교한다.0/15/반올림/
+UNPRINTED 대체는 등록 전에 거절한다. canonical integer는1.0, half는1.1의 실제 schema·hash로
+게시한다. 문제·해설 OTHER pointer,6 component, 원본 Excel metadata와 EXTERNAL 구분은 그대로다.
+
+canonical GET은 기존 request10/new response19, 표시 읽기는 response2로 API와 Catalog 양쪽을
+연결했다. 실제 로컬 socket에서 두 번씩 읽어1.5/2.5와 body·image pointer가 같은 것을 확인했다.
+Native 그림은 기존 Office picture-use를 그대로 사용한다. 일반 PDF visual-set2의 result2/3
+연결도 기존 publisher 안에서 추가했으며 Native를 PDF crop으로 대체하지 않는다.
+
+현재 관리자 모델·추론·instruction·capacity·권한을 보존하는1.39→1.40 갱신은 기존 protocol-only
+upgrade owner를 공유한다. 새 preset/queue/DB migration은 없다. 실제 disposable DB에서 동시
+호출과 같은 요청 replay가 같은 released revision/evaluation을 쓰고 구 문서·다른 preset을
+바꾸지 않는 것을 확인했다. 평가가 pin하는 것은 draft ID와 동일 policy hash다. 이를 released
+revision ID와 같다고 가정했던 새 테스트의 잘못된 assertion은 수정했고 실패 로그를 보존했다.
+
+최종 공식 guarded DB 경로: migration head0079 왕복·제한 계정 reconcile PASS,
+기존/새 Registry suite **129 PASS**(새 exact 등록11개 포함), sequential protocol upgrades
+**2 PASS**, score Workflow 저장·동시성·late denial **4 PASS**. Native 원문 descriptor는 실제
+Artifact owner로 읽지만 completed worker/source admission은 fixture이므로 live 모델·실제 권한
+증거로 확대하지 않는다. `native-score-registration-testdb-r3-20261115.log`가 최종 결과다.
+앞선 두 임시 DB의 실행/테스트 assertion 실패 기록도 보존하고 공식 cleanup으로 제거했다.
+최종 세 번째 임시 DB도 공식 confirmed cleanup으로 제거했고 cleanup-r3 로그에 보존했다.
+
+source 회귀1419 PASS, 새 최종 read/hash 회귀9 PASS, context/immutability/embedding projection/
+Preview81 PASS, changed source9개 mypy와 Ruff/format/diff check PASS다. 기존40 role bundle의
+baseline hash가 그대로라는 executable 회귀도 추가했다. wire audit1419 canonical /1070 mirror /
+12080 refs PASS다. 앞선 SVG 테스트의 함수명 문자열 검사는 실제 request-aware validator 이름을
+따르도록 보정했으며 unsafe SVG의 schema/typed 거절과 commit 이전 순서 검증은 유지했다.
+
+**아직 미배포**다. Material owner 및 우리가 PAUSE한 두 run은 유지보수 상태를 유지한다.
+다음은 오류가 확인된 target의 supported linked re-extraction·same logical Item successor를
+연결하고, 설치 wheel/SDK 호환 배포 뒤 실제 Native1.5/2.5/2 등록·조회와 전체 처리 재개를 확인하는
+일이다. 이미 제출된 old extraction을 그대로 잘못 신규 등록하지 않는 cutover도 확인해야 한다.
+이 단계는 운영 DB·원본·등록 정본·accepted 분석·실패 이력·INDEX/QUERY에 쓰지 않았고,
+모델/GPU 실행0이다.450개 전체 goal은 계속 ACTIVE이며 완료로 선언하지 않는다.
+
 ## 2026-11-15 — 정확한 배점 실행 family와 임시 DB 검증, 등록/배포 연결은 계속
 
 Workflow3 / ROLE1.40 / request3 / result3 / plan41 / receipt3의 source 후보를 연결했다.
