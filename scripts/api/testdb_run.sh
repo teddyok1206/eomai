@@ -568,6 +568,7 @@ if [[ "${action}" == "material-learning-tests" ]]; then
     tests/integration/test_material_item_registration_storage.py \
     tests/integration/test_material_coverage_registration_storage.py \
     tests/integration/test_material_exact_score_registration_storage.py \
+    tests/integration/test_material_native_score_reanalysis_storage.py \
     tests/integration/test_material_native_registration_storage.py \
     tests/integration/test_material_native_graph_batch_storage.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata

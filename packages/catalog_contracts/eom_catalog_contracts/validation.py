@@ -52,6 +52,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:e0e6a589b0d38dcfcc4766bebba090594c8e9ed60915c1eda6e8de234c646cc5",
         ),
+        "material-native-score-reanalysis-v1": CatalogSchemaResource(
+            "schemas/material-learning/native-score-reanalysis-v1.schema.json",
+            "resources/material-learning/native-score-reanalysis-v1.schema.json",
+            "1.0",
+            "sha256:eed28fc4b48f30c39afd70c6c32fe523987202c6fb4efe7a9c69575b4fa1a805",
+        ),
+        "material-learning-item-lineage-v4": CatalogSchemaResource(
+            "schemas/material-learning/item-lineage-v4.schema.json",
+            "resources/material-learning/item-lineage-v4.schema.json",
+            "4.0",
+            "sha256:d92ba7670fb4647af4361181fa07417ffffb4d5c3b4197686b70c229ac9b2fdc",
+        ),
         "material-learning-item-lineage-v3": CatalogSchemaResource(
             "schemas/material-learning/item-lineage-v3.schema.json",
             "resources/material-learning/item-lineage-v3.schema.json",

@@ -135,6 +135,44 @@ same-source successor의 transaction/멱등 경계를 구현·검증하기 전 �
 
 ## 구현·검증 순서
 
+### 후속 추출의 최소 저장·동시성 경계
+
+새 explicit Native score reanalysis는 원본 run이 terminal이고 실제 Workflow/Job/lease가
+quiescent일 때만 만든다. ordinary retry의 FAILED 의미를 넓히지 않는다. 원문 question을 읽은
+동일 source owner가 등록 배점 불일치 또는 구 계약의 배점 표현 거부를 확인한 target만 고른다.
+기등록 target은 그 준비 시점의 mutable current를 한 번 선택해 exact Item/revision/manifest/
+content hash로 고정한다. 특히 앞선22번 그림 보정 revision을 원래 revision으로 되돌리지 않는다.
+
+target마다 작은 immutable proof를 기존 ControlFileSetPublisher로 게시한다. 조회는 새 run ID와
+predecessor task ID에서 정해지는 explicit idempotency key의 indexed owner lookup이며,
+반환된 pointer를 Catalog Artifact owner로 해석한다. path/implicit latest나 작업 결과 복제,
+새 DB table/queue/cache가 아니다. 단일 문항 등록이 시험지 전체 proof를 다시 파싱하지 않도록
+proof는 문항별 Artifact이며 work/result/native question/기등록 content의 작은 pointer만 가진다.
+
+원본 revision→run lock, source task checksum, pinned Artifact metadata와 현재 Item CAS를
+최종 확인한 한 transaction에서 기존 linked run/task를 만든다. first event는 명시적
+MATERIAL_NATIVE_SCORE_REANALYSIS_STARTED이며 기존 predecessor FK가 대상 관계를 고정한다.
+선정 target의 새 task만 PENDING이고 입력/출력/분석/Item pin을 상속하지 않는다. 정상 완료
+target은 원래 Item/base/public/Graph checkpoint를 모두 유지한다. old task/result/Graph는 수정하지 않는다.
+초기 command의 run/timestamp/idempotency key hash가 동일하면 새 작업을 만들지 않고 같은 successor를 읽는다.
+
+새 target의 result3 등록은 같은 source key advisory lock 안에서 proof의 기존 Item에 대해
+Registry REVISE_ITEM/base_revision_id를 사용한다. 새 logical Item을 만들지 않는다.
+후속 Lineage4는 문항별 보정 proof Artifact를 명시적으로 pin한다. 일반 result3의 Lineage3와
+기존 Lineage1/2는 바꾸지 않는다. proof의 원문·구 result·구 current revision 및 새 result가
+한 등록 이력에서 추적되며, 숨은 latest 또는 filesystem 경로로 근거를 복원하지 않는다.
+fresh canonical/proposal/receipt는 새 source-faithful 추출에서 만들고 old accepted result에 값을
+끼워 넣지 않는다. Registry commit 직후 응답이 사라져도 exact revision key로 회복한다.
+source·Item·권한·hash가 달라지면 새 current로 대체하지 않고 explicit stale/error다.
+
+접근 패턴은 run/task PK·source-current 준비·revision hash·publication key lookup과 bounded
+문항 순회다. 전체 선정은 O(q × 기존 source-resolution 비용 + question XML bytes)다.
+task/history는 bulk keyed query이며 각 원본/Item의 권한·Artifact 확인은 기존 owner의
+indexed resolution을 그대로 쓴다. 문항별 등록 proof 조회는 O(1) indexed lookup + bounded
+JSON/XML이다. 이 일회성 보정에 별도 영속 cache나 전체 source 정본 사본을 만들지 않는다.
+모델·추론·capacity와 기존 control release owner는 유지한다. 새 Indexed tracker/단순 현재 row
+수정이나 전체25개 재생성은 source fidelity·이력 또는 재사용 범위를 깨므로 선택하지 않는다.
+
 - 원본290개/기존 등록16개 불일치를 보존하고 새 등록을 안전하게 drain한다.
 - pure bounded parser, 새 score schema/value, source/canonical successor와 단위 검사.
 - 기존 worker/등록 owner에 연결하고 원본 배점 대조를 강제한다. 원문/그림/해설은 바꾸지 않는다.

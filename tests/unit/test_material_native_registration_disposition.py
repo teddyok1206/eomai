@@ -14,6 +14,7 @@ from eom_catalog_service.material_learning_processing import MaterialLearningPro
     [
         "MATERIAL_ITEM_SOURCE_UNREADABLE",
         "MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED",
+        "MATERIAL_NATIVE_SCORE_REANALYSIS_REQUIRED",
         "MATERIAL_NATIVE_BINDING_HASH_INVALID",
     ],
 )

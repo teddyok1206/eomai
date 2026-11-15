@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-score-reanalysis/1.0",
+  "title": "Native original-score reanalysis command and one source-pinned target",
+  "$defs": {
+    "contentPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "assessment-item-content.json"},
+        "schema_ref": {"enum": ["eom.assessment.item-content/1.0", "eom.assessment.item-content/1.1", "eom://schemas/item-registry/assessment-item-content-v1", "eom://schemas/item-registry/assessment-item-content-v1_1"]},
+        "media_type": {"const": "application/json"},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-native-score-reanalysis-command/1.0"
+        },
+        "operation": {
+          "const": "REANALYZE_NATIVE_MATERIAL_SCORES"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^materialrun_[0-9a-f]{32}$"
+        },
+        "expected_updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "idempotency_key",
+        "actor_id",
+        "run_id",
+        "expected_updated_at"
+      ]
+    },
+    "priorItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "content": {
+          "$ref": "#/$defs/contentPointer"
+        },
+        "points": {
+          "$ref": "eom://schemas/external-item/source-score/2.0#/$defs/printedPoints"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "manifest_sha256",
+        "content",
+        "points"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-native-score-reanalysis-target/1.0"
+        },
+        "command": {
+          "$ref": "#/$defs/command"
+        },
+        "material_id": {
+          "type": "string",
+          "pattern": "^material_[0-9a-f]{32}$"
+        },
+        "material_revision_id": {
+          "type": "string",
+          "pattern": "^materialrev_[0-9a-f]{32}$"
+        },
+        "successor_run_id": {
+          "type": "string",
+          "pattern": "^materialrun_[0-9a-f]{32}$"
+        },
+        "prepared": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "source_tasks_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source_task_id": {
+          "type": "string",
+          "pattern": "^materialtask_[0-9a-f]{32}$"
+        },
+        "unit_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "native_binding_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "question": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "expected_score": {
+          "$ref": "eom://schemas/external-item/source-score/2.0#/oneOf/0"
+        },
+        "source_work": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "source_result": {
+          "$ref": "eom://schemas/external-item/creative-source-lineage/1.0#/$defs/member"
+        },
+        "prior_item": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/priorItem"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "enum": [
+            "REGISTERED_SCORE_MISMATCH",
+            "LEGACY_SCORE_CONTRACT"
+          ]
+        },
+        "target_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "command",
+        "material_id",
+        "material_revision_id",
+        "successor_run_id",
+        "prepared",
+        "source_tasks_sha256",
+        "source_task_id",
+        "unit_key",
+        "native_binding_sha256",
+        "question",
+        "expected_score",
+        "source_work",
+        "source_result",
+        "prior_item",
+        "reason",
+        "target_sha256"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/target"
+    }
+  ]
+}

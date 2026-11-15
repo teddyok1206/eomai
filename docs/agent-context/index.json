@@ -75,7 +75,7 @@
         "services/catalog_service/eom_catalog_service/material_registered_base_recovery.py",
         "services/catalog_service/eom_catalog_service/material_discovery_finalization_recovery.py",
         "services/catalog_service/eom_catalog_service/material_native_score.py",
-        "services/catalog_service/eom_catalog_service/material_task_source_read.py",
+        "services/catalog_service/eom_catalog_service/material_native_score_reanalysis.py",
         "services/catalog_service/eom_catalog_service/material_item_registration.py",
         "packages/catalog_contracts/eom_catalog_contracts/material_item_lineage.py",
         "services/catalog_service/eom_catalog_service/material_native_discovery.py",
@@ -92,7 +92,7 @@
         "tests/unit/test_material_learning_execution_v3.py",
         "tests/unit/test_material_task_results.py",
         "tests/unit/test_material_item_registration_versions.py",
-        "tests/unit/test_material_result_pointer_successors.py",
+        "tests/unit/test_material_native_score_reanalysis.py",
         "tests/unit/test_material_native_visual_coverage.py",
         "tests/unit/test_material_native_publication.py",
         "tests/unit/test_material_native_question_batch.py",
@@ -124,7 +124,7 @@
         "tests/integration/test_content_planning_storage.py",
         "tests/integration/test_content_workbook_import.py",
         "tests/integration/test_curated_assembly_library.py",
-        "tests/integration/test_material_exact_score_registration_storage.py"
+        "tests/integration/test_material_native_score_reanalysis_storage.py"
       ],
       "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md", "docs/architecture/EXCEL_STANDARD_WORKBOOK_IMPORT.md", "docs/architecture/NATIVE_EXAM_ITEM_INTAKE.md", "docs/architecture/REGISTERED_ITEM_BASE_REFERENCE_RECOVERY.md", "docs/architecture/NATIVE_PRINTED_SCORE_FIDELITY.md", "docs/architecture/NATIVE_DISCOVERY_COMPLETENESS_REANALYSIS.md"]
     },

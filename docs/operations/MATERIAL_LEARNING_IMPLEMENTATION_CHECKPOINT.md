@@ -5,6 +5,40 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 선택적 배점 재추출·같은 Item 후속 등록 후보 검증
+
+원본 run이 terminal이고 실제 Workflow/analysis/lease가 quiescent인 경우만 받는
+`NativeMaterialScoreReanalysisService`를 연결했다. source owner가 원래 한글 question을 읽어
+등록 배점 불일치/구 계약의 배점 표현 거부를 확인한다. 원문·old result를 수정하지 않고
+선정 문항별 작은 proof Artifact와 기존 predecessor run/task를 만든다. 정상 checkpoint는
+기존 Item/base/public solution/Graph pin까지 유지한다. 동일 command는 같은 후속 run이다.
+
+fresh result3은 Registry의 기존 REVISE_ITEM/base_revision_id로 같은 logical Item의 새
+revision이 된다. 준비 시점 current revision을 명시적으로 고정하므로 앞선 그림 보정 revision을
+옛 버전으로 되돌리지 않는다. Lineage4는 exact repair proof pointer를 보존하고, 일반 result3은
+기존 Lineage3다. exact Pack이 명시된 runtime에서는 old-role의 *신규* Native 등록만
+`MATERIAL_NATIVE_SCORE_REANALYSIS_REQUIRED`로 기록하며 기존 등록 replay는 유지한다.
+이 예외는 한 task의 명시적 후속 보정 대상으로 기록하지 resident owner를 종료시키지 않는다.
+
+최종 guarded disposable DB: migration0079 왕복·제한 계정 reconcile PASS,
+Material 저장/Registry **141 PASS**, protocol upgrade **2 PASS**, score Workflow **4 PASS**.
+새 검사에는 선택적 상속·부정 범위·실제 proof publication/read·동시 생성·transaction rollback,
+동일 Item revision CAS·원본6 component 보존·Registry commit 직후 중단/replay와 old-role
+cutover가 포함된다. completed worker/source eligibility는 명시한 fixture port이며 실제 운영
+재추출/450개 검증의 대체 증거가 아니다. 첫 임시 DB 실행의 잘못된 fixture가 terminal 이력을
+바꾸려다 DB trigger에 거절된 기록도 보존했다. trigger를 완화하지 않고 fixture를 수정했다.
+
+source 회귀1325 PASS, 최종 disposition/proof/구 role hash/context44 PASS, 새 핵심4개 mypy와
+Ruff/format PASS. wire audit1421 canonical /1072 mirror /12095 refs PASS. 실행 로그는
+`staging/native-score-reanalysis-storage-r3-20261115.log`, `native-score-reanalysis-source-full-r1-20261115.log`,
+`native-score-reanalysis-final-unit-20261115.log`에 임시 보존한다. 두 번째 임시 DB는 새로 준비해
+최종141개를 재검사했다. 범위가 겹치는 수치는 합산하지 않는다.
+
+**현재는 source 후보이고 운영 미반영**이다. 이번 단계의 운영 write/model/GPU 실행0.
+실제 첫 회차25개의 보정 후 source-score 대조, 멈춘 두 run과 나머지 회차 재개, 공유 Graph/
+공개 풀이/INDEX 연결 및 전체450 검증이 남는다. 목표는 ACTIVE다. 18회 업로드·원본 Excel과
+250개 고유번호/200개 미지정 값, 원본 단원, 과거 실패 이력은 보존한다.
+
 ## 2026-11-15 — 설치 wheel의 API 명세 경계 후속 보정
 
 등록·조회 후보610d8c05를 공식 `deploy_release.sh --build-only`로 검사했다. wheel RECORD는

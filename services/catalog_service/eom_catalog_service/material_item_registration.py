@@ -18,12 +18,14 @@ from eom_catalog_contracts.material_item_lineage import (
     MATERIAL_ITEM_LINEAGE_REF,
     MATERIAL_ITEM_LINEAGE_V2_REF,
     MATERIAL_ITEM_LINEAGE_V3_REF,
+    MATERIAL_ITEM_LINEAGE_V4_REF,
     MATERIAL_ITEM_PACK,
     MATERIAL_ITEM_TYPE,
     MaterialItemLineage,
     MaterialItemLineageFamily,
     MaterialItemLineageV2,
     MaterialItemLineageV3,
+    MaterialItemLineageV4,
     material_item_registration_key,
     parse_material_item_lineage,
 )
@@ -91,6 +93,10 @@ from eom_catalog_service.material_native_score import (
     read_native_question_score,
     require_native_source_score,
 )
+from eom_catalog_service.material_native_score_reanalysis import (
+    NativeMaterialScoreReanalysisService,
+    ResolvedNativeScoreTarget,
+)
 from eom_catalog_service.material_native_visual_context import read_native_visual_prepared_for_run
 from eom_catalog_service.material_native_visual_preparation import (
     MaterialNativeVisualPreparationService,
@@ -154,6 +160,9 @@ class MaterialItemRegistrationService:
         self.sources = CatalogMaterialLearningSourceAuthorizer(engine, self.settings)
         self.pack_resources = PackResourceResolver()
         self.native_visuals = native_visuals
+        self.score_reanalysis = NativeMaterialScoreReanalysisService(
+            engine, publisher=publisher, source_commit=source_commit, settings=self.settings
+        )
 
     def _selected_pack_release_id(
         self, resolved: ResolvedMaterialTask, native: MaterialNativeItemBinding | None
@@ -274,6 +283,35 @@ class MaterialItemRegistrationService:
             if self._native_binding(guard, current) != native:
                 raise ValueError("MATERIAL_ITEM_INPUT_CHANGED")
             self._authorize(guard, current, native)
+            reanalysis = (
+                self.score_reanalysis.registration_target(
+                    guard, task_id=current.task_id, operator_id=operator_id
+                )
+                if native is not None and isinstance(current.role, MaterialLearningRoleResultV3)
+                else None
+            )
+            target = reanalysis.target if reanalysis else None
+            if target is not None:
+                if native is None or (
+                    native.binding_sha256 != target.native_binding_sha256
+                    or native.question.document != target.question
+                    or current.work.material_revision_id != target.material_revision_id
+                ):
+                    raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_NATIVE_CHANGED")
+                if target.prior_item is not None:
+                    # Keep the source-key advisory lock, but a new exact revision
+                    # has its own idempotent identity and the same logical Item.
+                    key = (
+                        "material-native-score:"
+                        + content_sha256(
+                            {
+                                "source_key": key,
+                                "target_sha256": target.target_sha256,
+                                "task_id": current.task_id,
+                                "result_sha256": current.result_pointer.sha256,
+                            }
+                        )[7:]
+                    )
             if native is not None and isinstance(current.role, MaterialLearningRoleResultV3):
                 result = current.role.output.learning_result
                 if not isinstance(result, MaterialExtractionResultV2) or result.proposal is None:
@@ -296,7 +334,9 @@ class MaterialItemRegistrationService:
                     or existing.metadata_json.get("unit_key") != current.unit_key
                 ):
                     raise ValueError("MATERIAL_NATIVE_METADATA_UPDATE_REQUIRED")
-                lineage = self._verify_registered(guard, existing, current, native)
+                lineage = self._verify_registered(
+                    guard, existing, current, native, reanalysis=reanalysis
+                )
                 return RegisteredMaterialItem(
                     existing.item_id,
                     existing.item_revision_id,
@@ -304,9 +344,19 @@ class MaterialItemRegistrationService:
                     lineage,
                     False,
                 )
+            if (
+                native is not None
+                and not isinstance(current.role, MaterialLearningRoleResultV3)
+                and self.native_exact_score_pack_release_id is not None
+            ):
+                # Explicit installed successor availability closes *new* legacy
+                # writes, not historical replay or the immutable old ABI.
+                raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_REQUIRED")
+            if target is not None:
+                self.score_reanalysis.validate_target(guard, target, require_current=True)
             content = self._prepare_content(current)
-            lineage = material_item_lineage(current, content)
-            lineage_ref = _lineage_ref(current)
+            lineage = material_item_lineage(current, content, reanalysis=reanalysis)
+            lineage_ref = _lineage_ref(current, reanalysis=reanalysis)
             content_ref = (
                 ASSESSMENT_ITEM_CONTENT_V1_1_SCHEMA_REF
                 if isinstance(content.content, AssessmentItemContentV1_1)
@@ -394,7 +444,15 @@ class MaterialItemRegistrationService:
             assert selected_pack_id is not None
             registered = self.registry.register(
                 RegistrationRequest(
-                    mode="CREATE_ITEM",
+                    mode="REVISE_ITEM"
+                    if target is not None and target.prior_item
+                    else "CREATE_ITEM",
+                    item_id=target.prior_item.item_id
+                    if target is not None and target.prior_item
+                    else None,
+                    base_revision_id=target.prior_item.item_revision_id
+                    if target is not None and target.prior_item
+                    else None,
                     registration_key=key,
                     content_pack_release_id=selected_pack_id,
                     workflow_id=current.selection.workflow_id,
@@ -456,7 +514,9 @@ class MaterialItemRegistrationService:
                     created_by=current.operator_id,
                 )
             )
-            stored = self._verify_registered(guard, registered, current, native)
+            stored = self._verify_registered(
+                guard, registered, current, native, reanalysis=reanalysis
+            )
             if stored != lineage:
                 raise ValueError("MATERIAL_ITEM_REGISTRATION_REPLAY_CONFLICT")
             return RegisteredMaterialItem(
@@ -588,6 +648,8 @@ class MaterialItemRegistrationService:
         revision: ItemRevisionRecord,
         resolved: ResolvedMaterialTask,
         native: MaterialNativeItemBinding | None = None,
+        *,
+        reanalysis: ResolvedNativeScoreTarget | None = None,
     ) -> MaterialItemLineageFamily:
         rows = tuple(
             session.scalars(
@@ -599,7 +661,7 @@ class MaterialItemRegistrationService:
         components = {(row.component_type, row.ordinal): row for row in rows}
         item = session.get(ItemRecord, revision.item_id, populate_existing=True)
         source = components.get(("SOURCE_REFERENCE", 0))
-        lineage_ref = _lineage_ref(resolved)
+        lineage_ref = _lineage_ref(resolved, reanalysis=reanalysis)
         if (
             len(rows) != (6 if native else 3)
             or set(components)
@@ -672,18 +734,48 @@ class MaterialItemRegistrationService:
         )
         if native is not None:
             verify_registered_native_material(session, self.artifacts, revision, components, native)
+        if reanalysis is not None and (
+            not isinstance(lineage, MaterialItemLineageV4)
+            or lineage.native_score_reanalysis != reanalysis.evidence
+        ):
+            raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_LINEAGE_MISMATCH")
+        target = reanalysis.target if reanalysis else None
+        if target is not None and target.prior_item is not None:
+            prior = session.get(
+                ItemRevisionRecord, target.prior_item.item_revision_id, populate_existing=True
+            )
+            if (
+                revision.item_id != target.prior_item.item_id
+                or prior is None
+                or prior.revision_state != "SUPERSEDED"
+                or prior.superseded_by_revision_id != revision.item_revision_id
+                or prior.manifest_sha256 != target.prior_item.manifest_sha256
+            ):
+                raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_ITEM_STALE")
         return lineage
 
 
 def material_item_lineage(
-    resolved: ResolvedMaterialTask, content: CreativeSourceContent
+    resolved: ResolvedMaterialTask,
+    content: CreativeSourceContent,
+    *,
+    reanalysis: ResolvedNativeScoreTarget | None = None,
 ) -> MaterialItemLineageFamily:
     work = resolved.work
     if not isinstance(work, MaterialExtractionWork):
         raise ValueError("MATERIAL_ITEM_QUESTION_TASK_REQUIRED")
-    model: type[MaterialItemLineage] | type[MaterialItemLineageV2] | type[MaterialItemLineageV3]
+    model: (
+        type[MaterialItemLineage]
+        | type[MaterialItemLineageV2]
+        | type[MaterialItemLineageV3]
+        | type[MaterialItemLineageV4]
+    )
     version: str
-    if isinstance(resolved.role, MaterialLearningRoleResultV3):
+    if reanalysis is not None:
+        if not isinstance(resolved.role, MaterialLearningRoleResultV3):
+            raise ValueError("MATERIAL_NATIVE_SCORE_REANALYSIS_RESULT_REQUIRED")
+        model, version = MaterialItemLineageV4, "4.0"
+    elif isinstance(resolved.role, MaterialLearningRoleResultV3):
         model, version = MaterialItemLineageV3, "3.0"
     elif isinstance(resolved.role, MaterialLearningRoleResultV2):
         model, version = MaterialItemLineageV2, "2.0"
@@ -708,10 +800,16 @@ def material_item_lineage(
         requested_by=resolved.operator_id,
         created_at=resolved.role.completed_at.isoformat().replace("+00:00", "Z"),
     )
+    if reanalysis is not None:
+        value["native_score_reanalysis"] = reanalysis.evidence.model_dump(mode="json")
     return model.model_validate({**value, "lineage_sha256": content_sha256(value)})
 
 
-def _lineage_ref(resolved: ResolvedMaterialTask) -> str:
+def _lineage_ref(
+    resolved: ResolvedMaterialTask, *, reanalysis: ResolvedNativeScoreTarget | None = None
+) -> str:
+    if reanalysis is not None:
+        return MATERIAL_ITEM_LINEAGE_V4_REF
     if isinstance(resolved.role, MaterialLearningRoleResultV3):
         return MATERIAL_ITEM_LINEAGE_V3_REF
     if isinstance(resolved.role, MaterialLearningRoleResultV2):

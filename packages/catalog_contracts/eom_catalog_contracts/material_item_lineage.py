@@ -17,6 +17,7 @@ from eom_catalog_contracts.validation import validate_contract
 MATERIAL_ITEM_LINEAGE_REF = "eom://schemas/material-learning/item-lineage/1.0"
 MATERIAL_ITEM_LINEAGE_V2_REF = "eom://schemas/material-learning/item-lineage/2.0"
 MATERIAL_ITEM_LINEAGE_V3_REF = "eom://schemas/material-learning/item-lineage/3.0"
+MATERIAL_ITEM_LINEAGE_V4_REF = "eom://schemas/material-learning/item-lineage/4.0"
 MATERIAL_ITEM_TYPE = "uploaded-material-item"
 MATERIAL_ITEM_PACK = "uploaded-material-item"
 
@@ -167,12 +168,28 @@ class MaterialItemLineageV3(_CoverageMaterialItemLineage):
     _role_result_ref = "material-learning-result@3.0"
 
 
-type MaterialItemLineageFamily = MaterialItemLineage | MaterialItemLineageV2 | MaterialItemLineageV3
+class MaterialItemLineageV4(_CoverageMaterialItemLineage):
+    """Fresh result3 with an explicit pointer to the original-score repair proof."""
+
+    schema_version: Literal["material-learning-item-lineage/4.0"] = (
+        "material-learning-item-lineage/4.0"
+    )
+    native_score_reanalysis: MaterialArtifactMember
+    _schema_resource = "material-learning-item-lineage-v4"
+    _role_result_ref = "material-learning-result@3.0"
+
+
+type MaterialItemLineageFamily = (
+    MaterialItemLineage | MaterialItemLineageV2 | MaterialItemLineageV3 | MaterialItemLineageV4
+)
 
 
 def parse_material_item_lineage(value: object) -> MaterialItemLineageFamily:
     """Dispatch pinned JSON values explicitly, without latest or parse-error fallback."""
-    if isinstance(value, (MaterialItemLineage, MaterialItemLineageV2, MaterialItemLineageV3)):
+    if isinstance(
+        value,
+        (MaterialItemLineage, MaterialItemLineageV2, MaterialItemLineageV3, MaterialItemLineageV4),
+    ):
         value = value.model_dump(mode="json")
     if not isinstance(value, Mapping):
         raise ValueError("MATERIAL_ITEM_LINEAGE_DOCUMENT_INVALID")
@@ -183,4 +200,6 @@ def parse_material_item_lineage(value: object) -> MaterialItemLineageFamily:
         return MaterialItemLineageV2.model_validate(value)
     if version == "material-learning-item-lineage/3.0":
         return MaterialItemLineageV3.model_validate(value)
+    if version == "material-learning-item-lineage/4.0":
+        return MaterialItemLineageV4.model_validate(value)
     raise ValueError("MATERIAL_ITEM_LINEAGE_SCHEMA_UNSUPPORTED")

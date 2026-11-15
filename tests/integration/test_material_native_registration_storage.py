@@ -86,10 +86,11 @@ def native_registration_case(creative_engine, registration_case, tmp_path, monke
     )
     for role in ("question", "solution"):
         raw = b"PK\x03\x04synthetic-native-registry-document-" + role.encode()
-        if exact:
+        if exact or "native_printed_points" in options:
             from tests.unit.test_material_native_score import package, section
 
-            raw = package(section(f"[{options['points']}점]" if role == "question" else "해설"))
+            printed = options.get("native_printed_points", options.get("points"))
+            raw = package(section(f"[{printed}점]" if role == "question" else "해설"))
         path = tmp_path / (role + ".hwpx")
         path.write_bytes(raw)
         member = role + ".hwpx"
@@ -154,6 +155,9 @@ def native_registration_case(creative_engine, registration_case, tmp_path, monke
         # Material run/task rows. This port is synthetic here too: these cases
         # test Registry commit/replay/metadata, not native visual qualification.
         monkeypatch.setattr(selected, "_verify_native_visual_scope", lambda *_a, **_k: None)
+        monkeypatch.setattr(
+            selected.score_reanalysis, "registration_target", lambda *_a, **_k: None
+        )
         return selected
 
     return factory, resolved, binding

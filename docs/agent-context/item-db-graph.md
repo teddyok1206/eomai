@@ -64,6 +64,13 @@ read family 확장으로 입력/OpenAPI까지 묵시적으로 넓히지 않는�
 `test_material_exact_score_read.py`와 guarded `test_material_exact_score_registration_storage.py`가
 새 조회·source mismatch·등록·동시 재전송·중단 복구를 검사한다.
 
+구 Native 배점의 선택적 재추출은 `material_native_score_reanalysis.py`가 소유한다. 기존
+terminal run의 quiescence·원문 배점·현재 Item을 확인해 문항별 작은 proof Artifact와 linked
+task를 만들며, 정상 checkpoint는 상속한다. fresh result3만 같은 logical Item의 Registry
+REVISE_ITEM/base CAS로 등록한다. Lineage4는 proof를 pin하고 보통 result3의 Lineage3는
+유지한다. exact Pack이 설정된 runtime의 *새* old-role 등록은 명시적 reanalysis 필요로 기록하되
+historical replay는 유지한다. 이는 후보 구현이며 실제 보정·배포는 운영 checkpoint를 확인한다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,
