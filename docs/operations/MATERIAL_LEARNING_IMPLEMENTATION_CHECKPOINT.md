@@ -5,6 +5,37 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 22:07 UTC — 최종 설치 후보와 실제 원본 보정 대상 확인
+
+source73ea7068을 커밋·push했다. 공식 API build-only의 RECORD/source-free installed
+OpenAPI/definition/admission/resource/CLI 검사가 PASS다. 빌드는
+`/tmp/eom-api-build/73ea7068f1ef89331eea7904b52909f45e5915d3.ChIslM`이며 platform SHA는
+`0c488afb0f703149d0c7c8019ba1fa3ed63b37d0ecadee650bd7b0354696c41c`다.
+Web wheel도 같은 source의 artifact/import/installed simulation PASS(82파일)이며
+`/tmp/eom-web-gui-build/73ea7068f1ef89331eea7904b52909f45e5915d3.XaMMfa`에 있다.
+
+기존 protected owner installer로 새 platform/API-contract SDK만 별도 immutable prefix에
+설치했다. 수치 interpreter·기존 CPU Office70·운영 API/Web·QUERY와 credential은 바꾸지 않았다.
+설치본에서 실제 첫 회차의 기존 source/role/result/원문 HWPX/현재 Item을 **read-only DB**로
+해석했다. 선정은 정확히16개(원문1.5점8,2.5점8)이며16개 모두 prepare-time current CAS와
+source pointer/배점 재확인 PASS다. 앞선22번 그림 보정 current revision도 그대로 pin됐다.
+DB write·proof publication·model 호출0이며 이 검사가 이미 배점을 고쳤다는 뜻은 아니다.
+증거는 `staging/native-score-actual-target-inspection-r1-20261115.json`이다.
+
+기존 private handoff owner의 prepare도 PASS다. root stage는
+`/var/lib/eom-native-exact-score-release-20261115`, frozen helper는
+`/usr/local/libexec/eom-native-exact-score-release-20261115/release_r3.py`다.
+**PREPARED_ONLY**이며 admission/control 전환·서비스 활성화·Material 재개는 아직 하지 않았다.
+초기 wrapper의 frozen-file 경로 오류와 그 뒤 autonomous INDEX 실패 invocation 변경으로
+중단된 prepare 로그도 남겼다. 두 번 모두 stage 생성 전이었고, 새로 관측한 실제 실패
+invocation을 기준으로 준비를 끝냈다. INDEX 실패를 성공으로 고치거나 INDEX를 재시작하지 않았다.
+마지막 QUERY PID416239/invocation99376675…는 그대로이고 INDEX는 failed/PID0이다.
+
+임시 DB 두 개는 모두 공식 confirmed cleanup으로 제거했다(`native-score-reanalysis-db-cleanup-r1/r2`).
+다음은 staged control/Pack1.4·1.5/Workflow3의 호환 전환과 API/Web/ROLE/소비 SDK 활성화,
+실제16개 재추출·등록·source-score 대조 및2·3회/나머지 회차 재개다. 원래450개 전체,
+공개 풀이/Graph/INDEX 완료는 아직 미완료이며 goal은 ACTIVE다. 추가 사용자 인증은 현재 없다.
+
 ## 2026-11-15 — 선택적 배점 재추출·같은 Item 후속 등록 후보 검증
 
 원본 run이 terminal이고 실제 Workflow/analysis/lease가 quiescent인 경우만 받는
