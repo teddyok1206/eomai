@@ -26,6 +26,11 @@ Material3 definition의 staging/compile 목록 누락을 발견했다. 비교 ga
 build의 기존 copy/compile/profile/schema 검사에3.0을 추가했다. 기존1/2도 계속 검사한다.
 정의 사본을 실제 copy block에서 읽고 compiler/admission과 대조하며, 새 Material3을 일부러
 누락하면 같은 installed 비교가 거절하는 회귀를 추가했다. 두 build 실패는 미설치 상태다.
+관련 release inventory·admission·wheel 검사97 PASS 후594dd7b6으로 재빌드했다. 최종
+`native-score-registration-api-build-r3-20261115.log`는 wheel RECORD 및 source-free installed
+OpenAPI/definition/admission/resource/CLI 검사 PASS다. frozen build는
+`/tmp/eom-api-build/594dd7b6feb3b2408248a484bd35429eefad99b6.iIkTaU`다. 빌드·검증만 했으며
+운영 설치·활성화·모델 실행·우리가 멈춘 Material 재개는 아직 하지 않았다.
 
 ## 2026-11-15 — 정확한 배점 등록·조회·설정 전환 후보 검증, 실제 활성화는 다음
 
