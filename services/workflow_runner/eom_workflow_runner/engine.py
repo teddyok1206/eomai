@@ -80,8 +80,12 @@ from eom_workflow.inference_transfer import (
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
-from eom_workflow.material_learning_prompt import MATERIAL_LEARNING_GUIDANCE
-from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
+from eom_workflow.material_learning_prompt import material_learning_guidance
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequest,
+    MaterialLearningWorkerRequestFamily,
+    MaterialLearningWorkerRequestV2,
+)
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
 )
@@ -363,7 +367,7 @@ def _prompt_name_for_request(
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | ExternalItemLearningWorkerRequest
-        | MaterialLearningWorkerRequest
+        | MaterialLearningWorkerRequestFamily
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
@@ -377,7 +381,9 @@ def _prompt_name_for_request(
         return "legacy-item-extraction"
     if worker_role == "support" and isinstance(request, ExternalItemLearningWorkerRequest):
         return "external-item-learning"
-    if worker_role == "support" and isinstance(request, MaterialLearningWorkerRequest):
+    if worker_role == "support" and isinstance(
+        request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+    ):
         return "material-learning"
     if worker_role == "support" and isinstance(
         request, LegacyItemEditorialCompatibilityWorkerRequest
@@ -424,7 +430,7 @@ class RoleJobExecutor(Protocol):
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
-            | MaterialLearningWorkerRequest
+            | MaterialLearningWorkerRequestFamily
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -479,7 +485,7 @@ class PlatformRoleJobExecutor:
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
-            | MaterialLearningWorkerRequest
+            | MaterialLearningWorkerRequestFamily
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -497,8 +503,8 @@ class PlatformRoleJobExecutor:
                 "agent step is missing role contract",
             )
         prompt_name = _prompt_name_for_request(worker_role=step.worker_role, request=request)
-        if isinstance(request, MaterialLearningWorkerRequest):
-            prompt_text = MATERIAL_LEARNING_GUIDANCE
+        if isinstance(request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)):
+            prompt_text = material_learning_guidance(request)
         if (
             prompt_text is None
             and isinstance(request, ExternalItemLearningWorkerRequest)
@@ -578,7 +584,7 @@ class PlatformRoleJobExecutor:
                     request=request,
                     publisher=self.creative_page_publisher,
                 )
-        if isinstance(request, MaterialLearningWorkerRequest):
+        if isinstance(request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)):
             with self.sessions() as session:
                 material_context = prepare_material_learning_execution_context(
                     session,

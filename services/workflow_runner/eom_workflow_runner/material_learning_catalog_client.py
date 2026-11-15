@@ -28,7 +28,11 @@ from eom_orchestrator.material_learning_execution import (
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.control_plane import ResolvedExecutionPlanV34
-from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequest,
+    MaterialLearningWorkerRequestFamily,
+    MaterialLearningWorkerRequestV2,
+)
 from eom_workflow.models import KnowledgeAnalysisWorkerRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -40,7 +44,7 @@ class CatalogMaterialLearningSourceReader:
     def __init__(
         self,
         selection: MaterialLearningAuthorizationRequest,
-        original: MaterialLearningWorkerRequest | KnowledgeAnalysisWorkerRequest,
+        original: MaterialLearningWorkerRequestFamily | KnowledgeAnalysisWorkerRequest,
         *,
         endpoint: ChatSocketEndpoint | None = None,
     ) -> None:
@@ -49,18 +53,20 @@ class CatalogMaterialLearningSourceReader:
         self.endpoint = endpoint
         input_sha = (
             original.work_input.input_sha256
-            if isinstance(original, MaterialLearningWorkerRequest)
+            if isinstance(
+                original, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+            )
             else original.analysis_request.request_sha256
         )
-        if not isinstance(original, MaterialLearningWorkerRequest) and not isinstance(
-            original.analysis_request, KnowledgeAnalysisRequestV12
-        ):
+        if not isinstance(
+            original, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+        ) and not isinstance(original.analysis_request, KnowledgeAnalysisRequestV12):
             raise ValueError("MATERIAL_LEARNING_AUTHORIZATION_PURPOSE_INVALID")
         if selection.input_sha256 != input_sha:
             raise ValueError("MATERIAL_LEARNING_AUTHORIZATION_INPUT_MISMATCH")
 
     def __call__(
-        self, request: MaterialLearningWorkerRequest | KnowledgeAnalysisWorkerRequest
+        self, request: MaterialLearningWorkerRequestFamily | KnowledgeAnalysisWorkerRequest
     ) -> None:
         try:
             if request != self.original:
@@ -141,7 +147,7 @@ def prepare_material_learning_execution_context(
     *,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    request: MaterialLearningWorkerRequest,
+    request: MaterialLearningWorkerRequestFamily,
     publisher: ControlFileSetPublisher,
 ) -> MaterialLearningExecutionContext:
     if step.workflow_id != workflow.workflow_id:

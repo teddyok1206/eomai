@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-visual-correction-prepared/1.0",
+  "title": "Read-only exact Native visual correction preparation; no canonical bytes copied",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "item_id",
+    "material_id",
+    "material_revision_id",
+    "source_task_id",
+    "source_lineage",
+    "native_binding",
+    "catalog",
+    "scope",
+    "base_content",
+    "image",
+    "corrected_content_sha256",
+    "corrected_content_bytes",
+    "preserved_components_sha256",
+    "prepared_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "material-native-visual-correction-prepared/1.0"
+    },
+    "command": {
+      "$ref": "eom://schemas/material-learning/native-visual-correction-command/1.0"
+    },
+    "item_id": {
+      "type": "string",
+      "pattern": "^item_[0-9a-f]{32}$"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "source_task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
+    "source_lineage": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "native_binding": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "catalog": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "scope": {
+      "$ref": "eom://schemas/material-learning/prepared/3.0#/$defs/questionScope"
+    },
+    "base_content": {
+      "$ref": "#/$defs/contentPointer"
+    },
+    "image": {
+      "$ref": "eom://schemas/item-registry/assessment-item-content-v1#/$defs/imageBlock"
+    },
+    "corrected_content_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "corrected_content_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2097152
+    },
+    "preserved_components_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "prepared_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "contentPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "assessment-item-content.json"
+        },
+        "schema_ref": {
+          "const": "eom.assessment.item-content/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

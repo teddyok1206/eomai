@@ -564,9 +564,14 @@ if [[ "${action}" == "material-learning-tests" ]]; then
     tests/integration/test_material_registered_base_recovery_storage.py \
     tests/integration/test_material_native_reference_recovery_storage.py \
     tests/integration/test_material_item_registration_storage.py \
+    tests/integration/test_material_coverage_registration_storage.py \
     tests/integration/test_material_native_registration_storage.py \
     tests/integration/test_material_native_graph_batch_storage.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
+  # This explicit same-logical upgrade leaves Material at ROLE1.39. Run it last;
+  # old bootstrap fixtures must never reset published current policy to ROLE1.37.
+  EOM_RUN_MATERIAL_COVERAGE_UPGRADE_TESTS=1 "${PYTHON}" -m pytest -q \
+    tests/integration/test_material_learning_coverage_controls_storage.py
   printf 'Disposable mixed-material learning persistence tests passed.\n'
   exit 0
 fi

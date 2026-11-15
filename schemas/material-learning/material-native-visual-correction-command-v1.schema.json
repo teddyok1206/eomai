@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-visual-correction-command/1.0",
+  "title": "Reviewed Native single-use image insertion command; no caller Artifact or path",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "actor_id",
+    "base_item_revision_id",
+    "base_item_manifest_sha256",
+    "expected_version",
+    "picture_use_id",
+    "insert_after_block_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "material-native-visual-correction-command/1.0"
+    },
+    "actor_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "base_item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "base_item_manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "expected_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "picture_use_id": {
+      "type": "string",
+      "pattern": "^officeobj_[0-9a-f]{32}$"
+    },
+    "insert_after_block_id": {
+      "type": "string",
+      "pattern": "^block_[a-z][a-z0-9_]{0,63}$"
+    }
+  }
+}

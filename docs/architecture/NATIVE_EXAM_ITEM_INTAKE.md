@@ -530,3 +530,81 @@ owner가 소유한다. 원본 use 최대2048개의 immutable map과 문항별 us
 이는 Hancom의 실제 화면과 pixel-golden 검증을 끝냈다는 뜻이 아니다. 현재 H2O의 PDF
 렌더 경로는 이 효과를 적용하지 않으므로 그 PDF를 흑백 효과의 정답으로 쓰지 않는다.
 원본 PNG와 편집 가능한 Native HWPX의 그림·효과 속성은 수정하지 않는다.
+
+## Native 그림의 표현 누락 — 후속 설계 (2026-11-15, 아직 미활성)
+
+첫 회차25개 실등록 대조에서 Native BODY picture use8개와 등록 PNG6개의 차이를
+발견했다. 공식 Artifact PNG와 실제 정본 body를 읽어 판정했다. 22번의 과학 도식은
+본문에서 빠졌고 거리·위치 정보가 다른 block에도 없다. 반면25번은 원 그림의 서열과
+박스 표시가 native equation으로 옮겨져 있다. 후자는 올바른 비이미지 표현이므로
+`selected == allowed`를 새 규칙으로 강제하지 않는다. 원문50개 Native 파일은 기존
+hash 그대로 보존됐으며, 기존 선택↔등록 감사 PASS를 모든 원그림의 의미 보존 PASS로
+확대 해석하지 않는다. 증거는 staging의 `native-body-22-25-{view-export,content-review}-20261114.json`
+및 `native-run5-all25-visuals-r3-20261114.jsonl`이다. 문항 내용·PNG는 Git에 복사하지 않는다.
+
+### 책임·정본·계약
+
+1. 책임은 기존 Material native source selection, ROLE 입력/수신, Material 등록 owner다.
+   새 queue·Graph·이미지 생성기·검색기를 만들지 않는다. 정본은 기존 원문/Native
+   document·split evidence·Office catalog와 승인된 Item revision이다.
+2. logical Item, Item revision, Artifact/member/hash는 그대로 분리한다. 기존 결과·task·
+   base·공개 풀이·Graph pin은 수정하지 않는다. 새 동작은 Native 전용 후속 계약에서만
+   활성화하며 Work1/ExtractionResult1/OfficeBindings1 및 ROLE1.37 bytes/readers는 보존한다.
+   ROLE1.38은 이미 다른 지식 분석 계약이 사용하므로 재사용하지 않는다.
+3. JSON Schema2020-12를 먼저 정의하는 작은 `material-native-visual-coverage/1.0`은
+   request의 exact Native scope와 결과의 block/binding을 연결한다. scope의 question/split/
+   catalog pointers, 원본 hash, 현재 actor 권한·lifecycle·schema/media/hash를 기존 owner에서
+   재검증한다. 모델이 선언한 권한이나 경로는 사용하지 않는다.
+4. scope의 각 picture use를 정확히 한 번 설명한다. `IMAGE`는 기존 source_image와
+   Office binding, `NATIVE_EQUATION`/`NATIVE_TABLE`은 실제 해당 block과 region, `NON_CONTENT`는
+   닫힌 제외 사유와 근거, `UNRESOLVED`는 기존 NEEDS_DECISION 경계에 연결한다. 이미지가
+   없는 경우도 원 native 수식/표의 동등 표현을 유지한다. per-use 기록은 완전성을
+   확인하는 receipt이지 수식·픽셀의 과학적 동등성을 자동 증명하는 점수가 아니다.
+5. 실제 transport는 기존 선언·commit 경계를 우선한다. 현재 Material ROLE1.37은
+   `output.learning_result`와 단일 result.json만 허용하므로 Pack만으로 임의 sidecar를
+   추가하지 않는다. 미래 Material request/result envelope2는 ROLE1.39·definition2·
+   resolved-plan40에서 typed scope/coverage를 싣고 기존 Work1/ExtractionResult1 및 단일
+   Artifact commit을 재사용한다. canonical/packaged resource inventory상 plan34–39도
+   이미 다른 계약이 사용하므로 class 정의가 없다는 이유로 덮어쓰지 않는다.
+   scope/coverage는 필수 nullable다. DISCOVER·비Native는 null, Native EXTRACT는 빈 그림
+   집합이어도 실제 scope와 빈 coverage를 전달한다. 새 receipt2/lineage2 및 필요한 Pack
+   successor만 추가하고 기존 JSON 저장 슬롯을 재사용한다. 관리자가 고른 모델·추론 깊이를
+   계승한 같은 `material-learning` 논리 프리셋의 새 revision을 정식 baseline으로 선택한다.
+   별도 Native 프리셋/GUI 카드를 만들지 않는다. 이 문구만으로 버전이나 Pack을 활성화하지 않는다.
+
+### 자료구조·트랜잭션·의존 방향
+
+6. 주 연산은 use/block key lookup, 중복·전체 집합 대조와 ordered body traversal이다.
+   use/block map과 ID set을 사용해 O(U+B), 공간 O(U+B)로 검증한다. U는 기존 문항별64개
+   한도다. 같은 PNG를 복제하거나 반복 parse/hash하지 않고 기존 canonical image pointer를
+   참조한다. block hash 등 작은 파생 값은 owner가 계산하며 모델에게 hash 산술을 맡기지 않는다.
+7. 계약/순수 closure 검증은 infrastructure를 import하지 않는다. Catalog는 현재 scope를
+   다시 해석하고 ROLE/Orchestrator가 검증한 결과만 기존 Artifact owner로 commit한다.
+   새 DB table/index/migration은 기본적으로 필요 없다. 입력 pin은 제출 전, 등록의
+   실제 권한·revision/CAS는 기존 transaction 안에서 확인한다.
+8. 누락·중복·다른 use/block·다른 catalog/hash는 명시적 기술 오류다. 알려진 task 오류는
+   기존 실패·retry 경계를 따르고 일반 source/hash/권한 오류를 숨기지 않는다. 불확실한
+   그림은 기존 보고서·conflict를 보존하고 NEEDS_DECISION으로 남긴다. 구 결과를 새 계약으로
+   재검증하거나 실패 이력을 성공으로 바꾸지 않는다.
+
+### 기존22번 복구와 검증
+
+9. 원 Native 파일·metadata·기존 보고서를 덮어쓰지 않는다. 실제 source PNG pointer 하나만
+   올바른 body 위치에 추가한 reviewed content를 기존 `StructuredItemContentImportService`로
+   같은 logical Item의 successor revision으로 만든다. 이미지 외 body/정답/해설/원본 pointers가
+   같음을 먼저 검증하고 expected revision/version과 기존 멱등 key를 사용한다. 25번은 수정하지 않는다.
+   실제 동시성 검사에서 동일 reviewed key의 manifest staging 충돌을 재현했으므로, 기존
+   reviewed import owner가 그 key의 advisory transaction lock으로 조회부터 Artifact/Registry
+   commit까지 직렬화한다. 새 table/queue/재시도 framework 없이 기존 unique key/CAS를 유지한다.
+10. 새 revision에는 fresh base/공개 풀이와 기존 공통 Graph publication이 필요하다.
+    old task에 새 Item pin을 강제로 쓰지 않는다. 필요한 좁은 native correction application은
+    기존 reviewed import·KnowledgeAnalysis·registered solution·Automatic/KnowledgeGraph publisher를
+    조합하고 정확한 old→new receipt를 남긴다. 실행 중인 run5는 자연 종료를 기다린다.
+    새 Graph membership/증분 INDEX 연결과 실제 조회를 확인하기 전에는 복구 완료가 아니다.
+    기존 approved-Item 분석은 canonical JSON을 읽는 경로다. 새 분석이 수정된 content/image
+    pointer를 참조한다는 사실을 모델이 PNG 픽셀까지 직접 검수했다는 증거로 확대하지 않는다.
+11. 검증은 누락/중복/다른 use, 잘못된 block type·region·hash, native equation 허용,
+    unresolved와 historical wire 재생, image-only diff, CAS/멱등 재전송 및 기존 pins 보존을
+    포함한다. state/concurrency 검사는 disposable DB에서만 한다. schema/Pydantic/wheel/실제
+    source 읽기·후속 revision·Graph/INDEX 인계를 구분한다. 전체900파일 재생성, PDF crop,
+    GUI만의 가짜 그림 overlay, old revision 덮어쓰기, 모든 그림 강제 raster화는 채택하지 않는다.

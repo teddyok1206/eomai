@@ -362,6 +362,20 @@ run에 한정하며 성공 task의 기존 pins를 상속한다. 설계는
 `test_material_native_visual_work.py`, `test_material_native_visual_authorization.py`를 본다.
 이 문맥은 코드 탐색용이며 운영 활성화나 실제 그림 검수의 증거가 아니다.
 
+후속 Native visual coverage는 별도 Root ROLE1.39/result2 envelope에서만 받는다.
+[완료 결과 reader](../../services/catalog_service/eom_catalog_service/material_task_results.py)는
+저장된 실제 job request와 그 실행 계획을 함께 읽어 범위·coverage를
+검사하며, 역사 ROLE1.37/result1을 새 계약으로 재해석하지 않는다. 작은 receipt/lineage는
+[receipt](../../packages/catalog_contracts/eom_catalog_contracts/material_learning_role_receipt.py)와
+[lineage](../../packages/catalog_contracts/eom_catalog_contracts/material_item_lineage.py)의 명시적
+1/2 parser로 읽고, 전체 Root 결과 Artifact hash가 coverage를 묶는다. lineage의
+`result_sha256`는 이전처럼 내부 learning result의 hash다. `material_item_registration.py`는
+Root1의 generic/native Pack1.0/1.1과 Root2의 Pack1.2/1.3을 정확히 구분한다. metadata1/2와
+native binding1은 그대로이며 새 lineage2 포인터는 새 결과에만 생성한다.
+[순수 coverage validator](../../packages/catalog_contracts/eom_catalog_contracts/material_native_visual_coverage.py)는
+선언·블록·원본 범위의 closure를 검사하며 과학적 의미의 동일성을 보증하지 않는다.
+후보 구현과 실제 Runner/Pack/서비스 활성화는 설계·릴리스 기록에서 별도로 확인한다.
+
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`

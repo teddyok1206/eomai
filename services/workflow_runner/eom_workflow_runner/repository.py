@@ -45,7 +45,12 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
-from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkflowRequest,
+    MaterialLearningWorkflowRequestFamily,
+    MaterialLearningWorkflowRequestV2,
+    parse_material_learning_workflow_request,
+)
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
 )
@@ -725,7 +730,7 @@ def workflow_business_fingerprint(
 def workflow_request_storage_document(
     request: (
         WorkflowRequest
-        | MaterialLearningWorkflowRequest
+        | MaterialLearningWorkflowRequestFamily
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -733,7 +738,7 @@ def workflow_request_storage_document(
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
-    if isinstance(request, MaterialLearningWorkflowRequest):
+    if isinstance(request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)):
         return request.model_dump(mode="json")
     if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
         return parse_supported_private_chat_query_workflow_request(request).model_dump(mode="json")
@@ -775,11 +780,11 @@ def workflow_request_storage_document(
 
 def load_persisted_workflow_request(
     document: dict[str, Any],
-) -> WorkflowRequest | MaterialLearningWorkflowRequest:
+) -> WorkflowRequest | MaterialLearningWorkflowRequestFamily:
     """Load persisted requests, repairing only the verified legacy null-omission defect."""
     normalized = dict(document)
     if normalized.get("request_name") == "MATERIAL_LEARNING_REQUEST":
-        return MaterialLearningWorkflowRequest.model_validate(normalized)
+        return parse_material_learning_workflow_request(normalized)
     analysis = normalized.get("analysis_request")
     if (
         normalized.get("request_name") == "KNOWLEDGE_ANALYSIS_REQUEST"
@@ -1093,7 +1098,7 @@ def create_workflow_instance(
     definition: WorkflowDefinitionRecord,
     request: (
         WorkflowRequest
-        | MaterialLearningWorkflowRequest
+        | MaterialLearningWorkflowRequestFamily
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1115,7 +1120,9 @@ def create_workflow_instance(
     external_item_learning_authorizer: ExternalItemLearningSourceAuthorizer | None = None,
     material_learning_authorizer: MaterialLearningSourceAuthorizer | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
-    is_material = isinstance(request, MaterialLearningWorkflowRequest)
+    is_material = isinstance(
+        request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
+    )
     if is_material or definition.definition_key == MATERIAL_LEARNING_WORKFLOW_KEY:
         if (
             not is_material
@@ -1141,7 +1148,9 @@ def create_workflow_instance(
                 WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
                 "material learning requires only its source owner and exact purpose",
             )
-        assert isinstance(request, MaterialLearningWorkflowRequest)
+        assert isinstance(
+            request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
+        )
         checked_material = validate_material_learning_submission(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
@@ -1184,7 +1193,9 @@ def create_workflow_instance(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
             "material source authority cannot admit another Workflow purpose",
         )
-    assert not isinstance(request, MaterialLearningWorkflowRequest)
+    assert not isinstance(
+        request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
+    )
     is_creative = (
         isinstance(request, WorkflowRequest)
         and getattr(request, "request_name", None) == "EXTERNAL_ITEM_LEARNING_REQUEST"
@@ -1520,7 +1531,7 @@ def _persist_workflow_instance(
     definition: WorkflowDefinitionRecord,
     request: (
         WorkflowRequest
-        | MaterialLearningWorkflowRequest
+        | MaterialLearningWorkflowRequestFamily
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1550,7 +1561,9 @@ def _persist_workflow_instance(
     else:
         request_hash = (
             material_learning_fingerprint(definition, request, operator_id=actor_id)
-            if isinstance(request, MaterialLearningWorkflowRequest)
+            if isinstance(
+                request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
+            )
             else external_item_learning_fingerprint(definition, request, operator_id=actor_id)
             if isinstance(request, WorkflowRequest)
             and request.request_name == "EXTERNAL_ITEM_LEARNING_REQUEST"

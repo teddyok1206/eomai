@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v40": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v40.schema.json",
+            "resources/control-plane/resolved-execution-plan-v40.schema.json",
+            "40.0",
+            "sha256:7b181ed22687d8e6bb31a6abc6e44a785cf6d871850b524d2552d62c3144a960",
+        ),
         "resolved-execution-plan-v35": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v35.schema.json",
             "resources/control-plane/resolved-execution-plan-v35.schema.json",
@@ -976,6 +982,7 @@ def _control_schema_registry() -> Registry[Any]:
     for name in (
         "educational-document-knowledge-source-v5",
         "material-learning-types-v1",
+        "material-learning-prepared-v3",
         "material-learning-discovery-work-v1",
         "material-learning-extraction-work-v1",
         "knowledge-types",

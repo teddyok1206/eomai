@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/native-visual-correction-result/1.0",
+  "title": "Reviewed Native visual correction immutable old-to-new revision receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "prepared",
+    "item_revision_id",
+    "item_manifest_sha256",
+    "resource_version",
+    "content",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "material-native-visual-correction-result/1.0"
+    },
+    "state": {
+      "const": "IMPORTED"
+    },
+    "prepared": {
+      "$ref": "eom://schemas/material-learning/native-visual-correction-prepared/1.0"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "item_manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resource_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content": {
+      "$ref": "eom://schemas/material-learning/native-visual-correction-prepared/1.0#/$defs/contentPointer"
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -41,7 +41,7 @@
     {
       "id": "item-db-graph",
       "note": "item-db-graph.md",
-      "keywords": ["DB", "Map", "Layer", "창작", "외부", "자료 학습", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage", "Excel", "표준 엑셀 가져오기", "native HWPX", "문항 정보 엑셀", "PREPARE 복구", "CMYK", "Prepared3", "문항별 그림 범위", "signed scale", "BLACK_WHITE", "native subtree"],
+      "keywords": ["DB", "Map", "Layer", "창작", "외부", "자료 학습", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage", "Excel", "표준 엑셀 가져오기", "native HWPX", "문항 정보 엑셀", "PREPARE 복구", "CMYK", "Prepared3", "문항별 그림 범위", "signed scale", "BLACK_WHITE", "native subtree", "native visual coverage", "ROLE1.39", "Lineage2"],
       "source_paths": [
         "apps/application_api/eom_api/routers/item_db.py",
         "apps/application_api/eom_api/services/external_item_db_read.py",
@@ -87,6 +87,10 @@
       "test_paths": [
         "tests/unit/test_creative_item_graph_learning.py",
         "tests/unit/test_material_native_preparation.py",
+        "tests/unit/test_material_task_results.py",
+        "tests/unit/test_material_item_registration_versions.py",
+        "tests/unit/test_material_result_pointer_successors.py",
+        "tests/unit/test_material_native_visual_coverage.py",
         "tests/unit/test_material_native_publication.py",
         "tests/unit/test_material_native_question_batch.py",
         "tests/unit/test_material_native_visual_prepared_read.py",

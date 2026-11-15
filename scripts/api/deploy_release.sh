@@ -1855,7 +1855,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     for name in (
         "external-item-learning.v1.yaml", "external-item-learning.v2.yaml",
         "external-item-learning.v3.yaml",
-        "material-learning.v1.yaml",
+        "material-learning.v1.yaml", "material-learning.v2.yaml",
     ):
         (root / name).write_bytes(
             (Path(os.environ["REPOSITORY_ROOT"]) / "config/workflows" / name).read_bytes()
@@ -2045,6 +2045,7 @@ from eom_api_contracts import (
 from eom_api.build_info import get_build_info
 from eom_workflow.compiler import compile_definition
 from eom_workflow.definition_execution_protocol import definition_execution_protocol
+from eom_workflow.material_learning_request import material_learning_contract_for_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
@@ -2070,6 +2071,7 @@ creative_definition = Path(legacy_definition).with_name("external-item-learning.
 creative_source_definition = Path(legacy_definition).with_name("external-item-learning.v2.yaml")
 creative_office_definition = Path(legacy_definition).with_name("external-item-learning.v3.yaml")
 material_definition = Path(legacy_definition).with_name("material-learning.v1.yaml")
+material_coverage_definition = Path(legacy_definition).with_name("material-learning.v2.yaml")
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -2286,6 +2288,8 @@ load_role_input_schema("support", "workflow-role/1.36.0")
 load_codex_result_schema("external-item-learning-result@3.0")
 load_role_input_schema("support", "workflow-role/1.37.0")
 load_codex_result_schema("material-learning-result@1.0")
+load_role_input_schema("support", "workflow-role/1.39.0")
+load_codex_result_schema("material-learning-result@2.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("support", "workflow-role/1.29.0")
 load_role_input_schema("support", "workflow-role/1.30.0")
@@ -2406,6 +2410,17 @@ if (
     or customer_support.definition_version != "1.0.0"
 ):
     raise SystemExit("customer-support workflow definition mismatch")
+for path, version in ((material_definition, "1.0.0"), (material_coverage_definition, "2.0.0")):
+    material = compile_definition(path, {"support"}).definition
+    profile = material_learning_contract_for_definition(version)
+    agent = next(step for step in material.steps if isinstance(step, AgentStep))
+    if (
+        material.definition_key != "material-learning"
+        or material.definition_version != profile.definition_version
+        or agent.result_schema != profile.result_schema
+        or definition_execution_protocol(material) != profile.role_protocol
+    ):
+        raise SystemExit("material learning workflow profile mismatch")
 pdf_document_reviews = tuple(
     compile_definition(Path(path), {"support"}).definition
     for path in (
@@ -2450,6 +2465,7 @@ admitted_definitions = (
     compile_definition(creative_source_definition, {"support"}),
     compile_definition(creative_office_definition, {"support"}),
     compile_definition(material_definition, {"support"}),
+    compile_definition(material_coverage_definition, {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),

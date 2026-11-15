@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 from eom_catalog_contracts import AssessmentItemContent
 from eom_catalog_service.artifacts import CatalogArtifact
@@ -145,7 +147,9 @@ def test_reviewed_import_preserves_base_pointers_and_replaces_only_item_content(
     session = FakeSession(values)
     service = object.__new__(StructuredItemContentImportService)
     service.settings = _settings(tmp_path)
-    service.sessions = lambda: session
+    guard = Mock()
+    service.sessions = Mock(return_value=session)
+    service.sessions.begin.return_value = nullcontext(guard)
     artifacts = FakeArtifacts()
     registry = FakeRegistry()
     service.artifacts = artifacts
@@ -180,3 +184,10 @@ def test_reviewed_import_preserves_base_pointers_and_replaces_only_item_content(
     assert content_pointer.artifact_revision_id == "rev_" + "3" * 32
     assert content_pointer.metadata["base_revision_id"] == base_revision_id
     assert len(request.registration_key) <= 200  # type: ignore[attr-defined]
+    guard.execute.assert_called_once()
+    statement = guard.execute.call_args.args[0]
+    assert "pg_advisory_xact_lock" in str(statement)
+    assert statement.compile().params == {
+        "hashtextextended_1": request.registration_key,  # type: ignore[attr-defined]
+        "hashtextextended_2": 0,
+    }

@@ -16,6 +16,7 @@ from eom_catalog_contracts.material_learning_authorization import (
 )
 from eom_catalog_contracts.material_native_files import MaterialNativeItemBinding
 from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeVisualPreparationProfile,
     MaterialNativeVisualPreparedArtifact,
 )
 from eom_catalog_contracts.material_native_visual_work import (
@@ -196,6 +197,12 @@ def changed_observation(resolved, *, ids=None, catalog_sha=None, no_bindings=Fal
     return replace(resolved, role=MaterialLearningRoleResult.model_validate(role_body))
 
 
+def changed_current_profile(case, **updates):
+    value = case.prepared.visual_profile.model_dump(mode="json")
+    value.update(updates)
+    return MaterialNativeVisualPreparationProfile.model_validate(rehash(value, "profile_sha256"))
+
+
 @pytest.mark.parametrize("missing", ["task", "run"])
 @pytest.mark.parametrize("adapter", [False, True])
 def test_missing_actual_task_or_run_never_becomes_a_legacy_fallback(monkeypatch, missing, adapter):
@@ -223,8 +230,8 @@ def test_real_legacy_run_is_not_retrospectively_reinterpreted(monkeypatch, adapt
 def test_native3_requires_the_actual_visual_preparation_adapter_profile(monkeypatch, case_name):
     case = registration_case(monkeypatch, adapter=case_name != "no_adapter")
     if case_name == "profile_changed":
-        case.service.native_visuals.profile = case.prepared.visual_profile.model_copy(
-            update={"source_commit": "f" * 40}
+        case.service.native_visuals.profile = changed_current_profile(
+            case, office_tool_source_commit="f" * 40
         )
     with pytest.raises(ValueError, match="PREPARATION_PROFILE_STALE"):
         case.service._verify_native_visual_scope(
@@ -234,12 +241,68 @@ def test_native3_requires_the_actual_visual_preparation_adapter_profile(monkeypa
     case.service.registry.register.assert_not_called()
 
 
+def test_new_runtime_source_replays_exact_historical_prepared3_without_relabeling_it(monkeypatch):
+    case = registration_case(monkeypatch)
+    original = canonical_json_bytes(case.prepared.model_dump(mode="json"))
+    case.service.native_visuals.profile = changed_current_profile(case, source_commit="f" * 40)
+    assert (
+        case.service.native_visuals.profile.profile_sha256
+        != case.prepared.visual_profile.profile_sha256
+    )
+    case.service._verify_native_visual_scope(case.resolved, case.native, authorize=case.authorize)
+    case.service.native_visuals.question_scope.assert_called_once()
+    assert canonical_json_bytes(case.prepared.model_dump(mode="json")) == original
+    assert case.service.native_visuals.question_scope.call_args.args == (case.native.question,)
+    assert case.authorize.call_count == 2
+    case.service.registry.register.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("office_tool_source_commit", "f" * 40),
+        ("parser_implementation_sha256", "sha256:" + "f" * 64),
+        ("options_sha256", "sha256:" + "f" * 64),
+    ],
+)
+def test_historical_replay_does_not_accept_a_changed_tool_parser_or_options(
+    monkeypatch, field, value
+):
+    case = registration_case(monkeypatch)
+    case.service.native_visuals.profile = changed_current_profile(
+        case, source_commit="f" * 40, **{field: value}
+    )
+    with pytest.raises(ValueError, match="PREPARATION_PROFILE_STALE"):
+        case.service._verify_native_visual_scope(
+            case.resolved, case.native, authorize=case.authorize
+        )
+    case.service._read.assert_not_called()
+    case.service.native_visuals.question_scope.assert_not_called()
+
+
+def test_replay_never_accepts_a_self_hash_invalid_current_profile(monkeypatch):
+    case = registration_case(monkeypatch)
+    case.service.native_visuals.profile = case.prepared.visual_profile.model_copy(
+        update={"profile_sha256": "sha256:" + "f" * 64}
+    )
+    with pytest.raises(ValueError, match="PROFILE_HASH_MISMATCH"):
+        case.service._verify_native_visual_scope(
+            case.resolved, case.native, authorize=case.authorize
+        )
+    case.service.native_visuals.question_scope.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "field",
     ["allowed_picture_use_ids", "question_document", "split_evidence", "source_catalog_sha256"],
 )
-def test_native_recomputed_scope_must_equal_stored_scope_before_registry_commit(monkeypatch, field):
+@pytest.mark.parametrize("new_runtime", [False, True])
+def test_native_recomputed_scope_must_equal_stored_scope_before_registry_commit(
+    monkeypatch, field, new_runtime
+):
     case = registration_case(monkeypatch)
+    if new_runtime:
+        case.service.native_visuals.profile = changed_current_profile(case, source_commit="f" * 40)
     actual = case.scope.model_dump(mode="json")
     if field == "allowed_picture_use_ids":
         actual[field] = []

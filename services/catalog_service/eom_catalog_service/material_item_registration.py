@@ -14,10 +14,14 @@ from eom_catalog_contracts.assessment_item import (
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.material_item_lineage import (
     MATERIAL_ITEM_LINEAGE_REF,
+    MATERIAL_ITEM_LINEAGE_V2_REF,
     MATERIAL_ITEM_PACK,
     MATERIAL_ITEM_TYPE,
     MaterialItemLineage,
+    MaterialItemLineageFamily,
+    MaterialItemLineageV2,
     material_item_registration_key,
+    parse_material_item_lineage,
 )
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
@@ -28,6 +32,9 @@ from eom_catalog_contracts.material_native_files import (
     MATERIAL_NATIVE_BINDING_REF,
     MaterialNativeItemBinding,
     material_native_registration_key,
+)
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeVisualPreparationProfile,
 )
 from eom_catalog_contracts.material_native_visual_selection import (
     validate_material_native_visual_bindings,
@@ -43,6 +50,7 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.material_source_visual_publication import publish_material_pdf_visuals
 from eom_orchestrator.office_picture_use_publication import resolve_material_office_source_images
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_workflow.models import MaterialLearningRoleResultV2
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
@@ -95,7 +103,7 @@ class RegisteredMaterialItem:
     item_id: str
     item_revision_id: str
     content_sha256: str
-    lineage: MaterialItemLineage
+    lineage: MaterialItemLineageFamily
     created: bool
 
 
@@ -108,6 +116,8 @@ class MaterialItemRegistrationService:
         *,
         content_pack_release_id: str,
         native_content_pack_release_id: str | None = None,
+        coverage_content_pack_release_id: str | None = None,
+        native_coverage_content_pack_release_id: str | None = None,
         publisher: ControlFileSetPublisher,
         source_commit: str,
         settings: CatalogSettings | None = None,
@@ -117,12 +127,22 @@ class MaterialItemRegistrationService:
         self.settings = settings or CatalogSettings.from_environment()
         self.pack_release_id = content_pack_release_id
         self.native_pack_release_id = native_content_pack_release_id
+        self.coverage_pack_release_id = coverage_content_pack_release_id
+        self.native_coverage_pack_release_id = native_coverage_content_pack_release_id
         self.publisher, self.source_commit = publisher, source_commit
         self.artifacts = CatalogArtifactService(engine, self.settings)
         self.registry = RegistryService(engine, self.settings)
         self.sources = CatalogMaterialLearningSourceAuthorizer(engine, self.settings)
         self.pack_resources = PackResourceResolver()
         self.native_visuals = native_visuals
+
+    def _selected_pack_release_id(
+        self, resolved: ResolvedMaterialTask, native: MaterialNativeItemBinding | None
+    ) -> str | None:
+        """Keep historical registrations replayable; a missing successor is not a fallback."""
+        if isinstance(resolved.role, MaterialLearningRoleResultV2):
+            return self.native_coverage_pack_release_id if native else self.coverage_pack_release_id
+        return self.native_pack_release_id if native else self.pack_release_id
 
     def _authorize(
         self,
@@ -131,13 +151,18 @@ class MaterialItemRegistrationService:
         native: MaterialNativeItemBinding | None = None,
     ) -> None:
         self.sources.reauthorize(session, operator_id=resolved.operator_id, work=resolved.work)
-        pack_id = self.native_pack_release_id if native else self.pack_release_id
+        pack_id = self._selected_pack_release_id(resolved, native)
         release = (
             session.get(ContentPackReleaseRecord, pack_id, populate_existing=True)
             if pack_id
             else None
         )
         logical = session.get(ContentPackRecord, release.content_pack_id) if release else None
+        expected_version = (
+            ("1.3.0" if native else "1.2.0")
+            if isinstance(resolved.role, MaterialLearningRoleResultV2)
+            else ("1.1.0" if native else "1.0.0")
+        )
         if (
             PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT
             not in effective_permissions(session, resolved.operator_id)
@@ -145,7 +170,7 @@ class MaterialItemRegistrationService:
             or release.state != "RELEASED"
             or logical is None
             or logical.pack_key != MATERIAL_ITEM_PACK
-            or release.version != ("1.1.0" if native else "1.0.0")
+            or release.version != expected_version
         ):
             raise ValueError("MATERIAL_ITEM_REGISTRATION_NOT_AUTHORIZED")
         if native is not None:
@@ -241,6 +266,11 @@ class MaterialItemRegistrationService:
                 )
             content = self._prepare_content(current)
             lineage = material_item_lineage(current, content)
+            lineage_ref = (
+                MATERIAL_ITEM_LINEAGE_V2_REF
+                if isinstance(lineage, MaterialItemLineageV2)
+                else MATERIAL_ITEM_LINEAGE_REF
+            )
             staged, digest = stage_registry_item_content(
                 self.settings, content.content.model_dump(mode="json")
             )
@@ -266,7 +296,7 @@ class MaterialItemRegistrationService:
                 self.settings,
                 lineage,
                 member_path="lineage.json",
-                schema_ref=MATERIAL_ITEM_LINEAGE_REF,
+                schema_ref=lineage_ref,
                 artifact_type="material-item-lineage",
                 idempotency_key="material-lineage:" + lineage.lineage_sha256[7:],
             )
@@ -309,7 +339,7 @@ class MaterialItemRegistrationService:
                     mode="json"
                 )
             self._authorize(guard, current, native)
-            selected_pack_id = self.native_pack_release_id if native else self.pack_release_id
+            selected_pack_id = self._selected_pack_release_id(current, native)
             assert selected_pack_id is not None
             registered = self.registry.register(
                 RegistrationRequest(
@@ -318,7 +348,11 @@ class MaterialItemRegistrationService:
                     content_pack_release_id=selected_pack_id,
                     workflow_id=current.selection.workflow_id,
                     workflow_definition_key="material-learning",
-                    workflow_definition_version="1.0.0",
+                    workflow_definition_version=(
+                        "2.0.0"
+                        if isinstance(current.role, MaterialLearningRoleResultV2)
+                        else "1.0.0"
+                    ),
                     source_workflow_step_run_id=current.selection.step_run_id,
                     source_intake_batch_ids=(),
                     item_type_key=MATERIAL_ITEM_TYPE,
@@ -342,7 +376,7 @@ class MaterialItemRegistrationService:
                         ComponentPointer(
                             component_type="SOURCE_REFERENCE",
                             ordinal=0,
-                            schema_ref=MATERIAL_ITEM_LINEAGE_REF,
+                            schema_ref=lineage_ref,
                             media_type="application/json",
                             artifact_id=source.artifact_id,
                             artifact_revision_id=source.artifact_revision_id,
@@ -405,7 +439,18 @@ class MaterialItemRegistrationService:
             )
         if prepared is None:
             return  # Historical V1/V2 inputs are not retrospectively reinterpreted.
-        if self.native_visuals is None or prepared.visual_profile != self.native_visuals.profile:
+        if self.native_visuals is None:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_PROFILE_STALE")
+        recorded, current = (
+            MaterialNativeVisualPreparationProfile.model_validate(profile.model_dump(mode="json"))
+            for profile in (prepared.visual_profile, self.native_visuals.profile)
+        )
+        # A compatible SDK release does not replace the historical producer pin.
+        # Tool/parser/options must still match; the native scope is independently
+        # recomputed below, so differing runtime source is not a visual authority.
+        if recorded.model_dump(exclude={"source_commit", "profile_sha256"}) != current.model_dump(
+            exclude={"source_commit", "profile_sha256"}
+        ):
             raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_PROFILE_STALE")
         assert isinstance(resolved.work, MaterialExtractionWork)
         scope = material_native_question_visual_scope(
@@ -490,7 +535,7 @@ class MaterialItemRegistrationService:
         revision: ItemRevisionRecord,
         resolved: ResolvedMaterialTask,
         native: MaterialNativeItemBinding | None = None,
-    ) -> MaterialItemLineage:
+    ) -> MaterialItemLineageFamily:
         rows = tuple(
             session.scalars(
                 select(ItemComponentRecord).where(
@@ -501,6 +546,11 @@ class MaterialItemRegistrationService:
         components = {(row.component_type, row.ordinal): row for row in rows}
         item = session.get(ItemRecord, revision.item_id, populate_existing=True)
         source = components.get(("SOURCE_REFERENCE", 0))
+        lineage_ref = (
+            MATERIAL_ITEM_LINEAGE_V2_REF
+            if isinstance(resolved.role, MaterialLearningRoleResultV2)
+            else MATERIAL_ITEM_LINEAGE_REF
+        )
         if (
             len(rows) != (6 if native else 3)
             or set(components)
@@ -515,20 +565,21 @@ class MaterialItemRegistrationService:
             or source is None
             or revision.workflow_id != resolved.selection.workflow_id
             or revision.source_workflow_step_run_id != resolved.selection.step_run_id
-            or source.schema_ref != MATERIAL_ITEM_LINEAGE_REF
-            or revision.content_pack_release_id
-            != (self.native_pack_release_id if native else self.pack_release_id)
+            or source.schema_ref != lineage_ref
+            or revision.content_pack_release_id != self._selected_pack_release_id(resolved, native)
         ):
             raise ValueError("MATERIAL_ITEM_REGISTRATION_REPLAY_CONFLICT")
-        lineage = MaterialItemLineage.model_validate_json(
-            self.artifacts.read_member(
-                artifact_id=source.artifact_id,
-                revision_id=source.artifact_revision_id,
-                member_path=source.logical_name,
-                sha256=source.sha256,
-                schema_ref=source.schema_ref,
-                media_type="application/json",
-                max_bytes=64 * 1024,
+        lineage = parse_material_item_lineage(
+            json.loads(
+                self.artifacts.read_member(
+                    artifact_id=source.artifact_id,
+                    revision_id=source.artifact_revision_id,
+                    member_path=source.logical_name,
+                    sha256=source.sha256,
+                    schema_ref=source.schema_ref,
+                    media_type="application/json",
+                    max_bytes=64 * 1024,
+                )
             )
         )
         content, report = components[("ITEM_CONTENT", 0)], components[("REVIEW_REPORT", 0)]
@@ -568,12 +619,21 @@ class MaterialItemRegistrationService:
 
 def material_item_lineage(
     resolved: ResolvedMaterialTask, content: CreativeSourceContent
-) -> MaterialItemLineage:
+) -> MaterialItemLineageFamily:
     work = resolved.work
     if not isinstance(work, MaterialExtractionWork):
         raise ValueError("MATERIAL_ITEM_QUESTION_TASK_REQUIRED")
+    model = (
+        MaterialItemLineageV2
+        if isinstance(resolved.role, MaterialLearningRoleResultV2)
+        else MaterialItemLineage
+    )
     value = dict(
-        schema_version="material-learning-item-lineage/1.0",
+        schema_version=(
+            "material-learning-item-lineage/2.0"
+            if model is MaterialItemLineageV2
+            else "material-learning-item-lineage/1.0"
+        ),
         material_id=work.material_id,
         material_revision_id=work.material_revision_id,
         task_id=resolved.task_id,
@@ -591,4 +651,4 @@ def material_item_lineage(
         requested_by=resolved.operator_id,
         created_at=resolved.role.completed_at.isoformat().replace("+00:00", "Z"),
     )
-    return MaterialItemLineage.model_validate({**value, "lineage_sha256": content_sha256(value)})
+    return model.model_validate({**value, "lineage_sha256": content_sha256(value)})

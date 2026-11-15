@@ -1235,3 +1235,308 @@ def test_native_finalization_transaction_interruption_has_no_partial_successor(
         )
     result = case.service.recover(case.command)
     assert not result.replayed and case.service.recover(case.command).replayed
+
+
+@pytest.fixture
+def native_visual_correction_case(creative_engine, native_read_case, tmp_path, monkeypatch):
+    """Real six-component Item/Artifact/rights/read/import; source-pixel qualification is a port.
+
+    Like this module's original registration fixture, completed AI/source preparation
+    is synthetic. No model or real Hancom parser runs. The reviewed-import owner,
+    Registry CAS/unique keys, stored components, canonical bytes and Native read are real.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from eom_catalog_contracts import ImageBlock
+    from eom_catalog_contracts.creative_source_visuals import CREATIVE_SOURCE_VISUAL_IMAGE_REF
+    from eom_catalog_contracts.material_native_files import MaterialImportedNativeItemMetadata
+    from eom_catalog_contracts.material_native_visual_correction import (
+        MaterialNativeVisualCorrectionCommand,
+        MaterialNativeVisualCorrectionPrepared,
+        native_visual_correction_block_id,
+    )
+    from eom_catalog_contracts.material_native_visual_preparation import (
+        MaterialNativeQuestionVisualScope,
+    )
+    from eom_catalog_service.material_learning_artifacts import pin_material_primary
+    from eom_catalog_service.material_native_visual_correction import (
+        MaterialNativeVisualCorrectionService,
+        insert_native_visual_image,
+    )
+    from eom_identifiers import canonical_json_bytes
+    from eom_protocol.artifact_members import ArtifactMemberPointer
+
+    from tests.unit.test_material_native_visual_preparation_service import _real_catalog
+
+    create, resolved, binding = native_read_case
+    registration = create()
+    original = registration.register_completed(
+        task_id=resolved.task_id, operator_id=resolved.operator_id
+    )
+    catalog, payloads = _real_catalog(binding.question.original_source_sha256)
+    files, metadata, hashes = {}, {}, {}
+    for member, payload in payloads.items():
+        path = tmp_path / ("correction-" + member.replace("/", "-"))
+        path.write_bytes(payload)
+        files[member] = path
+        is_catalog = member == "picture-use-catalog.json"
+        metadata[member] = dict(
+            schema_ref="eom://schemas/image-provider/office-picture-use-catalog/1.0"
+            if is_catalog
+            else CREATIVE_SOURCE_VISUAL_IMAGE_REF,
+            media_type="application/json" if is_catalog else "image/png",
+        )
+        hashes[member] = sha256_bytes(payload)
+    published = registration.artifacts.commit_file_set(
+        files=files,
+        primary_file="picture-use-catalog.json",
+        artifact_type="office-picture-use-catalog",
+        idempotency_key="native-correction-pixels:" + uuid4().hex,
+        request={"synthetic_source_qualification": True},
+        result={"synthetic_source_qualification": True},
+        file_metadata=metadata,
+        expected_file_sha256=hashes,
+    )
+
+    def pointer(member):
+        from eom_catalog_contracts.material_learning import MaterialArtifactMember
+
+        return MaterialArtifactMember(
+            artifact_id=published.artifact_id,
+            artifact_revision_id=published.revision_id,
+            member_path=member,
+            **metadata[member],
+            sha256=hashes[member],
+            bytes=len(payloads[member]),
+        )
+
+    canonical = registration.registry.load_item_content(original.item_revision_id)
+    with Session(creative_engine) as session:
+        original_row = session.get(ItemRevisionRecord, original.item_revision_id)
+        original_manifest_sha256 = original_row.manifest_sha256
+        original_version = original_row.lock_version
+    view = catalog.rendered_uses[0]
+    catalog_pointer = pointer("picture-use-catalog.json")
+    command = MaterialNativeVisualCorrectionCommand(
+        actor_id=resolved.operator_id,
+        base_item_revision_id=original.item_revision_id,
+        base_item_manifest_sha256=original_manifest_sha256,
+        expected_version=original_version,
+        picture_use_id=catalog.picture_uses[0].use_id,
+        insert_after_block_id=canonical.body[0].block_id,
+    )
+    image = ImageBlock(
+        block_id=native_visual_correction_block_id(command.picture_use_id),
+        purpose="stimulus",
+        artifact=dict(
+            artifact_id=published.artifact_id,
+            artifact_revision_id=published.revision_id,
+            artifact_member=view.member_path,
+            sha256=view.sha256,
+            media_type="image/png",
+        ),
+        alt_text="Synthetic source-only test picture",
+        width_px=view.width_px,
+        height_px=view.height_px,
+    )
+    corrected = insert_native_visual_image(
+        canonical, image=image, insert_after_block_id=command.insert_after_block_id
+    )
+    service = MaterialNativeVisualCorrectionService(
+        creative_engine,
+        native_visuals=Mock(),
+        settings=registration.settings,
+    )
+    with Session(creative_engine) as session:
+        row = session.get(ItemRevisionRecord, original.item_revision_id)
+        components = service._components(session, original.item_revision_id)
+        indexed = {(c.component_type, c.ordinal): c for c in components}
+        lineage = pin_material_primary(
+            session,
+            ArtifactMemberPointer(
+                **{
+                    key: getattr(indexed["SOURCE_REFERENCE", 0], key)
+                    for key in (
+                        "artifact_id",
+                        "artifact_revision_id",
+                        "schema_ref",
+                        "media_type",
+                        "sha256",
+                    )
+                },
+                member_path=indexed["SOURCE_REFERENCE", 0].logical_name,
+            ),
+        ).pointer
+        source_metadata = MaterialImportedNativeItemMetadata.model_validate(row.metadata_json)
+    body = dict(
+        schema_version="material-native-visual-correction-prepared/1.0",
+        command=command.model_dump(mode="json"),
+        item_id=original.item_id,
+        material_id=source_metadata.material_id,
+        material_revision_id=source_metadata.material_revision_id,
+        source_task_id=resolved.task_id,
+        source_lineage=lineage.model_dump(mode="json"),
+        native_binding=source_metadata.native_binding.model_dump(mode="json"),
+        catalog=catalog_pointer.model_dump(mode="json"),
+        scope=MaterialNativeQuestionVisualScope(
+            item_number=1,
+            question_document=binding.question.document,
+            split_evidence=binding.question.split_evidence,
+            source_catalog_sha256=catalog_pointer.sha256,
+            allowed_picture_use_ids=(command.picture_use_id,),
+        ).model_dump(mode="json"),
+        base_content=ArtifactMemberPointer(
+            artifact_id=indexed["ITEM_CONTENT", 0].artifact_id,
+            artifact_revision_id=indexed["ITEM_CONTENT", 0].artifact_revision_id,
+            member_path=indexed["ITEM_CONTENT", 0].logical_name,
+            schema_ref=indexed["ITEM_CONTENT", 0].schema_ref,
+            media_type=indexed["ITEM_CONTENT", 0].media_type,
+            sha256=indexed["ITEM_CONTENT", 0].sha256,
+        ).model_dump(mode="json"),
+        image=image.model_dump(mode="json"),
+        corrected_content_sha256=content_sha256(corrected.model_dump(mode="json")),
+        corrected_content_bytes=len(canonical_json_bytes(corrected.model_dump(mode="json"))),
+        preserved_components_sha256=content_sha256(
+            [c.model_dump(mode="json") for c in components if c.component_type != "ITEM_CONTENT"]
+        ),
+    )
+    prepared = MaterialNativeVisualCorrectionPrepared.model_validate(
+        {**body, "prepared_sha256": content_sha256(body)}
+    )
+
+    def factory():
+        target = MaterialNativeVisualCorrectionService(
+            creative_engine, native_visuals=Mock(), settings=registration.settings
+        )
+
+        def qualified(actual, *, require_current):
+            assert actual == command
+            return SimpleNamespace(prepared=prepared, content=corrected, metadata=source_metadata)
+
+        monkeypatch.setattr(target, "_resolve", qualified)
+        return target
+
+    return SimpleNamespace(**locals())
+
+
+def test_native_correction_concurrent_import_replay_preserves_five_components_and_history(
+    creative_engine,
+    native_visual_correction_case,
+):
+    from eom_catalog_service.models import ItemRecord
+
+    value = native_visual_correction_case
+    barrier = Barrier(2)
+
+    def submit(_):
+        service = value.factory()
+        barrier.wait(timeout=10)
+        return service.import_reviewed(value.command, prepared=value.prepared)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(submit, range(2))
+    assert first == second
+    assert value.factory().import_reviewed(value.command, prepared=value.prepared) == first
+    assert (
+        value.factory().validate_applied(first, actor_id=value.resolved.operator_id)
+        == value.prepared
+    )
+    with Session(creative_engine) as session:
+        original = session.get(ItemRevisionRecord, value.original.item_revision_id)
+        successor = session.get(ItemRevisionRecord, first.item_revision_id)
+        assert original.revision_state == "SUPERSEDED" and successor.revision_state == "APPROVED"
+        assert original.superseded_by_revision_id == first.item_revision_id
+        assert original.metadata_json == successor.metadata_json
+        assert original.content_pack_release_id == successor.content_pack_release_id
+        assert (
+            session.get(ItemRecord, successor.item_id).current_revision_id == first.item_revision_id
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ItemRevisionRecord)
+                .where(ItemRevisionRecord.item_id == successor.item_id)
+            )
+            == 2
+        )
+        after = value.service._components(session, first.item_revision_id)
+        assert tuple(c for c in after if c.component_type != "ITEM_CONTENT") == tuple(
+            c for c in value.components if c.component_type != "ITEM_CONTENT"
+        )
+    assert (
+        value.registration.registry.load_item_content(value.original.item_revision_id)
+        == value.canonical
+    )
+    actual = value.registration.registry.load_item_content(first.item_revision_id).model_dump(
+        mode="json"
+    )
+    actual["body"].pop(1)
+    assert actual == value.canonical.model_dump(mode="json")
+
+
+def test_native_correction_real_fresh_base_uses_new_content_despite_preserved_original_lineage(
+    creative_engine,
+    native_visual_correction_case,
+    controls,
+):
+    from eom_catalog_contracts import CreateKnowledgeAnalysisCommand, KnowledgeAnalysisRequestV2
+    from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
+    from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+
+    from tests.integration.test_knowledge_analysis_service import POLICY_ID
+
+    value = native_visual_correction_case
+    service = value.factory()
+    receipt = service.import_reviewed(value.command, prepared=value.prepared)
+    service.validate_applied(receipt, actor_id=value.resolved.operator_id)
+    application = KnowledgeAnalysisApplicationService(creative_engine, service.settings)
+    command = CreateKnowledgeAnalysisCommand(
+        source=dict(
+            source_kind="APPROVED_ITEM_REVISION",
+            source_class="APPROVED_ITEM",
+            item_revision_id=receipt.item_revision_id,
+        ),
+        # The existing released baseline exercises the identical approved-Item
+        # source resolver without re-releasing the separate Material controls.
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="DISABLED",
+        risk_policy_revision_id=POLICY_ID,
+        requested_by=value.resolved.operator_id,
+        idempotency_key="native-correction-real-base:" + uuid4().hex,
+    )
+    first = application.create_with_pinned_preset(
+        command,
+        preset_id=controls[2].preset_id,
+        preset_revision_id=controls[2].preset_revision_id,
+    )
+    assert (
+        application.create_with_pinned_preset(
+            command,
+            preset_id=controls[2].preset_id,
+            preset_revision_id=controls[2].preset_revision_id,
+        )
+        == first
+    )
+    with Session(creative_engine) as session:
+        row = session.get(KnowledgeAnalysisRunRecord, first.analysis_run_id)
+        request = KnowledgeAnalysisRequestV2.model_validate(row.canonical_request)
+        assert (
+            request.source.item_revision_id
+            == receipt.item_revision_id
+            != value.original.item_revision_id
+        )
+        assert (
+            request.source.artifact_member.sha256
+            == receipt.content.sha256
+            != value.prepared.base_content.sha256
+        )
+        assert row.predecessor_analysis_run_id is None
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeAnalysisRunRecord)
+                .where(KnowledgeAnalysisRunRecord.idempotency_key == command.idempotency_key)
+            )
+            == 1
+        )

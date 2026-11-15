@@ -20,6 +20,7 @@ from eom_orchestrator.preset_model_selection import (
 from eom_orchestrator.settings import Settings
 from eom_textbook_analysis.bundle import PopplerTesseractTextExtractor
 from eom_workflow.control_plane import ExecutionPresetRevision, WorkerCapacityPolicyV7
+from eom_workflow.material_learning_request import material_learning_contract_for_definition
 from eom_workflow.shared_worker_capacity import SharedWorkerCapacityPolicy
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from pydantic import BaseModel, ConfigDict, Field
@@ -55,6 +56,10 @@ class MaterialLearningRuntimePins(BaseModel):
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
     content_pack_release_id: str = Field(min_length=1, max_length=128)
     native_content_pack_release_id: str | None = Field(default=None, min_length=1, max_length=128)
+    coverage_content_pack_release_id: str | None = Field(default=None, min_length=1, max_length=128)
+    native_coverage_content_pack_release_id: str | None = Field(
+        default=None, min_length=1, max_length=128
+    )
     definition_id: str = Field(min_length=1, max_length=128)
 
     @classmethod
@@ -82,8 +87,21 @@ def build_material_learning_runtime(
     sessions = build_session_factory(engine)
     presets: list[ExecutionPresetRevision] = []
     with sessions() as session:
+        definition = session.get(WorkflowDefinitionRecord, pins.definition_id)
+        if definition is None or definition.definition_key != "material-learning":
+            raise ValueError("MATERIAL_LEARNING_RUNTIME_DEFINITION_INVALID")
+        learning_contract = material_learning_contract_for_definition(definition.definition_version)
+        if learning_contract.definition_version == "2.0.0" and (
+            pins.coverage_content_pack_release_id is None
+            or pins.native_coverage_content_pack_release_id is None
+        ):
+            raise ValueError("MATERIAL_LEARNING_RUNTIME_COVERAGE_PACK_REQUIRED")
         for key, revision, protocol in (
-            ("material-learning", pins.learning_preset_revision_id, "workflow-role/1.37.0"),
+            (
+                "material-learning",
+                pins.learning_preset_revision_id,
+                learning_contract.role_protocol,
+            ),
             ("material-item-analysis", pins.item_preset_revision_id, "workflow-role/1.4.0"),
             ("material-item-solution", pins.solution_preset_revision_id, "workflow-role/1.35.0"),
             (
@@ -110,12 +128,6 @@ def build_material_learning_runtime(
         capacity = resolve_released_capacity_policy(session, presets[0].capacity_policy_revision_id)
         if not isinstance(capacity, (WorkerCapacityPolicyV7, SharedWorkerCapacityPolicy)):
             raise ValueError("MATERIAL_LEARNING_RUNTIME_CAPACITY_INVALID")
-        definition = session.get(WorkflowDefinitionRecord, pins.definition_id)
-        if definition is None or (definition.definition_key, definition.definition_version) != (
-            "material-learning",
-            "1.0.0",
-        ):
-            raise ValueError("MATERIAL_LEARNING_RUNTIME_DEFINITION_INVALID")
     extractor = PopplerTesseractTextExtractor(
         pdftotext=Path("/usr/bin/pdftotext"),
         pdfinfo=Path("/usr/bin/pdfinfo"),
@@ -187,6 +199,8 @@ def build_material_learning_runtime(
             engine,
             content_pack_release_id=pins.content_pack_release_id,
             native_content_pack_release_id=pins.native_content_pack_release_id,
+            coverage_content_pack_release_id=pins.coverage_content_pack_release_id,
+            native_coverage_content_pack_release_id=pins.native_coverage_content_pack_release_id,
             publisher=publisher,
             source_commit=platform.runtime_source_commit,
             settings=catalog,

@@ -8,7 +8,6 @@ from eom_catalog_contracts.material_learning import (
     MaterialDiscoveryWork,
     MaterialExtractionResult,
     MaterialExtractionWork,
-    MaterialLearningRoleReceipt,
     MaterialLearningWork,
     validate_material_discovery,
     validate_material_extraction,
@@ -16,14 +15,26 @@ from eom_catalog_contracts.material_learning import (
 from eom_catalog_contracts.material_learning_authorization import (
     MaterialLearningAuthorizationRequest,
 )
+from eom_catalog_contracts.material_learning_role_receipt import (
+    parse_material_learning_role_receipt,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.material_learning_execution import validate_material_learning_execution_plan
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
-from eom_workflow.models import ArtifactPointer, MaterialLearningRoleResult
-from eom_workflow.schemas import validate_role_input, validate_role_result
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequest,
+    MaterialLearningWorkerRequestV2,
+    material_learning_contract,
+    material_learning_contract_for_definition,
+)
+from eom_workflow.models import (
+    ArtifactPointer,
+    MaterialLearningRoleResult,
+    MaterialLearningRoleResultV2,
+)
+from eom_workflow.schemas import validate_role_input, validate_role_result_for_request
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,7 +60,7 @@ class ResolvedMaterialTask:
     selection: MaterialLearningAuthorizationRequest
     work: MaterialLearningWork
     work_pointer: MaterialArtifactMember
-    role: MaterialLearningRoleResult
+    role: MaterialLearningRoleResult | MaterialLearningRoleResultV2
     result_pointer: ArtifactMemberPointer
     result_bytes: int
 
@@ -95,12 +106,14 @@ def resolve_completed_material_task(
             .limit(2)
         )
     )
+    if workflow is None:
+        raise ValueError("MATERIAL_LEARNING_CHILD_NOT_COMPLETED")
+    profile = material_learning_contract_for_definition(workflow.definition_version)
     if (
-        workflow is None
-        or len(steps) != 1
+        len(steps) != 1
         or workflow.state != "COMPLETED"
         or (workflow.definition_key, workflow.definition_version, workflow.role_schema_version)
-        != ("material-learning", "1.0.0", "workflow-role/1.37.0")
+        != ("material-learning", profile.definition_version, profile.role_protocol)
         or workflow.created_actor_type != "human"
         or workflow.created_actor_id != operator_id
     ):
@@ -119,7 +132,7 @@ def resolve_completed_material_task(
         "support",
         1,
         "SUCCEEDED",
-        "material-learning-result@1.0",
+        profile.result_schema,
     ) or step.platform_job_id is None:
         raise ValueError("MATERIAL_LEARNING_CHILD_ROLE_INVALID")
     input_revision = (
@@ -165,6 +178,18 @@ def resolve_completed_material_task(
         )
     else:
         raise ValueError("MATERIAL_LEARNING_TASK_KIND_INVALID")
+    job = session.get(JobRecord, step.platform_job_id)
+    if job is None:
+        raise ValueError("MATERIAL_LEARNING_RESULT_POINTER_INVALID")
+    original = validate_role_input(job.request, "support", profile.role_protocol)
+    if (
+        not isinstance(
+            original.request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+        )
+        or original.request.work_input != work
+        or material_learning_contract(original.request) != profile
+    ):
+        raise ValueError("MATERIAL_LEARNING_RESULT_INPUT_DIFFERS")
     row = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id
@@ -174,7 +199,7 @@ def resolve_completed_material_task(
         row,
         workflow_id=workflow.workflow_id,
         step_key=step.step_key,
-        request=MaterialLearningWorkerRequest(work_input=work),
+        request=original.request,
     )
     selection = MaterialLearningAuthorizationRequest(
         workflow_id=workflow.workflow_id,
@@ -189,12 +214,10 @@ def resolve_completed_material_task(
     reply.validate_for(selection)
     if reply.status != "SUCCESS":
         raise ValueError("MATERIAL_LEARNING_SOURCE_AUTHORIZATION_FAILED")
-    job = session.get(JobRecord, step.platform_job_id)
-    revision = session.get(ArtifactRevisionRecord, job.revision_id) if job else None
-    logical = session.get(ArtifactRecord, job.logical_artifact_id) if job else None
+    revision = session.get(ArtifactRevisionRecord, job.revision_id)
+    logical = session.get(ArtifactRecord, job.logical_artifact_id)
     if (
-        job is None
-        or revision is None
+        revision is None
         or logical is None
         or job.status != "SUCCEEDED"
         or job.error_code is not None
@@ -225,7 +248,7 @@ def resolve_completed_material_task(
         logical.logical_artifact_id,
         revision.revision_id,
         revision.content_hash,
-        "material-learning-result@1.0",
+        profile.result_schema,
         "learn",
         1,
     ):
@@ -234,7 +257,7 @@ def resolve_completed_material_task(
         artifact_id=logical.logical_artifact_id,
         artifact_revision_id=revision.revision_id,
         member_path="result.json",
-        schema_ref="material-learning-result@1.0",
+        schema_ref=profile.result_schema,
         media_type="application/json",
         sha256=revision.content_hash,
     )
@@ -256,18 +279,15 @@ def resolve_completed_material_task(
     raw = canonical_json_bytes(payload)
     if len(raw) != revision.content_bytes or sha256_bytes(raw) != result_pointer.sha256:
         raise ValueError("MATERIAL_LEARNING_RESULT_SIZE_DIFFERS")
-    role = validate_role_result(payload, "support", "material-learning-result@1.0")
-    if not isinstance(role, MaterialLearningRoleResult) or (
+    role = validate_role_result_for_request(payload, "support", profile.result_schema, original)
+    if not isinstance(role, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)) or (
         role.workflow_id,
         role.step_run_id,
         role.job_id,
     ) != (workflow.workflow_id, step.step_run_id, job.job_id):
         raise ValueError("MATERIAL_LEARNING_RESULT_ROLE_DIFFERS")
-    original = validate_role_input(job.request, "support", "workflow-role/1.37.0")
     if (
-        not isinstance(original.request, MaterialLearningWorkerRequest)
-        or original.request.work_input != work
-        or original.job_id != role.job_id
+        original.job_id != role.job_id
         or original.workflow_id != role.workflow_id
         or original.step_run_id != role.step_run_id
         or role.artifact != original.artifact
@@ -275,9 +295,10 @@ def resolve_completed_material_task(
         != (logical.logical_artifact_id, revision.revision_id)
     ):
         raise ValueError("MATERIAL_LEARNING_RESULT_INPUT_DIFFERS")
-    receipt = MaterialLearningRoleReceipt.model_validate(revision.result)
+    receipt = parse_material_learning_role_receipt(revision.result)
     if (
-        receipt.input_sha256 != work.input_sha256
+        receipt.result_schema != profile.result_schema
+        or receipt.input_sha256 != work.input_sha256
         or receipt.result_sha256 != content_sha256(role.model_dump(mode="json"))
         or receipt.task_kind != work.task_kind
     ):

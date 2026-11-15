@@ -1,5 +1,7 @@
 """Catalog owns material/source permissions and exact page-to-source membership."""
 
+from dataclasses import dataclass
+
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
@@ -19,6 +21,9 @@ from eom_catalog_contracts.material_native_intake import (
     MaterialNativeLearningIntakeManifest,
     require_native_material_checkpoint_chain,
 )
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeQuestionVisualScope,
+)
 from eom_catalog_contracts.material_native_visual_work import (
     material_native_question_visual_scope,
     material_visual_work_instructions,
@@ -33,7 +38,12 @@ from eom_orchestrator.material_learning_execution import validate_material_learn
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.control_plane import ResolvedExecutionPlanV34
-from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkflowRequest,
+    MaterialLearningWorkflowRequestV2,
+    material_learning_contract,
+)
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
@@ -66,6 +76,13 @@ from eom_catalog_service.material_page_source_read import read_material_source_p
 from eom_catalog_service.settings import CatalogSettings
 
 
+@dataclass(frozen=True, slots=True)
+class _AuthorizedMaterialInput:
+    work: MaterialLearningWork
+    native_visual_scope: MaterialNativeQuestionVisualScope | None
+    requires_native_scope: bool
+
+
 class CatalogMaterialLearningSourceAuthorizer:
     def __init__(self, engine: Engine, settings: CatalogSettings) -> None:
         self.artifacts = CatalogArtifactService(engine, settings)
@@ -75,6 +92,21 @@ class CatalogMaterialLearningSourceAuthorizer:
     def reauthorize(
         self, session: Session, *, operator_id: str, work: MaterialLearningWork
     ) -> MaterialLearningWork:
+        return self._authorized_input(session, operator_id=operator_id, work=work).work
+
+    def authorize_future_input(
+        self, session: Session, *, operator_id: str, work: MaterialLearningWork
+    ) -> MaterialLearningWorkerRequestV2:
+        actual = self._authorized_input(session, operator_id=operator_id, work=work)
+        if actual.requires_native_scope and actual.native_visual_scope is None:
+            raise ValueError("MATERIAL_NATIVE_VISUAL_PREPARATION_REQUIRED")
+        return MaterialLearningWorkerRequestV2(
+            work_input=actual.work, native_visual_scope=actual.native_visual_scope
+        )
+
+    def _authorized_input(
+        self, session: Session, *, operator_id: str, work: MaterialLearningWork
+    ) -> _AuthorizedMaterialInput:
         authorize_material_learning(session, operator_id)
         task = session.get(MaterialLearningTaskRecord, work.task_id, populate_existing=True)
         run = (
@@ -119,6 +151,7 @@ class CatalogMaterialLearningSourceAuthorizer:
             authorize=lambda: authorize_material_learning(session, operator_id),
         )
         expected_instructions = intake.upload.additional_instructions
+        native_scope = None
         base_sources = {}
         if visual_prepared is not None:
             if not isinstance(intake, MaterialNativeLearningIntakeManifest):
@@ -137,13 +170,16 @@ class CatalogMaterialLearningSourceAuthorizer:
             )
             require_material_native_visual_bundle(visual_prepared, bundle)
             base_sources = {source.source_role: source for source in visual_prepared.sources}
-            expected_instructions = material_visual_work_instructions(
-                source_instructions=expected_instructions,
-                scope=material_native_question_visual_scope(
+            native_scope = (
+                material_native_question_visual_scope(
                     visual_prepared, printed_label=work.question.printed_label
                 )
                 if isinstance(work, MaterialExtractionWork)
-                else None,
+                else None
+            )
+            expected_instructions = material_visual_work_instructions(
+                source_instructions=expected_instructions,
+                scope=native_scope,
             )
         if (
             intake.requested_by != operator_id
@@ -235,7 +271,12 @@ class CatalogMaterialLearningSourceAuthorizer:
                 if page != expected:
                     raise MaterialLearningSourceError("MATERIAL_LEARNING_PAGE_NOT_IN_SOURCE")
         authorize_material_learning(session, operator_id)
-        return work
+        return _AuthorizedMaterialInput(
+            work,
+            native_scope,
+            isinstance(intake, MaterialNativeLearningIntakeManifest)
+            and isinstance(work, MaterialExtractionWork),
+        )
 
 
 class CatalogMaterialLearningAuthorizationService:
@@ -262,13 +303,11 @@ class CatalogMaterialLearningAuthorizationService:
                 or step is None
                 or workflow.definition_key != "material-learning"
                 or workflow.created_actor_type != "human"
-                or workflow.role_schema_version != "workflow-role/1.37.0"
                 or step.workflow_id != workflow.workflow_id
                 or step.step_key != "learn"
                 or step.worker_role != "support"
                 or step.step_type != "agent"
                 or step.attempt != 1
-                or step.result_schema != "material-learning-result@1.0"
             ):
                 raise ValueError("material stored role differs")
             definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
@@ -286,9 +325,16 @@ class CatalogMaterialLearningAuthorizationService:
                 raise ValueError("material pinned definition differs")
             original = load_persisted_workflow_request(workflow.initial_request)
             if not isinstance(
-                original, MaterialLearningWorkflowRequest
+                original, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
             ) or original != load_persisted_workflow_request(workflow.request_payload):
                 raise ValueError("material original input differs")
+            profile = material_learning_contract(original)
+            if (
+                workflow.definition_version != profile.definition_version
+                or workflow.role_schema_version != profile.role_protocol
+                or step.result_schema != profile.result_schema
+            ):
+                raise ValueError("material stored protocol family differs")
             plan = validate_material_learning_execution_plan(
                 session.get(ResolvedExecutionPlanRecord, request.plan_id),
                 workflow_id=workflow.workflow_id,
@@ -302,9 +348,16 @@ class CatalogMaterialLearningAuthorizationService:
                 or plan.workflow_definition_version != workflow.definition_version
             ):
                 raise ValueError("material requested plan differs")
-            self.source.reauthorize(
-                session, operator_id=workflow.created_actor_id, work=plan.work_input
-            )
+            if isinstance(original, MaterialLearningWorkflowRequestV2):
+                actual = self.source.authorize_future_input(
+                    session, operator_id=workflow.created_actor_id, work=plan.work_input
+                )
+                if actual != original.worker_request():
+                    raise ValueError("material native scope differs from its actual source")
+            else:
+                self.source.reauthorize(
+                    session, operator_id=workflow.created_actor_id, work=plan.work_input
+                )
             task = session.get(
                 MaterialLearningTaskRecord, plan.work_input.task_id, populate_existing=True
             )

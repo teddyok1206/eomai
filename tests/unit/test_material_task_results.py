@@ -6,44 +6,71 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_contracts.material_learning import MaterialLearningRoleReceipt
 from eom_catalog_contracts.material_learning_authorization import MaterialLearningAuthorizationReply
+from eom_catalog_contracts.material_learning_role_receipt import MaterialLearningRoleReceiptV2
 from eom_catalog_service import material_task_results as owner
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_workflow.control_plane import ResolvedExecutionPlanV33
+from eom_workflow.control_plane import ResolvedExecutionPlanV33, ResolvedExecutionPlanV40
 from eom_workflow.schemas import validate_role_input, validate_role_result
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
 from tests.unit.test_material_learning_contracts import discovery
 from tests.unit.test_material_learning_execution import record
 from tests.unit.test_material_learning_role_contracts import material_plan, worker_input
+from tests.unit.test_material_learning_role_v2 import request_input
 
 
-def case(monkeypatch):
-    input_doc = worker_input()
-    source = validate_role_input(input_doc, "support", "workflow-role/1.37.0")
+def case(monkeypatch, *, successor=False, native=False):
+    if successor or native:
+        input_doc, body = request_input("native" if native else "discovery")
+        if not successor:
+            input_doc["protocol_version"] = body["protocol_version"] = "workflow-role/1.37.0"
+            input_doc["request"].pop("native_visual_scope")
+            body["output"].pop("native_visual_coverage")
+        if native:
+            for region in body["output"]["learning_result"]["regions"]:
+                if region["role"] == "EDITORIAL_SOLUTION":
+                    region["physical_page"] = 2
+    else:
+        input_doc = worker_input()
+    protocol = "workflow-role/1.39.0" if successor else "workflow-role/1.37.0"
+    result_schema = "material-learning-result@2.0" if successor else "material-learning-result@1.0"
+    source = validate_role_input(input_doc, "support", protocol)
     work = source.request.work_input
     plan_doc = material_plan()
     plan_doc.update(workflow_id=source.workflow_id, work_input=work.model_dump(mode="json"))
+    if successor:
+        plan_doc.update(
+            schema_version="resolved-execution-plan/40.0",
+            resolver_version="40.0.0",
+            workflow_definition_version="2.0.0",
+            native_visual_scope=input_doc["request"]["native_visual_scope"],
+        )
     plan_doc["plan_sha256"] = content_sha256(
         {key: value for key, value in plan_doc.items() if key != "plan_sha256"}
     )
-    plan = ResolvedExecutionPlanV33.model_validate(plan_doc)
-    body = {
-        key: input_doc[key]
-        for key in (
-            "schema_version",
-            "protocol_version",
-            "job_id",
-            "workflow_id",
-            "step_run_id",
-            "role",
-            "artifact",
+    plan_type = ResolvedExecutionPlanV40 if successor else ResolvedExecutionPlanV33
+    plan = plan_type.model_validate(plan_doc)
+    if not successor and not native:
+        body = {
+            key: input_doc[key]
+            for key in (
+                "schema_version",
+                "protocol_version",
+                "job_id",
+                "workflow_id",
+                "step_run_id",
+                "role",
+                "artifact",
+            )
+        }
+        body.update(
+            status="ok",
+            completed_at="2026-11-05T22:00:00Z",
+            output={"learning_result": discovery()},
         )
-    }
-    body.update(
-        status="ok", completed_at="2026-11-05T22:00:00Z", output={"learning_result": discovery()}
-    )
-    role = validate_role_result(body, "support", "material-learning-result@1.0")
+    role = validate_role_result(body, "support", result_schema)
     raw = canonical_json_bytes(role.model_dump(mode="json"))
     work_raw = canonical_json_bytes(work.model_dump(mode="json"))
     actor = "operator_" + "f" * 32
@@ -52,7 +79,7 @@ def case(monkeypatch):
         run_id="materialrun_" + "1" * 32,
         unit_key="discovery-main-31-32",
         state="RESULT_READY",
-        task_kind="DISCOVER",
+        task_kind="QUESTION" if native else "DISCOVER",
         workflow_id=source.workflow_id,
         predecessor_task_id=None,
         input_artifact_id="artifact_" + "c" * 32,
@@ -71,7 +98,7 @@ def case(monkeypatch):
         worker_role="support",
         attempt=1,
         state="SUCCEEDED",
-        result_schema="material-learning-result@1.0",
+        result_schema=result_schema,
         platform_job_id=role.job_id,
     )
     job = SimpleNamespace(
@@ -83,7 +110,8 @@ def case(monkeypatch):
         task_type="workflow_support",
         request=input_doc,
     )
-    receipt = MaterialLearningRoleReceipt(
+    receipt_type = MaterialLearningRoleReceiptV2 if successor else MaterialLearningRoleReceipt
+    receipt = receipt_type(
         task_kind=work.task_kind,
         input_sha256=work.input_sha256,
         result_sha256=content_sha256(role.model_dump(mode="json")),
@@ -107,8 +135,8 @@ def case(monkeypatch):
         workflow_id=source.workflow_id,
         state="COMPLETED",
         definition_key="material-learning",
-        definition_version="1.0.0",
-        role_schema_version="workflow-role/1.37.0",
+        definition_version="2.0.0" if successor else "1.0.0",
+        role_schema_version=protocol,
         created_actor_type="human",
         created_actor_id=actor,
         runtime_context={
@@ -121,7 +149,7 @@ def case(monkeypatch):
                         logical_artifact_id=logical.logical_artifact_id,
                         revision_id=revision.revision_id,
                         content_hash=revision.content_hash,
-                        result_schema="material-learning-result@1.0",
+                        result_schema=result_schema,
                     )
                 ]
             }
@@ -176,6 +204,21 @@ def case(monkeypatch):
     artifacts = SimpleNamespace(
         engine=None, settings=None, read_member=read_member, load_json_revision=load_json_revision
     )
+
+    def replace_result(payload):
+        nonlocal role, raw
+        role = validate_role_result(payload, "support", result_schema)
+        raw = canonical_json_bytes(role.model_dump(mode="json"))
+        revision.content_hash, revision.content_bytes = sha256_bytes(raw), len(raw)
+        revision.result = receipt_type(
+            task_kind=work.task_kind,
+            input_sha256=work.input_sha256,
+            result_sha256=revision.content_hash,
+        ).model_dump(mode="json")
+        workflow.runtime_context["final_pointer_manifest"]["artifact_pointers"][0][
+            "content_hash"
+        ] = revision.content_hash
+
     return SimpleNamespace(
         session=session,
         artifacts=artifacts,
@@ -189,6 +232,8 @@ def case(monkeypatch):
         actor=actor,
         reads=reads,
         role=role,
+        plan=plan,
+        replace_result=replace_result,
     )
 
 
@@ -200,6 +245,72 @@ def test_completed_result_reads_canonical_members_not_the_small_db_receipt(monke
     assert result.role == value.role
     assert value.reads == ["material/work.json", "result.json"]
     assert "output" not in value.revision.result
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_result2_reads_exact_stored_request_plan_and_coverage_not_an_invented_current_scope(
+    monkeypatch, native
+):
+    value = case(monkeypatch, successor=True, native=native)
+    result = owner.resolve_completed_material_task(
+        value.session, value.artifacts, task_id=value.task.task_id, operator_id=value.actor
+    )
+    assert result.role == value.role
+    assert result.result_pointer.schema_ref == "material-learning-result@2.0"
+    assert value.reads == ["material/work.json", "result.json"]
+    if native:
+        assert result.role.output.native_visual_coverage is not None
+        assert value.plan.native_visual_scope is not None
+    else:
+        assert result.role.output.native_visual_coverage is None
+
+
+@pytest.mark.parametrize("change", ["missing", "foreign", "scope", "block", "null"])
+def test_result2_rejects_bad_coverage_even_when_full_artifact_and_receipt_hashes_match(
+    monkeypatch, change
+):
+    value = case(monkeypatch, successor=True, native=True)
+    payload = value.role.model_dump(mode="json")
+    coverage = payload["output"]["native_visual_coverage"]
+    if change == "missing":
+        coverage["dispositions"] = []
+    elif change == "foreign":
+        coverage["dispositions"][0]["picture_use_id"] = "officeobj_" + "f" * 32
+    elif change == "scope":
+        coverage["scope_sha256"] = "sha256:" + "f" * 64
+    elif change == "block":
+        coverage["dispositions"][0]["block_id"] = "block_missing"
+    else:
+        payload["output"]["native_visual_coverage"] = None
+    value.replace_result(payload)
+    with pytest.raises((ValueError, ControlPlaneError)):
+        owner.resolve_completed_material_task(
+            value.session, value.artifacts, task_id=value.task.task_id, operator_id=value.actor
+        )
+
+
+@pytest.mark.parametrize("change", ["definition", "role_protocol", "step", "receipt", "plan_scope"])
+def test_result2_rejects_cross_version_and_different_stored_native_scope(monkeypatch, change):
+    value = case(monkeypatch, successor=True, native=True)
+    if change == "definition":
+        value.workflow.definition_version = "1.0.0"
+    elif change == "role_protocol":
+        value.workflow.role_schema_version = "workflow-role/1.37.0"
+    elif change == "step":
+        value.step.result_schema = "material-learning-result@1.0"
+    elif change == "receipt":
+        value.revision.result.update(
+            schema_version="material-learning-role-receipt/1.0",
+            result_schema="material-learning-result@1.0",
+        )
+    else:
+        value.job.request["request"]["native_visual_scope"]["question_document"][
+            "artifact_revision_id"
+        ] = "rev_" + "f" * 32
+    with pytest.raises((ValueError, ControlPlaneError)):
+        owner.resolve_completed_material_task(
+            value.session, value.artifacts, task_id=value.task.task_id, operator_id=value.actor
+        )
 
 
 def test_actual_orchestrator_single_primary_manifest_is_read_without_inventing_files(

@@ -31,6 +31,9 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_catalog_contracts.material_learning import MaterialLearningWork
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeQuestionVisualScope,
+)
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256
 from pydantic import (
@@ -44,6 +47,7 @@ from pydantic import (
 )
 
 from eom_workflow.document_review import PairedReviewDocument
+from eom_workflow.material_learning_request import require_material_learning_native_scope
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -1399,6 +1403,20 @@ class ResolvedExecutionPlanV33(FrozenModel):
             self.model_dump(mode="json", exclude={"plan_sha256"})
         ):
             raise ValueError("material learning plan hash differs")
+        return self
+
+
+class ResolvedExecutionPlanV40(ResolvedExecutionPlanV33):
+    """Future material tasks retain Work1 and pin explicit nullable native coverage scope."""
+
+    schema_version: Literal["resolved-execution-plan/40.0"] = "resolved-execution-plan/40.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["2.0.0"] = "2.0.0"  # type: ignore[assignment]
+    native_visual_scope: MaterialNativeQuestionVisualScope | None
+    resolver_version: Literal["40.0.0"] = "40.0.0"  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def exact_native_scope(self) -> ResolvedExecutionPlanV40:
+        require_material_learning_native_scope(self.work_input, self.native_visual_scope)
         return self
 
 

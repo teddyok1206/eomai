@@ -16,6 +16,7 @@ from eom_catalog_contracts.external_item_learning_work import (
 )
 from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import MaterialLearningRoleReceipt
+from eom_catalog_contracts.material_learning_role_receipt import MaterialLearningRoleReceiptV2
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -83,7 +84,13 @@ from eom_workflow.inference_transfer_workflow import (
     InferenceTransferWorkflowRequest,
     InferenceTransferWorkflowRequestV11,
 )
-from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequest,
+    MaterialLearningWorkerRequestFamily,
+    MaterialLearningWorkerRequestV2,
+    material_learning_contract,
+    parse_material_learning_worker_request,
+)
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
@@ -113,6 +120,7 @@ from eom_workflow.models import (
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
     MaterialLearningRoleResult,
+    MaterialLearningRoleResultV2,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewRoleResultV4,
@@ -248,7 +256,7 @@ WorkflowRoleRequest = (
     | KnowledgeAnalysisWorkerRequest
     | LegacyItemExtractionWorkerRequest
     | ExternalItemLearningWorkerRequest
-    | MaterialLearningWorkerRequest
+    | MaterialLearningWorkerRequestFamily
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
@@ -768,7 +776,9 @@ class Orchestrator:
 
         reauthorize_uploaded_knowledge()
         is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
-        is_material = isinstance(request, MaterialLearningWorkerRequest)
+        is_material = isinstance(
+            request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+        )
         material_plan: ResolvedExecutionPlanV33 | None = None
         if is_material and material_learning is None:
             raise ControlPlaneError(
@@ -776,9 +786,11 @@ class Orchestrator:
             )
         if material_learning is not None:
             if (
-                not isinstance(request, MaterialLearningWorkerRequest)
+                not isinstance(
+                    request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+                )
                 or role != "support"
-                or result_schema != "material-learning-result@1.0"
+                or result_schema != material_learning_contract(request).result_schema
                 or upstream_artifacts
                 or execution_tier != "PRIMARY"
                 or external_item_learning is not None
@@ -791,7 +803,7 @@ class Orchestrator:
                 raise ControlPlaneError(
                     "CONTROL_MATERIAL_CONTEXT_INVALID", "material execution context differs"
                 )
-            request = MaterialLearningWorkerRequest.model_validate(request.model_dump(mode="json"))
+            request = parse_material_learning_worker_request(request.model_dump(mode="json"))
             material_learning.reauthorize(request)
             with self.sessions() as session:
                 material_plan = validate_material_learning_execution_plan(
@@ -929,7 +941,9 @@ class Orchestrator:
                 assert isinstance(request, ExternalItemLearningWorkerRequest)
                 external_item_learning.reauthorize_source(request)
             if material_learning is not None:
-                assert isinstance(request, MaterialLearningWorkerRequest)
+                assert isinstance(
+                    request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+                )
                 material_learning.reauthorize(request)
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
@@ -1022,7 +1036,9 @@ class Orchestrator:
                     assert isinstance(request, ExternalItemLearningWorkerRequest)
                     external_item_learning.reauthorize_source(request)
                 if material_learning is not None:
-                    assert isinstance(request, MaterialLearningWorkerRequest)
+                    assert isinstance(
+                        request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+                    )
                     material_learning.reauthorize(request)
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
@@ -1051,7 +1067,9 @@ class Orchestrator:
         try:
             reauthorize_uploaded_knowledge()
             if material_learning is not None:
-                assert isinstance(request, MaterialLearningWorkerRequest)
+                assert isinstance(
+                    request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
+                )
                 material_learning.reauthorize(request)
             if external_item_learning is not None:
                 assert isinstance(request, ExternalItemLearningWorkerRequest)
@@ -1257,7 +1275,10 @@ class Orchestrator:
                             self._reauthorize_inference_transfer_sources(
                                 request, reauthorize_transfer_sources
                             )
-                        elif isinstance(request, MaterialLearningWorkerRequest):
+                        elif isinstance(
+                            request,
+                            (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2),
+                        ):
                             assert material_learning is not None
                             material_learning.reauthorize(request)
                         else:
@@ -1318,9 +1339,12 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
-            if isinstance(result, MaterialLearningRoleResult):
+            if isinstance(result, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)):
                 if (
-                    not isinstance(worker_input.request, MaterialLearningWorkerRequest)
+                    not isinstance(
+                        worker_input.request,
+                        (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2),
+                    )
                     or material_learning is None
                 ):
                     raise PlatformError(
@@ -1740,9 +1764,17 @@ class Orchestrator:
                 content_bytes = staged.manifest.content_bytes
                 manifest_document = staged.manifest.model_dump(mode="json")
                 database_result = result_document
-                if isinstance(result, MaterialLearningRoleResult):
-                    assert isinstance(worker_input.request, MaterialLearningWorkerRequest)
-                    database_result = MaterialLearningRoleReceipt(
+                if isinstance(result, (MaterialLearningRoleResult, MaterialLearningRoleResultV2)):
+                    assert isinstance(
+                        worker_input.request,
+                        (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2),
+                    )
+                    receipt_type = (
+                        MaterialLearningRoleReceiptV2
+                        if isinstance(result, MaterialLearningRoleResultV2)
+                        else MaterialLearningRoleReceipt
+                    )
+                    database_result = receipt_type(
                         task_kind=worker_input.request.work_input.task_kind,
                         input_sha256=worker_input.request.work_input.input_sha256,
                         result_sha256=content_sha256(result_document),

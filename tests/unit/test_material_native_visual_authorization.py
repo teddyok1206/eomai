@@ -5,7 +5,10 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_contracts.material_learning import MaterialExtractionWork, MaterialLearningRights
 from eom_catalog_contracts.material_native_intake import MaterialNativeExamBundle
-from eom_catalog_contracts.material_native_visual_work import material_visual_work_sources
+from eom_catalog_contracts.material_native_visual_work import (
+    material_native_question_visual_scope,
+    material_visual_work_sources,
+)
 from eom_catalog_service import material_learning_authorization as owner
 from eom_catalog_service import material_native_visual_context as context_owner
 from eom_catalog_service.material_learning_models import (
@@ -209,6 +212,35 @@ def test_actual_source_owner_accepts_exact_instructions_and_reads_only_base_page
     assert authorizer.reauthorize(session, operator_id=actor, work=work) == work
     assert len(pages) == 2 and len(sources) == 2
     assert all(operator == actor for operator in permissions)
+
+
+def test_future_input_derives_exact_scope_from_authorized_prepared_source(monkeypatch):
+    authorizer, session, actor, work, state, pages, sources, permissions = authorization_case(
+        monkeypatch, 3
+    )
+    actual = authorizer.authorize_future_input(session, operator_id=actor, work=work)
+    assert actual.work_input == work
+    assert actual.native_visual_scope == material_native_question_visual_scope(
+        state["prepared"], printed_label=work.question.printed_label
+    )
+    assert actual.native_visual_scope is not None
+    assert len(pages) == len(sources) == 2
+    assert all(operator == actor for operator in permissions)
+
+
+def test_future_native_input_requires_prepared_scope_without_reinterpreting_legacy(
+    monkeypatch,
+):
+    authorizer, session, actor, work, _, _, _, _ = authorization_case(monkeypatch, 2)
+    assert authorizer.reauthorize(session, operator_id=actor, work=work) == work
+    with pytest.raises(ValueError, match="MATERIAL_NATIVE_VISUAL_PREPARATION_REQUIRED"):
+        authorizer.authorize_future_input(session, operator_id=actor, work=work)
+
+
+def test_future_generic_input_keeps_explicit_null_native_scope(monkeypatch):
+    authorizer, session, actor, work, _, _, _, _ = authorization_case(monkeypatch, 1)
+    actual = authorizer.authorize_future_input(session, operator_id=actor, work=work)
+    assert actual.work_input == work and actual.native_visual_scope is None
 
 
 @pytest.mark.parametrize(

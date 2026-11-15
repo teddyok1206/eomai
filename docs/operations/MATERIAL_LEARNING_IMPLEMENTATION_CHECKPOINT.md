@@ -5,6 +5,63 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 01:34 UTC — 누락 방지 후보의 저장·동시성 회귀
+
+후속 최종 gate는 소스1179 PASS, 새 disposable DB의 정식 자료 학습 suite111개와 마지막
+coverage upgrade1개 PASS다. 22번 보완의 실제 Registry 동시성 검사에서 동일 reviewed key의
+manifest staging 충돌을 재현해 기존 reviewed import owner에 key별 transaction lock을
+추가했다. 두 호출이 예외 우회 없이 같은 successor를 반환하고, 다섯 비본문 component와
+Native 읽기·메타데이터를 보존하며 fresh approved-Item 분석이 새 본문을 읽는 것도 확인했다.
+과거 Prepared3는 producer source/hash를 그대로 보존하고 tool/parser/options와 실제 원본
+재계산 결과로 재인가한다. 호환 SDK 업데이트만으로 historical replay를 막지 않는다.
+최종 소스·DB 로그는 각각 `native-material-final-source-gate-r2-20261115.log`와
+`native-material-final-disposable-20261115.log`다. 첫 충돌 실패 로그도 보존한다.
+
+새 Material 봉투와 coverage, 구·신 receipt/lineage reader, 실제 source 재인가 및 RuntimePins
+후보의 material 소스 suite는1089 PASS다. 별도의 marker-guarded disposable PostgreSQL에서
+기존 자료 학습 전체106개, 새 봉투의 실제 Pack/Artifact/Registry 등록3개, 현재 관리자의
+모델·추론 설정을 보존하는 protocol-only upgrade1개를 실행해 통과했다. 새 등록은 동시
+생성·저장 직후 중단·같은 요청 재전송에서 같은 revision/lineage를 보존한다. upgrade는
+관리자 동시 변경을 CAS로 거부하고, Artifact 저장 후 응답 유실에서 같은 draft/report를
+재사용한다. 운영 DB를 테스트 대상으로 사용하거나 old current policy를 강제로 되돌리지 않았다.
+
+검증 로그는 staging의 `native-material-whole-source-gate-20261115.log`,
+`native-material-disposable-20261115.log`, `native-coverage-registration-disposable-r2-20261115.log`,
+`native-coverage-controls-disposable-20261115.log`다. 첫 직접 invocation은 필요한 opt-in을
+누락해3 SKIP이었으며 별도 로그로 보존하고 PASS에 포함하지 않는다. 새 coverage preset
+동시성 suite는 기존 ROLE1.37 bootstrap suite 뒤에만 수행한다.
+
+이는 설치·활성화·실제22번 보완·나머지425개 등록 완료의 증거가 아니다. 후보는 아직
+운영 미배포이며 native correction의 실제 fresh-base 경계 검사와 최종 wheel 검증을
+진행한다. 기존 API/Web51·GPU/QUERY의 수치 runtime pin은 변경하지 않는다. CPU 그림
+도구70도 자체 runtime/source identity를 갖는 별도 adapter여서, 바뀌지 않은 도구를 새
+application commit과 같게 만들기 위한 재설치는 하지 않는다.
+
+## 2026-11-15 01:07 UTC — 첫 회차25개 풀이·Graph 완료와 도식 누락 발견
+
+공식 read-only run5 조회에서 state COMPLETED, QUESTION COMPLETED25, 등록25와 Graph
+연결25를 확인했다. 기존19개와 실패분6개의 지원된 후속 처리까지 기술적으로 완주했다.
+관측 시각은01:07:44 UTC이며 이를 정확한 완료 시각으로 해석하지 않는다. 기존 run4·
+accepted-invalid base·실패 이력은 보존한다. 근거는
+`staging/native-reference-run5-public-status-0050-20261115.json`이다.
+
+별도 fidelity 대조에서 실제 차이를 발견했다. Native 문항 파일의 BODY picture use는8개,
+등록 JSON의 PNG는6개다. 공식 Artifact/Native reader로 두 원그림과 정본 body를 직접 읽었다.
+25번은 같은 내용·표시가 native equation으로 표현돼 있어 정상이며 변경하지 않는다.
+22번은 필요한 도식이 body에서 빠져 있고 관련 거리·위치 정보가 다른 block에도 없다.
+원본 문제·해설 HWPX50개는 원래 hash 그대로다. 선택한 image↔등록 image의 일치만으로
+모든 원그림의 의미 보존을 증명할 수 없다는 한계를 기존 감사에 추가한다. 원본/문항
+내용·PNG는 Git/Slack에 복사하지 않는다. 검토 증거는 staging의
+`native-body-22-25-{view-export,content-review}-20261114.json` 및 제한된 local 검토 copy다.
+
+이 실제 누락을 수정하기 전에는 나머지17회차를 제출하지 않는다. 구현 후보는 기존
+자료 학습의 미래 봉투ROLE1.39/plan40와 같은 logical preset, per-use coverage1,
+receipt2/lineage2 및 Pack1.2(generic)/1.3(native)다. Work1/inner Result1/OfficeBindings1과
+기존 모든 wire bytes는 유지한다. 22번만 reviewed image-only successor로 고치고 새 base/
+공개 풀이/공통 Graph/INDEX를 연결한다. old task/정본/report/Graph를 덮어쓰지 않는다.
+이 시각에는 소스 구현·비운영 테스트 단계이며 새 봉투/Pack/프리셋은 운영 미활성이다.
+전체450개 목표와 실제 HTTP 조회·나머지425개·전체 대상 임베딩 검증은 계속 남아 있다.
+
 ## 2026-11-14 23:25 UTC — 첫 회차25개 Native 실등록 전수 대조 PASS
 
 run5의 실제25 Item을 공식 Native source/완료된 추출/Registry/Artifact reader로 읽어

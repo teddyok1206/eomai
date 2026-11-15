@@ -34,6 +34,42 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-role-receipt-v2": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-role-receipt-v2.schema.json",
+            "resources/material-learning/material-learning-role-receipt-v2.schema.json",
+            "2.0",
+            "sha256:e0e6a589b0d38dcfcc4766bebba090594c8e9ed60915c1eda6e8de234c646cc5",
+        ),
+        "material-learning-item-lineage-v2": CatalogSchemaResource(
+            "schemas/material-learning/item-lineage-v2.schema.json",
+            "resources/material-learning/item-lineage-v2.schema.json",
+            "2.0",
+            "sha256:56b7b14d3d5b3c1ef3cdc434799b8eeb2aebfd257e771441f7821c48feb1b6ca",
+        ),
+        "material-native-visual-correction-command-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-visual-correction-command-v1.schema.json",
+            "resources/material-learning/material-native-visual-correction-command-v1.schema.json",
+            "1.0",
+            "sha256:9091863de2a2186f254bfad1bd4f810823fc02b9f9f9412a0d8e9fbdd22d5713",
+        ),
+        "material-native-visual-correction-prepared-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-visual-correction-prepared-v1.schema.json",
+            "resources/material-learning/material-native-visual-correction-prepared-v1.schema.json",
+            "1.0",
+            "sha256:f2a57e52abfd67521a3e4de76bdeddb21a4b640395f98123fc8bc8971e2e9eb3",
+        ),
+        "material-native-visual-correction-result-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-visual-correction-result-v1.schema.json",
+            "resources/material-learning/material-native-visual-correction-result-v1.schema.json",
+            "1.0",
+            "sha256:02bfe8cf705c2873a257cda827e11a02fba9b8c81749c2c53db2e7244c6d8665",
+        ),
+        "material-native-visual-coverage-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-native-visual-coverage-v1.schema.json",
+            "resources/material-learning/material-native-visual-coverage-v1.schema.json",
+            "1.0",
+            "sha256:347a2267af33619d6622854e2532b6fe0afeb8a86b0a0f9b0e9d34adbe2b13ca",
+        ),
         "material-learning-db-entry-v2": CatalogSchemaResource(
             "schemas/material-learning/db-entry-v2.schema.json",
             "resources/material-learning/db-entry-v2.schema.json",

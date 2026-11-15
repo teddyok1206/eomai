@@ -11,9 +11,14 @@ from eom_catalog_contracts.material_learning import (
 )
 from eom_catalog_contracts.office_item_learning import validate_source_office_visual_bindings
 from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog
-from eom_workflow.control_plane import ResolvedExecutionPlanV33
-from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
-from eom_workflow.models import MaterialLearningRoleResult
+from eom_workflow.control_plane import ResolvedExecutionPlanV33, ResolvedExecutionPlanV40
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequestFamily,
+    MaterialLearningWorkerRequestV2,
+    material_learning_contract,
+)
+from eom_workflow.models import MaterialLearningRoleResult, MaterialLearningRoleResultV2
+from eom_workflow.schemas import validate_material_learning_role_result
 
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
@@ -21,10 +26,10 @@ from eom_orchestrator.control_service import ControlPlaneError
 
 @dataclass(frozen=True, slots=True)
 class MaterialLearningExecutionContext:
-    source_authorizer: Callable[[MaterialLearningWorkerRequest], None]
+    source_authorizer: Callable[[MaterialLearningWorkerRequestFamily], None]
     catalog_reader: Callable[[MaterialArtifactMember], OfficePictureUseCatalog]
 
-    def reauthorize(self, request: MaterialLearningWorkerRequest) -> None:
+    def reauthorize(self, request: MaterialLearningWorkerRequestFamily) -> None:
         try:
             self.source_authorizer(request)
         except ValueError as error:
@@ -34,8 +39,16 @@ class MaterialLearningExecutionContext:
             ) from error
 
     def validate_result(
-        self, request: MaterialLearningWorkerRequest, result: MaterialLearningRoleResult
+        self,
+        request: MaterialLearningWorkerRequestFamily,
+        result: MaterialLearningRoleResult | MaterialLearningRoleResultV2,
     ) -> None:
+        if result.protocol_version != material_learning_contract(request).role_protocol:
+            raise ValueError("MATERIAL_LEARNING_RESULT_PROTOCOL_MISMATCH")
+        if isinstance(request, MaterialLearningWorkerRequestV2):
+            if not isinstance(result, MaterialLearningRoleResultV2):
+                raise ValueError("MATERIAL_LEARNING_RESULT_PROTOCOL_MISMATCH")
+            validate_material_learning_role_result(request, result)
         observed = result.output.learning_result
         if isinstance(observed, MaterialDiscoveryResult):
             if request.work_input.task_kind != "DISCOVER":
@@ -70,12 +83,19 @@ def validate_material_learning_execution_plan(
     *,
     workflow_id: str,
     step_key: str,
-    request: MaterialLearningWorkerRequest,
+    request: MaterialLearningWorkerRequestFamily,
 ) -> ResolvedExecutionPlanV33:
     try:
         if record is None:
             raise ValueError("material plan missing")
-        plan = ResolvedExecutionPlanV33.model_validate(record.canonical_document)
+        successor = isinstance(request, MaterialLearningWorkerRequestV2)
+        model = ResolvedExecutionPlanV40 if successor else ResolvedExecutionPlanV33
+        plan = model.model_validate(record.canonical_document)
+        if isinstance(request, MaterialLearningWorkerRequestV2) and (
+            not isinstance(plan, ResolvedExecutionPlanV40)
+            or plan.native_visual_scope != request.native_visual_scope
+        ):
+            raise ValueError("material native scope differs from the pinned request")
         if (
             plan.workflow_id != workflow_id
             or step_key != "learn"

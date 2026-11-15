@@ -3,9 +3,18 @@
 from dataclasses import dataclass
 
 from eom_catalog_contracts.material_learning import MaterialLearningWork
-from eom_orchestrator.material_learning_plan_resolution import resolve_material_learning_plan
+from eom_orchestrator.material_learning_plan_resolution import (
+    resolve_material_learning_plan,
+    resolve_material_learning_plan_for_request,
+)
 from eom_workflow.control_plane import ExecutionPresetRevision
-from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
+from eom_workflow.material_learning_request import (
+    MaterialLearningWorkerRequestV2,
+    MaterialLearningWorkflowRequest,
+    MaterialLearningWorkflowRequestFamily,
+    MaterialLearningWorkflowRequestV2,
+    material_learning_contract_for_definition,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -49,7 +58,22 @@ def submit_material_learning_workflow(
 ) -> SubmittedMaterialLearning:
     if not session.in_transaction():
         raise ValueError("material submission requires a caller-owned root transaction")
-    request = MaterialLearningWorkflowRequest(work_input=work)
+    profile = material_learning_contract_for_definition(definition.definition_version)
+    request: MaterialLearningWorkflowRequestFamily
+    if profile.definition_version == "2.0.0":
+        authorized = source_authorizer.authorize_future_input(
+            session, operator_id=operator_id, work=work
+        )
+        authorized = MaterialLearningWorkerRequestV2.model_validate(
+            authorized.model_dump(mode="json")
+        )
+        if authorized.work_input != work:
+            raise ValueError("MATERIAL_LEARNING_AUTHORIZED_INPUT_MISMATCH")
+        request = MaterialLearningWorkflowRequestV2(
+            work_input=work, native_visual_scope=authorized.native_visual_scope
+        )
+    else:
+        request = MaterialLearningWorkflowRequest(work_input=work)
     # A caller catching a late plan/source failure must not commit an orphan child.
     with session.begin_nested():
         workflow, created = create_workflow_instance(
@@ -67,14 +91,24 @@ def submit_material_learning_workflow(
             .with_for_update()
             .execution_options(populate_existing=True)
         ).one()
-        plan = resolve_material_learning_plan(
-            session,
-            workflow_id=workflow.workflow_id,
-            workflow_definition_sha256=definition.definition_hash,
-            workflow_role_schema_version=workflow.role_schema_version,
-            work=work,
-            expected_preset=expected_preset,
-        )
+        if isinstance(request, MaterialLearningWorkflowRequestV2):
+            plan = resolve_material_learning_plan_for_request(
+                session,
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=definition.definition_hash,
+                workflow_role_schema_version=workflow.role_schema_version,
+                request=request.worker_request(),
+                expected_preset=expected_preset,
+            )
+        else:
+            plan = resolve_material_learning_plan(
+                session,
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=definition.definition_hash,
+                workflow_role_schema_version=workflow.role_schema_version,
+                work=work,
+                expected_preset=expected_preset,
+            )
         pointer = {
             "plan_id": plan.plan_id,
             "plan_sha256": plan.plan_sha256,
@@ -107,7 +141,7 @@ def submit_material_learning_workflow(
                 step_key="learn",
                 step_type="agent",
                 worker_role="support",
-                result_schema="material-learning-result@1.0",
+                result_schema=profile.result_schema,
                 input_pointer_manifest={"upstream_artifacts": []},
                 max_attempts=1,
             )
@@ -127,7 +161,7 @@ def submit_material_learning_workflow(
             step.step_key != "learn"
             or step.step_type != "agent"
             or step.worker_role != "support"
-            or step.result_schema != "material-learning-result@1.0"
+            or step.result_schema != profile.result_schema
             or step.attempt != 1
         ):
             raise ValueError("material stored role differs")
