@@ -5,6 +5,22 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 설치 wheel의 API 명세 경계 후속 보정
+
+등록·조회 후보610d8c05를 공식 `deploy_release.sh --build-only`로 검사했다. wheel RECORD는
+통과했지만 bundled OpenAPI가 새 canonical1.1 read family를 포함하지 않아 installed route
+비교가 중단됐다. 운영 설치/서비스 변경은 없었고 첫 build 로그를 보존했다.
+
+공식 exporter로 OpenAPI·SHA를 갱신했다. 동시에 새 read union이 기존 수동 import 입력을
+묵시적으로 넓히지 않도록 실제 두 입력 DTO와 import owner의 공통 타입을 기존1/2/3 전용
+`ReviewedItemContentContract`로 분리했다. content1.1은 기존 Native 등록과 읽기로만 들어오며
+미지원 수동 입력은 typed/closed wire에서 거절한다. 이력 schema bytes나 권한은 바꾸지 않았다.
+
+OpenAPI breaking 검사 PASS(검사 범위 내 finding0), API 명세의 결정성/실제 route 일치·읽기/
+기존 import·frontend alignment 등 **77 PASS**와 source4개 mypy PASS다. Starlette TestClient의
+기존 deprecation warning1은 별도로 남았다. `native-score-openapi-final-regression-20261115.log`.
+설치본 재검증과 실제 배포/Native canary는 이어서 진행하며 전체 goal은 ACTIVE다.
+
 ## 2026-11-15 — 정확한 배점 등록·조회·설정 전환 후보 검증, 실제 활성화는 다음
 
 새 Lineage3 / 일반 Pack1.4 / Native Pack1.5를 기존 Registry owner에 연결했다. Native result3은

@@ -56,7 +56,9 @@ successor이며 기존 정수 계약의 bytes/의미는 유지한다. 원문과 
 등록의 exact family는 `material_item_registration.py`의 Pack1.4/Native1.5와 Lineage3이며,
 같은 Registry key 잠금 안에서 Native 원문 배점을 다시 확인한다. content1.1의 canonical GET은
 기존 request10/new response19, 표시 읽기는 visual response2를 사용한다. 정수/미인쇄는 content1.0을
-유지하고 원문 문제·해설 OTHER pointer/metadata는 그대로다. 모델·추론·권한·capacity를 바꾸지 않는
+유지한다. 수동 import 입력은 별도 `ReviewedItemContentContract`로 기존1/2/3을 유지하며,
+read family 확장으로 입력/OpenAPI까지 묵시적으로 넓히지 않는다. Native의
+원문 문제·해설 OTHER pointer/metadata는 그대로다. 모델·추론·권한·capacity를 바꾸지 않는
 1.39→1.40 설정 갱신은 기존 `material_learning_coverage_controls.py`의 exact-score 진입점이 맡는다.
 이는 source 후보이며 설치·실제 canary와 구 오류 Revision 복구는 운영 checkpoint에서 따로 확인한다.
 `test_material_exact_score_read.py`와 guarded `test_material_exact_score_registration_storage.py`가

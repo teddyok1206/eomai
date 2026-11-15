@@ -11,9 +11,9 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
-    AssessmentItemContentContract,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
+    ReviewedItemContentContract,
     validate_contract,
 )
 from eom_hwpx_contracts import (
@@ -80,7 +80,7 @@ class StructuredItemContentImportService:
     def import_reviewed(
         self,
         base_revision_id: str,
-        content: AssessmentItemContentContract,
+        content: ReviewedItemContentContract,
         *,
         reviewed_by: str,
         review_reason: str,

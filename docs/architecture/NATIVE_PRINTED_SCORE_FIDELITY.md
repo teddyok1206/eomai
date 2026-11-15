@@ -93,6 +93,8 @@ source 후보의 통과만으로 운영 지원을 선언하거나 Material owner
 - GET_ITEM_CONTENT의 request10·권한은 그대로이고 content1.1 응답만 response19로 읽는다.
   visual presentation response2는 기존 응답 전체와 새1.1 표시만 수용한다. API/SDK 양쪽을
   호환 배포해야 한다. 수동 reviewed import와 구형 template renderer 지원을 묵시적으로 넓히지 않는다.
+  `ReviewedItemContentContract`는 기존 수동 입력1/2/3만 유지하고 read family와 분리한다.
+  새1.1 읽기 추가가 미지원 수동 import까지 OpenAPI에 허용된다고 표시되게 하지 않는다.
 - 기존 Office picture-use publisher는 두 실제 draft family를 같은 image pointer로 처리한다.
   일반 PDF의 visual-set2는 result2/3 pointer를 pin하며 기존1은 유지한다. 이는 PDF 원본의
   기존 렌더 경계만 잇는 것이고 Native HWPX 그림을 PDF crop으로 바꾸는 경로가 아니다.

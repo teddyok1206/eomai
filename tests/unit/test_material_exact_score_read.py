@@ -70,6 +70,9 @@ def test_both_canonical_and_visual_socket_roundtrip_preserve_score_body_and_imag
 
 
 def test_exact_read_uses_new_response_only_and_does_not_widen_historical_import_request():
+    from eom_api_contracts.items import StructuredItemContentImportRequest
+    from eom_catalog_contracts.application import ReviewedItemContentImportCommand
+
     route = catalog_application_schema_route("GET_ITEM_CONTENT", content_schema_version="1.1")
     assert (route.request_schema, route.response_schema) == (
         "catalog-application-request-v10",
@@ -91,6 +94,20 @@ def test_exact_read_uses_new_response_only_and_does_not_widen_historical_import_
     assert catalog_application_schema_route(
         "IMPORT_REVIEWED_ITEM_CONTENT", content_schema_version="1.1"
     ) == catalog_application_schema_route("IMPORT_REVIEWED_ITEM_CONTENT")
+    with pytest.raises(ValueError):
+        StructuredItemContentImportRequest(
+            reviewed=True,
+            review_reason="원문 그대로의 배점과 그림 등록 전용입니다.",
+            content=content("1.5"),
+        )
+    with pytest.raises(ValueError):
+        ReviewedItemContentImportCommand(
+            base_revision_id="itemrev_" + "1" * 32,
+            expected_version=1,
+            reviewed_by="operator_test_admin",
+            review_reason="원문 그대로의 배점과 그림 등록 전용입니다.",
+            content=content("1.5"),
+        )
     for wrong in (15, 0, 1.5, "1.50"):
         tampered = deepcopy(value)
         tampered["content"]["score"]["points"] = wrong

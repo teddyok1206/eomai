@@ -269,6 +269,11 @@ class AssessmentItemContentV3(ContentTeamEditorialDraftV2):
     schema_version: Literal["3.0"] = "3.0"
 
 
+type ReviewedItemContentContract = (
+    AssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
+)
+
+
 type AssessmentItemContentContract = (
     BlockAssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
 )

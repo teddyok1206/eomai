@@ -21,7 +21,10 @@ from eom_catalog_contracts.assessment_assembly import (
     MockExamAssemblyPlanContract,
     PreviewMockExamAssemblyPlan,
 )
-from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
+from eom_catalog_contracts.assessment_item import (
+    AssessmentItemContentContract,
+    ReviewedItemContentContract,
+)
 from eom_catalog_contracts.item_approval import (
     ApproveItemRevisionCommandV1,
     InspectItemRevisionHwpxEligibilityQueryV1,
@@ -112,7 +115,7 @@ class ReviewedItemContentImportCommand(FrozenModel):
     expected_version: int = Field(ge=1)
     reviewed_by: ActorId
     review_reason: str = Field(min_length=10, max_length=2000)
-    content: AssessmentItemContentContract
+    content: ReviewedItemContentContract
 
     @field_validator("review_reason")
     @classmethod
