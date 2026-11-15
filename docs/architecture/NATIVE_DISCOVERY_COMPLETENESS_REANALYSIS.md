@@ -51,6 +51,11 @@
 
 ## 현재 범위와 인계
 
+준비 checkpoint는 기존 Native2와 원본 그림 보강 Native3를 모두 지원한다.
+새 형식을 추측하거나3을2로 바꾸지 않는다. 기존 `read_material_prepared`가3의 exact2 base를
+읽고 관계·hash를 검증하며, retry는3의 원 pointer를 그대로 상속하고 검증한2 base도 최종
+Artifact metadata fence에 포함한다. 그림 catalog를 다시 생성하거나 준비 결과를 덮어쓰지 않는다.
+
 안내 명확화 → 선택 재분석 회귀/DB 검증 → Material/Catalog/실제 ROLE executor의 호환 source
 반영 → 두 번째 회차의 원래 실패를 보존한 선택 retry → 첫 새 등록의 Native 그림/metadata/
 풀이/Graph 확인 순서다. 전체18회차 접수는 완료됐으나450개 등록·임베딩 완료는 아니다.

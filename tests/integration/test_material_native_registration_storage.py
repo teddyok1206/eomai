@@ -959,6 +959,8 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch, req
         operator_id=resolved.operator_id,
         authorize=lambda: None,
     )
+    selected_case = getattr(request, "param", "MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID")
+    failure_code = selected_case[0] if isinstance(selected_case, tuple) else selected_case
     data = native_prepared()
     data.update(
         material_id=binding.material_id,
@@ -969,6 +971,11 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch, req
     for source, selection in zip(data["sources"], intake.sources, strict=True):
         source["original"] = selection.source_upload.original.model_dump(mode="json")
         source["actual_format"] = "HWPX"
+        if isinstance(selected_case, tuple) and selected_case[1] == "VISUAL":
+            source["office_catalog"].update(
+                member_path="picture-use-catalog.json",
+                schema_ref="eom://schemas/image-provider/office-picture-use-catalog/1.0",
+            )
     prepared = MaterialNativePreparedArtifact.model_validate(rehash(data, "prepared_sha256"))
     pointer = publish_material_metadata(
         artifacts,
@@ -979,6 +986,49 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch, req
         idempotency_key="native-finalization-prepared:" + uuid4().hex,
         artifact_type="material-learning-prepared",
     )
+    if isinstance(selected_case, tuple) and selected_case[1] == "VISUAL":
+        from eom_catalog_contracts.material_native_visual_preparation import (
+            MaterialNativeVisualPreparedArtifact,
+        )
+
+        from tests.unit.test_material_native_visual_preparation import visual_profile
+
+        catalog = prepared.sources[0].office_catalog
+        assert catalog is not None
+        visual = prepared.model_dump(mode="json")
+        visual.update(
+            schema_version="material-learning-prepared/3.0",
+            base_prepared=pointer.model_dump(mode="json"),
+            visual_profile=visual_profile(),
+            catalog_supplements=[
+                dict(
+                    source_role="MAIN",
+                    base_catalog=catalog.model_dump(mode="json"),
+                    catalog=catalog.model_dump(mode="json"),
+                )
+            ],
+            question_visual_scopes=[
+                dict(
+                    item_number=1,
+                    question_document=binding.question.document.model_dump(mode="json"),
+                    split_evidence=binding.question.split_evidence.model_dump(mode="json"),
+                    source_catalog_sha256=catalog.sha256,
+                    allowed_picture_use_ids=[],
+                )
+            ],
+        )
+        qualified = MaterialNativeVisualPreparedArtifact.model_validate(
+            rehash(visual, "prepared_sha256")
+        )
+        pointer = publish_material_metadata(
+            artifacts,
+            settings,
+            qualified,
+            member_path="material/prepared.json",
+            schema_ref="eom://schemas/material-learning/prepared/3.0",
+            idempotency_key="native-reanalysis-visual-prepared:" + uuid4().hex,
+            artifact_type="material-learning-prepared",
+        )
     runs = tuple("materialrun_" + uuid4().hex for _ in range(3))
     prepares = tuple("materialtask_" + uuid4().hex for _ in range(3))
     discovers = tuple("materialtask_" + uuid4().hex for _ in range(2))
@@ -1012,9 +1062,7 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch, req
                     prepared_artifact_id=pointer.artifact_id if index else None,
                     prepared_artifact_revision_id=pointer.artifact_revision_id if index else None,
                     prepared_sha256=pointer.sha256 if index else None,
-                    error_code=getattr(request, "param", "MATERIAL_NATIVE_DISCOVERY_NUMBER_INVALID")
-                    if index == 2
-                    else None,
+                    error_code=failure_code if index == 2 else None,
                     created_at=now,
                     updated_at=now,
                 )
@@ -1100,7 +1148,12 @@ def native_finalization_case(creative_engine, native_read_case, monkeypatch, req
 
 
 @pytest.mark.parametrize(
-    "native_finalization_case", ["MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE"], indirect=True
+    "native_finalization_case",
+    [
+        "MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE",
+        ("MATERIAL_NATIVE_DISCOVERY_REGION_INCOMPLETE", "VISUAL"),
+    ],
+    indirect=True,
 )
 def test_native_incomplete_reanalysis_validates_real_source_and_inherited_producer(
     creative_engine, native_finalization_case, monkeypatch

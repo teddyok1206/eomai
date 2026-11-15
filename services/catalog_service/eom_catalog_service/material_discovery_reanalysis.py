@@ -17,6 +17,9 @@ from eom_catalog_contracts.material_native_intake import (
     MaterialNativePreparedArtifact,
     require_native_material_checkpoint_chain,
 )
+from eom_catalog_contracts.material_native_visual_preparation import (
+    MaterialNativeVisualPreparedArtifact,
+)
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
@@ -317,7 +320,9 @@ class NativeMaterialDiscoveryReanalysisService:
         )
         if (
             not isinstance(intake, MaterialNativeLearningIntakeManifest)
-            or not isinstance(prepared, MaterialNativePreparedArtifact)
+            or not isinstance(
+                prepared, (MaterialNativePreparedArtifact, MaterialNativeVisualPreparedArtifact)
+            )
             or not isinstance(preparation, MaterialNativePreparationInput)
             or (intake.requested_by, intake.material_id, intake.material_revision_id)
             != (command.actor_id, revision.material_id, source.material_revision_id)
@@ -382,6 +387,12 @@ class NativeMaterialDiscoveryReanalysisService:
             for task in tasks
             for prefix in ("input", "output")
         )
+        if isinstance(prepared, MaterialNativeVisualPreparedArtifact):
+            # The official prepared reader already validated this exact V2
+            # base. Keep its metadata in the final fence as well as the V3 pin.
+            keys.add(
+                (prepared.base_prepared.artifact_id, prepared.base_prepared.artifact_revision_id)
+            )
         self._reauthorize(session, intake, command.actor_id)
         frozen_keys = frozenset(keys)
         return _DiscoveryRetrySnapshot(

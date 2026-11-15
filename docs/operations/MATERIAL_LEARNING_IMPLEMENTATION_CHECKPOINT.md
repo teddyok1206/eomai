@@ -5,6 +5,33 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 — 선택 재분석 첫 운영 사전 검사와 Native3 호환 보완
+
+`b84d0dc9`를 private Catalog/Material/실제 ROLE runner4곳에 설치·활성화했다.
+`native-reanalysis-release-{prepare-r2,admit,activate,postdeploy}-20261115` 로그는 PASS다.
+API/Web/QUERY/numerical source·기존 CPU Office tool은 교체하지 않았다. 기존 풀이 worker의
+정상 종료를 기다린 뒤 교체했고 Material도 다시 시작했다.
+
+그러나 실제2회차 retry는 새 run 생성 **전** `MATERIAL_NATIVE_REANALYSIS_CHECKPOINT_INVALID`로
+거부됐다. 원본 실패와6개 성공 결과는 그대로이며 새 모델 실행은 없었다. 정확한 공식 읽기로
+prepared3 / preparation-input2 / profile 일치를 확인했다:
+`staging/native-reanalysis-checkpoint-real-schemas-20261115.json`.
+이는 손상된 checkpoint가 아니라 새 retry 코드의 prepared2 전용 type 조건 누락이다.
+
+기존 prepared reader의 Native3→exact Native2 base 검증을 그대로 재사용하고 outer3 pointer와
+base2의 최종 metadata fence를 보존하도록 보완했다. 그림 준비/worker prompt/Material runtime은
+그대로이며 후속 배포 범위는 이 Catalog 경계뿐이다. schema bytes·DB migration·실패 이력을
+수정하거나 원본 그림을 다시 만드는 변경이 아니다.
+
+- Native2/3 실제 source/rights/Artifact/history 및 동시성·rollback 집중 DB **7 PASS**.
+- 관련 source **120 PASS**, mypy/Ruff PASS.
+- 새 disposable DB `20261115180509_f1470456`의 migration79 왕복·Material 전체 **118 PASS**.
+  재사용한 앞 DB는 마지막 ROLE1.39 upgrade 뒤 구ROLE1.37 fixture를 재실행해 기존 control
+  pins 불일치가 났다. published control을 되돌리지 않고 새 DB에서 다시 검증했다. 두 로그 모두 보존한다.
+- Web BFF/실제 브라우저 fixture **17 PASS**. 운영 Web 새 패키지 적용은 후속이다.
+
+Native3 보완의 실제2-task retry/새 등록 성공과 전체450완료는 아직 선언하지 않는다.
+
 ## 2026-11-15 17:49 UTC — 선택 재분석 구현·DB 검증 완료, 배포 전
 
 기존 retry wire와 linked run/task를 쓰는 `NativeMaterialDiscoveryReanalysisService`를
