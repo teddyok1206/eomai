@@ -5,6 +5,80 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 05:08 UTC — 동일 capture 소비자 운영 정렬·중단된 CPU 저장 재개
+
+검증된 source `0a56aaf1ff82051fa7cd4c40eef8ddd163ed93ec`의 동일 SDK를 QUERY와 private
+Catalog에도 반영했다. 기존 QUERY release owner를 재사용한6파일 metadata CAS이며 새 DB
+migration/Identity/policy·model/recipe/space 변경은 없다. 실제 Catalog UID에서 구/신 role
+schema와 installed import를 먼저 확인했다. QUERY와 Catalog는 각각 main-only SIGINT로
+자식을 자연 종료한 뒤 전환했다. 04:49 활성화, 04:51 postdeploy에서 파일·effective
+config hash·SDK import 선택·다른 실행과 수치 환경의 보존을 확인했다.
+
+QUERY의 과거 nonterminal12건은 모두 현 서비스 기동 전 기록이고 유효 lease가 없었다.
+정확한12개 Workflow/12개 command metadata fingerprint
+`3ea5b1b537e1c2fb479537ecb78e7c76b58cff6868cdf7a1ee4c042701eaafdd`를 전후 대조했다.
+새로운 in-flight는 허용하지 않았으며 과거 요청의 상태·갱신 시각·실패 이력을 고치거나
+자동 재실행하지 않았다. QUERY의 기동이 과거 전체 queue를 실행하지 않는 경로도 확인했다.
+기존 prepared plan을 바꾸거나 다시 만들지 않았고 공유 GPU env SHA도 같았다. 후보 설치
+검사/배포 검증은 실제 사용자 검색 성공의 대체 증거가 아니며 `SEARCH_NOT_RUN`으로 남긴다.
+근거는 `staging/query-historical-capture-{activate,postdeploy}-20261115.log`와 과거 요청의
+읽기 전용 `query-historical-capture-blocked-inspect-20261115.json`이다.
+
+별도로 INDEX는 두 번째 새 CUDA batch를04:19:54에 완료한 뒤04:19:59 OS unit 관측
+timeout으로 종료했다. 기존2/5/10초 조회를 모두 소진한
+`EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE / LOCAL_INDEXING_RUNTIME_UNAVAILABLE`이며
+수치 실패나 model 오류가 아니다. PID1 지연의 근본 원인은 미확인이고 QUERY 준비와의 인과도
+확인되지 않았다. QUERY 배포의 첫 preserved snapshot부터 INDEX는 이미 failed/PID0이었다.
+이를 배포가 실행 중 INDEX를 계속 유지한 증거로 과장하지 않는다.
+
+성공한 GPU 저장 head1392/1582와 원래 CPU 요청의 성공 encoding4개·만료 claim을 먼저
+확인했다. QUERY/Catalog postdeploy 뒤04:53 동일 source0a56·service revision3f43091e의
+공식 INDEX service만 시작했다. PID420457/invocation61f6b45cfdcf4947a8235376a8ad0498이며
+보호 설정·timeout·수치 실행 권한을 변경하지 않았다.04:58 원래 CPU Workflow
+`workflow_1440bc409e9143148293381c3b6c2a6f`의 같은 command가 lease generation2로 재개됐다.
+성공한4개 owned encoding의 Job/hash/completion을 그대로 재사용했다.05:06:50 관측에서는
+CPU의 REGISTERED checkpoint와 저장 head1328/1582를 확인했다. 이 시점 Workflow는 아직
+COMMITTING이므로 COMPLETED라고 보고하지 않는다. 다음 CUDA 요청도 encoding4개가
+SUCCEEDED지만 아직 head 저장/전체 완료는 미확인이다. GPU와 CPU의 서로 다른 space를
+더하거나 이를 신규 Native450개 완료 수로 해석하지 않는다. 근거는
+`staging/native-index-post-consumer-release-progress-20261115.json`이다.
+
+전체450개 목표는 ACTIVE다. 실제 등록·분석·Graph 완료는 첫 회차25개이며, 남은17회차는
+동일 EOM2 `native-import` HTTP driver가 Studio 인증 입력을 기다려 아직 미제출이다.
+원래 main/solution HWPX의 실제 사용자 다운로드 gate와 이후425개 처리·최종 공식 조회가
+남아 있다. 로그인 인증을 대신했다고 간주하거나 원본·완료 이력·비밀번호를 바꾸지 않았다.
+
+## 2026-11-15 04:05 UTC — 새 GPU 저장 완료·Web 안내 운영 반영 / 동일 소비자 확인
+
+03:57:21 UTC 새 CUDA 요청이 BATCH_COMPLETED, selected4/missing_reports0으로 완료됐다.
+공식 observer의04:00:45 관측에서 새 Graph
+`graphrev_54f1af9a585a980475e784e30376e094`에 GPU head1388/1582를 확인했다. 기존1384개에
+새 계산4개가 연결됐다. CPU head1324/1581과 원래 성공 이력은 보존됐고 다음 CPU 요청도
+같은 invocation에서 RUNNING이다. 전체 Native450 완료나 CPU/GPU 동등 scope 완료를 뜻하지
+않는다. 근거는 `staging/native-index-history-first-batch-completed-20261115.json`이다.
+
+GUI 안내/회귀만 바꾼 `f855faa8db191e2b77cc8d146ef97de8fcd69afb`를 커밋·푸시하고 기존
+Web release build/RECORD/target-runtime import/installed simulation82파일 및 실제 서비스 UID
+검증 후 Web만 반영했다. 이전 Web51과 runtime source diff는 HTML 안내1줄뿐이다.
+Web PID357932/invocation11ff9f3d1e8b4b2299f5fa8f9ed70975이며 API/QUERY/INDEX/Material/
+Catalog/ROLE의 PID·invocation은 전후 같다. 설치 wheel SHA는
+`4c93c66f626908ba10a0f9fffcfae21eb291eafbee26192f935c2e5525b7bd24`다. HTTPS 공개 static
+HTML과 설치본/source의 SHA14d2e520이 같고 HTTPS ready도 PASS다. 미인증 `/studio/`는
+의도대로303 login redirect였다. 이를 실제 사용자 로그인·Native 다운로드 PASS로 해석하지
+않는다. 첫 health 요청의 잘못된 URL404도 관측 오류로 구분한다.
+
+동일 capture의 실제 consumer를 더 대조해 누락된 활성 설치본을 확인했다. QUERY는 고정 SDK
+`11d826...`에서 직접, 결과 조회는 private Catalog1b30에서 실행하며 두 곳에 이전
+APPROVED-only 조건이 남아 있다. prepared anchor가 current이거나 정상 cache hit면 통과할 수
+있으므로 모든 검색 실패를 주장하지 않는다. 그러나 pinned historical population의 fresh
+검증은 같은 이유로 거부될 수 있다. INDEX0a56만으로 이 leaf 수정의 완전 반영은 아니다.
+동일0a56 SDK를 QUERY와 private Catalog에 최소 호환 반영하는 후속을 준비한다. 새 Identity/
+정책/DB migration·model/space/vector 변경은 필요 없으며 기존 QUERY/config file-set owner를
+재사용한다. 아직 두 소비자는 미전환이고 실제 새 사용자 검색은 실행하지 않았다.
+
+전체450개 목표는 ACTIVE다. EOM2의 같은 native HTTP driver는 Studio 로그인 입력 대기이고,
+나머지17회차는 미제출이다. 비밀번호·인증 파일·이미 완료한 원본/분석/Graph/벡터를 바꾸지 않았다.
+
 ## 2026-11-15 03:54 UTC — 새 GPU 계산4건 성공 / Native 화면 경계 회귀
 
 재개한 같은 INDEX invocation의 새 요청

@@ -52,6 +52,9 @@ locked row 검사는 `knowledge_analysis_sources.require_historically_approved_i
 기존 이력 조건을 재사용한다. SUPERSEDED/RETIRED를 단순 APPROVED-only 조건으로 거부하거나
 current로 바꾸지 않는다. 신규 분석의 APPROVED-only 조건과 권한/hash/provenance fence는
 유지한다. `docs/architecture/PUBLIC_SOLUTION_HISTORICAL_REVISION_CAPTURE.md`를 참고한다.
+이 capture의 설치 소비자는 INDEX뿐 아니라 QUERY의 자체 Catalog adapter와 private Catalog의
+strict 결과 조회도 포함한다. 공통 source를 수정해도 세 SDK가 자동으로 갱신되지는 않는다.
+변경된 metadata leaf만 각 소비자에 호환 반영하고 numerical controller/model/space는 보존한다.
 
 공개 QUERY도 `public_solution_index_read_set.capture_public_solution_query_population`에서
 같은 root의 전체 보고서 해석을 재사용한다. 실제 사용자/scope/recipe와 fresh SQL closure는
