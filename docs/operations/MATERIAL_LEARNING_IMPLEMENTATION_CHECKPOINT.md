@@ -5,6 +5,40 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-15 18:18 UTC — Native3 실제 선택 retry·Web 운영 반영, 전체 목표 계속
+
+Catalog-only 후속 source `36152674a37cd5e1f50e25e19dc35853b5097c75`를 설치·활성화했다.
+Material와 실제 ROLE runner4곳은 이미 안내문을 반영한 `b84d0dc9` 그대로다. API51·QUERY0a56·
+기존 CPU/CUDA 모델/recipe/space·Office CPU70·Pack/control·원본 및 실패 이력은 변경하지 않았다.
+`staging/native-reanalysis-catalog-v3-activate-20261115.json`은 peer PID/Invocation 보존 PASS다.
+
+실제2회차의 원래 실패 `materialrun_3b66485a97fb5324b136228e0f18b120`에서 새 linked run
+`materialrun_612042aeff585cbd9a0c9e96e5015d15`를 만들었다. **2개 재분석 / 5개 재사용**이며
+같은 공식 retry 재전송은 **replayed=true / 동일 successor**를 반환했다. 원 실패의 상태·시각,
+성공한6개 결과는 불변이다. 증거: `staging/native-reanalysis-v3-real-retry-20261115.json`.
+새 run은18:15 공식 조회 기준 DISCOVERING, PREPARE완료1·DISCOVER완료4·PENDING2다.
+이는 복구 등록 성공이지 두 모델 작업의 실행/완료 증거가 아니다. 기존 생성 시각 순서의
+공식 대기열을 사용하므로 현재 처리 중인3회차와 먼저 접수된 다른 회차 뒤에 기다릴 수 있다.
+대기 순서를 바꾸려고 DB 시각/priority를 직접 수정하거나 별도 worker를 띄우지 않았다.
+
+Web은 검증한 `b84d0dc9` wheel로 갱신했다. 공식 설치기·82개 RECORD member 검사 PASS,
+실제 HTTPS `/studio/assets/material-learning.js` SHA가 source와 같다:
+`3a820612ae883f4257c6a5ab506145d8fc56e76756ffcce036fab15b476e77e4`.
+HTTPS ready도 PASS다. 실제 운영 브라우저 버튼의 사람 확인은 아직 별도 기록하지 않았다.
+DB2개는 공식 cleanup으로 제거했고 검증·실패 로그는 보존했다.
+
+18:15 현재:1회차25 Item/base/풀이/Graph 완료.3회차 Item/base2, Graph0이며1개 source-unreadable
+예외와1개 analysis-terminal-failure가 기록됐다.3회차의 실제 풀이 worker는 계속 실행 중이다.
+`staging/native-reanalysis-current-progress-20261115.json`은 원 실패와 후속 run을 따로 보여 준다.
+다음 핵심은3회차 실패한 분석의 정확한 원인 조회·terminal 후 지원된 재시도와 다른 회차의
+실제 등록/Graph 검증이다. **18회 접수 완료 ≠450개 등록/풀이/Graph/임베딩 완료**다.
+
+INDEX는 성공한 원벡터를 보존하고 동일 source/config로 재개했다. 재개 전 native lifetime의
+drained=true/blocking=[]를 확인했다.18:18 unit은 active(PID1307845,
+Invocation`677a2051de244de385c04bfb0d04b9a1`)다. 마지막 저장 head는 GPU1412/1582,
+CPU1332/1582로 두 space는 합산하지 않는다. 재개 뒤 head 증가나 반복 OS 관측 실패의
+영구 해결은 아직 주장하지 않는다. 증거: `staging/native-reanalysis-index-after-resume-20261115.json`.
+
 ## 2026-11-15 — 선택 재분석 첫 운영 사전 검사와 Native3 호환 보완
 
 `b84d0dc9`를 private Catalog/Material/실제 ROLE runner4곳에 설치·활성화했다.
