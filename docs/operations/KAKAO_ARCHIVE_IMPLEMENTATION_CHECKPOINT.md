@@ -13,6 +13,8 @@
 - `일반 → KakaoTalk`의 연결 준비·학생/방 화면과 해당 API/BFF를 반영했다. 새 화면 JS의
   HTTPS 응답 SHA는 source와 일치하고, 비로그인 source-binding 조회는 HTTP 401이다.
   실제 사용자 세션으로 설정/학생 CRUD를 수행한 live acceptance는 아직 별도 미확인이다.
+  이후 사용자가 운영 GUI를 직접 확인하고 화면이 좋다고 응답했다. 이는 화면 확인 결과이며
+  아직 실행하지 않은 카카오 수집·질문 저장·PDF 출력의 성공으로 확대하지 않는다.
 - API 직접 ready와 HTTPS BFF ready, HTTPS 로그인 페이지는 정상이다. Catalog·QUERY·
   채팅 owner/worker·HWPX·네 개 Workflow runner와 creative owner의 active 상태를 확인했다.
   active/ready는 새 카카오 업무의 전체 성공이나 모델 작업 완료를 뜻하지 않는다.
