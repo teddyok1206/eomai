@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-room-intake-v1/1.0",
+  "title": "Owner-confirmed observed room; not automatic collection or source admission authority",
+  "$defs": {
+    "Request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "manual_lease_id", "capture_id", "expected_channel_key", "expected_room_key", "display_name", "expected_binding_version"],
+      "properties": {
+        "schema_version": {"const": "kakao-manual-room-confirmation/1.0"},
+        "source_binding_id": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+        "manual_lease_id": {"type": "string", "pattern": "^kakaoremotelease_[0-9a-f]{32}$"},
+        "capture_id": {"type": "string", "pattern": "^kakaodownload_[0-9a-f]{32}$"},
+        "expected_channel_key": {"$ref": "#/$defs/ProviderKey"},
+        "expected_room_key": {"$ref": "#/$defs/ProviderKey"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "expected_binding_version": {"type": "integer", "minimum": 1, "maximum": 2147483647}
+      }
+    },
+    "ProviderKey": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "Hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "UTC": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+    "Evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "owner_operator_id", "confirmation", "request_sha256", "profile_id", "browser_run_id", "fence_epoch", "page_instance_id", "capture_started_at", "observed_at", "capture_completed_at", "payload_sha256", "payload_bytes", "receipt_sha256", "observation_sha256", "source_identity_sha256", "identity_method"],
+      "properties": {
+        "schema_version": {"const": "kakao-manual-room-evidence/1.0"},
+        "owner_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "confirmation": {"$ref": "#/$defs/Request"},
+        "request_sha256": {"$ref": "#/$defs/Hash"},
+        "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+        "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+        "fence_epoch": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "page_instance_id": {"type": "string", "pattern": "^kakaopage_[0-9a-f]{32}$"},
+        "capture_started_at": {"$ref": "#/$defs/UTC"},
+        "observed_at": {"$ref": "#/$defs/UTC"},
+        "capture_completed_at": {"$ref": "#/$defs/UTC"},
+        "payload_sha256": {"$ref": "#/$defs/Hash"},
+        "payload_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "receipt_sha256": {"$ref": "#/$defs/Hash"},
+        "observation_sha256": {"$ref": "#/$defs/Hash"},
+        "source_identity_sha256": {"$ref": "#/$defs/Hash"},
+        "identity_method": {"const": "MANUALLY_CONFIRMED_CHANNEL_AND_DOWNLOAD_ROOM_PATH"}
+      }
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/Request"}, {"$ref": "#/$defs/Evidence"}]
+}

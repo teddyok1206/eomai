@@ -116,6 +116,32 @@ class KakaoRoomService:
     def __init__(self, engine: Engine) -> None:
         self._sessions = build_session_factory(engine)
 
+    def get_admission_evidence(
+        self, actor: ActorContext, binding_id: str, *, idempotency_key: str
+    ) -> ArtifactMemberPointer | None:
+        """Exact completed intake replay lookup; no file access or admission side effect."""
+        key = validate_kakao_idempotency_key(idempotency_key)
+        with self._sessions.begin() as session:
+            owner = self._authorize(session, actor, PermissionKey.KAKAO_ARCHIVE_COLLECT)
+            self._binding(session, owner, binding_id, mutate=True)
+            prior = session.scalar(
+                select(KakaoRoomAdmissionRecord).where(
+                    KakaoRoomAdmissionRecord.owner_operator_id == owner,
+                    KakaoRoomAdmissionRecord.source_binding_id == binding_id,
+                    KakaoRoomAdmissionRecord.idempotency_key == key,
+                )
+            )
+            if prior is None:
+                return None
+            return ArtifactMemberPointer(
+                artifact_id=prior.evidence_artifact_id,
+                artifact_revision_id=prior.evidence_artifact_revision_id,
+                member_path="observation.json",
+                schema_ref=ROOM_OBSERVATION_REF,
+                media_type="application/json",
+                sha256=prior.evidence_sha256,
+            )
+
     @staticmethod
     def _authorize(session: Session, actor: ActorContext, permission: PermissionKey) -> str:
         return authorize_kakao_actor(

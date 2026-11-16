@@ -135,6 +135,7 @@ if [[ "${action}" == "kakao-tests" ]]; then
   "${PYTHON}" -m alembic upgrade head
   "${PYTHON}" -m pytest -q tests/integration/test_kakao_archive_storage.py \
     tests/integration/test_kakao_room_storage.py \
+    tests/integration/test_kakao_room_intake.py \
     tests/integration/test_kakao_manual_storage.py \
     tests/integration/test_kakao_source_storage.py \
     tests/integration/test_kakao_question_storage.py \

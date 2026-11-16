@@ -34,6 +34,8 @@ class ReceivedKakaoDownload:
     receipt: ManualDownloadResult = field(repr=False)
     payload: bytes = field(repr=False)
     observation: ManualPageObservation | None = field(default=None, repr=False)
+    receipt_bytes: bytes = field(default=b"", repr=False)
+    observation_bytes: bytes | None = field(default=None, repr=False)
 
 
 def read_received_kakao_download(
@@ -97,7 +99,8 @@ def read_received_kakao_download(
         directory(capture, 0o750)
         try:
             started = ManualDownloadStart.model_validate_json(read(capture / "started.json", 16384))
-            result = ManualDownloadResult.model_validate_json(read(capture / "result.json", 16384))
+            result_raw = read(capture / "result.json", 16384)
+            result = ManualDownloadResult.model_validate_json(result_raw)
         except ValueError as error:
             if isinstance(error, KakaoRuntimeOsError):
                 raise
@@ -118,14 +121,16 @@ def read_received_kakao_download(
         if len(raw) != result.member.size_bytes or sha256(raw) != result.member.sha256:
             raise KakaoDownloadInputError("KAKAO_DOWNLOAD_MEMBER_HASH_MISMATCH")
         try:
-            observed_raw = read(capture / "page-observation.json", MAX_OBSERVATION_BYTES)
+            read_observation = read(capture / "page-observation.json", MAX_OBSERVATION_BYTES)
         except FileNotFoundError:
             # Historical captures have no document evidence. This is UNKNOWN,
             # not proof of a room identity or a missing/absent photo attachment.
             observation = None
+            observed_raw = None
         else:
+            observed_raw = read_observation
             try:
-                observation = ManualPageObservation.model_validate_json(observed_raw)
+                observation = ManualPageObservation.model_validate_json(read_observation)
             except ValueError as error:
                 if isinstance(error, KakaoRuntimeOsError):
                     raise
@@ -142,7 +147,7 @@ def read_received_kakao_download(
                 or not started.started_at <= observation.observed_at <= result.completed_at
             ):
                 raise KakaoDownloadInputError("KAKAO_DOWNLOAD_OBSERVATION_STALE")
-        return ReceivedKakaoDownload(result, raw, observation)
+        return ReceivedKakaoDownload(result, raw, observation, result_raw, observed_raw)
     except FileNotFoundError:
         raise KakaoDownloadInputError("KAKAO_DOWNLOAD_INPUT_MISSING") from None
     except (KakaoRuntimeOsError, OSError):

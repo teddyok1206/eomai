@@ -116,6 +116,15 @@ hash만 binding과 공유한다. 학생 정보는 Item/Graph로 등록하지 않
 binding·owner 범위에서 수행하며 이전 mapping과 정확한 학생 표시 revision을 보존한다.
 공통 intent 잠금과 짧은 CAS를 재사용하며, 방에는 현재 mapping pointer/version만 UPDATE한다.
 
+`kakao_room_intake.py`는 현재 owner가 실제 MANUAL download 관측의 채널·방을 확인하는
+내부 application이다. `kakao_manual_capture_access.py`가 과거 capture의 실제 lease/fence와
+현재 권한을 검사하고, 기존 Orchestrator reader·Artifact publisher·room admission을 재사용한다.
+작은 immutable channel pin만 추가하며 별도 큐/실행 tracker를 만들지 않는다. 같은 요청의
+완료 재조회는 canonical proof를 읽어 staging 수명과 분리한다. 새 로그인으로 자기 소유 수신물을
+확인할 수 있지만 원격 화면의 원래 session/TTL이나 ENDED 기록은 바꾸지 않는다.
+관측된 사진 download path와 document channel이 맞아야 하며 이름·filename은 identity가 아니다.
+이는 source 구현/임시 DB 검증 경계다. 공개 API/화면·source 수락·AUTO 활성화와 구분한다.
+
 `kakao_question_editing.py`는 질문의 exact source span/사진·분할/병합·검토와 packet
 선택을 담당한다. `kakao_question_publication.py`는 결과 manifest만 기존 Artifact owner로
 발행하고 CSV/사진은 다시 복사하지 않는다. 발행 후 DB 수락·현재 mapping/source 권한은

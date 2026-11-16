@@ -1,5 +1,33 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 MANUAL 관측 → 기존 방 등록의 내부 연결 검증
+
+- `manual-room-intake-v1` schema와 frozen DTO를 먼저 정의하고, 기존 수신 reader → Artifact
+  publisher → `KakaoRoomService.admit_room`을 연결했다. 공개 create endpoint나 별도 수집
+  queue/실행 tracker는 추가하지 않았다. canonical room은 기존 owner가 만들며 최초 학생
+  mapping은 UNMAPPED다. DRAFT·capability·AUTO를 활성 상태로 위장하지 않는다.
+- 현재 owner/권한·실제 과거 lease/fence·capture 시각과 사진 download의 방별 path/현재
+  document 채널을 대조한다. 이름·파일명·화면 순서로 방을 추측하지 않는다. 작은 immutable
+  `kakao_manual_channel_pins` 한 테이블(0089)로 같은 연결에 다른 채널이 섞이지 않게 한다.
+  사진/CSV 본문은 여기에 복사하지 않고 원래 receipt/DOM과 작은 proof만 발행한다.
+- 같은 요청은 기존 admission/publication을 재사용한다. 완료 후 staging이 없어도 canonical
+  evidence로 재조회하며, 발행 중 중단·동시 요청·응답 유실에서도 원래 identity를 유지한다.
+  현재 owner의 새 인증 세션으로 과거 capture를 확인할 수 있지만, 이전 remote 화면의 session
+  제한·TTL·ENDED 기록은 그대로다. source 수락/사진 occurrence 연결은 별도 후속 책임이다.
+- 공식 guarded disposable PostgreSQL suite **185 PASS**, 관련 pure/reader/room/의존성 unit
+  **146 PASS**, strict mypy6 source·Ruff/format·wire schema audit PASS다. 0089의 적용→되돌림→
+  재적용과 ORM metadata 일치도 확인했다. 실제 사용자·운영 DB·실제 카카오 자료는 테스트하지 않았다.
+  첫 실행의184 PASS/1 FAIL은 이미 승인된 Artifact를 UPDATE하려던 부정 fixture가 기존
+  immutable trigger에 막힌 경우다. 실제 불변성을 확인하는 테스트로 고쳤으며 trigger를 풀거나
+  원본을 변경하지 않았다. 기존 TestClient deprecation warning1건은 남아 있다.
+- 이 변경은 **소스 검증이며 운영 미배포**다. 운영 DB0087·API/Catalog/Web·GPU pins와
+  collector53cb1a1e는 유지한다. 0088/0089는 후속 compatible release에서 함께 반영해야 한다.
+  원래 실제 CSV/JPEG에는 이번 DOM 관측이 없으므로 새 proof를 소급해서 붙이지 않았다.
+- 사용자 요청의 코드/전용 Codex 슬롯 비교는 `KAKAO_COLLECTION_EXECUTION_BOUNDARY.md`의
+  실행 방식 결정에 기록했다. 반복 수집은 검증된 고정 Playwright adapter가 담당하고 전용
+  Codex 슬롯은 사용하지 않는다. 실제 UI와 불일치하면 중단하며, 메시지 전송/임의 클릭 경로는
+  만들지 않는다. 실제 방→학생 PDF와 전체 방 주기 수집은 아직 완료가 아니다.
+
 ## 2026-11-16 20:00 UTC DOM 관측 browser 설치·격리 headed 검증 PASS
 
 - source `53cb1a1e7fade4b6d97160f67a67411df1d7d7b1`를 커밋·푸시하고, stopped-profile

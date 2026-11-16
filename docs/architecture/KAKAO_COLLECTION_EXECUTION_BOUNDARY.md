@@ -300,3 +300,49 @@ page instance만으로 메시지 occurrence를 알 수 없으므로, 기존 MANU
   map으로 만들고 전체 DOM 복제·재파싱·주기적인 전체 화면 dump는 하지 않는다.
 - 별도 control service나 전용 Codex 슬롯을 여는 대안은 과하다. 기존 receiver의 page callback과
   보호된 로컬 receipt helper를 재사용한다. 실제 DOM/selector 실증 전 자동 클릭·수집은 켜지 않는다.
+
+## 관측한 MANUAL 방을 기존 방 디렉터리에 수락하기
+
+첫 실제 방 등록은 `KakaoRoomService.admit_room`과 기존 admission receipt를 재사용한다.
+새 수집 tracker/큐나 범용 승인 service는 만들지 않는다. 방 등록은 CSV/사진 source 수락,
+학생 연결, capability 검증, AUTO 활성화와 서로 다른 단계다. DRAFT 연결을 fake ACTIVE로
+바꾸지 않고, 사용자 확인이 필요한 작은 경로를 명시적으로 `MANUAL_CONFIRMED`로 기록한다.
+
+1. 책임/정본: Catalog의 `KakaoRoomIntakeService`가 실제 현재 owner·COLLECT/ADMIN을 확인하고
+   보호된 MANUAL 수신물을 읽어 기존 Artifact owner와 Room application을 연결한다. 원문 DOM/
+   수신 receipt는 private Artifact에, canonical room/최초 mapping은 기존 room 테이블에 둔다.
+2. 입력/identity: schema-first 명령은 binding/lease/capture ID, 사용자가 확인할 channel/room
+   provider key, 표시 이름과 binding version만 받는다. 파일 path·권한·profile/fence·Artifact
+   pointer를 클라이언트가 정하지 않는다. provider key는 canonical room ID가 아니며 기존
+   room owner가 별도 ID를 발급한다. 이름으로 방/학생을 합치지 않는다.
+3. 근거: actual SDK download target에서 관측된 `/api/profiles/<channel>/chats/<room>/…/image`
+   구조와 document의 channel path가 맞아야 한다. query/서명 URL·filename은 join key가 아니다.
+   현재 확실히 관측하지 않은 문서의 room URL suffix나 selector는 추측하지 않는다. 그 근거가
+   없는 CSV/blob/text-only 방은 이 단계에서 IDENTITY_UNAVAILABLE이며 최종 제품의 남은 의존이다.
+4. 수신 접근: 현재 operator의 새로운 유효 세션으로 자기 소유 과거 capture를 확인할 수 있다.
+   이것은 원격 화면을 다시 여는 권한이 아니다. remote `_owned`/TTL/session 일치 규칙은 그대로다.
+   원래 lease의 owner/binding/fence·실제 browser 관측 및 capture 시각을 확인하며 ENDED/실패
+   이력은 수정하지 않는다. 과거 VNC의 30초 grant를 현재 원격 접근 권한으로 재사용하지 않는다.
+5. materialization: 기존 Orchestrator reader로 원래 payload·receipt·DOM의 hash/종류/UID/GID/
+   mode를 검사한다. room proof는 원래 receipt/관측 bytes를 pointer와 SHA로 연결한 작은 값이다.
+   새 JPEG 복사·재다운로드·NAS writer는 없다. 질문 본문은 나중에 원본 CSV에서 만든다.
+6. 저장/동시성: existing Artifact publication의 같은 owner/binding/key를 재사용하고, 마지막
+   `admit_room` transaction에서 actual source callback과 현재 ACL/lifecycle을 재검사한다.
+   canonical channel 고정에는 immutable `kakao_manual_channel_pins` 한 테이블만 추가한다.
+   owner+binding unique/FK와 evidence Artifact FK로 첫 channel identity를 고정한다. 같은
+   binding의 다른 channel은 명시적으로 거부하며 전환은 다른 binding의 별도 작업이다.
+7. access/복잡도: owner/binding/lease/capture의 indexed lookup, 기존 admission key lookup과
+   bounded 파일 읽기다. 첫 수락 O(bytes), 완료 재조회는 작은 canonical proof만 해석하고
+   원본 payload를 다시 hash/read하지 않는다. node/대화 전체 검색이나 N+1은 없다.
+8. transaction: 긴 file I/O·Artifact 발행 중 DB lock을 잡지 않는다. 방의 기존 intent/binding
+   잠금 뒤 channel-pin intent를 직렬화하고 pin과 room/admission을 한 transaction에 채택한다.
+   source 발행 후 중단은 같은 key/publication으로 이어가고 실패를 성공으로 바꾸지 않는다.
+9. replay: 기존 room admission의 exact evidence를 찾아 실제 owner/원래 명령/hash·source 접근을
+   다시 검증한다. 완료본은 worker staging이 정리된 뒤에도 canonical Artifact로 재조회한다.
+   확인 전에 바뀐 binding version은 거부하되 이미 완료된 receipt는 이후 policy edit로 바꾸지 않는다.
+10. 계층: HTTP/CLI가 invariant를 구현하지 않는다. Catalog application → 기존 room/manual
+    metadata/read·Artifact/Orchestrator adapter → pure 계약 방향을 유지한다. worker는 이
+    테이블·NAS·Identity에 접근하지 않고 이 기능에 Codex 슬롯/AI를 추가하지 않는다.
+11. 단순 대안: boolean callback 허용이나 이름/filename 매칭은 근거가 없다. 별도 intake queue와
+    다중 command 테이블은 기존 admission/publication receipt와 중복이다. 작은 channel pin만
+    새로 두고 나머지는 현재 owner를 재사용한다. 이 절은 source 구현 설계이며 운영 승인 증거가 아니다.
