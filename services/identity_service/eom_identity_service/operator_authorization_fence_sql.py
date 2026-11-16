@@ -18,6 +18,16 @@ from sqlalchemy.exc import SQLAlchemyError
 OPERATOR_AUTHORIZATION_FENCE_FUNCTION: Final = "public.eom_fence_operator_authorization_v1"
 OPERATOR_AUTHORIZATION_FENCE_SIGNATURE: Final = OPERATOR_AUTHORIZATION_FENCE_FUNCTION + "(text)"
 OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE: Final = "eom_catalog_manager_runtime"
+# Current private-source session revocation/expiry checks need no bearer token,
+# token-family key, credential or writable session access. Own this allowlist
+# here so installation and read-only inspection cannot disagree about IAM scope.
+OPERATOR_SESSION_METADATA_COLUMNS: Final = (
+    "api_session_id",
+    "operator_id",
+    "revoked_at",
+    "absolute_expires_at",
+    "idle_expires_at",
+)
 OPERATOR_AUTHORIZATION_FENCE_BODY: Final = """
 BEGIN
     IF requested_operator_id IS NULL
@@ -142,7 +152,14 @@ SELECT
          object.oid IS NOT NULL
          AND pg_catalog.has_table_privilege(runtime.oid, object.oid, 'SELECT') = iam.readable
          AND (iam.readable OR NOT pg_catalog.has_any_column_privilege(
-                 runtime.oid, object.oid, 'SELECT'))
+                 runtime.oid, object.oid, 'SELECT')
+              OR (iam.table_name = 'api_sessions' AND NOT EXISTS (
+                  SELECT 1 FROM pg_catalog.pg_attribute attribute
+                  WHERE attribute.attrelid = object.oid AND attribute.attnum > 0
+                    AND NOT attribute.attisdropped
+                    AND attribute.attname::text <> ALL(CAST(:session_metadata_columns AS text[]))
+                    AND pg_catalog.has_column_privilege(
+                        runtime.oid, object.oid, attribute.attnum, 'SELECT'))))
          AND NOT pg_catalog.has_table_privilege(runtime.oid, object.oid,
                  'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT pg_catalog.has_any_column_privilege(runtime.oid, object.oid,
@@ -195,6 +212,7 @@ def require_operator_authorization_fence_installation(
                     "owner_name": owner.role_name,
                     "execute_role": OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE,
                     "expected_body": OPERATOR_AUTHORIZATION_FENCE_BODY,
+                    "session_metadata_columns": list(OPERATOR_SESSION_METADATA_COLUMNS),
                 },
             )
             .mappings()

@@ -21,6 +21,15 @@ Prepared browser/PDF prefixes are not installed/activated by the partial API/Web
 New private history must not be removed by rollback; restore a schema-0084-compatible
 release set or keep the feature disabled. Existing numerical runs/pins are preserved.
 
+The first actual startup exposed an IAM composition conflict: Kakao's column-only
+session liveness SELECT was granted correctly, but the older search-fence inspection
+forbade every session column. Identity now owns one five-column metadata allowlist,
+reused by Catalog grants and the read-only inspector. Full-table SELECT, other
+session columns, credentials/tokens and all IAM writes remain forbidden. The fixed
+SQL function/body/ACL and actual operator/source policy are unchanged. This is not
+permission to disable inspection or substitute an actor. QUERY and Catalog must
+both select the compatible successor; the numerical workers/bundles stay pinned.
+
 ## 2026-11-09 Excel content-planning successor
 
 Context/admission 1.22 pins `20261109_0076`, including the additive 0075 tables.

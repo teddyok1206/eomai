@@ -139,6 +139,13 @@ def test_exact_read_only_inspection_and_fixed_execute_role() -> None:
         "owner_name": "synthetic_owner",
         "execute_role": "eom_catalog_manager_runtime",
         "expected_body": OPERATOR_AUTHORIZATION_FENCE_BODY,
+        "session_metadata_columns": [
+            "api_session_id",
+            "operator_id",
+            "revoked_at",
+            "absolute_expires_at",
+            "idle_expires_at",
+        ],
     }
     assert OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE == "eom_catalog_manager_runtime"
     for rule in (
@@ -153,6 +160,10 @@ def test_exact_read_only_inspection_and_fixed_execute_role() -> None:
         "schema_acl.grantee NOT IN",
         "pg_auth_members",
         "has_any_column_privilege",
+        "iam.table_name = 'api_sessions'",
+        "attribute.attname::text <> ALL(CAST(:session_metadata_columns AS text[]))",
+        "attribute.attnum > 0",
+        "NOT attribute.attisdropped",
         "operator_credentials",
         "api_sessions",
         "api_tokens",

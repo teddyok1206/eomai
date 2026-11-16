@@ -369,6 +369,44 @@ def test_actual_limited_role_executes_fixed_routine_and_denies_iam_writes(
         engine.dispose()
 
 
+@pytest.mark.parametrize("extra", ["token_family_id", "authenticated_at", "TABLE", "UPDATE"])
+def test_session_metadata_columns_coexist_with_fence_but_extra_access_is_denied(prepared, extra):
+    """Actual PostgreSQL grants, not a mocked inspection success or a production role."""
+    owner = _guard_process(prepared, runtime=False)
+    runtime = _guard_process(prepared, runtime=True)
+    role = prepared.runtime_role
+    assert role.startswith("eom_api_test_runtime_")
+    columns = ", ".join(routine.OPERATOR_SESSION_METADATA_COLUMNS)
+    try:
+        with owner.begin() as connection:
+            connection.execute(text(f"GRANT SELECT ({columns}) ON app.api_sessions TO {role}"))
+        with runtime.begin() as connection:
+            require_operator_authorization_fence_installation(connection, prepared.owner_pin)
+            connection.execute(text(f"SELECT {columns} FROM app.api_sessions WHERE false"))
+        statement = (
+            f"GRANT SELECT ON app.api_sessions TO {role}"
+            if extra == "TABLE"
+            else f"GRANT UPDATE (revoked_at) ON app.api_sessions TO {role}"
+            if extra == "UPDATE"
+            else f"GRANT SELECT ({extra}) ON app.api_sessions TO {role}"
+        )
+        with owner.begin() as connection:
+            connection.execute(text(statement))
+        with runtime.begin() as connection, pytest.raises(OperatorAuthorizationFenceError):
+            require_operator_authorization_fence_installation(connection, prepared.owner_pin)
+    finally:
+        with owner.begin() as connection:
+            connection.execute(text(f"REVOKE ALL ON app.api_sessions FROM {role}"))
+            connection.execute(
+                text(
+                    f"REVOKE SELECT ({columns},token_family_id,authenticated_at), "
+                    f"UPDATE (revoked_at) ON app.api_sessions FROM {role}"
+                )
+            )
+        owner.dispose()
+        runtime.dispose()
+
+
 def test_nested_rollback_retains_outer_fence_against_actual_role_revoke(
     prepared: PreparedFence,
 ) -> None:

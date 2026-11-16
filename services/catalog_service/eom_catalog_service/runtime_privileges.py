@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Final, Literal
 
+from eom_identity_service.operator_authorization_fence_sql import OPERATOR_SESSION_METADATA_COLUMNS
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
@@ -383,7 +384,7 @@ COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
     (
         "SELECT",
         "api_sessions",
-        ("api_session_id", "operator_id", "revoked_at", "absolute_expires_at", "idle_expires_at"),
+        OPERATOR_SESSION_METADATA_COLUMNS,
     ),
 )
 
