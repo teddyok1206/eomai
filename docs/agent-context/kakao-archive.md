@@ -122,8 +122,14 @@ binding·owner 범위에서 수행하며 이전 mapping과 정확한 학생 표�
 호출 use case 책임이며 이 함수 자체가 private 원문 조회 권한은 아니다.
 `kakao_question_selections.py`는 `question-compose-v1`의 작은 block/span 선택과 exact
 질문 revision/version을 위 순수 분할·병합에 연결한다. 결과 ID/시각은 저장 owner가 예약해
-전달하며 요청이 원문·사진 pointer·권한을 주장하지 못한다. 아직 다중 질문의 원자적 저장과
-공개 명령 연결을 대신하지 않는다. 기존 `kakao_question_composition.py`는 다른 책임인
+전달하며 요청이 원문·사진 pointer·권한을 주장하지 못한다.
+`kakao_question_compose_service.py`는 이 선택을 기존 question/source/Artifact owner에
+연결한다. command와 순서 있는 입력·출력 ID를 예약하고, 파일 발행 이후 모든 새 질문과
+입력의 supersession을 한 transaction에 채택한다. 반복 요청은 같은 초기 출력 revision을
+읽으며 입력의 원래 revision과 packet은 유지된다. 목록만 superseded 질문을 제외한다.
+DB0088의 deferred adoption guard가 일부 질문만 저장되는 것을 막으며 기존 source-origin
+unique는 재수집 중복을 계속 막는다. source 구현/임시 DB 검증과 공개 API·GUI/운영 배포는
+구분한다. 기존 `kakao_question_composition.py`는 다른 책임인
 application 조립 지점이며 이 선택 규칙과 구분한다.
 `kakao_render_projection.py`는 packet 안의 요청한 학생 subset만 골라 exact source를
 로컬 렌더 manifest로 바꾼다. source binding·질문 revision·학생 표시·사진 포인터를

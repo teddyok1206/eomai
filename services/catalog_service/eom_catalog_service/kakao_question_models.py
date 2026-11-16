@@ -15,6 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from eom_catalog_service import kakao_question_composition_models  # noqa: F401
+
 
 class KakaoQuestionRecord(Base):
     __tablename__ = "kakao_questions"
@@ -48,6 +50,33 @@ class KakaoQuestionRecord(Base):
             deferrable=True,
             initially="DEFERRED",
         ),
+        ForeignKeyConstraint(
+            ["origin_composition_id", "question_id"],
+            [
+                "kakao_question_composition_outputs.composition_id",
+                "kakao_question_composition_outputs.question_id",
+            ],
+            name="fk_kakao_question_composed_origin",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        ForeignKeyConstraint(
+            ["superseded_by_composition_id", "question_id"],
+            [
+                "kakao_question_composition_inputs.composition_id",
+                "kakao_question_composition_inputs.question_id",
+            ],
+            name="fk_kakao_question_supersession",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "(origin_composition_id IS NULL AND origin_source_revision_id IS NOT NULL "
+            "AND origin_candidate_ordinal IS NOT NULL AND origin_occurrence_id IS NOT NULL) OR "
+            "(origin_composition_id IS NOT NULL AND origin_source_revision_id IS NULL "
+            "AND origin_candidate_ordinal IS NULL AND origin_occurrence_id IS NULL)",
+            name="ck_kakao_question_origin_kind",
+        ),
         UniqueConstraint("room_id", "origin_occurrence_id", name="uq_kakao_question_origin"),
         UniqueConstraint("owner_operator_id", "question_id", name="uq_kakao_question_owner"),
         UniqueConstraint("question_id", "room_id", name="uq_kakao_question_room"),
@@ -71,7 +100,7 @@ class KakaoQuestionRecord(Base):
             "origin_occurrence_id ~ '^kakaomessage_[0-9a-f]{32}$'", name="ck_kakao_question_origin"
         ),
         CheckConstraint(
-            "origin_candidate_ordinal BETWEEN 1 AND 100000 "
+            "(origin_candidate_ordinal IS NULL OR origin_candidate_ordinal BETWEEN 1 AND 100000) "
             "AND resource_version BETWEEN 1 AND 2147483647",
             name="ck_kakao_question_bounds",
         ),
@@ -80,9 +109,11 @@ class KakaoQuestionRecord(Base):
     owner_operator_id: Mapped[str] = mapped_column(String(41), nullable=False)
     source_binding_id: Mapped[str] = mapped_column(String(45), nullable=False)
     room_id: Mapped[str] = mapped_column(String(42), nullable=False)
-    origin_source_revision_id: Mapped[str] = mapped_column(String(47), nullable=False)
-    origin_candidate_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
-    origin_occurrence_id: Mapped[str] = mapped_column(String(45), nullable=False)
+    origin_source_revision_id: Mapped[str | None] = mapped_column(String(47))
+    origin_candidate_ordinal: Mapped[int | None] = mapped_column(Integer)
+    origin_occurrence_id: Mapped[str | None] = mapped_column(String(45))
+    origin_composition_id: Mapped[str | None] = mapped_column(String(49))
+    superseded_by_composition_id: Mapped[str | None] = mapped_column(String(49))
     current_revision_id: Mapped[str] = mapped_column(String(49), nullable=False)
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -199,6 +230,21 @@ class KakaoQuestionRevisionRecord(Base):
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
+            ["composition_id", "question_id", "question_revision_id"],
+            [
+                "kakao_question_composition_outputs.composition_id",
+                "kakao_question_composition_outputs.question_id",
+                "kakao_question_composition_outputs.question_revision_id",
+            ],
+            name="fk_kakao_question_revision_composition",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(command_id IS NOT NULL AND composition_id IS NULL) OR "
+            "(command_id IS NULL AND composition_id IS NOT NULL AND resource_version = 1)",
+            name="ck_kakao_question_revision_authority",
+        ),
+        ForeignKeyConstraint(
             ["room_id", "mapping_revision_id"],
             [
                 "kakao_room_mapping_revisions.room_id",
@@ -231,7 +277,8 @@ class KakaoQuestionRevisionRecord(Base):
     question_revision_id: Mapped[str] = mapped_column(String(49), primary_key=True)
     question_id: Mapped[str] = mapped_column(String(46), nullable=False)
     room_id: Mapped[str] = mapped_column(String(42), nullable=False)
-    command_id: Mapped[str] = mapped_column(String(45), nullable=False)
+    command_id: Mapped[str | None] = mapped_column(String(45))
+    composition_id: Mapped[str | None] = mapped_column(String(49))
     previous_revision_id: Mapped[str | None] = mapped_column(String(49))
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
     mapping_revision_id: Mapped[str] = mapped_column(String(48), nullable=False)

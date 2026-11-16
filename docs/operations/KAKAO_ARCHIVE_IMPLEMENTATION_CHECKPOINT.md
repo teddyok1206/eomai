@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 18:17 UTC 클릭 없는 스크롤 확인·질문 조합 저장
+
+- 사용자는 실제 카카오 화면에 **마우스 이동·스크롤만 허용하고 클릭은 금지**했다.
+  그 범위에서 먼저 스크롤만 검증했다. 이후 **채팅방 열기·닫기와 내보내기 버튼 hover**를
+  추가 허용하여 방 하나를 여는 클릭 1회만 실행했다. 키 입력·메시지 전송·내보내기 실행은
+  하지 않았다. 번역 팝업이 방 메뉴를 가려, 그 팝업 닫기/방 정보 메뉴 열기는 별도로 확인 중이다.
+  아직 내보내기에 hover했다고 주장하지 않는다. 합성 입력 개발은 계속 가능하다.
+- 기존 MANUAL은 ENDED/profile STOPPED·실제 프로세스 없음으로 확인했다. 원래
+  STOP_UNCONFIRMED 이력은 그대로 두었고, 사용자가 새 연결을 시작한 뒤 ACTIVE를 확인했다.
+  연결을 개발자가 임의로 되살리거나 TTL/인증정보를 바꾸지 않았다.
+- 실제 화면에서 채팅방 목록의 세로 wheel 3회만 수행했다. 전후 화면에서 목록 내부만
+  이동한 것을 확인했고 click/key/message는 0이다. 전체 방 inventory·CSV·사진 수집 검증은
+  아니다. screenshot 원문·이름·대화는 Git/Slack에 저장하지 않는다.
+- 원격 화면은 1440×960인데 현재 Chromium 창은 그보다 좁다. window manager 부재와
+  창 크기를 함께 정리해야 하며, Chromium 100% 기준과 창 장식/크기 고정은 **미구현**이다.
+  현재 배율·창 위치·크기와 사용자 프로필은 변경하지 않았다. 좌표를 실제 수집 selector로
+  채택하거나 지금 보이는 상담 필터를 전체 방이라고 간주하지 않는다.
+- source에는 JSON Schema/frozen 결과 DTO → 질문 조합 저장 owner → DB0088을 추가했다.
+  동일 요청은 같은 출력 ID/Artifact를 재사용하고, 분할/병합의 모든 출력과 입력 대체를
+  원자적으로 채택한다. 과거 질문 revision·packet·source origin 중복 방지 기록은 보존한다.
+  소스 철회·세션 만료·학생 mapping 변경·다른 편집 경합은 수락 직전에 다시 확인한다.
+- 새 disposable DB의 전체 migration·0088 되돌리기/재적용과 Kakao 저장/HTTP/PDF/metadata
+  **167 PASS**, focused 계약/편집 **137 PASS**, strict mypy4개/Ruff PASS다.
+  초기 테스트에서 fixture import 누락과 JSON Schema 예외 분류를 수정했다. 기존 오래된
+  disposable DB의 source 완료 시각 CHECK가 현재 source와 달라 한 건 실패한 것은 metadata로
+  확인한 뒤 새 DB에서 전체 migration으로 재검증했다. 운영 결함으로 추정해 상태를 고치지 않았다.
+- 이번 저장 소스는 **운영 미배포**다. 공개 split/merge API·BFF·GUI와 compatible release는
+  후속이며 현재 MANUAL/PDF 운영 설치와 AUTO 비활성 상태는 유지한다. 실제 한 방 수집부터
+  학생 PDF까지의 완료와 전체 방 주기 수집도 아직 남아 있다.
+
 ## 2026-11-16 17:49 UTC 사용자 채팅방 열림 확인·분할/병합 선택 입력
 
 - 사용자가 원격 화면에서 카카오 채팅방을 열었다고 확인했다. 실제 browser/remote unit도

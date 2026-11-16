@@ -170,9 +170,10 @@ class KakaoQuestionService:
         self._sources = sources
 
     @staticmethod
-    def _current_student(
+    def current_student_pin(
         session: Session, room: KakaoRoomRecord, mapping_id: str
     ) -> KakaoQuestionStudentPin | None:
+        """Shared question-write gate; caller holds the authorized room transaction."""
         if room.current_mapping_revision_id != mapping_id:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
         pair = session.execute(
@@ -210,6 +211,8 @@ class KakaoQuestionService:
         )
         if head is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        if head.superseded_by_composition_id is not None:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
         if (head.current_revision_id, head.resource_version) != (
             command.edit.parent_revision_id,
             command.expected_resource_version,
@@ -258,7 +261,7 @@ class KakaoQuestionService:
                 if isinstance(command, KakaoQuestionCreate)
                 else room.current_mapping_revision_id
             )
-            self._current_student(session, room, mapping_id)
+            self.current_student_pin(session, room, mapping_id)
             result = _Reservation(
                 "kakaocommand_" + uuid4().hex,
                 "kakaoquestion_" + uuid4().hex
@@ -324,7 +327,7 @@ class KakaoQuestionService:
                     reserved.question_id,
                     reserved.revision_id,
                 ).student
-            pin = self._current_student(session, room, reserved.mapping_id)
+            pin = self.current_student_pin(session, room, reserved.mapping_id)
             if isinstance(command, KakaoQuestionChange):
                 self._head(session, owner, command)
             else:
@@ -492,7 +495,7 @@ class KakaoQuestionService:
                 if stored.manifest != pointer:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_QUESTION_INVALID")
                 return KakaoQuestionMutation(question=stored, replayed=True)
-            pin = self._current_student(session, room, reserved.mapping_id)
+            pin = self.current_student_pin(session, room, reserved.mapping_id)
             if question.student != pin:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
             if isinstance(command, KakaoQuestionCreate):
@@ -948,6 +951,7 @@ class KakaoQuestionService:
                 .where(
                     KakaoQuestionRecord.owner_operator_id == owner,
                     KakaoQuestionRecord.source_binding_id == source_binding_id,
+                    KakaoQuestionRecord.superseded_by_composition_id.is_(None),
                     KakaoRoomRecord.state == "ACTIVE",
                     KakaoQuestionRevisionRecord.question_revision_id
                     == KakaoQuestionRecord.current_revision_id,

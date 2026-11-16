@@ -17,6 +17,7 @@ import eom_catalog_service.kakao_archive_models
 import eom_catalog_service.kakao_export_models
 import eom_catalog_service.kakao_manual_models
 import eom_catalog_service.kakao_packet_models
+import eom_catalog_service.kakao_question_composition_models
 import eom_catalog_service.kakao_question_models
 import eom_catalog_service.kakao_room_models
 import eom_catalog_service.kakao_source_models

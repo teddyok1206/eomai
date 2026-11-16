@@ -186,6 +186,27 @@ current/version을 검증하고 결과 ID/시각을 같은 command에 예약한 
 보존한다. 두 개의 독립 CREATE 호출로 분할을 흉내 내는 대안은 부분 저장과 재수집 중복을
 막지 못하므로 사용하지 않는다. **이 입력 연결만으로 저장/API/GUI가 활성화되지는 않는다.**
 
+저장 확장은 기존 question aggregate 안에 composition command·ordered input·reserved
+output의 작은 세 관계만 추가한다. command는 owner/room/key/request SHA와 mapping·시각을
+고정하고, 입력은 exact question/revision/version, 출력은 서버 예약 ID만 가진다.
+본문·분할 selector·사진 bytes는 DB에 복사하지 않는다. 재시도는 같은 명령 hash와 예약을
+사용하며, 결과 manifest의 provenance가 원래 입력을 가리킨다. 완료 command가 작은 receipt다.
+
+원래 source 후보의 origin 세 필드와 `UNIQUE(room,occurrence)`는 유지한다. 조합으로
+만든 질문만 source origin 대신 composition output FK를 가진다. 가짜 occurrence를 만들지
+않는다. 기존 질문 revision의 단일 command FK는 보존하고 조합 결과에만 별도 output FK를
+허용한다(둘 중 정확히 하나). 입력 head에는 `superseded_by_composition_id`를 한 번 기록한다.
+이는 current revision을 덮는 변경이 아니라 후속 질문으로 대체됐다는 관계이며, content
+resource_version은 그대로다. 이후 편집/재조합은 거부하고 exact 과거 조회·packet은 유지한다.
+목록은 같은 indexed page에서 superseded를 제외하고, 원래 수집 origin은 계속 중복을 막는다.
+
+기존 room 잠금 아래 입력 ID 정렬로 CAS하고 모든 출력/입력 대체/command 완료를 한 번에
+채택한다. 새 queue·lease는 없다. lookup·정렬은 O(Q log Q), 최대100 입력/출력이며 source
+해석은 기존 batch resolver를 재사용한다. command replay UNIQUE, input exact revision FK,
+output 예약 UNIQUE와 immutable trigger를 사용한다. migration rollback은 composition
+이력이 하나라도 있으면 거부한다. 이 변경은 isolated DB에서 먼저 검증하며 현재 MANUAL
+운영 연결과 별개다.
+
 순서는 **JSON Schema → frozen DTO → owner/ORM → Catalog RPC → API/BFF → GUI**이다.
 기존 `question-manifest-v1`, `question-edit-v1`, `question-packet-v1`, worker render 계약은 재사용한다.
 source-resolution/source-admission, 콘텐츠 command/page, export request/status/output receipt에 필요한

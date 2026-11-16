@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/question-composition-result-v1/1.0",
+  "title": "Atomically adopted question composition receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "composition_id", "operation", "source_binding_id", "room_id", "inputs", "outputs", "replayed"],
+  "properties": {
+    "schema_version": {"const": "kakao-question-composition-result/1.0"},
+    "composition_id": {"type": "string", "pattern": "^kakaocomposition_[0-9a-f]{32}$"},
+    "operation": {"enum": ["SPLIT", "MERGE"]},
+    "source_binding_id": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "room_id": {"type": "string", "pattern": "^kakaoroom_[0-9a-f]{32}$"},
+    "inputs": {
+      "type": "array", "minItems": 1, "maxItems": 100,
+      "items": {"$ref": "eom://schemas/kakao-archive/question-compose-v1/1.0#/$defs/Input"}
+    },
+    "outputs": {
+      "type": "array", "minItems": 1, "maxItems": 100,
+      "items": {"$ref": "eom://schemas/kakao-archive/question-store-v1/1.0#/$defs/Stored"}
+    },
+    "replayed": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"const": "SPLIT"}}},
+      "then": {"properties": {"inputs": {"maxItems": 1}, "outputs": {"minItems": 2}}},
+      "else": {"properties": {"inputs": {"minItems": 2}, "outputs": {"maxItems": 1}}}
+    }
+  ]
+}
