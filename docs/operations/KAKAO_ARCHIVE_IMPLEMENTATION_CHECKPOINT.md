@@ -1,5 +1,27 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 19:01 UTC 설치본 headed 수신·종료 후 보존 PASS
+
+- stopped profile에서 `77fc7c0d6dbd190e20f8975788bca41e760e9f09`의 collector wheel
+  `sha256:80c396e1db0318de353a6842cef8d8322775219a9fc7a410549d4765ff694c75`을
+  후속 설치했다. pure contracts는 앞선3fbece8c 설치본을 유지한다. source138개 검사와
+  후속61개 focused 검사가 통과했고, 공식 설치 stage/verify·wheel member/RECORD·전체
+  prefix fingerprint/pip check와 HTTPS Studio login200을 확인했다.
+- release receipt는 `/var/lib/eom-kakao-download-release-77fc7c0d/installed.json`이다.
+  API/Catalog8e2e11eb·Web636e39fa·DB0087·GPU INDEX/QUERY pin은 유지한다. Catalog만
+  stopped-browser 릴리스 검증 뒤 재기동했고, 원래 profile/비밀번호/실패 이력은 보존한다.
+- 실제 설치 `run_manual`/Xvnc/SDK/다운로드 수신/streaming hash/receipt/close를 전용 UID·
+  `NoNewPrivileges`/`RestrictSUIDSGID`/PrivateTmp/PrivateDevices 아래에서 두 번 실행했다.
+  실제 profile과 NAS를 mask하고 network를 격리했다. 새 합성 staging 위치와 익명 UI
+  exercise만 주입했으며 launch/readiness나 다운로드 완료를 mock으로 바꾸지 않았다.
+- 두 cycle에서 합성 CSV 총4건의 수신·byte/hash·context 종료 후 보존과 VNC endpoint
+  cleanup이 PASS, process exit0이다. 기존 두 실패 canary는 각각 보존했다. 새 검증 기록은
+  `staging/kakao-download-installed-headed-77fc7c0d.log`와 root 보관된 전용 canary receipt다.
+- **실제 카카오 CSV·사진·학생 PDF는 여전히 미검증**이다. 사용자에게 이제 같은 연결의
+  MANUAL을 열어 달라고 한 번 요청했다. 다음은 기존 승인 범위의 실제 내보내기1회와 파일
+  수신·원문 포맷 검증이다. 내보내기 source를 방/사진 occurrence에 연결한 것으로 가정하지 않는다.
+  기본80%/창 장식은 아직 미적용이며 다운로드 수정 성공과 섞어 보고하지 않는다.
+
 ## 2026-11-16 MANUAL 다운로드 배포·sandbox 후속
 
 - `3fbece8c` collector/pure-contract wheel을 stopped profile에서 전용 browser 환경에만
