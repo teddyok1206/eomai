@@ -38,6 +38,12 @@
   첫 사용자 경로를 닫는 것이다. source 후보 수락 연결과 atomic 분할/병합도 남아 있다.
   그 뒤 호환 release/보호 runtime 배포와 실제 한 방→전체 주기 수집 검증을 진행한다.
 
+후속 설치 패키지 검사에서 c081dd76의 committed OpenAPI가 신규 질문 routes보다 이전인 것을
+확인했다. 공식 source exporter로 명세/hash를 갱신한다. 또한 공식 installer의 migration
+verify callback이 source head0087이 아닌0084를 가리키던 것을0087로 정렬하고, 기존0083까지
+고정돼 있던 배포 회귀 검사의 기대값/closed callback 집합을 실제 지원된0084/0087과 대조한다.
+이 수정은 추가 migration 실행이나 운영 변경이 아니며 새 wheel 검증 뒤 후속 release에 포함한다.
+
 ## 진행 중간 저장 — 영속 출력 요청·claim·현재 권한 파일 열기
 
 `99f97a65` 뒤에 기존 PDF executor/publisher를 바꾸지 않고 export 저장 owner를 연결했다.
