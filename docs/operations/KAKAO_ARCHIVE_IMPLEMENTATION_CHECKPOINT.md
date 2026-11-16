@@ -1,5 +1,37 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 후속 운영 release — 학생별 PDF 연결 소스 반영
+
+1. 실제 사용 경로: `eb9e7e1f`에 질문 선택/packet/PDF API·BFF·Studio 연결을 커밋·푸시했다.
+   설치 기동 import 결함을 `8e2e11eb95d618cfcd7ee8f7ae810297d96b674e`에서 수정·푸시했으며,
+   **현재 API·Web·Catalog/QUERY 호환 release는 8e2e11eb, 운영 DB는0087**이다.
+   Web은 공식 offline closure 설치 후 명시적으로 재기동했다. 공개 HTTPS login200과
+   API READY를 확인했다. 이것은 아직 실제 학생 자료 PDF 생성의 증거가 아니다.
+2. 합성 검증: 아래152개 PostgreSQL 검증을 보존한다. 전체 Kakao source/API/BFF·브라우저·
+   의존성/개발 문맥·배포 검사는 재실행 **1426 PASS / 132.25초**였다. 이후 실제 기동에서
+   드러난 optional renderer annotation import를 수정했고 disabled composition 직접 생성
+   등21개, 배포/기동 경계69개 및 mypy를 통과했다. 겹치는 검사를 합산하지 않는다.
+3. 실제 카카오 계정 검증: **NOT_PERFORMED**. 사용자 계정에 접속하거나 대화를 전송하지 않았다.
+4. 운영 활성 범위: API/GUI와 저장 schema만 반영했다. AUTO 수집·MANUAL 원격 화면·PDF
+   보호 실행은 아직 비활성이다. 전용 browser/remote/pdf의 새 wheel과 dependency 검사를
+   마쳤고 별도 보호 runtime publication/설치를 진행한다. 기출·창작·벡터 정본을 변경하지 않았다.
+5. 다음: 보호 runtime·현재 권한 Caddy 경로 → 사용자의 실제 카카오 로그인 → 관리자 권한으로
+   한 방의 조회/CSV/사진 occurrence → 저장 질문/학생 PDF의 실제 재조회·다운로드를 검증한다.
+   atomic 분할/병합 저장 및 전체 방 주기 수집도 남아 있다. 부분 배포로 goal을 완료하지 않는다.
+6. 실패/복구: 최초 eb9 배포는 Catalog의 TYPE_CHECKING 전용 class를 postponed annotation
+   없이 참조해 중단됐다. 실패 로그/시작 marker는 보존했다. source0087을 되돌리지 않고
+   successor 설치본의 실제 Catalog runner import를 확인한 뒤8e 호환 set으로 복구했다.
+   successor 첫 실행의 admission receipt 누락도 원래 기록과 config-before SHA/head를
+   확인하고 같은 배포의 명시적 복구로 처리했다. 이미 적용한 migration을 재실행하지 않았다.
+   공식 API wheel/실제 설치 검사에도 Catalog runner import를 추가해 재발을 차단한다.
+
+운영 evidence 위치는 `/var/lib/eom-kakao-delivery-release-8e2e11eb/api`와
+`/var/lib/eom-api/deployments/8e2e11eb95d618cfcd7ee8f7ae810297d96b674e.json`이다.
+이전 eb9 실패 및 원래 source/설정 백업도 별도 control directory에 보존했다.
+INDEX/자료학습은 배포 전 FAILED였던 상태/설치 pin을 그대로 보존했으며 이번 작업에서
+복구·재개했다고 주장하지 않는다. creative producer는 지원된 drain 후 새 호환 source로 재개했다.
+
+
 ## 진행 중간 저장 — 학생별 PDF의 실제 API·저장·Studio 다운로드 연결
 
 기준 commit은 `4ba17415`다. 새 delivery wire schema를 먼저 정의하고 기존

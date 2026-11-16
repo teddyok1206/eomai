@@ -119,6 +119,7 @@ def test_new_release_pins_all_four_wheels_through_build_inspection_install_and_r
     assert '"${SOURCE_ROOT}/packages/kakao_archive_contracts" >/dev/null' in build
     assert source.count("--kakao-release") == 3
     assert 'MIGRATION_VERIFY_0087 "${COMMIT}"' in source
+    assert source.count('"eom_catalog_service.application_runner",') == 2
     assert 'MIGRATION_VERIFY_0079 "${COMMIT}"' not in source
     assert 'str(by_prefix["eom_kakao_archive_contracts"])' in source
     assert '"eom_kakao_archive_contracts.kakao_remote"' in source

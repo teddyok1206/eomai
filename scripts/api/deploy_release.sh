@@ -2159,6 +2159,7 @@ for recovery_module in (
     "eom_kakao_archive_contracts",
     "eom_kakao_archive_contracts.kakao_remote",
     "eom_catalog_service.kakao_manual_service",
+    "eom_catalog_service.application_runner",
     "eom_operator_identity.errors",
     "eom_identity_service.local_admin_recovery",
     "eomctl.operator",
@@ -2813,6 +2814,7 @@ for module in (
 for module in (
     "eom_kakao_archive_contracts.kakao_remote",
     "eom_catalog_service.kakao_manual_service",
+    "eom_catalog_service.application_runner",
     "eom_operator_identity.errors",
     "eom_identity_service.local_admin_recovery",
     "eomctl.operator",
