@@ -166,6 +166,7 @@ from eom_web_gui.kakao_archive_contracts import (
     BindingUpdatePolicy,
     SourceBinding,
 )
+from eom_web_gui.kakao_room_contracts import Room, RoomCommand, RoomMap, RoomMutation, RoomPage
 from eom_web_gui.kakao_student_contracts import (
     Student,
     StudentCommand,
@@ -499,6 +500,34 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def kakao_room_list(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> RoomPage: ...
+
+    async def kakao_room_read(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        mapping_revision_id: str | None = None,
+    ) -> Room: ...
+
+    async def kakao_room_command(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        room_id: str,
+        value: RoomCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> RoomMutation: ...
+
     async def kakao_student_list(
         self, session: WebSession, *, limit: int = 50, cursor: str | None = None
     ) -> StudentPage: ...
@@ -1331,6 +1360,128 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def kakao_room_list(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> RoomPage:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/rooms",
+            params={
+                "source_binding_id": source_binding_id,
+                "limit": limit,
+                **({"cursor": cursor} if cursor else {}),
+            },
+        )
+        try:
+            result = RoomPage.model_validate(self._data(response))
+            ids = [entry.room_id for entry in result.items]
+            if (
+                len(ids) > limit
+                or ids != sorted(set(ids))
+                or any(entry.source_binding_id != source_binding_id for entry in result.items)
+                or any(cursor is not None and identity <= cursor for identity in ids)
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different room page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_room_read(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        mapping_revision_id: str | None = None,
+    ) -> Room:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/rooms/{quote(room_id, safe='')}",
+            params={
+                "source_binding_id": source_binding_id,
+                **(
+                    {"mapping_revision_id": mapping_revision_id}
+                    if mapping_revision_id is not None
+                    else {}
+                ),
+            },
+        )
+        try:
+            result = Room.model_validate(self._data(response))
+            if (
+                result.source_binding_id != source_binding_id
+                or result.room_id != room_id
+                or (
+                    mapping_revision_id is not None
+                    and result.mapping.mapping_revision_id != mapping_revision_id
+                )
+            ):
+                raise ValueError("different room revision")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_room_command(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        room_id: str,
+        value: RoomCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> RoomMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/rooms/{quote(room_id, safe='')}/mapping",
+            params={"source_binding_id": source_binding_id},
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+        )
+        try:
+            result = RoomMutation.model_validate(self._data(response))
+            room, mapping = result.room, result.room.mapping
+            if (
+                room.source_binding_id != source_binding_id
+                or room.room_id != room_id
+                or room.state != "ACTIVE"
+                or room.resource_version != value.expected_resource_version + 1
+                or mapping.resource_version != room.resource_version
+                or mapping.previous_revision_id != value.parent_revision_id
+                or mapping.reason != value.reason
+            ):
+                raise ValueError("different room successor")
+            if isinstance(value, RoomMap):
+                if (
+                    mapping.state != "MAPPED"
+                    or mapping.student_id != value.student_id
+                    or mapping.student_display_revision_id != value.student_display_revision_id
+                ):
+                    raise ValueError("different mapped student revision")
+            elif mapping.state != "UNMAPPED" or any(
+                x is not None
+                for x in (
+                    mapping.student_id,
+                    mapping.student_display_revision_id,
+                    mapping.student_display_name,
+                )
+            ):
+                raise ValueError("different unmapped room")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def kakao_student_list(
         self, session: WebSession, *, limit: int = 50, cursor: str | None = None
     ) -> StudentPage:

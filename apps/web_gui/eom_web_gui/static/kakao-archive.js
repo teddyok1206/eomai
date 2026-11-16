@@ -1,5 +1,6 @@
 // Presentation only: original messages, revisions and source authority belong to Catalog.
 import {createKakaoStudents} from "./kakao-students.js";
+import {createKakaoRooms} from "./kakao-rooms.js";
 const BASE = "/kakao-archive";
 const ID = /^[a-z][a-z0-9_]{1,48}_[a-f0-9]{32}$/;
 const TERMINAL_RUNS = new Set(["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "PAUSED", "AUTH_REQUIRED"]);
@@ -51,9 +52,15 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   let permissions = new Set(), roles = new Set(), binding = null, run = null, currentRoom = null;
   let collectionIntent = null, collectionPending = false, bindingRows = new Map();
   let bindingIntent = null, bindingPending = false;
-  let questionRows = new Map(), roomRows = new Map(), packetRows = new Map();
+  let questionRows = new Map(), packetRows = new Map();
   const nodes = {};
   const students = createKakaoStudents({document, api, explainError});
+  const rooms = createKakaoRooms({document, api, explainError, onSelect: row => {
+    if (!active || !archiveReady() || row.source_binding_id !== binding?.source_binding_id) return;
+    const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear();
+    empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
+    void loadQuestions(token).catch(error => { if (live(token)) message(explainError(error), true); });
+  }});
 
   function node(tag, text, className = "") {
     const result = document.createElement(tag);
@@ -88,9 +95,9 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   }
   function clearSelection() {
     binding = null; run = null; currentRoom = null; runGeneration++; questionListGeneration++;
-    roomRows.clear(); questionRows.clear(); packetRows.clear();
+    void rooms.setBinding(null); questionRows.clear(); packetRows.clear();
     nodes.connection.replaceChildren(); nodes.run.replaceChildren();
-    nodes.rooms.replaceChildren(); nodes.questions.replaceChildren(); nodes.packets.replaceChildren();
+    nodes.questions.replaceChildren(); nodes.packets.replaceChildren();
     clearDetails(); stopTimer();
   }
   function clearPrivateView() {
@@ -147,6 +154,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     publications.setAttribute("aria-label", "만든 자료"); publications.append(node("h3", "만든 자료"));
     nodes.packets = node("div"); publications.append(nodes.packets);
     nodes.students = node("section"); students.install(nodes.students);
+    rooms.install(nodes.rooms);
     root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.students, nodes.run, work, publications);
     clearDetails(); syncBootstrapControls();
   }
@@ -289,11 +297,12 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
         throw new Error("지원하지 않는 채널 연결 상태입니다.");
       }
       binding = detail; nodes.bindings.value = value;
+      await rooms.setBinding(detail);
+      if (!live(token)) return;
       nodes.connection.replaceChildren(node("strong", detail.display_name), status(detail.state));
       if (!archiveReady()) {
         const retired = detail.state === "RETIRED";
         nodes.connection.append(node("p", retired ? "해제된 연결 준비입니다. 보관된 이력은 유지됩니다." : "연결 이름을 저장했습니다. 카카오 로그인과 대상 채널 확인은 아직 준비되지 않았습니다. 자동 수집하지 않습니다."));
-        empty(nodes.rooms, "채널 확인 후 대화방을 열 수 있습니다.");
         empty(nodes.questions, "대화를 수집한 뒤 질문을 확인할 수 있습니다.");
         empty(nodes.packets, "질문을 확인한 뒤 PDF 자료를 만들 수 있습니다.");
         if (!retired && mayManage()) {
@@ -315,7 +324,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
         collect.textContent = "같은 수집 요청 확인";
       }
       nodes.connection.append(technicalDetails([["연결", value], ["수집 정책", detail.collection_policy_revision_id]]));
-      await Promise.all([loadRooms(token), loadQuestions(token), loadPackets(token)]);
+      await Promise.all([loadQuestions(token), loadPackets(token)]);
       if (live(token)) {
         message("원문을 확인한 뒤 학생과 질문 범위를 검토해 주세요.");
         if (detail.latest_run_id) await observeRun(detail.latest_run_id, token);
@@ -392,27 +401,6 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     } catch (error) { if (live(token) && request === runGeneration) message(`수집 상태를 확인하지 못했습니다. ${explainError(error)}`, true); }
   }
 
-  async function loadRooms(token, cursor = null) {
-    const query = new URLSearchParams({source_binding_id: binding.source_binding_id, limit: "50"});
-    if (cursor) query.set("cursor", cursor);
-    const page = pageValues(await api(`${BASE}/rooms?${query}`));
-    if (!live(token)) return;
-    if (!cursor) roomRows.clear();
-    for (const row of page.items) { identifier(row.room_id); roomRows.set(row.room_id, row); }
-    nodes.rooms.replaceChildren();
-    for (const row of roomRows.values()) {
-      const entry = node("div", undefined, "kakao-list-row");
-      const select = button(row.display_name, async () => {
-        if (!live(token)) return;
-        currentRoom = row.room_id; clearDetails(); questionRows.clear();
-        empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
-        try { await loadQuestions(token); } catch (error) { if (live(token)) message(explainError(error), true); }
-      });
-      entry.append(select, node("small", row.student_display_name || "학생 연결 필요")); nodes.rooms.append(entry);
-    }
-    if (!roomRows.size) empty(nodes.rooms, "수집한 대화방이 없습니다.");
-    more(nodes.rooms, page.next_cursor, next => loadRooms(token, next), token);
-  }
 
   async function loadQuestions(token, cursor = null) {
     const roomId = currentRoom, request = ++questionListGeneration;
@@ -537,12 +525,14 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   function setOwner(next) {
     if (next === owner) return;
     students.setOwner(next);
+    rooms.setOwner(next);
     owner = next || null; permissions = new Set(); roles = new Set();
     generation++; listGeneration++; collectionIntent = null; collectionPending = false; bindingIntent = null; bindingPending = false;
     if (installed) { clearPrivateView(); nodes.refresh.disabled = false; }
   }
   function setPermissions(values) {
     students.setPermissions(values);
+    rooms.setPermissions(values);
     permissions = new Set(values);
     generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
@@ -553,9 +543,10 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     if (installed) clearPrivateView();
     if (active && owner && allowed("read")) void refresh();
   }
-  async function open() { install(); active = true; generation++; await Promise.all([refresh(), students.open()]); }
+  async function open() { install(); active = true; generation++; rooms.open(); await Promise.all([refresh(), students.open()]); }
   function close() {
     students.close();
+    rooms.close();
     active = false; generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
     // A pending request keeps its key while the same owner navigates away and back.

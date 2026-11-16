@@ -13,7 +13,7 @@ function studentValue(value) {
       !["ACTIVE", "RETIRED"].includes(value.state) || !Number.isInteger(value.resource_version) ||
       value.resource_version < 1 || value.resource_version > 2147483647 ||
       (value.resource_version === 1) !== (value.previous_revision_id === null) ||
-      typeof value.display_name !== "string" || !value.display_name.trim() || value.display_name.length > 128 ||
+      typeof value.display_name !== "string" || !value.display_name.trim() || [...value.display_name].length > 128 ||
       /[\u0000-\u001f\u007f]/.test(value.display_name) || !/^sha256:[a-f0-9]{64}$/.test(value.sha256 || "")) {
     throw new Error("학생 정보를 확인하지 못했습니다.");
   }
@@ -85,7 +85,7 @@ export function createKakaoStudents({document, api, explainError}) {
       nodes.detail.append(node("p", "앞으로 사용할 학생 목록에서는 제외됩니다. 기존 자료와 이름 변경 이력은 유지됩니다."));
     } else if (allowed("edit")) {
       const form = node("form", undefined, "kakao-student-edit"); form.setAttribute("aria-label", "학생 이름 변경");
-      const label = node("label", "표시 이름"), input = node("input"); input.type = "text"; input.maxLength = 128; input.required = true;
+      const label = node("label", "표시 이름"), input = node("input"); input.type = "text"; input.maxLength = 256; input.required = true;
       input.value = value.display_name; input.autocomplete = "off"; label.append(input);
       const save = node("button", "이름 저장", "button secondary"); save.type = "submit";
       form.append(label, save); form.addEventListener("submit", event => {
@@ -106,7 +106,7 @@ export function createKakaoStudents({document, api, explainError}) {
     sync();
   }
   function validName(raw) {
-    if (!raw.trim() || raw.length > 128 || /[\u0000-\u001f\u007f]/.test(raw)) {
+    if (!raw.trim() || [...raw].length > 128 || /[\u0000-\u001f\u007f]/.test(raw)) {
       message("학생 이름을 확인해 주세요.", true); return null;
     }
     return raw;
@@ -149,7 +149,7 @@ export function createKakaoStudents({document, api, explainError}) {
       const value = studentValue(await api(`${BASE}/${encodeURIComponent(id)}`));
       if (!live(token) || request !== detailRequest) return;
       if (value.student_id !== id) throw new Error("다른 학생 정보가 반환됐습니다.");
-      renderDetail(value); message("학생 정보를 확인했습니다. 대화방 연결은 아직 준비 중입니다.");
+      renderDetail(value); message("학생 정보를 확인했습니다. 확인된 대화방을 선택해 학생을 연결할 수 있습니다.");
     } catch (error) {
       if (live(token) && request === detailRequest) {
         if (REJECTED.has(error?.code)) clear(); else clearDetail();
@@ -202,7 +202,8 @@ export function createKakaoStudents({document, api, explainError}) {
     root = container; root.classList.add("kakao-students"); root.setAttribute("aria-label", "학생 관리");
     nodes.message = node("p", undefined, "form-message"); nodes.message.setAttribute("role", "status"); nodes.message.setAttribute("aria-live", "polite");
     nodes.createForm = node("form", undefined, "kakao-student-edit"); nodes.createForm.setAttribute("aria-label", "학생 추가");
-    const label = node("label", "새 학생 이름"); nodes.name = node("input"); nodes.name.type = "text"; nodes.name.required = true; nodes.name.maxLength = 128; nodes.name.autocomplete = "off"; label.append(nodes.name);
+    // Native maxlength is UTF-16; validName enforces the contract's 128 code points.
+    const label = node("label", "새 학생 이름"); nodes.name = node("input"); nodes.name.type = "text"; nodes.name.required = true; nodes.name.maxLength = 256; nodes.name.autocomplete = "off"; label.append(nodes.name);
     nodes.create = node("button", "학생 추가", "button secondary"); nodes.create.type = "submit"; nodes.createForm.append(label, nodes.create);
     nodes.createForm.addEventListener("submit", event => { event.preventDefault(); const name = validName(nodes.name.value); if (name !== null) void begin("CREATE", null, {display_name: name}); });
     nodes.recovery = node("div");

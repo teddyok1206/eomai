@@ -129,10 +129,13 @@ PY
 
 cd "${REPOSITORY_ROOT}"
 if [[ "${action}" == "kakao-tests" ]]; then
+  export PYTHONPATH="${PYTHONPATH}:${REPOSITORY_ROOT}/packages/kakao_archive_contracts"
   export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
   export EOM_RUN_API_INTEGRATION=1 EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
   "${PYTHON}" -m alembic upgrade head
   "${PYTHON}" -m pytest -q tests/integration/test_kakao_archive_storage.py \
+    tests/integration/test_kakao_room_storage.py \
+    tests/integration/test_kakao_pdf_publication.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
   exit 0
 fi

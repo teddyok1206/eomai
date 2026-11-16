@@ -85,3 +85,36 @@ crop은 회전 후 크기의 정수 millionths 좌표이며 왼쪽/위는 floor,
 원본과 transform은 command manifest hash로 고정되고, 결과를 읽을 때 같은 transform과
 source hash, 블록 순서·비겹침·최소 크기를 재검증한다. 알려지지 않은 날짜는 임의의 생성
 날짜로 바꾸지 않고 owner의 명시적 unsupported 상태로 남긴다.
+## 검증된 PDF의 정본 발행 연결
+
+`kakao_pdf_publication.py`는 Orchestrator가 정지한 worker 결과를 검증해 만든
+`AcceptedKakaoPdf`를 기존 Catalog Artifact 발행에 연결한다. 별도 NAS writer,
+worker의 DB 접근, 새로운 파일 복제 계층은 만들지 않는다. 이 함수는 공개 API가 아니며
+실제 export owner가 현재 권한·binding·packet/student·attempt/fence를 확인하는 callback을
+발행 전과 직전 및 직후에 제공해야 한다.
+
+- 정본은 한 발행의 PDF, layout receipt, 순서 있는 page PNG다. 기존 core-only accepted
+  staging을 `commit_file_set`의 입력 경계로 그대로 넘기며, DB에는 이들의 exact Artifact
+  member pointer만 채택한다. 학생 이름·질문 본문은 일반 Job request/result에 넣지 않는다.
+- logical export/attempt와 publication Job, Artifact/revision, 각 member hash는 별개다.
+  `export + attempt`를 멱등 발행 key로 사용한다. 같은 attempt 재전송은 같은 파일 집합을
+  반환하고, 동일 key의 다른 내용은 conflict다. 새 attempt는 기존 실패 이력을 덮지 않는다.
+- request/manifest/layout/result의 exact pins, PDF/PNG media와 페이지 순서, 전체 member
+  집합을 확인한다. Artifact owner가 staged bytes를 expected hashes와 대조한다. worker의
+  임의 경로나 출처 이름은 발행 파일 이름으로 사용하지 않는다.
+- manifest는 검증된 원래 JSON bytes를 받는다. 선택 필드의 생략·명시적 null 또는 공백이
+  다를 수 있으므로 Pydantic 기본값을 채운 재직렬화 결과를 원본 hash로 사용하지 않는다.
+- 접근은 단일 export/attempt 조회와 최대 202개 member의 순서 있는 집합 검사다.
+  map/set으로 O(페이지 수), 실제 저장/검증은 O(출력 bytes), 추가 binary 복제는 없다.
+  domain lock은 발행 동안 유지하지 않는다. callback은 발행 권한을 대체하지 않는다.
+- 발행 뒤 DB CAS나 권한 확인이 실패하면 미채택 Artifact를 보존한다. 같은 완료 attempt의
+  발행·수락을 다시 시도하지 worker를 다시 실행하지 않는다. FAILED를 성공으로 바꾸지 않는다.
+- 단순 PDF 경로 저장은 파일 교체·다른 학생의 결과·중복 재렌더를 구별하지 못하므로
+  기존 immutable Artifact 발행을 재사용한다. 새 DB/schema는 이 연결 함수에 필요 없다.
+
+PDF/PNG binary pointer 형식 식별자는 각각
+`eom://schemas/kakao-archive/question-pdf/1.0`,
+`eom://schemas/kakao-archive/question-preview-png/1.0`이다. JSON Schema는 binary에
+적용하지 않으며 실제 media/bytes 검증은 격리 renderer와 core acceptance가 수행한다.
+layout은 기존 `eom://schemas/kakao-archive/worker-question-layout/1.0`을 사용한다.
+이 연결의 소스/합성 검증은 실제 DB export 수락·권한별 다운로드·운영 활성화 증거가 아니다.

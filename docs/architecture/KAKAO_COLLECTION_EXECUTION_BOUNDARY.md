@@ -207,3 +207,24 @@ owner가 그 객체를 파싱했다는 사실만으로 source identity acceptanc
 
 source 프로토콜 검사는 63개, 기존 remote 회귀와 합쳐 146개가 통과했다. 이는 위 신규 영속
 owner·Kakao runtime·운영 배포를 검증한 수치가 아니다. 그 단계의 검사와 실증은 각각 별도다.
+
+### 0082의 제한된 구현 범위
+
+첫 영속 slice는 room, immutable mapping revision, internal admission receipt의 3개 테이블이다.
+공개 room create나 channel activate API는 없다. Catalog 내부 admission은 현재 실제 actor와
+필수 owner-authority callback, 발행된 room-observation Artifact의 exact schema/hash/상태를
+모두 검사한다. callback은 이미 검증한 source bytes와 현재 runtime/source authority를
+대조하며 transaction 안에서 긴 파일 I/O를 하지 않는다. DRAFT binding에 자료를 연결해도
+채널이 ACTIVE가 된 것으로 표시하지 않는다. RETIRED binding은 새 admission/mapping을 거부한다.
+
+처음 확인한 room identity/display/evidence는 보존하고, 같은 verified source identity의
+재접수는 기존 room과 해당 시점 mapping을 반환한다. worker의 변경된 이름/ID로 기존 방을
+덮지 않는다. 주기적 재관측 이력은 후속 snapshot owner가 관리한다. mapping 수정만 current
+pointer/version을 CAS 갱신한다. immutable mapping revision이 명령 key/hash를 보유하므로
+mapping 전용 command 테이블을 또 만들지 않는다. 최초 UNMAPPED revision은 public key가 없다.
+
+admission과 mapping은 owner/scope/key 잠금 뒤 binding → room → student 순서로 짧게 잠근다.
+같은 source identity 동시 admission은 binding 내 identity 잠금과 unique constraint가 막고,
+두 mapping 수정은 room lock+expected revision/version으로 하나만 수락한다. 이름으로 identity를
+추정하지 않으며 public mapping은 같은 owner의 현재 ACTIVE student/display revision만 받는다.
+이전 mapping 조회와 same-key replay는 나중의 rename/unmap으로 내용이 바뀌지 않는다.

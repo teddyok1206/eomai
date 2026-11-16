@@ -43,6 +43,7 @@ from eom_identity_service.models import (
     RoleRecord,
 )
 from eom_operator_identity.contracts import ActorContext, ActorSource, ActorType, PermissionKey
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import Base
 from sqlalchemy import Engine, MetaData, event, func, select, text, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
@@ -692,13 +693,16 @@ def test_policy_and_receipt_are_immutable_and_cross_binding_pointer_fails(
 
 
 def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None:
-    # Compare this owner and its direct FK dependencies, independent of which other
+    # Compare this owner and its FK closure, independent of which other
     # application owners happened to be imported by test collection.
     metadata = MetaData()
-    OperatorRecord.__table__.to_metadata(metadata)
-    for table in tuple(Base.metadata.tables.values()):
-        if table.name.startswith("kakao_"):
-            table.to_metadata(metadata)
+    pending = [table for table in Base.metadata.tables.values() if table.name.startswith("kakao_")]
+    while pending:
+        table = pending.pop()
+        if table.key in metadata.tables:
+            continue
+        table.to_metadata(metadata)
+        pending.extend(foreign_key.column.table for foreign_key in table.foreign_keys)
 
     def include_object(obj, name, type_, reflected, compare_to):
         if type_ == "table":
@@ -708,7 +712,10 @@ def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None
     with creative_engine.connect() as connection:
         context = MigrationContext.configure(connection, opts={"include_object": include_object})
         assert compare_metadata(context, metadata) == []
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261116_0081"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == CURRENT_MIGRATION_REVISION
+        )
         rows = connection.execute(
             select(RoleRecord.role_key, PermissionRecord.permission_key)
             .join(

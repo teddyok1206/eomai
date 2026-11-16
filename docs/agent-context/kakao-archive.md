@@ -34,6 +34,12 @@ socket의 별도 closed operation family이고, 실제 actor/session만 전달�
 원래 명령 replay를 보존한다. `kakao_archive_commands.py`의 짧은 intent 잠금·정규 request
 hash만 binding과 공유한다. 학생 정보는 Item/Graph로 등록하지 않는다.
 
+`kakao_room_service.py`는 수락된 방 identity와 불변 학생 연결을 관리한다. 방 생성은
+검증된 관측 Artifact와 현재 owner 권한을 요구하는 내부 admission이고 공개 create API는
+없다. worker의 room ID·닉네임은 정본 식별자가 아니다. public 읽기/연결/해제는 실제
+binding·owner 범위에서 수행하며 이전 mapping과 정확한 학생 표시 revision을 보존한다.
+공통 intent 잠금과 짧은 CAS를 재사용하며, 방에는 현재 mapping pointer/version만 UPDATE한다.
+
 `kakao_question_editing.py`는 질문의 exact source span/사진·분할/병합·검토와 packet
 선택을 담당한다. `kakao_question_publication.py`는 결과 manifest만 기존 Artifact owner로
 발행하고 CSV/사진은 다시 복사하지 않는다. 발행 후 DB 수락·현재 mapping/source 권한은
@@ -49,6 +55,10 @@ worker 구현은 staged local members만 읽고 DB·NAS·브라우저 profile·�
 `kakao_pdf_execution.py`는 exact attempt/fence·로컬 input/output·중단 후 동일 결과
 수락을 연결한다. unit/template 소스는 있어도 실제 전용 UID·sandbox 설치 검증은
 별도 운영 gate이며 아직 PASS로 기록하지 않는다.
+`kakao_pdf_publication.py`는 이 완료 결과를 기존 Artifact 발행에 연결한다. 별도 NAS
+writer나 재렌더 없이 export+attempt의 같은 publication을 재조회하고, 원래 JSON bytes의
+hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export pointer 수락과
+권한별 다운로드는 별도 use case이며 아직 운영 완료로 표시하지 않는다.
 질문 한 개가 한 페이지이며 사진은 자르지 않는다. glyph/배치/필수 사진 조건이 실패하면
 명시적으로 검토 필요이고 성공 PDF로 발행하지 않는다. 검증된 원본과 EXIF 적용 derivative를
 구분하며 원본을 덮지 않는다. 새 의존 Pillow는 이 worker에서만 사용한다.
@@ -58,6 +68,24 @@ worker 구현은 staged local members만 읽고 DB·NAS·브라우저 profile·�
 실제 API가 없는 화면은 fixture 검증일 뿐 수집 성공으로 표시하거나 운영 연결로 보고하지 않는다.
 학생 디렉터리는 `kakao-students.js`가 담당한다. 실제 학생 RPC/API/BFF를 사용하며 연결
 선택과 독립된 owner/요청 순서 검사로 늦은 응답을 차단한다. 학생 생성 자체는 방 mapping이 아니다.
+`kakao-rooms.js`는 확인된 방 조회와 학생 연결/해제를 같은 경계에서 수행한다. 연결 변경은
+방 version·mapping parent·학생 표시 revision을 함께 확인한다. hard reload는 확정된 DB
+상태를 다시 읽으며, 아직 응답이 확정되지 않은 변경 intent는 같은 화면 세션에서만 보존한다.
+학생 이름과 변경 이유의 길이는 브라우저에서도 schema와 같은 Unicode code point 기준이다.
+
+## 실제 브라우저 프로세스 경계
+
+`kakao_browser_runtime.py`는 하나의 고정 systemd unit에 AUTO/MANUAL을 함께 연결한다.
+별도 `eom_kakao_archive_collector` supervisor는 실제 profile flock을 child lifetime 동안
+잡으며, root-installed 고정 driver만 실행한다. Catalog owner의 권한·현재 fence 검사는
+필수 callback이고, DB lease 만료만으로 profile을 넘기지 않는다. 종료는 실제 invocation,
+boot, cgroup 비어 있음과 exit status로 판정한다. 같은 실행의 시작 응답이 사라졌으면
+다시 launch하지 않고 원래 run을 관측한다.
+
+이 단계는 OS adapter 소스와 local subprocess 검증이다. driver, 카카오 selector, 원격
+gateway·영속 lease와 실제 전용 UID/systemd 설치는 아직 없다. READY 이전 시작 실패의
+staged intent도 보존하며, 후속 owner reconciliation 없이 marker를 삭제하거나 처음 실행으로
+위장해 재시작하지 않는다. 설치/권한/실사 미완료를 수집 성공으로 표시하지 않는다.
 
 ## 먼저 볼 코드·검사
 

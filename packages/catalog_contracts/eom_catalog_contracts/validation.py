@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "catalog-kakao-room-request-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-room-request-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-room-request-v1.schema.json",
+            "1.0",
+            "sha256:9c5c26bb544f32c29cc3cb14f78a762c58e9a2ff1728ce21b7dce87b7d73a4f2",
+        ),
+        "catalog-kakao-room-response-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-room-response-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-room-response-v1.schema.json",
+            "1.0",
+            "sha256:b8de7dfc59b706d31116415fc560f867b2f66047b864fcad6dd001875ff25139",
+        ),
+        "kakao-room-directory-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/room-directory-v1.schema.json",
+            "resources/kakao-archive/room-directory-v1.schema.json",
+            "1.0",
+            "sha256:645346cd90cb882eed807d86f9dc4fe2683ad90a285cf6df657d7534237796df",
+        ),
         "catalog-kakao-student-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-student-request-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-student-request-v1.schema.json",

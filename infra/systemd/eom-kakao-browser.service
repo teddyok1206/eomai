@@ -1,0 +1,54 @@
+[Unit]
+Description=EOM private Kakao browser profile (AUTO or MANUAL, mutually exclusive)
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=eom-kakao
+Group=eom-kakao
+RuntimeDirectory=eom-kakao-private
+RuntimeDirectoryMode=0700
+# Preserve failed-run request snapshots until explicit owner cleanup/reboot.
+RuntimeDirectoryPreserve=yes
+WorkingDirectory=/run/eom-kakao-private
+ExecStart=/srv/eom/conda/envs/eom-kakao-browser/bin/python -I -B -m eom_kakao_archive_collector.supervisor
+Restart=no
+KillMode=mixed
+TimeoutStartSec=15
+TimeoutStopSec=30
+SendSIGKILL=yes
+UMask=0077
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Browser needs network. Do not disable its Chromium sandbox or user namespaces.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=2G
+CPUQuota=200%
+TasksMax=256
+LimitNOFILE=1024
+LimitCORE=0
+ReadOnlyPaths=/var/lib/eom-kakao-runtime/browser/request.json /etc/eom/kakao-browser.env
+ReadWritePaths=/var/lib/eom-kakao/profile /var/lib/eom-kakao/profile.lock /run/eom-kakao-private
+# VNC directory/socket creation and access are an independently verified install gate.
+ReadWritePaths=-/run/eom-kakao-vnc
+InaccessiblePaths=/mnt/nas /home/eom/EOM -/home/eom/EOMIS /root /srv/eom/worker-homes
+InaccessiblePaths=-/var/lib/eom-catalog-api -/run/postgresql -/run/eom-catalog-api -/var/run/docker.sock
+InaccessiblePaths=-/run/dbus -/run/systemd/private -/usr/local/bin/codex

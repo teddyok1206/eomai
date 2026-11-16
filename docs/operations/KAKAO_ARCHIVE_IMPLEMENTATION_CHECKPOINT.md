@@ -161,3 +161,74 @@ Catalog 설치 권한은 새 테이블 3개 SELECT/INSERT 및 binding만 UPDATE�
   canonical room으로 연결하고 worker가 제안한 room ID나 닉네임을 정본으로 믿지 않는다.
   자세한 최소 순서는 `KAKAO_COLLECTION_EXECUTION_BOUNDARY.md`에 기록했다.
 - 운영 API/Web/Catalog·카카오 계정·기존 문항/벡터에는 변경이 없다. 새 로그인 요청도 없다.
+
+## 2026-11-16 P2 방 연결·PDF 발행 및 P3 프로세스 경계
+
+기준은 로컬 구현 체크포인트 `d37dc7dd` 이후 변경이다. **운영 배포·실제 카카오 수집은
+아직 하지 않았다.** 이번 검증에는 합성 이름/대화/그림만 사용했다.
+
+- 확인된 방의 canonical identity와 학생 mapping을 0082에 저장한다. 최초 원본·관측
+  Artifact를 현재 owner 권한으로 재확인하며, 공개 임의 방 생성 API는 없다. 이름으로
+  학생/방을 합치지 않는다. 연결·해제는 version/parent CAS, exact 학생 표시 revision,
+  같은 요청 재확인과 불변 이력을 유지한다. 목록은 기존 unique B-tree와 한 bounded join을
+  사용하며 같은 열의 중복 index는 만들지 않았다.
+- Studio 방 목록·학생 연결·해제까지 기존 RPC/API/BFF에 연결했다. 새로고침 후 확정된
+  DB 상태를 읽고 늦은 응답·다른 owner 응답을 차단한다. 미확정 변경의 intent 복구는 같은
+  페이지 세션 범위이며, 새로고침을 넘는 미확정 intent 복구까지 구현했다고 주장하지 않는다.
+  학생·방 이름과 사유의 길이는 UTF-16 길이가 아닌 schema의 Unicode code point 기준으로
+  맞췄고, 이모지·ZWJ 조합을 실제 Chromium에서 확인했다.
+- `kakao_pdf_publication.py`가 core에 수락된 PDF/PNG/layout을 기존 Artifact owner로
+  발행한다. export+attempt의 원래 발행을 재사용하며 재렌더하거나 PDF를 다른 정본으로
+  복사하지 않는다. DB/Job에는 ID·hash·count만 저장한다. 실제 export DB 수락과 비공개
+  다운로드 use case는 다음 단계이며 이 helper의 PASS와 구분한다.
+- 최초 PDF 소스 검사에서 5 FAIL/13 PASS를 확인했다. 유효한 원본 render JSON의 생략된
+  optional field가 Pydantic 직렬화에서 추가되어 hash가 달라지는 문제였다. 원래 입력
+  bytes를 검증하도록 수정했으며, whitespace/생략 필드도 보존하는 18개 focused 검사가
+  통과했다. 입력 hash 검사를 제거하거나 옛 결과를 변경하지 않았다.
+- 실제 임시 DB에서 0082 적용·되돌리기·재적용을 확인했다. 첫 migration 검사에서 source의
+  예상 head가 0079였던 차이를 발견하여 `CURRENT_MIGRATION_REVISION`을 0082로 맞췄다.
+  현재 운영 release operator의 0079 지원을 몰래 넓히지는 않았으며, 운영 설치에는 별도
+  compatible release/context successor가 필요하다.
+- 첫 통합 DB 검사: 40 PASS/8 FAIL. 하나는 좁은 metadata 테스트에 신규 Artifact FK의
+  dependency가 빠진 경우였고, 일곱은 negative fixture가 이미 승인된 Artifact를 직접
+  UPDATE해 기존 immutable trigger가 차단한 경우였다. metadata 검사는 FK closure를
+  포함하고, replay fault는 read boundary에서만 주입하도록 고쳤다. trigger/FK를 끄거나
+  approved 정본을 수정하지 않았다. fault 제거 뒤 원래 정본의 replay도 확인한다.
+- 후속 공식 guarded DB 검사 **48 PASS**: 기존 binding/학생, 신규 room 23개, PDF 발행
+  3개, 전체 Alembic/ORM composition. 같은 키의 동시 admission·mapping, 경쟁 CAS·학생
+  rename 경합, 권한·source 검증, publication 중단/응답 유실·재조회와 원본 불변을 확인했다.
+  disposable DB는 후속 검증을 위해 보존하며 운영 DB 테스트는 하지 않았다.
+- 합동 소스 검사 **733 PASS**: 계약·RPC/API/BFF·Chromium·PDF·설치 platform wheel·
+  OpenAPI·의존성/개발 문맥. 이후 browser/room/context의 최종 변경 검사는 **93 PASS**.
+  새 핵심 소스 14개 strict mypy PASS, Ruff/format와 shell syntax PASS.
+  기존 Starlette TestClient deprecation warning 한 건은 별도 의존 교체 없이 유지했다.
+  schema audit는 canonical 1445 / mirror 1096 / reference 12390 PASS다.
+
+### 별도 브라우저 실행 경계
+
+- AUTO/MANUAL은 하나의 고정 unit과 실제 profile flock을 공유한다. fixed driver만
+  실행하고, 현재 owner/fence 확인과 실제 invocation/boot/cgroup 종료를 요구한다.
+  초기화 marker·per-run 입력을 보존하여 불확실한 시작을 새 실행으로 위장하지 않는다.
+- 실제 subprocess 검사에서 SIGTERM 처리 중 driver가 7로 종료한 것을 supervisor가 0으로
+  덮던 결함을 발견해 수정했다. 정상 close/flush, 실패 종료, 강제 timeout을 구별한다.
+  supervisor/OS adapter 61개 검사와 별도 non-editable wheel 검증을 통과했다.
+  이는 현재 사용자 권한의 local 검증이지 전용 UID/systemd sandbox의 live PASS가 아니다.
+- collector wheel SHA:
+  `sha256:4a07a87776bb547b3f7e7a1e65697a34318e67ee525cf9f52dbd8a124268ab29`.
+  검증 설치 위치는 `/tmp/eom-kakao-browser-verified.FckefOrG`다.
+- actual driver·Playwright/Xvnc/gateway·전용 계정은 아직 없다. `systemd-analyze verify`도
+  미설치 전용 interpreter를 지적하므로 전체 unit 설치 PASS로 기록하지 않는다.
+  READY 이전 시작 실패의 staged intent는 후속 owner reconcile이 필요하다.
+
+### 다음 실제 경로
+
+1. MANUAL browser driver와 private gateway/현재 사용자 lease를 연결해 안전한 로그인
+   화면을 준비한다. 실제 설치·권한/종료 검증 전 원격 화면을 공개하지 않는다.
+2. accepted collection run/capability에서 snapshot·occurrence·첨부 연결을 수락하는
+   owner를 구현한다. `ResolvedKakaoQuestionSource`를 만들었다는 것만으로 원문 권한을
+   얻지 않으며, worker의 source identity 주장을 바로 canonical source로 받지 않는다.
+3. 고정된 질문 intent/revision → 기존 pure 편집/Artifact 발행 → 짧은 재검증 CAS →
+   packet → 한 학생 PDF로 연결한다. 이 수직 경로를 확인한 뒤 전체/주기 수집으로 확장한다.
+
+추가 비밀번호 요청 없이 가능한 부분을 계속 구현한다. 기존 문항·GPU 완료 데이터·실패
+이력은 보존하며, 이 체크포인트를 전체 goal 완료 또는 운영 활성화로 보고하지 않는다.

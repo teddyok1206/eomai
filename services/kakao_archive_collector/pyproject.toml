@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-kakao-archive-collector"
+version = "0.1.0"
+description = "Private fixed-profile Kakao browser process supervisor"
+requires-python = ">=3.12,<3.13"
+# Only staged input validation. Browser dependencies belong to the separately pinned driver.
+dependencies = ["eom-kakao-archive-contracts==0.1.0"]
+
+[project.scripts]
+eom-kakao-browser-supervisor = "eom_kakao_archive_collector.supervisor:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_kakao_archive_collector*"]

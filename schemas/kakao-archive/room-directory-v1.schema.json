@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/room-directory-v1/1.0",
+  "title": "Private admitted rooms and immutable student mapping revisions",
+  "$defs": {
+    "RoomId": {"type": "string", "pattern": "^kakaoroom_[0-9a-f]{32}$"},
+    "BindingId": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "MappingRevisionId": {"type": "string", "pattern": "^kakaomappingrev_[0-9a-f]{32}$"},
+    "StudentId": {"type": "string", "pattern": "^kakaostudent_[0-9a-f]{32}$"},
+    "StudentDisplayRevisionId": {"type": "string", "pattern": "^kakaostudentrev_[0-9a-f]{32}$"},
+    "Version": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "Name": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"},
+    "Reason": {"type": "string", "minLength": 1, "maxLength": 1000, "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"},
+    "Sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "UtcDatetime": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+    "IdentityLevel": {"enum": ["SOURCE_VERIFIED", "MANUAL_CONFIRMED"]},
+    "Pointer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "schema_ref": {"type": "string", "minLength": 1, "maxLength": 512},
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"$ref": "#/$defs/Sha256"}
+      }
+    },
+    "Observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "proposed_room_id", "identity_level", "source_identity_sha256", "display_name", "observed_at", "source_evidence"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-observation/1.0"},
+        "source_binding_id": {"$ref": "#/$defs/BindingId"},
+        "proposed_room_id": {"anyOf": [{"$ref": "#/$defs/RoomId"}, {"type": "null"}]},
+        "identity_level": {"$ref": "#/$defs/IdentityLevel"},
+        "source_identity_sha256": {"$ref": "#/$defs/Sha256"},
+        "display_name": {"$ref": "#/$defs/Name"},
+        "observed_at": {"$ref": "#/$defs/UtcDatetime"},
+        "source_evidence": {"$ref": "#/$defs/Pointer"}
+      }
+    },
+    "MapStudent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "action", "parent_revision_id", "expected_resource_version", "student_id", "student_display_revision_id", "reason"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-mapping-command/1.0"},
+        "action": {"const": "MAP_STUDENT"},
+        "parent_revision_id": {"$ref": "#/$defs/MappingRevisionId"},
+        "expected_resource_version": {"$ref": "#/$defs/Version"},
+        "student_id": {"$ref": "#/$defs/StudentId"},
+        "student_display_revision_id": {"$ref": "#/$defs/StudentDisplayRevisionId"},
+        "reason": {"$ref": "#/$defs/Reason"}
+      }
+    },
+    "UnmapStudent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "action", "parent_revision_id", "expected_resource_version", "reason"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-mapping-command/1.0"},
+        "action": {"const": "UNMAP_STUDENT"},
+        "parent_revision_id": {"$ref": "#/$defs/MappingRevisionId"},
+        "expected_resource_version": {"$ref": "#/$defs/Version"},
+        "reason": {"$ref": "#/$defs/Reason"}
+      }
+    },
+    "Mapping": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "mapping_revision_id", "previous_revision_id", "resource_version", "state", "student_id", "student_display_revision_id", "student_display_name", "reason", "sha256", "created_at"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-mapping/1.0"},
+        "mapping_revision_id": {"$ref": "#/$defs/MappingRevisionId"},
+        "previous_revision_id": {"anyOf": [{"$ref": "#/$defs/MappingRevisionId"}, {"type": "null"}]},
+        "resource_version": {"$ref": "#/$defs/Version"},
+        "state": {"enum": ["MAPPED", "UNMAPPED"]},
+        "student_id": {"anyOf": [{"$ref": "#/$defs/StudentId"}, {"type": "null"}]},
+        "student_display_revision_id": {"anyOf": [{"$ref": "#/$defs/StudentDisplayRevisionId"}, {"type": "null"}]},
+        "student_display_name": {"anyOf": [{"$ref": "#/$defs/Name"}, {"type": "null"}]},
+        "reason": {"$ref": "#/$defs/Reason"},
+        "sha256": {"$ref": "#/$defs/Sha256"},
+        "created_at": {"$ref": "#/$defs/UtcDatetime"}
+      },
+      "allOf": [{
+        "if": {"properties": {"state": {"const": "UNMAPPED"}}},
+        "then": {"properties": {"student_id": {"type": "null"}, "student_display_revision_id": {"type": "null"}, "student_display_name": {"type": "null"}}},
+        "else": {"properties": {"student_id": {"$ref": "#/$defs/StudentId"}, "student_display_revision_id": {"$ref": "#/$defs/StudentDisplayRevisionId"}, "student_display_name": {"$ref": "#/$defs/Name"}}}
+      }]
+    },
+    "Room": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "room_id", "display_name", "state", "identity_level", "resource_version", "created_at", "last_observed_at", "mapping"],
+      "properties": {
+        "schema_version": {"const": "kakao-room/1.0"},
+        "source_binding_id": {"$ref": "#/$defs/BindingId"},
+        "room_id": {"$ref": "#/$defs/RoomId"},
+        "display_name": {"$ref": "#/$defs/Name"},
+        "state": {"enum": ["ACTIVE", "RETIRED"]},
+        "identity_level": {"$ref": "#/$defs/IdentityLevel"},
+        "resource_version": {"$ref": "#/$defs/Version"},
+        "created_at": {"$ref": "#/$defs/UtcDatetime"},
+        "last_observed_at": {"$ref": "#/$defs/UtcDatetime"},
+        "mapping": {"$ref": "#/$defs/Mapping"}
+      }
+    },
+    "Page": {
+      "type": "object", "additionalProperties": false,
+      "required": ["items", "next_cursor"],
+      "properties": {
+        "items": {"type": "array", "items": {"$ref": "#/$defs/Room"}, "maxItems": 100},
+        "next_cursor": {"anyOf": [{"$ref": "#/$defs/RoomId"}, {"type": "null"}]}
+      }
+    },
+    "Mutation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["room", "replayed"],
+      "properties": {"room": {"$ref": "#/$defs/Room"}, "replayed": {"type": "boolean"}}
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/Observation"}, {"$ref": "#/$defs/MapStudent"},
+    {"$ref": "#/$defs/UnmapStudent"}, {"$ref": "#/$defs/Mapping"},
+    {"$ref": "#/$defs/Room"}, {"$ref": "#/$defs/Page"}, {"$ref": "#/$defs/Mutation"}
+  ]
+}

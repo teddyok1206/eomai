@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/kakao-rooms/1.0",
+  "title": "Owner-private admitted rooms and pinned student mappings",
+  "description": "Existing admitted rooms only. Mapping does not verify a source or activate collection.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Command"
+    },
+    {
+      "$ref": "#/$defs/Room"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    }
+  ],
+  "$defs": {
+    "Command": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/MapStudent"
+        },
+        {
+          "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/UnmapStudent"
+        }
+      ]
+    },
+    "Room": {
+      "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Room"
+    },
+    "Page": {
+      "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Page"
+    },
+    "Mutation": {
+      "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Mutation"
+    }
+  }
+}

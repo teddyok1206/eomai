@@ -175,6 +175,7 @@ mypy_path = [
   "services/image_provider",
   "packages/kakao_archive_contracts",
   "services/kakao_archive_worker",
+  "services/kakao_archive_collector",
   "services/image_candidate_runner",
   "apps/eomctl",
   "tools/dev_reporter",

@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id=(prefix,n)=>prefix+'_'+n.toString(16).padStart(32,'0');
@@ -166,6 +166,18 @@ try {
   await page.getByRole('button',{name:'학생 더 보기',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[aria-label="학생"]')?.options.length===54);
   assert.equal(await page.getByRole('button',{name:'학생 더 보기',exact:true}).isVisible(),false);
+  // JSON Schema counts code points, not UTF-16 units or rendered graphemes.
+  const emojiName='😀'.repeat(80);await name.fill(emojiName);
+  await page.getByRole('button',{name:'학생 추가',exact:true}).click();
+  await page.waitForFunction(value=>document.querySelector('[data-kakao="student-detail"] h3')?.textContent===value,emojiName);
+  const unicodePosts=await page.evaluate(()=>fixture.calls.filter(call=>call.method==='POST').length);
+  const rename=page.getByRole('textbox',{name:'표시 이름',exact:true});
+  await rename.fill('👩‍🔬'.repeat(64)); // 64 glyphs, 192 Unicode code points: too long.
+  await page.getByRole('button',{name:'이름 저장',exact:true}).click();
+  await status.filter({hasText:'학생 이름을 확인해 주세요'}).waitFor();
+  assert.equal(await page.evaluate(()=>fixture.calls.filter(call=>call.method==='POST').length),unicodePosts);
+  await rename.fill('😀'.repeat(128));await page.getByRole('button',{name:'이름 저장',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-kakao="student-detail"] h3')?.textContent==='😀'.repeat(128));
   await page.setViewportSize({width:375,height:900});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'student UI overflowed mobile');
   assert.deepEqual(errors,[]);assert.deepEqual(outbound,[]);

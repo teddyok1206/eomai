@@ -206,6 +206,22 @@ from eom_catalog_contracts.kakao_archive_rpc import (
     parse_kakao_binding_reply,
     parse_kakao_binding_request,
 )
+from eom_catalog_contracts.kakao_room_rpc import (
+    CommandKakaoRoomRequest,
+    KakaoRoomFailure,
+    KakaoRoomRequest,
+    ListKakaoRoomsRequest,
+    ReadKakaoRoomRequest,
+    check_kakao_room_reply,
+    parse_kakao_room_reply,
+    parse_kakao_room_request,
+)
+from eom_catalog_contracts.kakao_rooms import (
+    KakaoRoom,
+    KakaoRoomCommand,
+    KakaoRoomMutation,
+    KakaoRoomPage,
+)
 from eom_catalog_contracts.kakao_student_rpc import (
     CommandKakaoStudentRequest,
     CreateKakaoStudentRequest,
@@ -478,6 +494,81 @@ class CatalogApplicationClient:
             ) from error
         if isinstance(reply, KakaoStudentFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private student request failed")
+        return reply.result
+
+    def command_kakao_room(
+        self,
+        source_binding_id: str,
+        room_id: str,
+        command: KakaoRoomCommand,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoRoomMutation:
+        request = CommandKakaoRoomRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": source_binding_id,
+                "room_id": room_id,
+                "command": command,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return cast(KakaoRoomMutation, self._request_kakao_room(request))
+
+    def read_kakao_room(
+        self,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        actor: ActorContext,
+        mapping_revision_id: str | None = None,
+    ) -> KakaoRoom:
+        request = ReadKakaoRoomRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": source_binding_id,
+                "room_id": room_id,
+                "mapping_revision_id": mapping_revision_id,
+            }
+        )
+        return cast(KakaoRoom, self._request_kakao_room(request))
+
+    def list_kakao_rooms(
+        self,
+        source_binding_id: str,
+        *,
+        actor: ActorContext,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> KakaoRoomPage:
+        request = ListKakaoRoomsRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": source_binding_id,
+                "limit": limit,
+                "cursor": cursor,
+            }
+        )
+        return cast(KakaoRoomPage, self._request_kakao_room(request))
+
+    def _request_kakao_room(
+        self, request: KakaoRoomRequest
+    ) -> KakaoRoomMutation | KakaoRoomPage | KakaoRoom:
+        try:
+            parsed = parse_kakao_room_request(request.model_dump(mode="json"))
+            reply = parse_kakao_room_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"), timeout_seconds=RESPONSE_TIMEOUT_SECONDS
+                )
+            )
+            check_kakao_room_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private room response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoRoomFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private room request failed")
         return reply.result
 
     def content_workbook(

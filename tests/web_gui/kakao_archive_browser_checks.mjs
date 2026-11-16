@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id = (prefix, digit = '1') => prefix + '_' + digit.repeat(32);
@@ -18,6 +18,7 @@ const row = (number) => ({question_id: number === 1 ? questionA : questionB, cur
   title: number === 1 ? '첫 번째 질문' : '두 번째 질문', student_display_name: '학생 <img src=x>', first_student_at_utc: '2026-10-31T15:20:00Z', review_state: 'CANDIDATE'});
 const binding = {source_binding_id: bindingId, display_name:'합성 채널', state:'ACTIVE', capability_state:'VERIFIED', collection_policy_revision_id:id('kakaopolicyrev'), allowed_actions:['READ_ARCHIVE','COLLECT']};
 const page = items => ({items,next_cursor:null});
+const room = (digit='1') => ({schema_version:'kakao-room/1.0',source_binding_id:bindingId,room_id:id('kakaoroom',digit),display_name:digit==='1'?'합성 대화방':'두 번째 대화방',state:'ACTIVE',identity_level:'MANUAL_CONFIRMED',resource_version:1,created_at:'2026-11-16T00:00:00Z',last_observed_at:'2026-11-16T00:00:00Z',mapping:{schema_version:'kakao-room-mapping/1.0',mapping_revision_id:id('kakaomappingrev',digit),previous_revision_id:null,resource_version:1,state:'UNMAPPED',student_id:null,student_display_revision_id:null,student_display_name:null,reason:'합성 확인',sha256:'sha256:'+'a'.repeat(64),created_at:'2026-11-16T00:00:00Z'}});
 async function api(path, options = {}) {
   fixture.calls.push({path,method:options.method || 'GET',body:options.body,key:options.headers?.['Idempotency-Key']});
   const url = new URL(path,'http://fixture');
@@ -28,7 +29,8 @@ async function api(path, options = {}) {
     return page([binding]);
   }
   if (url.pathname.startsWith('/kakao-archive/source-bindings/')) return binding;
-  if (url.pathname === '/kakao-archive/rooms') return page([{room_id:roomId,display_name:'합성 대화방',student_display_name:null},...(fixture.secondRoom?[{room_id:id('kakaoroom','2'),display_name:'두 번째 대화방',student_display_name:'둘째 학생'}]:[])]);
+  if (url.pathname === '/kakao-archive/rooms') return page([room(),...(fixture.secondRoom?[room('2')]:[])]);
+  if (url.pathname.startsWith('/kakao-archive/rooms/')) return room(url.pathname.endsWith(id('kakaoroom','2'))?'2':'1');
   if (url.pathname === '/kakao-archive/questions') return page(url.searchParams.get('room_id')===id('kakaoroom','2')?[row(2)]:[row(1),row(2)]);
   if (url.pathname.startsWith('/kakao-archive/questions/')) {
     const first = path.includes(questionA + '/');

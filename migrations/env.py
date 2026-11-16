@@ -14,6 +14,7 @@ import eom_catalog_service.embedding_registry_models
 import eom_catalog_service.external_item_models
 import eom_catalog_service.item_origin_models
 import eom_catalog_service.kakao_archive_models
+import eom_catalog_service.kakao_room_models
 import eom_catalog_service.kakao_student_models
 import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.knowledge_graph_models

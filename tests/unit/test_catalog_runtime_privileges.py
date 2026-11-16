@@ -20,6 +20,8 @@ def test_kakao_binding_grants_are_append_only_and_session_read_is_column_bounded
         "kakao_binding_commands",
         "kakao_student_display_revisions",
         "kakao_student_commands",
+        "kakao_room_mapping_revisions",
+        "kakao_room_admissions",
     }
     assert immutable | {"kakao_channel_bindings"} <= set(READ_TABLES)
     assert immutable | {"kakao_channel_bindings"} <= set(INSERT_TABLES)
@@ -28,10 +30,13 @@ def test_kakao_binding_grants_are_append_only_and_session_read_is_column_bounded
     assert "kakao_students" in READ_TABLES
     assert "kakao_students" in INSERT_TABLES
     assert "kakao_students" in UPDATE_TABLES
+    assert "kakao_rooms" in READ_TABLES and "kakao_rooms" in INSERT_TABLES
+    assert "kakao_rooms" not in UPDATE_TABLES
     assert "api_sessions" not in READ_TABLES
     assert "api_sessions" not in INSERT_TABLES
     assert "api_sessions" not in UPDATE_TABLES
     assert COLUMN_PRIVILEGES == (
+        ("UPDATE", "kakao_rooms", ("current_mapping_revision_id", "resource_version")),
         (
             "SELECT",
             "api_sessions",

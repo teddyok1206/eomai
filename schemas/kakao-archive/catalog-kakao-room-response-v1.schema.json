@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-room-response-v1/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "COMMAND_KAKAO_ROOM"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Mutation"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_ROOM"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Room"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "LIST_KAKAO_ROOMS"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/room-directory-v1/1.0#/$defs/Page"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "COMMAND_KAKAO_ROOM",
+            "READ_KAKAO_ROOM",
+            "LIST_KAKAO_ROOMS"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "enum": [
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "KAKAO_ARCHIVE_PERMISSION_DENIED",
+            "KAKAO_ARCHIVE_RESOURCE_NOT_FOUND",
+            "KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT",
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "KAKAO_ARCHIVE_STUDENT_RETIRED",
+            "KAKAO_ARCHIVE_STORED_STUDENT_INVALID",
+            "KAKAO_ARCHIVE_RESULT_INVALID",
+            "KAKAO_ARCHIVE_RESULT_TOO_LARGE",
+            "CATALOG_APPLICATION_UNAVAILABLE",
+            "CATALOG_APPLICATION_INTERNAL_ERROR",
+            "KAKAO_ARCHIVE_ROOM_RETIRED",
+            "KAKAO_ARCHIVE_STUDENT_STALE",
+            "KAKAO_ARCHIVE_BINDING_RETIRED",
+            "KAKAO_ARCHIVE_STORED_ROOM_INVALID"
+          ]
+        }
+      }
+    }
+  ]
+}
