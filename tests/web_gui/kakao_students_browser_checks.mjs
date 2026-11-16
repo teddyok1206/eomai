@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id=(prefix,n)=>prefix+'_'+n.toString(16).padStart(32,'0');

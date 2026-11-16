@@ -53,6 +53,11 @@ def test_kakao_bootstrap_states_do_not_claim_collection_is_ready() -> None:
         "UNREVIEWED",
         "CONFIRMED",
         "EXCLUDED",
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        "NEEDS_LAYOUT_REVIEW",
     }
     assert states["DRAFT"]["tone"] == "neutral"
     assert states["NOT_VERIFIED"]["tone"] == "warning"

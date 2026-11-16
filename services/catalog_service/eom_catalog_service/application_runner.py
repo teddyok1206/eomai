@@ -53,6 +53,7 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 )
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_delivery_composition import build_kakao_delivery_application
 from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
 from eom_catalog_service.kakao_question_composition import build_kakao_question_application
 from eom_catalog_service.kakao_room_service import KakaoRoomService
@@ -200,6 +201,7 @@ def serve() -> int:
     server: CatalogApplicationServer | None = None
     thread: threading.Thread | None = None
     manual_thread: threading.Thread | None = None
+    pdf_thread: threading.Thread | None = None
     stopping = threading.Event()
 
     def stop(_signum: int, _frame: object) -> None:
@@ -329,6 +331,8 @@ def serve() -> int:
             engine, profile=CHOICE_LAYOUT_OFFICE_PROFILE
         )
         manual = build_kakao_manual_runtime(engine, os.environ)
+        questions = build_kakao_question_application(engine)
+        delivery = build_kakao_delivery_application(engine, questions.questions, os.environ)
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -386,7 +390,8 @@ def serve() -> int:
             kakao_archive=KakaoArchiveService(engine),
             kakao_students=KakaoStudentService(engine),
             kakao_rooms=KakaoRoomService(engine),
-            kakao_questions=build_kakao_question_application(engine),
+            kakao_questions=questions,
+            kakao_delivery=delivery.application,
             kakao_manual=manual.application if manual is not None else None,
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
@@ -399,6 +404,16 @@ def serve() -> int:
             daemon=True,
         )
         thread.start()
+        if delivery.coordinator is not None:
+            pdf_coordinator = delivery.coordinator
+
+            def advance_pdf() -> None:
+                while not stopping.wait(timeout=0.25):
+                    if pdf_coordinator.advance_once() == "ERROR":
+                        print("KAKAO_PDF_RECONCILIATION_REQUIRED", flush=True)
+
+            pdf_thread = threading.Thread(target=advance_pdf, name="eom-kakao-pdf", daemon=True)
+            pdf_thread.start()
         if manual is not None:
             coordinator = manual.coordinator
 
@@ -452,6 +467,8 @@ def serve() -> int:
             thread.join(timeout=5)
         if manual_thread is not None:
             manual_thread.join(timeout=5)
+        if pdf_thread is not None:
+            pdf_thread.join(timeout=5)
         engine.dispose()
 
 

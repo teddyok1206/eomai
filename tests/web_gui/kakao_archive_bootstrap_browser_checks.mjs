@@ -7,7 +7,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const policy = {include_images:true,interval_minutes:1440,question_rule_version:"turn_v1",source_timezone:"unknown"};
 const policyHash = "sha256:" + createHash("sha256").update(JSON.stringify(policy)).digest("hex");
 const app = `
@@ -23,6 +23,7 @@ const api=async(path,options={})=>{
   if(path.startsWith('/kakao-archive/students?'))return {items:[],next_cursor:null};
   if(path.startsWith('/kakao-archive/rooms?'))return {items:[],next_cursor:null};
   if(path.startsWith('/kakao-archive/questions?'))return {items:[],next_cursor:null};
+  if(path.startsWith('/kakao-archive/question-packets?'))return {schema_version:'kakao-packet-page/1.0',items:[],next_cursor:null};
   if(fixture.held&&options.method==='POST'){fixture.held=false;await new Promise(resolve=>fixture.release=resolve);}
   if(path==='/kakao-archive/source-bindings'){
     if(options.method!=='POST')return {items:fixture.binding?[fixture.binding]:[],next_cursor:null};
@@ -78,7 +79,7 @@ try {
   assert.equal(await page.locator('#kakao-archive-root script').count(),0);
   assert.equal(await page.locator('[data-kakao="collect"]').count(),0,'unverified binding enabled collection');
   assert.equal(await page.getByRole('button',{name:'학생별 PDF 보기'}).count(),0);
-  assert.ok(await page.evaluate(()=>fixture.calls.every(call=>call.path.startsWith('/kakao-archive/source-bindings')||call.path.startsWith('/kakao-archive/students?')||call.path.startsWith('/kakao-archive/rooms?')||call.path.startsWith('/kakao-archive/questions?'))),'DRAFT enabled capture or export rather than accepted-history read');
+  assert.ok(await page.evaluate(()=>fixture.calls.every(call=>call.path.startsWith('/kakao-archive/source-bindings')||call.path.startsWith('/kakao-archive/students?')||call.path.startsWith('/kakao-archive/rooms?')||call.path.startsWith('/kakao-archive/questions?')||call.path.startsWith('/kakao-archive/question-packets?'))),'DRAFT enabled capture or rendering rather than accepted-history read');
 
   // A stale version is rejected, not replayed with a silently substituted latest revision.
   await page.getByRole('button',{name:'연결 준비 해제',exact:true}).click();

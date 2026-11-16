@@ -206,6 +206,16 @@ from eom_catalog_contracts.kakao_archive_rpc import (
     parse_kakao_binding_reply,
     parse_kakao_binding_request,
 )
+from eom_catalog_contracts.kakao_delivery_rpc import (
+    KakaoDeliveryFailure,
+    KakaoDeliveryRequest,
+    KakaoDeliveryResult,
+    KakaoExportPdf,
+    ReadKakaoExportPdfRequest,
+    check_kakao_delivery_reply,
+    parse_kakao_delivery_reply,
+    parse_kakao_delivery_request,
+)
 from eom_catalog_contracts.kakao_manual import (
     KakaoManualEnd,
     KakaoManualMutation,
@@ -608,6 +618,60 @@ class CatalogApplicationClient:
         if isinstance(reply, KakaoRoomFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private room request failed")
         return reply.result
+
+    def request_kakao_delivery(self, request: KakaoDeliveryRequest) -> KakaoDeliveryResult:
+        if isinstance(request, ReadKakaoExportPdfRequest):
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_REQUEST_INVALID", "Use the bounded PDF download boundary"
+            )
+        try:
+            parsed = parse_kakao_delivery_request(request.model_dump(mode="json"))
+            reply = parse_kakao_delivery_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_kakao_delivery_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private delivery response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoDeliveryFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private delivery request failed")
+        return reply.result
+
+    def download_kakao_export_pdf(self, request: ReadKakaoExportPdfRequest) -> ProxiedItemMedia:
+        payload = request.model_dump(mode="json")
+        parse_kakao_delivery_request(payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            connection.sendall(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            )
+            connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+            value = json.loads(self._read_media_header(connection))
+            if not isinstance(value, dict):
+                raise ValueError("invalid private PDF header")
+            reply = parse_kakao_delivery_reply(value)
+            check_kakao_delivery_reply(request, reply)
+            if isinstance(reply, KakaoDeliveryFailure):
+                raise CatalogApplicationClientError(reply.error_code, "Private PDF unavailable")
+            if not isinstance(reply.result, KakaoExportPdf):
+                raise ValueError("unrelated private PDF response")
+            pdf = reply.result
+            return ProxiedItemMedia(connection, pdf.media_type, pdf.content_length, pdf.sha256)
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            connection.close()
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private PDF boundary unavailable"
+            ) from error
 
     def create_kakao_question(
         self,

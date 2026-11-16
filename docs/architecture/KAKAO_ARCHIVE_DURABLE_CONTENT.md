@@ -197,6 +197,35 @@ API/BFF는 transport와 presentation validation만 담당한다. binary 스트�
 member/프록시의 length·SHA 검사 경계를 재사용하며 새로운 파일 서버를 만들지 않는다.
 소스 조회 성공만으로 실제 수집 capability나 전체 이력 확보를 선언하지 않는다.
 
+### 학생 묶음·PDF의 공개 연결과 실행
+
+같은 API-only socket에 닫힌 delivery operation family를 추가한다. 기존 packet/export
+저장 owner가 정본과 멱등·동시성·현재 권한을 그대로 소유하며 새 DB·공용 queue는 없다.
+packet 상세는 저장 descriptor와 exact 질문 참조, 해당 snapshot의 학생별 이름/개수만
+반환한다. 학생 표시 이름은 identity가 아니며 PDF 접수는 packet revision과 student ID를 받는다.
+출력 상태 조회/목록과 exact 완료 revision의 PDF 읽기는 실행을 시작하지 않는다.
+
+Catalog의 bounded 실행 adapter가 접수된 PENDING export의 기존 단일 승자 claim을 받아
+입력을 물질화하고 Orchestrator executor→기존 publisher→export 채택으로 연결한다.
+HTTP에는 argv·font 경로·runtime profile·성공 stamp를 받지 않는다. 긴 작업은 DB lock과
+요청 수명 밖에서 실행하며 현재 원본 권한을 각 기존 경계에서 재검사한다. 실행 중인
+동일 export는 중복 제출하지 않는다. in-process 대기는 작은 실행 힌트일 뿐 정본이 아니며
+중단 뒤 PENDING은 동일 접수 replay로 재개하고 RUNNING은 실제 종료/기존 command 확인
+후 원래 결과 수락만 복구한다. 실패 이력을 성공으로 바꾸거나 GET에서 재렌더하지 않는다.
+
+목록·idempotency·claim은 기존 indexed lookup/keyset이며 선택/물질화는 O(질문+고유
+원본 bytes)다. 실행 힌트는 bounded keyed membership이고 원문·사진을 복제하지 않는다.
+API 안의 동기 렌더는 요청 timeout과 장기 작업을 결합하고, 새 범용 scheduler는 기존
+owner와 중복되므로 채택하지 않는다. 실제 보호 runtime을 검증하지 않은 구성에서는
+PDF 실행만 명시적으로 unavailable이며 저장된 packet 읽기까지 막지 않는다.
+
+PDF runtime은 기존 root 설치 NotoSansCJKkr OTF를 explicit hash/size로 pin한다. 새 font
+다운로드·모델 호출·worker 권한 확대는 없다. 0700 workspace 부모는 Catalog의 기본
+group이며 attempt의 input/output만 renderer group으로 공유한다. Catalog에 이 좁은
+group을 추가할 뿐 renderer를 Catalog/NAS/eom group에 추가하지 않는다. 실행은 별도
+명시적 `EOM_KAKAO_PDF_MODE=ENABLED`와 renderer/template/font pins가 모두 있을 때만 켠다.
+정지/복구는 exact 고정 unit의 MainPID/state와 실제 absent/empty cgroup을 확인한다.
+
 ## 10. 실패·재시도·멱등·출력 수명
 
 - 같은 intent+같은 request는 원래 결과/진행을 반환한다. 다른 내용은 409이며 새 ID로 우회하지 않는다.

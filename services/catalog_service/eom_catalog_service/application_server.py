@@ -125,6 +125,7 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     delivery_contract_version,
 )
 from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
+from eom_catalog_contracts.kakao_delivery_rpc import KAKAO_DELIVERY_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
 from eom_catalog_contracts.kakao_question_rpc import KAKAO_QUESTION_OPERATIONS
 from eom_catalog_contracts.kakao_room_rpc import KAKAO_ROOM_OPERATIONS
@@ -240,6 +241,8 @@ from eom_catalog_service.item_similarity_publication_service import (
 )
 from eom_catalog_service.kakao_archive_dispatch import dispatch_kakao_binding
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_delivery_application import KakaoDeliveryApplication
+from eom_catalog_service.kakao_delivery_dispatch import dispatch_kakao_delivery
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
 from eom_catalog_service.kakao_question_composition import KakaoQuestionApplication
 from eom_catalog_service.kakao_question_dispatch import dispatch_kakao_question
@@ -353,6 +356,11 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if isinstance(raw_operation, str) and raw_operation in KAKAO_ROOM_OPERATIONS:
                 self.wfile.write(dispatch_kakao_room(self.server.kakao_rooms, value))
                 self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in KAKAO_DELIVERY_OPERATIONS:
+                dispatch_kakao_delivery(
+                    self.server.kakao_delivery, value, cast(BinaryIO, self.wfile)
+                )
                 return
             if isinstance(raw_operation, str) and raw_operation in KAKAO_QUESTION_OPERATIONS:
                 questions = self.server.kakao_questions
@@ -2101,6 +2109,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         kakao_students: KakaoStudentService | None = None,
         kakao_rooms: KakaoRoomService | None = None,
         kakao_questions: KakaoQuestionApplication | None = None,
+        kakao_delivery: KakaoDeliveryApplication | None = None,
         kakao_manual: KakaoManualApplication | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
@@ -2149,6 +2158,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.kakao_students = kakao_students
         self.kakao_rooms = kakao_rooms
         self.kakao_questions = kakao_questions
+        self.kakao_delivery = kakao_delivery
         self.kakao_manual = kakao_manual
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag

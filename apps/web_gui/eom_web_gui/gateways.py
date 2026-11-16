@@ -166,6 +166,16 @@ from eom_web_gui.kakao_archive_contracts import (
     BindingUpdatePolicy,
     SourceBinding,
 )
+from eom_web_gui.kakao_delivery_contracts import (
+    ExportCreate,
+    ExportMutation,
+    ExportPage,
+    PacketCreate,
+    PacketMutation,
+    PacketPage,
+    PacketView,
+    StudentExport,
+)
 from eom_web_gui.kakao_manual_contracts import (
     ManualCommand,
     ManualEnd,
@@ -478,6 +488,12 @@ class KakaoQuestionMedia:
 
 
 @dataclass(frozen=True)
+class KakaoPdfDownload:
+    content: DownloadContent
+    etag: str
+
+
+@dataclass(frozen=True)
 class DocumentReviewPdfDownload:
     content: DownloadContent
     content_type: str
@@ -613,6 +629,28 @@ class ApplicationGateway(Protocol):
         revision: str,
         attachment: str,
     ) -> KakaoQuestionMedia: ...
+
+    async def kakao_packet_create(
+        self, session: WebSession, value: PacketCreate, idempotency_key: str
+    ) -> PacketMutation: ...
+    async def kakao_packet_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> PacketPage: ...
+    async def kakao_packet_read(
+        self, session: WebSession, binding: str, packet: str, revision: str
+    ) -> PacketView: ...
+    async def kakao_export_create(
+        self, session: WebSession, value: ExportCreate, idempotency_key: str
+    ) -> ExportMutation: ...
+    async def kakao_export_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> ExportPage: ...
+    async def kakao_export_read(
+        self, session: WebSession, binding: str, export: str
+    ) -> StudentExport: ...
+    async def kakao_export_pdf(
+        self, session: WebSession, binding: str, export: str, revision: str
+    ) -> KakaoPdfDownload: ...
 
     async def kakao_student_list(
         self, session: WebSession, *, limit: int = 50, cursor: str | None = None
@@ -1673,6 +1711,204 @@ class HttpApplicationGateway:
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_packet_create(
+        self, session: WebSession, value: PacketCreate, idempotency_key: str
+    ) -> PacketMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/question-packets",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = PacketMutation.model_validate(self._data(response))
+            p = result.packet
+            if (
+                any(
+                    getattr(p, key) != getattr(value, key)
+                    for key in (
+                        "source_binding_id",
+                        "title",
+                        "display_start_date",
+                        "display_end_date_inclusive",
+                        "mode",
+                        "include_replies",
+                    )
+                )
+                or p.resource_version != 1
+                or p.previous_revision_id is not None
+            ):
+                raise ValueError("different packet")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_packet_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> PacketPage:
+        _require_id(binding, "kakaobinding_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/question-packets",
+            params={"source_binding_id": binding, "limit": limit, "cursor": cursor},
+            timeout=130.0,
+        )
+        try:
+            result = PacketPage.model_validate(self._data(response))
+            ids = tuple(p.packet_id for p in result.items)
+            if (
+                len(ids) > limit
+                or ids != tuple(sorted(set(ids)))
+                or any(
+                    p.source_binding_id != binding or (cursor is not None and p.packet_id <= cursor)
+                    for p in result.items
+                )
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different packet page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_packet_read(
+        self, session: WebSession, binding: str, packet: str, revision: str
+    ) -> PacketView:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (packet, "kakaopacket_"),
+            (revision, "kakaopacketrev_"),
+        ):
+            _require_id(value, prefix)
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/question-packets/{packet}/revisions/{revision}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = PacketView.model_validate(self._data(response))
+            if (
+                result.packet.source_binding_id,
+                result.packet.packet_id,
+                result.packet.packet_revision_id,
+            ) != (binding, packet, revision):
+                raise ValueError("different packet revision")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_export_create(
+        self, session: WebSession, value: ExportCreate, idempotency_key: str
+    ) -> ExportMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/exports",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = ExportMutation.model_validate(self._data(response))
+            if any(
+                getattr(result.export, key) != getattr(value, key)
+                for key in ("source_binding_id", "packet_id", "packet_revision_id", "student_id")
+            ):
+                raise ValueError("different student export")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_export_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> ExportPage:
+        _require_id(binding, "kakaobinding_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/exports",
+            params={"source_binding_id": binding, "limit": limit, "cursor": cursor},
+            timeout=130.0,
+        )
+        try:
+            result = ExportPage.model_validate(self._data(response))
+            ids = tuple(p.export_id for p in result.items)
+            if (
+                len(ids) > limit
+                or ids != tuple(sorted(set(ids)))
+                or any(
+                    p.source_binding_id != binding or (cursor is not None and p.export_id <= cursor)
+                    for p in result.items
+                )
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different export page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_export_read(
+        self, session: WebSession, binding: str, export: str
+    ) -> StudentExport:
+        _require_id(binding, "kakaobinding_")
+        _require_id(export, "kakaoexport_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/exports/{export}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = StudentExport.model_validate(self._data(response))
+            if (result.source_binding_id, result.export_id) != (binding, export):
+                raise ValueError("different export")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_export_pdf(
+        self, session: WebSession, binding: str, export: str, revision: str
+    ) -> KakaoPdfDownload:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (export, "kakaoexport_"),
+            (revision, "kakaoexportrev_"),
+        ):
+            _require_id(value, prefix)
+        async with self._download(
+            session,
+            f"/api/v1/kakao-archive/exports/{export}/file",
+            params={"source_binding_id": binding, "revision_id": revision},
+            timeout=130.0,
+        ) as response:
+            etag = response.headers.get("etag", "")
+            if (
+                response.headers.get("content-type", "").split(";", 1)[0] != "application/pdf"
+                or response.headers.get("content-disposition")
+                != f'attachment; filename="{export}.pdf"'
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            content = await self._verified_download_body(
+                response,
+                error_code="APPLICATION_API_RESPONSE_INVALID",
+                maximum_bytes=128 * 1024 * 1024,
+                expected_sha256=etag[1:-1],
+                prefixes=(b"%PDF-",),
+            )
+            return KakaoPdfDownload(content, etag)
 
     async def kakao_question_list(
         self,

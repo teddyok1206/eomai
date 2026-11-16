@@ -325,17 +325,20 @@ def prepare_identities() -> None:
             if extra := EXTRA_GROUPS.get(name):
                 argv += ["--groups", ",".join(sorted(extra))]
             run([*argv, name])
-    # Catalog gains only fixed-lock access. Its process receives this group later
-    # through the compatible owner activation; no existing service is restarted here.
+    # Catalog receives fixed-lock and isolated-render I/O groups. Worker identities
+    # never gain Catalog/NAS access; no existing service is restarted here.
     owner = pwd.getpwnam("eom-catalog-manager")
-    control = grp.getgrnam("eom-kakao-control").gr_gid
-    if control not in os.getgrouplist(owner.pw_name, owner.pw_gid):
+    required_groups = ("eom-kakao-control", "eom-kakao-render")
+    if any(
+        grp.getgrnam(name).gr_gid not in os.getgrouplist(owner.pw_name, owner.pw_gid)
+        for name in required_groups
+    ):
         run(
             [
                 "/usr/sbin/usermod",
                 "--append",
                 "--groups",
-                "eom-kakao-control",
+                ",".join(required_groups),
                 "eom-catalog-manager",
             ]
         )
@@ -425,6 +428,12 @@ def layout() -> tuple[Layout, ...]:
         ),
         Layout(
             Path("/var/lib/eom-catalog-api/staging/kakao-render"), owner.pw_uid, owner.pw_gid, 0o700
+        ),
+        Layout(
+            Path("/var/lib/eom-catalog-api/staging/kakao-pdf-inputs"),
+            owner.pw_uid,
+            owner.pw_gid,
+            0o700,
         ),
     )
 

@@ -1,5 +1,40 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — 학생별 PDF의 실제 API·저장·Studio 다운로드 연결
+
+기준 commit은 `4ba17415`다. 새 delivery wire schema를 먼저 정의하고 기존
+packet/export owner, PDF executor/publisher와 Studio BFF를 연결했다. 새 migration이나
+AI 호출, 별도 저장소·큐 framework는 추가하지 않았다. **아래는 합성 검증이며 실제 카카오
+수집 또는 운영 활성화의 증거가 아니다.**
+
+- 수락된 CSV/사진 → 질문 확인 저장 → exact 질문·기간 packet 저장 → 학생 PDF 요청 →
+  별도 PDF subprocess → 기존 Artifact owner → 권한 검사된 HTTP/BFF 다운로드까지 연결했다.
+  같은 사진 byte가 여러 메시지에 쓰인 경우 occurrence 수와 학생별 구성을 유지한다.
+- Studio는 저장한 자료와 PDF 기록을 다시 읽는다. POST 응답 유실은 동일 body/key로
+  확인하고, GET 상태 조회·완료 기록 재열기는 새 계산을 시작하지 않는다. 원래 publication
+  이후 DB 채택 중단은 동일 attempt/command의 저장만 복구하며 재렌더하지 않는다.
+- process-local bounded deque/set은 DB 작업을 깨우는 hint다. 영속 정본은 기존 export
+  record이고, 재시작 뒤 명시적 원 요청 replay가 PENDING/RUNNING 복구를 깨운다.
+- Catalog의 private staging parent는 기존 primary GID를 유지하고 per-attempt에만 좁은
+  render group을 적용했다. 실제 cgroup 종료 확인과 종료된 원 unit의 명시적 close를
+  구분한다. worker에는 DB/NAS 권한을 주지 않는다. 이 소스 검증은 운영 sandbox PASS가 아니다.
+- guarded disposable PostgreSQL 최종 실행 **152 PASS / 76.81초**. 실제 API/UDS/PG와
+  Studio BFF 경로, 분리 PDF process, 다운로드 동일 SHA, session 철회 후 거부,
+  publication 중단/replay 무재렌더를 포함한다. 인증은 합성 fixture다.
+- 새 source·브라우저 focused **26 PASS**는 FINAL 거절 뒤 수정 가능, 응답 유실 시 동일
+  요청 유지, 새로고침 후 PDF 기록 재열기까지 검사한다. focused mypy 11개 PASS다.
+  전체 source 회귀 첫 실행은 **1425 PASS / 1 FAIL**였으며 실패는 배포 검사의 옛0084
+  기대값이었다. 현재 source0087과 기존 공식 installer callback을 대조해 정렬했다.
+  수정 후 release/context/delivery 집중 검사는 **45 PASS**, schema audit는
+  canonical1463 / mirror1109 / reference12550 PASS다. 개발 index의 경로 상한을 넘긴
+  첫 문맥 수정은 경로를 중복 나열하지 않도록 정리했으며 runtime 계약은 바꾸지 않았다.
+- 질문 분할/병합의 영속 API 연결, 실제 수집 source admission, 실제 한 방과 전체 방 주기
+  수집은 남아 있다. 이 체크포인트로 전체 goal을 완료 처리하지 않는다.
+- 사용자 운영 지시: 실제 카카오는 **조회·CSV/사진 다운로드만** 수행한다. 메시지 전송,
+  답장, 담당자·상태 변경, 차단/삭제/나가기는 금지다. 로그인/2단계 인증은 사용자가 한다.
+  방 열기의 불가피한 읽음 효과는 관측 후 알리며 되돌리기 mutation을 하지 않는다.
+
+
 ## 진행 중간 저장 — 실제 질문 API·Studio 열람/확인 저장 연결
 
 `b84952fa` 이후 기존 source/question owner를 API-only Catalog socket과 실제 API/BFF에

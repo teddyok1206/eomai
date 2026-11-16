@@ -46,7 +46,7 @@ BASE = "/api/v1/kakao-archive/questions"
 
 
 @contextmanager
-def question_api(store, tmp_path, *, actor=None):
+def question_api(store, tmp_path, *, actor=None, delivery=None):
     engine, original_actor, _questions, _command, sources, artifacts, _binding = store
     actor = original_actor if actor is None else actor
     runtime = tmp_path / ("kq-" + uuid4().hex[:8])
@@ -57,6 +57,7 @@ def question_api(store, tmp_path, *, actor=None):
     server = CatalogApplicationServer(
         *(SimpleNamespace() for _ in range(5)),
         kakao_questions=KakaoQuestionApplication(questions, reads),
+        kakao_delivery=delivery,
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid(),
         expected_uid=os.getuid(),
@@ -190,85 +191,87 @@ def photo_command(question_store, source_store):
     ), photo
 
 
+@contextmanager
+def studio_api(api, operator_id):
+    """Real BFF/gateway with a synthetic cookie; API/Catalog still check actual test Identity."""
+
+    def transport(request):
+        result = api.request(
+            request.method,
+            str(request.url.copy_with(scheme="http", host="localhost")),
+            headers={
+                **{k: v for k, v in request.headers.items() if k != "host"},
+                "Host": "localhost",
+            },
+            content=request.content,
+        )
+        return httpx.Response(result.status_code, headers=result.headers, content=result.content)
+
+    services, _ = make_services(gateway=http_gateway(transport))
+    now = datetime.now(UTC)
+    session = services.sessions.create(
+        operator={"operator_id": operator_id, "roles": ["ADMIN"]},
+        tokens=ApiTokens(
+            "TEST_ONLY_ACCESS",
+            "TEST_ONLY_REFRESH",
+            now + timedelta(hours=1),
+            now + timedelta(hours=2),
+        ),
+        now=now,
+    )
+    with TestClient(create_web_app(services), base_url="http://testserver.local") as web:
+        web.cookies.set(COOKIE_NAME, session.session_id)
+        yield web, session.csrf_token
+
+
 def test_studio_bff_through_api_socket_and_postgres_uses_same_saved_question(
     question_store, source_store, tmp_path
 ):
     command, photo = photo_command(question_store, source_store)
-    with question_api(question_store, tmp_path) as (api, state, _reads):
-
-        def transport(request):
-            result = api.request(
-                request.method,
-                str(request.url.copy_with(scheme="http", host="localhost")),
-                headers={
-                    **{k: v for k, v in request.headers.items() if k != "host"},
-                    "Host": "localhost",
-                },
-                content=request.content,
-            )
-            return httpx.Response(
-                result.status_code, headers=result.headers, content=result.content
-            )
-
-        gateway = http_gateway(transport)
-        services, _ = make_services(gateway=gateway)
-        now = datetime.now(UTC)
-        web_session = services.sessions.create(
-            operator={"operator_id": state.authentication.operator.operator_id, "roles": ["ADMIN"]},
-            tokens=ApiTokens(
-                "TEST_ONLY_ACCESS",
-                "TEST_ONLY_REFRESH",
-                now + timedelta(hours=1),
-                now + timedelta(hours=2),
-            ),
-            now=now,
+    with (
+        question_api(question_store, tmp_path) as (api, state, _reads),
+        studio_api(api, state.authentication.operator.operator_id) as (web, csrf_token),
+    ):
+        root = "/studio" + BASE
+        headers = {
+            "X-CSRF-Token": csrf_token,
+            "Idempotency-Key": "web-question-" + uuid4().hex,
+        }
+        result = web.post(root, json=command.model_dump(mode="json"), headers=headers)
+        assert result.status_code == 201, result.text
+        q = result.json()["question"]
+        assert (
+            web.post(root, json=command.model_dump(mode="json"), headers=headers).json()["question"]
+            == q
         )
-        with TestClient(create_web_app(services), base_url="http://testserver.local") as web:
-            web.cookies.set(COOKIE_NAME, web_session.session_id)
-            root = "/studio" + BASE
-            headers = {
-                "X-CSRF-Token": web_session.csrf_token,
-                "Idempotency-Key": "web-question-" + uuid4().hex,
-            }
-            result = web.post(root, json=command.model_dump(mode="json"), headers=headers)
-            assert result.status_code == 201, result.text
-            q = result.json()["question"]
-            assert (
-                web.post(root, json=command.model_dump(mode="json"), headers=headers).json()[
-                    "question"
-                ]
-                == q
-            )
-            params = {"source_binding_id": q["source_binding_id"]}
-            path = root + "/" + q["question_id"] + "/revisions/" + q["question_revision_id"]
-            displayed = web.get(path, params=params)
-            assert displayed.status_code == 200, displayed.text
-            images = [b for b in displayed.json()["ordered_blocks"] if b["kind"] == "IMAGE"]
-            assert len(images) == 2
-            opened = web.get(path + "/images/" + images[0]["attachment_id"], params=params)
-            assert opened.status_code == 200 and opened.content == photo
-            assert opened.headers["etag"] == '"' + sha256_bytes(photo) + '"'
-            review = dict(
-                schema_version="kakao-question-edit/1.0",
-                action="CONFIRM",
-                parent_revision_id=q["question_revision_id"],
-                reason="실제 BFF·원문 확인",
-                boundary_confirmed=True,
-            )
-            params["room_id"] = q["room_id"]
-            review_path = root + "/" + q["question_id"] + "/review"
-            headers = {
-                **headers,
-                "Idempotency-Key": "web-review-" + uuid4().hex,
-                "If-Match": '"v1"',
-            }
-            saved = web.post(review_path, params=params, json=review, headers=headers)
-            assert saved.status_code == 200, saved.text
-            assert saved.json()["question"]["review_state"] == "CONFIRMED"
-            assert web.post(review_path, params=params, json=review, headers=headers).json()[
-                "replayed"
-            ]
-            assert web.get(root, params=params).json()["items"] == [saved.json()["question"]]
+        params = {"source_binding_id": q["source_binding_id"]}
+        path = root + "/" + q["question_id"] + "/revisions/" + q["question_revision_id"]
+        displayed = web.get(path, params=params)
+        assert displayed.status_code == 200, displayed.text
+        images = [b for b in displayed.json()["ordered_blocks"] if b["kind"] == "IMAGE"]
+        assert len(images) == 2
+        opened = web.get(path + "/images/" + images[0]["attachment_id"], params=params)
+        assert opened.status_code == 200 and opened.content == photo
+        assert opened.headers["etag"] == '"' + sha256_bytes(photo) + '"'
+        review = dict(
+            schema_version="kakao-question-edit/1.0",
+            action="CONFIRM",
+            parent_revision_id=q["question_revision_id"],
+            reason="실제 BFF·원문 확인",
+            boundary_confirmed=True,
+        )
+        params["room_id"] = q["room_id"]
+        review_path = root + "/" + q["question_id"] + "/review"
+        headers = {
+            **headers,
+            "Idempotency-Key": "web-review-" + uuid4().hex,
+            "If-Match": '"v1"',
+        }
+        saved = web.post(review_path, params=params, json=review, headers=headers)
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["question"]["review_state"] == "CONFIRMED"
+        assert web.post(review_path, params=params, json=review, headers=headers).json()["replayed"]
+        assert web.get(root, params=params).json()["items"] == [saved.json()["question"]]
 
 
 def test_actual_http_photo_occurrences_are_pinned_native_bytes(

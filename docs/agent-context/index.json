@@ -6,7 +6,7 @@
     {
       "id": "kakao-archive",
       "note": "kakao-archive.md",
-      "keywords": ["KakaoTalk", "카카오", "학생 질문", "CSV", "질문집 PDF", "비공개 대화"],
+      "keywords": ["KakaoTalk", "카카오", "학생 질문", "CSV", "질문집 PDF", "비공개 대화", "packet", "학생별 PDF 다운로드"],
       "source_paths": [
         "packages/catalog_contracts/eom_catalog_contracts/kakao_archive.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_question_store.py",
@@ -56,6 +56,8 @@
         "tests/unit/test_kakao_media_decoder_review.py",
         "tests/unit/test_kakao_source_admission.py",
         "tests/integration/test_kakao_source_storage.py",
+        "tests/integration/test_kakao_delivery_http.py",
+        "tests/unit/test_kakao_delivery_rpc.py",
         "tests/integration/test_kakao_question_storage.py",
         "tests/integration/test_kakao_question_http.py",
         "tests/unit/test_kakao_question_rpc.py",

@@ -435,6 +435,45 @@ class KakaoExportService:
             self._source_check(session, actor, row, packet, selected)
             self._command_matches(row, attempt, command)
 
+    def check_claim(
+        self,
+        actor: ActorContext,
+        binding: str,
+        export_id: str,
+        execution: RenderExecution,
+        packet: AcceptedKakaoPacket,
+        selected: ResolvedKakaoQuestions,
+    ) -> None:
+        """Authorize preparation before the exact render command has been materialized."""
+        with self._sessions.begin() as session:
+            row, attempt = self._row(
+                session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_EXPORT
+            )
+            if attempt is None or attempt.state != "RUNNING" or _execution(attempt) != execution:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
+            self._source_check(session, actor, row, packet, selected)
+
+    def read_command(
+        self, actor: ActorContext, binding: str, export_id: str, execution: RenderExecution
+    ) -> RenderCommand:
+        """Read the original command for stopped-result recovery; never prepare a successor."""
+        _, packet, selected = self.resolve_inputs(actor, binding, export_id)
+        with self._sessions.begin() as session:
+            row, attempt = self._row(
+                session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_EXPORT
+            )
+            if (
+                attempt is None
+                or attempt.state != "RUNNING"
+                or _execution(attempt) != execution
+                or attempt.command is None
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
+            self._source_check(session, actor, row, packet, selected)
+            command = RenderCommand.model_validate(attempt.command)
+            self._command_matches(row, attempt, command)
+            return command
+
     @staticmethod
     def _output_metadata(
         session: Session,

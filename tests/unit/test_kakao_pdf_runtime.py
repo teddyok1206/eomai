@@ -54,6 +54,7 @@ def observations():
         "User": runtime.KAKAO_WORKER,
         "Group": runtime.KAKAO_WORKER,
         "ActiveState": "inactive",
+        "MainPID": "0",
         "ExecMainStartTimestampMonotonic": "0",
     }
     after = {
@@ -75,8 +76,9 @@ def launcher(monkeypatch, prepared, *, before_change=None, after_change=None):
     before.update(before_change or {})
     after.update(after_change or {})
     monkeypatch.setattr(runtime.FixedKakaoPdfLauncher, "_installed", lambda *args: None)
-    show = Mock(side_effect=[before, after])
+    show = Mock(side_effect=[before, after, {**before, "ExecMainStartTimestampMonotonic": "100"}])
     monkeypatch.setattr(runtime, "_show", show)
+    monkeypatch.setattr(runtime, "_cgroup_quiescent", lambda _unit: None)
     run = Mock(return_value=subprocess.CompletedProcess([], 0))
     monkeypatch.setattr(runtime.subprocess, "run", run)
     value = runtime.FixedKakaoPdfLauncher("sha256:" + "b" * 64, RELEASE)
@@ -86,7 +88,7 @@ def launcher(monkeypatch, prepared, *, before_change=None, after_change=None):
 def test_launcher_only_invokes_fixed_start_unit_once(prepared, monkeypatch):
     value, command, run, show = launcher(monkeypatch, prepared)
     value.run(command, runtime.KAKAO_WORKSPACE_ROOT / command.execution.attempt_id)
-    assert show.call_count == 2 and run.call_count == 2
+    assert show.call_count == 3 and run.call_count == 2
     assert run.call_args_list[0].args[0] == [
         "/usr/bin/systemctl",
         "--no-ask-password",
@@ -96,6 +98,65 @@ def test_launcher_only_invokes_fixed_start_unit_once(prepared, monkeypatch):
     assert run.call_args_list[0].kwargs["timeout"] == 190
     assert run.call_args_list[1].args[0][2] == "stop"
     assert run.call_args.kwargs["stdout"] == subprocess.DEVNULL
+
+
+@pytest.mark.parametrize("state", ["absent", "empty", "populated", "malformed", "linked"])
+def test_recovery_checks_actual_cgroup_without_starting_a_unit(
+    prepared, monkeypatch, tmp_path, state
+):
+    _, _, prepare = prepared
+    command = prepare()
+    before, _ = observations()
+    monkeypatch.setattr(runtime.FixedKakaoPdfLauncher, "_installed", lambda *_args: None)
+    monkeypatch.setattr(runtime, "_show", lambda _unit: before)
+    monkeypatch.setattr(runtime, "CGROUP_ROOT", tmp_path)
+    unit = f"eom-kakao-pdf@{command.execution.attempt_id}.service"
+    if state != "absent":
+        cgroup = tmp_path / unit
+        cgroup.mkdir()
+        data = (
+            b"populated 0\nfrozen 0\n"
+            if state == "empty"
+            else b"populated 1\n"
+            if state == "populated"
+            else b"unexpected"
+        )
+        (cgroup / "cgroup.events").write_bytes(data)
+        if state == "linked":
+            (cgroup / "cgroup.events").unlink()
+            (cgroup / "cgroup.events").symlink_to(tmp_path / "foreign")
+    process = Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", process)
+    value = runtime.FixedKakaoPdfLauncher("sha256:" + "b" * 64, RELEASE)
+    if state in {"absent", "empty"}:
+        value.assert_stopped(command, runtime.KAKAO_WORKSPACE_ROOT / command.execution.attempt_id)
+    else:
+        with pytest.raises(KakaoPdfExecutionError, match="EXECUTION_UNCERTAIN"):
+            value.assert_stopped(
+                command, runtime.KAKAO_WORKSPACE_ROOT / command.execution.attempt_id
+            )
+    process.assert_not_called()
+
+
+def test_explicit_recovery_closes_only_an_already_exited_original(prepared, monkeypatch):
+    value, command, process, show = launcher(monkeypatch, prepared)
+    before, after = observations()
+    show.side_effect = [after, before]
+    value.close_finished(command, runtime.KAKAO_WORKSPACE_ROOT / command.execution.attempt_id)
+    assert process.call_count == 1
+    assert process.call_args.args[0][2] == "stop"
+
+
+@pytest.mark.parametrize(
+    "change", [{"MainPID": "123"}, {"SubState": "running"}, {"DropInPaths": "/private"}]
+)
+def test_recovery_never_stops_unknown_running_processes(prepared, monkeypatch, change):
+    value, command, process, show = launcher(monkeypatch, prepared)
+    _before, after = observations()
+    show.side_effect = [{**after, **change}]
+    with pytest.raises(KakaoPdfExecutionError, match="EXECUTION_UNCERTAIN"):
+        value.close_finished(command, runtime.KAKAO_WORKSPACE_ROOT / command.execution.attempt_id)
+    process.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -82,6 +82,7 @@ from eom_web_gui.item_db_similarity_contracts import (
     ItemDbSimilaritySubmission,
 )
 from eom_web_gui.kakao_archive_routes import install_kakao_archive_routes
+from eom_web_gui.kakao_delivery_routes import install_kakao_delivery_routes
 from eom_web_gui.kakao_manual_routes import install_kakao_manual_routes
 from eom_web_gui.kakao_question_routes import install_kakao_question_routes
 from eom_web_gui.kakao_room_routes import install_kakao_room_routes
@@ -292,6 +293,7 @@ def create_app(
     install_kakao_student_routes(app, actual.gateway, require_session, require_csrf)
     install_kakao_room_routes(app, actual.gateway, require_session, require_csrf)
     install_kakao_question_routes(app, actual.gateway, require_session, require_csrf)
+    install_kakao_delivery_routes(app, actual.gateway, require_session, require_csrf)
     install_kakao_manual_routes(
         app,
         actual.gateway,

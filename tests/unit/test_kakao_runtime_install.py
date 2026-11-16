@@ -457,7 +457,7 @@ def test_owner_and_proxy_dropins_are_pinned_narrow_and_nonactivating(local, monk
         "ReadWritePaths=/var/lib/eom-kakao-runtime/browser /var/lib/eom-kakao-runtime/remote"
     ]
     assert [line for line in text.splitlines() if line.startswith("SupplementaryGroups=")] == [
-        "SupplementaryGroups=eom-kakao-control"
+        "SupplementaryGroups=eom-kakao-control eom-kakao-render"
     ]
     proxy = files[installer.PROXY_DROPIN].decode()
     assert [line for line in proxy.splitlines() if line and not line.startswith("#")] == [

@@ -8,5 +8,5 @@ Environment=EOM_KAKAO_BROWSER_DRIVER_SHA256={browser_driver_sha256}
 Environment=EOM_KAKAO_GATEWAY_TEMPLATE_SHA256={gateway_template_sha256}
 Environment=EOM_KAKAO_GATEWAY_SUPERVISOR_SHA256={gateway_supervisor_sha256}
 Environment=EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256={initial_profile_manifest_sha256}
-SupplementaryGroups=eom-kakao-control
+SupplementaryGroups=eom-kakao-control eom-kakao-render
 ReadWritePaths=/var/lib/eom-kakao-runtime/browser /var/lib/eom-kakao-runtime/remote

@@ -79,11 +79,24 @@ occurrence 수와 순서는 유지한다. 파일·font의 hash와 source 권한�
 
 `kakao_export_service.py`는 학생별 PDF build identity, 같은 요청/같은 build의 작은 receipt,
 한 번의 실행 claim, exact command pin과 불변 output revision을 저장한다. 긴 I/O와 렌더 중
-DB lock을 잡지 않고 완료 publication의 DB 채택만 재개할 수 있다. GET/replay는 렌더하지 않는다.
+DB lock을 잡지 않고 완료 publication의 DB 채택만 재개할 수 있다. GET은 렌더하지 않는다.
+명시적 같은 POST의 PENDING/RUNNING replay는 기존 작업만 깨우고 완료본은 재렌더하지 않는다.
 실패 attempt는 보존하고 실제 정지 증거 뒤의 명시적 retry만 새 attempt/fence를 만든다.
 `open_pdf`는 exact export revision의 현재 source 접근을 파일 FD 열기 전후에 재확인한다.
 작은 profile/로컬 RenderCommand 외에 본문·사진·PDF는 DB에 없다. owner 저장·파일 adapter의
-합성 PostgreSQL 검증과 아직 연결하지 않은 HTTP/GUI·운영 worker·실제 카카오 실증은 구별한다.
+합성 PostgreSQL 검증과 실제 카카오 실증·운영 worker 활성화는 구별한다.
+
+`kakao_delivery_rpc.py`/`kakao_delivery_dispatch.py`는 기존 API-only socket의 packet/PDF
+wire family다. `kakao_delivery_application.py`가 packet/export owner를 재사용하며,
+`kakao_pdf_delivery.py`는 기존 materializer → executor → publisher → export 채택을 연결한다.
+`kakao_pdf_coordinator.py`의 bounded deque/set은 process-local wake-up hint이고 DB 정본이 아니다.
+기본 composition은 DISABLED다. ENABLED일 때만 고정 renderer/font/template pin을 요구한다.
+private staging parent는 Catalog primary group, per-attempt input/output만 render group이다.
+실제 원 cgroup 정지 확인 뒤에만 원 command의 publication/채택을 복구한다.
+HTTP `routers/kakao_deliveries.py`와 Web `kakao_delivery_routes.py`/gateway는 exact
+packet/output revision과 현재 권한을 확인한다. `static/kakao-publications.js`는 질문 선택,
+저장한 packet·학생별 PDF 상태와 다운로드만 표시한다. GET 재조회는 실행이 아니다.
+확정된 날짜/확인 상태 거절은 사용자 선택을 다시 열고, 불확실한 응답은 동일 key/body를 유지한다.
 
 `kakao_archive_service.py`는 DRAFT 연결과 불변 정책 revision/명령 receipt의 소유자다.
 현재 session·permission·ADMIN 역할은 Identity repository에서 다시 확인하며 다른 owner의

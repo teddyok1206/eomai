@@ -80,7 +80,7 @@ class KakaoPdfExecutor:
         try:
             validate_contract("command", command.model_dump(mode="json"))
             self.assert_current(command)
-            require_owner_directory(self.workspace_root, os.geteuid(), self.shared_gid)
+            require_owner_directory(self.workspace_root, os.geteuid(), os.getgid())
             workspace = self.workspace_root / command.execution.attempt_id
             assert_stopped(command, workspace)
             inputs = workspace / "input"
@@ -111,7 +111,9 @@ class KakaoPdfExecutor:
         validate_contract("command", command.model_dump(mode="json"))
         self.assert_current(command)
         owner_uid = os.geteuid()
-        require_owner_directory(self.workspace_root, owner_uid, self.shared_gid)
+        # The private parent belongs only to the Catalog identity. Only per-attempt
+        # bind-mounted inputs/outputs use the renderer's narrow shared group.
+        require_owner_directory(self.workspace_root, owner_uid, os.getgid())
         if source_root.is_relative_to(self.workspace_root) or self.workspace_root.is_relative_to(
             source_root
         ):

@@ -6,14 +6,14 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id = (prefix, digit = '1') => prefix + '_' + digit.repeat(32);
 const bindingId = id('kakaobinding'), roomId = id('kakaoroom'), questionA = id('kakaoquestion'), questionB = id('kakaoquestion', '2');
 const revisionA = id('kakaoquestionrev'), revisionB = id('kakaoquestionrev', '2'), packetId = id('kakaopacket'), packetRevision = id('kakaopacketrev');
-// Question projections match the public DTO. Collection/export remain future fixtures.
-const fixture = window.fixture = {calls: [], failCollection: true, held: null, release: null, failBindings: false, denyExports: false, duplicateInstall: false, secondRoom: false,confirmed:null,failReview:true};
+// Question/packet/export projections match the public DTO. Collection is still a future fixture.
+const fixture = window.fixture = {calls: [], failCollection: true, held: null, release: null, failBindings: false, denyExports: false, duplicateInstall: false, secondRoom: false,confirmed:null,failReview:true,savedPacket:null,latestExport:null,failPacket:true,failExport:true};
 const row = (number) => ({schema_version:'kakao-stored-question/1.0',source_binding_id:bindingId,room_id:roomId,
   question_id:number===1?questionA:questionB,question_revision_id:number===1?revisionA:revisionB,
   previous_revision_id:null,resource_version:1,review_state:'UNREVIEWED',first_student_at_utc:'2026-10-31T15:20:00Z',
@@ -23,6 +23,14 @@ const row = (number) => ({schema_version:'kakao-stored-question/1.0',source_bind
     sha256:'sha256:'+'a'.repeat(64),schema_ref:'eom://schemas/kakao-archive/question-manifest-v1/1.0'},created_at:'2026-11-16T00:00:00Z'});
 const binding = {source_binding_id: bindingId, display_name:'합성 채널', state:'ACTIVE', capability_state:'VERIFIED', collection_policy_revision_id:id('kakaopolicyrev'), allowed_actions:['READ_ARCHIVE','COLLECT']};
 const page = items => ({items,next_cursor:null});
+const packet = {schema_version:'kakao-stored-packet/1.0',source_binding_id:bindingId,packet_id:packetId,packet_revision_id:packetRevision,
+  previous_revision_id:null,resource_version:1,title:'10월 질문 자료',manifest:{...row(1).manifest,member_path:'packet.json',schema_ref:'eom://schemas/kakao-archive/question-packet-v1/1.0'},
+  display_start_date:'2026-10-01',display_end_date_inclusive:'2026-11-01',mode:'DRAFT',include_replies:false,question_count:2,student_count:2,created_at:'2026-11-16T00:00:00Z'};
+const exported = {schema_version:'kakao-export/1.0',source_binding_id:bindingId,packet_id:packetId,packet_revision_id:packetRevision,student_id:row(1).student.student_id,
+  export_id:id('kakaoexport'),profile:{renderer_release_sha256:'sha256:'+'a'.repeat(64),font_sha256:'sha256:'+'b'.repeat(64),font_size_bytes:100,layout_policy:'student-question-a4/1.0'},
+  subset_sha256:'sha256:'+'c'.repeat(64),mode:'DRAFT',state:'COMPLETED',created_at:'2026-11-16T00:00:00Z',completed_at:'2026-11-16T00:01:00Z',export_revision_id:id('kakaoexportrev'),page_count:1,
+  pdf:{...row(1).manifest,member_path:'report.pdf',media_type:'application/pdf',schema_ref:'eom://schemas/kakao-archive/question-pdf/1.0'},
+  layout:{...row(1).manifest,member_path:'layout.json',schema_ref:'eom://schemas/kakao-archive/worker-question-layout/1.0'},error_code:null};
 const room = (digit='1') => ({schema_version:'kakao-room/1.0',source_binding_id:bindingId,room_id:id('kakaoroom',digit),display_name:digit==='1'?'합성 대화방':'두 번째 대화방',state:'ACTIVE',identity_level:'MANUAL_CONFIRMED',resource_version:1,created_at:'2026-11-16T00:00:00Z',last_observed_at:'2026-11-16T00:00:00Z',mapping:{schema_version:'kakao-room-mapping/1.0',mapping_revision_id:id('kakaomappingrev',digit),previous_revision_id:null,resource_version:1,state:'UNMAPPED',student_id:null,student_display_revision_id:null,student_display_name:null,reason:'합성 확인',sha256:'sha256:'+'a'.repeat(64),created_at:'2026-11-16T00:00:00Z'}});
 async function api(path, options = {}) {
   fixture.calls.push({path,method:options.method || 'GET',body:options.body,key:options.headers?.['Idempotency-Key']});
@@ -49,10 +57,32 @@ async function api(path, options = {}) {
         {kind:'IMAGE',block_id:'photo-1',role:'student',availability:'expired',attachment_id:id('kakaoattachment','2'),attachment_revision_id:id('kakaoattachmentrev','2'),source_quality:'UNKNOWN'},
         {kind:'IMAGE',block_id:'photo-2',role:'student',availability:'available',attachment_id:id('kakaoattachment'),attachment_revision_id:id('kakaoattachmentrev'),source_quality:'ORIGINAL'}]};
   }
-  if (url.pathname === '/kakao-archive/question-packets') return page([{packet_id:packetId,current_revision_id:packetRevision,title:'10월 질문 자료',question_count:2}]);
+  if (url.pathname === '/kakao-archive/question-packets' && options.method==='POST') {
+    if (options.body.mode==='FINAL') throw Object.assign(new Error('confirmation required'),{code:'KAKAO_ARCHIVE_FINAL_BLOCKED'});
+    fixture.savedPacket||={...packet,packet_id:id('kakaopacket','4'),packet_revision_id:id('kakaopacketrev','4'),title:options.body.title,display_start_date:options.body.display_start_date,display_end_date_inclusive:options.body.display_end_date_inclusive,mode:options.body.mode,include_replies:options.body.include_replies,question_count:1,student_count:1};
+    fixture.savedQuestions=options.body.questions;
+    if(fixture.failPacket){fixture.failPacket=false;throw new Error('SYNTHETIC_LOST_AFTER_SAVE');}
+    return {schema_version:'kakao-packet-mutation/1.0',packet:fixture.savedPacket,replayed:true};
+  }
+  if (url.pathname === '/kakao-archive/question-packets') return page([packet,...(fixture.savedPacket?[fixture.savedPacket]:[])]);
+  if (url.pathname.startsWith('/kakao-archive/question-packets/')) {
+    const saved=url.pathname.includes(id('kakaopacket','4'));
+    return {schema_version:'kakao-packet-view/1.0',packet:saved?fixture.savedPacket:packet,
+      questions:saved?fixture.savedQuestions:[row(1),row(2)].map(q=>({question_id:q.question_id,question_revision_id:q.question_revision_id})),
+      students:(saved?[row(1)]:[row(1),row(2)]).map(q=>({student_id:q.student.student_id,student_display_revision_id:q.student.student_display_revision_id,display_name:q.student.display_name,question_count:1}))};
+  }
+  if (url.pathname === '/kakao-archive/exports' && options.method==='POST') {
+    fixture.latestExport||={...exported,export_id:id('kakaoexport','4'),packet_id:options.body.packet_id,packet_revision_id:options.body.packet_revision_id,student_id:options.body.student_id,state:'PENDING',completed_at:null,export_revision_id:null,page_count:0,pdf:null,layout:null};
+    if(fixture.failExport){fixture.failExport=false;throw new Error('SYNTHETIC_LOST_AFTER_REQUEST');}
+    return {schema_version:'kakao-export-mutation/1.0',export:fixture.latestExport,replayed:true};
+  }
+  if (url.pathname.startsWith('/kakao-archive/exports/')) {
+    fixture.latestExport={...fixture.latestExport,state:'COMPLETED',completed_at:'2026-11-16T00:01:00Z',export_revision_id:id('kakaoexportrev','4'),page_count:1,pdf:exported.pdf,layout:exported.layout};
+    return fixture.latestExport;
+  }
   if (url.pathname === '/kakao-archive/exports') {
     if (fixture.denyExports) throw Object.assign(new Error('SYNTHETIC_DENIED'),{code:'PERMISSION_DENIED'});
-    return page([{source_binding_id:bindingId,packet_revision_id:packetRevision,student_display_name:'합성 학생',mode:'FINAL',state:'SUCCEEDED',export_id:id('kakaoexport'),export_revision_id:id('kakaoexportrev'),page_count:2,download_url:'https://example.invalid/private'}]);
+    return page([exported,...(fixture.latestExport?[fixture.latestExport]:[])]);
   }
   if (url.pathname === '/kakao-archive/collection-runs') {
     if (fixture.failCollection) {fixture.failCollection=false; throw new Error('SYNTHETIC_RESPONSE_LOST');}
@@ -97,11 +127,11 @@ try {
   assert.match(await page.locator('[data-kakao="detail"] img').getAttribute('src'),/\/studio\/api\/v1\/kakao-archive\/questions\/kakaoquestion_.*\/revisions\/kakaoquestionrev_.*\/images\/kakaoattachment_.*source_binding_id=kakaobinding_.*room_id=kakaoroom_/);
   await page.getByRole('button',{name:'학생별 PDF 보기',exact:true}).click();
   const download = page.getByRole('link',{name:'PDF 내려받기'}); await download.waitFor();
-  assert.match(await download.getAttribute('href'),/\/studio\/api\/v1\/kakao-archive\/exports\/kakaoexport_.*revision_id=kakaoexportrev_/);
+  assert.match(await download.getAttribute('href'),/\/studio\/api\/v1\/kakao-archive\/exports\/kakaoexport_.*\/file\?source_binding_id=kakaobinding_.*revision_id=kakaoexportrev_/);
   assert.equal(outbound.length,0,'untrusted upstream URLs escaped same-origin delivery');
   await page.evaluate(()=>{fixture.denyExports=true;});
   await page.getByRole('button',{name:'학생별 PDF 보기',exact:true}).click();
-  await page.waitForFunction(()=>!document.querySelector('.kakao-exports'));
+  await page.waitForFunction(()=>document.querySelector('.kakao-packet-detail').textContent.includes('자료를 열지 못했습니다'));
   assert.equal(await page.getByRole('link',{name:'PDF 내려받기'}).count(),0,'permission denial retained private download');
   await page.evaluate(()=>{fixture.denyExports=false;});
 
@@ -214,10 +244,45 @@ try {
   await page.getByRole('button',{name:'새로고침',exact:true}).click();
   await page.getByRole('button',{name:'첫 번째 학생의 질문',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-kakao="detail"]').textContent.includes('CONFIRMED'));
+  await page.getByRole('button',{name:'자료에 넣기',exact:true}).first().click();
+  const packetForm=page.getByRole('form',{name:'질문 자료 만들기'});
+  await packetForm.getByLabel('자료 이름').fill('새 질문 자료');
+  await packetForm.getByLabel('시작 날짜').fill('2026-01-01');
+  await packetForm.getByLabel('마지막 날짜').fill('2026-12-31');
+  await packetForm.getByLabel('자료 상태').selectOption('FINAL');
+  await packetForm.getByRole('button',{name:'선택한 질문으로 자료 저장',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.kakao-packet-form [role="status"]').textContent.includes('확인 상태와 날짜'));
+  assert.equal(await packetForm.getByLabel('자료 이름').isDisabled(),false,'domain refusal trapped immutable intent');
+  await packetForm.getByLabel('자료 상태').selectOption('DRAFT');
+  await packetForm.getByRole('button',{name:'선택한 질문으로 자료 저장',exact:true}).click();
+  await packetForm.getByRole('button',{name:'같은 자료 저장 요청 확인',exact:true}).waitFor();
+  assert.equal(await packetForm.getByLabel('자료 이름').isDisabled(),true);
+  await packetForm.getByRole('button',{name:'같은 자료 저장 요청 확인',exact:true}).click();
+  await page.getByRole('heading',{name:'새 질문 자료',exact:true}).waitFor();
+  const packetCalls=await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/question-packets'&&call.method==='POST'));
+  assert.equal(packetCalls.length,3);assert.notEqual(packetCalls[0].key,packetCalls[1].key);assert.equal(packetCalls[1].key,packetCalls[2].key);assert.deepEqual(packetCalls[1].body,packetCalls[2].body);
+  assert.equal(packetCalls[1].body.questions[0].question_revision_id,await page.evaluate(()=>fixture.confirmed.question_revision_id));
+  await page.getByRole('button',{name:'학생 PDF 만들기',exact:true}).click();
+  await page.getByRole('button',{name:'같은 PDF 요청 확인',exact:true}).waitFor();
+  await page.getByRole('button',{name:'같은 PDF 요청 확인',exact:true}).click();
+  await page.getByRole('button',{name:'상태 확인',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.kakao-packet-detail').textContent.includes('COMPLETED'));
+  const exportCalls=await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/exports'&&call.method==='POST'));
+  assert.equal(exportCalls.length,2);assert.equal(exportCalls[0].key,exportCalls[1].key);assert.deepEqual(exportCalls[0].body,exportCalls[1].body);
+  const links=page.getByRole('link',{name:'PDF 내려받기',exact:true});
+  assert.equal(await links.count(),2);
+  assert.equal(await links.nth(0).getAttribute('href'),await links.nth(1).getAttribute('href'));
+  await page.getByRole('button',{name:'상태 확인',exact:true}).first().click();
+  assert.equal(await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/exports'&&call.method==='POST').length),2,'status read dispatched new PDF');
+  await page.getByRole('button',{name:'새로고침',exact:true}).click();
+  await page.getByRole('button',{name:'학생별 PDF 보기',exact:true}).last().click();
+  await page.getByRole('heading',{name:'새 질문 자료',exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'PDF 내려받기',exact:true}).count(),1,'saved output history was lost');
   const before = await page.evaluate(()=>fixture.calls.length);
   await page.evaluate(()=>{fixture.controller.setPermissions([]);fixture.controller.close();});
   await page.waitForTimeout(20);
   assert.equal(await page.evaluate(()=>fixture.calls.length),before,'close/permission loss dispatched a mutation');
+  assert.equal(await packetForm.getByLabel('자료 이름').inputValue(),'학생 질문 자료','permission loss retained private form title');
   assert.deepEqual(errors,[]);
   console.log('KAKAO_ARCHIVE_BROWSER=PASS');
 } finally {await browser.close(); await new Promise(resolve=>server.close(resolve));}

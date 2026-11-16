@@ -30,6 +30,13 @@
 .kakao-technical { font-size: var(--eom-type-caption, 13px); color: var(--eom-text-muted); }
 .kakao-technical dd { margin: 0 0 12px; overflow-wrap: anywhere; }
 .kakao-publications { margin-top: 24px; }
+.kakao-packet-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 20px; }
+.kakao-packet-form > label { display: grid; gap: 8px; flex: 1 1 160px; max-width: 420px; min-width: 0; }
+.kakao-packet-form > .kakao-review-check { display: flex; }
+.kakao-packet-form input:not([type="checkbox"]), .kakao-packet-form select, .kakao-packet-detail select { min-height: 40px; width: 100%; min-width: 0; }
+.kakao-selected-questions, .kakao-packet-form > p { flex-basis: 100%; }
+.kakao-selected-question { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.kakao-packet-detail > label { display: grid; gap: 8px; max-width: 420px; margin-block: 16px; }
 .kakao-students { margin: 20px 0; padding: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
 .kakao-students h2, .kakao-student-detail h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
 .kakao-student-edit { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }

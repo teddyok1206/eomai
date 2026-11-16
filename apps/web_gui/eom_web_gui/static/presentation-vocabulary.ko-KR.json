@@ -57,7 +57,12 @@
         "NOT_VERIFIED": {"label": "채널 확인 전", "audience": "USER", "tone": "warning", "icon": "◆"},
         "UNREVIEWED": {"label": "질문 확인 전", "audience": "USER", "tone": "warning", "icon": "◆"},
         "CONFIRMED": {"label": "질문 확인 완료", "audience": "USER", "tone": "success", "icon": "✓"},
-        "EXCLUDED": {"label": "출력에서 제외됨", "audience": "USER", "tone": "neutral", "icon": "■"}
+        "EXCLUDED": {"label": "출력에서 제외됨", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "PENDING": {"label": "PDF 제작 대기", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "RUNNING": {"label": "PDF 제작 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "COMPLETED": {"label": "PDF 준비 완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "FAILED": {"label": "PDF 제작 실패", "audience": "USER", "tone": "danger", "icon": "!"},
+        "NEEDS_LAYOUT_REVIEW": {"label": "질문 구성 확인 필요", "audience": "USER", "tone": "warning", "icon": "◆"}
       }
     },
     "workflow": {
