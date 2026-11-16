@@ -228,3 +228,44 @@ admission과 mapping은 owner/scope/key 잠금 뒤 binding → room → student 
 두 mapping 수정은 room lock+expected revision/version으로 하나만 수락한다. 이름으로 identity를
 추정하지 않으며 public mapping은 같은 owner의 현재 ACTIVE student/display revision만 받는다.
 이전 mapping 조회와 same-key replay는 나중의 rename/unmap으로 내용이 바뀌지 않는다.
+
+## 실제 내보내기 경험에 따른 실행 방식 결정 — 2026-11-16
+
+실제 방에서 CSV와 사진2건의 download event·로컬 보존·hash를 확인했다. 이것은 전체 방
+수집이나 사진 occurrence 정합의 완료 증거가 아니다. 사용자 승인 아래 화면을 읽고 누른
+개발용 좌표를 운영 selector로 승격하지 않는다.
+
+**반복 수집에는 결정론적 Playwright adapter를 사용하고 전용 Codex 슬롯은 배정하지 않는다.**
+CSV 내보내기와 사진 내려받기는 관측 가능한 고정 업무이며 모델의 판단이 필요한 작업이 아니다.
+AI가 임의 클릭을 계획하면 인접한 차단/신고/상담 완료 기능의 위험과 재현성 비용이 커진다.
+Codex는 개발·장애 원인 분석에만 사용한다. 실제 UI에서 검증한 label/DOM·채널/방 identity를
+고정된 동작으로 구현하고, 일치 개수·현재 방·다운로드 결과가 예상과 다르면 `UI_CHANGED` 등으로
+멈춘다. 추측 클릭·일반적인 브라우저 명령 실행 도구·메시지 입력/전송 경로는 추가하지 않는다.
+이는 기존 ‘운영 수집·질문 구성·PDF에 AI를 쓰지 않는다’는 결정을 유지한다.
+
+### 로컬 수신물의 owner 입력 경계
+
+1. 책임: 기존 Orchestrator OS adapter가 browser의 로컬 수신 파일을 읽고, 기존 Catalog
+   source/media publisher에 넘길 검증된 입력을 만든다. 새 수집 서비스/큐/registry는 없다.
+2. 정본: 로컬 수신물은 untrusted staging이다. canonical source는 별도 실제 권한·방/메시지
+   정합 검증 후 기존 Artifact owner가 발행한 revision이다. 읽기 성공은 admission 권한이 아니다.
+3. identity: 기존 `manual-download-v1`의 capture/profile/browser-run/fence/page-instance와
+   payload SHA를 재사용한다. page instance나 filename을 provider room/message ID로 쓰지 않는다.
+4. resolution: exact fence와 run marker, STARTED/terminal receipt의 identity, 고정 member,
+   UID/GID/mode·종류·단일 link·symlink 없음·크기·SHA를 검사한다. 경로 입력은 서버 설정과
+   검증된 ID로만 구성한다. payload나 receipt가 없거나 바뀌면 명시적으로 거부한다.
+5. access/구조: capture ID의 직접 directory lookup과 bounded streaming/read다. O(file bytes),
+   최대32MiB 입력을 owner materialization 경계에서 한 번 읽는다. 반복 목록 탐색이나 재다운로드는 없다.
+6. persistence/concurrency: DB와 worker output은 변경하지 않는다. 읽기 FD 전후 metadata를
+   대조하고, consumer는 반환된 고정 receipt/bytes를 사용한다. source 수락은 기존 짧은 CAS와
+   publication 멱등 계약이 담당하며 이 reader가 claim·권한·성공 상태를 만들지 않는다.
+7. dependency: pure 계약 → Orchestrator filesystem adapter → Catalog application 방향을 유지한다.
+   Catalog가 collector private module을 import하거나 worker가 Catalog/NAS를 호출하지 않는다.
+8. failure/retry: 미완료/FAILED·다른 run/fence·변조·위험한 파일은 읽기 오류다. 같은 검증된
+   capture를 다시 읽을 수 있지만 재클릭/새 capture 생성/과거 FAILED 재해석은 하지 않는다.
+9. 단순 대안: 임의 경로와 `read_bytes()`만 넘기면 잘못된 실행·완료 전 파일·위험 경로를
+   구별하지 못한다. 기존 OS file 검증과 작은 수신 계약을 확장하며 범용 storage layer는 만들지 않는다.
+
+MANUAL 세션이 종료되어도 이미 RECEIVED인 수신물은 검증할 수 있다. 이것은 세션 만료 뒤
+자동 수집을 허용하거나 현재 owner/source 권한 확인을 생략하라는 뜻이 아니다. 실제 사진은
+메시지별 관측과 연결하고, 남은 사진을 확보하지 못하면 incomplete로 보존한다.

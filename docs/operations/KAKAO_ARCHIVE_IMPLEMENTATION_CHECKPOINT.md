@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 실제 사진2건 수신·보존 및 입력 검증 소스
+
+- 같은 실제 방에서 표시된 사진 각각의 내려받기 아이콘을 확인한 뒤, 사진2건을 받았다.
+  완료 receipt의 원본 크기는3,153,794/740,115byte이며 SHA를 대조했다. 격리 PDF 환경의
+  Pillow로 실제 JPEG 전체 decode·단일 frame·3061×3012/1791×1572 크기를 확인했다.
+  API 환경에서의 첫 decode 진단은 선택 Pillow 미설치로 시작 전 실패했으며, API의 운영
+  의존성을 임의 설치하지 않고 이미 decoder가 있는 환경에서 read-only로 확인했다.
+- browser/remote는 이후 MainPID0, Result success/exit0이다. 종료 후에도 CSV1건·JPEG2건의
+  payload/완료 receipt와 hash가 보존된다. 사진 표식3개 중1개는 아직 미확보다. 단순 수신·
+  픽셀 decode와 메시지별 사진 연결·실제 source 수락·학생 PDF 완료를 구분한다.
+  원문 없는 진단은 `staging/kakao-1926-retained.json`, `staging/kakao-1928-media-decoded.json`이다.
+- 사용자는 취침 전 사진 내려받기·스크롤을 허용했으며, 메시지 전송·차단·신고·상담 완료 등은
+  금지 상태로 유지했다. 추가 로그인·원격 세션 임의 재시작 없이 독립 소스 작업을 진행한다.
+- 기존 설계의 결정론적 Playwright 수집을 유지하며 전용 Codex 슬롯은 배정하지 않기로 했다.
+  근거와 안전한 DOM 동작·입력 경계는 `KAKAO_COLLECTION_EXECUTION_BOUNDARY.md`에 기록했다.
+  개발용 화면 좌표를 자동 수집 selector로 사용하지 않는다.
+- source에는 기존 수신 계약을 소비하는 Orchestrator reader를 추가했다. 작은 exact ID lookup,
+  FD 전후 metadata·권한·run/fence·STARTED/terminal identity·payload size/hash를 확인하며
+  읽기만 한다. 기존 OS reader의 optional GID/mode 검사도 재사용한다. 새 DB/queue/의존성,
+  source 권한 우회, browser 임의 조작이나 자동 admission은 없다.
+- 신규 부정/재조회/동시 읽기39개를 포함한 관련 runtime 회귀 **244 PASS**, Ruff·formatter·
+  strict mypy2 source PASS다. 이 reader는 **소스 구현이며 아직 운영 application에 연결하지
+  않았다.** source 수집 authority·사진 occurrence 정합과 기존 질문/packet/PDF 연결이 다음이다.
+
+## 2026-11-16 19:11 UTC 실제 카카오 CSV 수신 PASS
+
+- 사용자가 기존 연결의 MANUAL 화면을 다시 준비한 뒤, 실제 열린 방에서 `대화 내보내기 →
+  내 PC 저장`을 실행했다. 현재 browser run의 완료 receipt가 `RECEIVED`이며 5,723byte의
+  원본 파일이 로컬 staging에 보존됐다. Catalog 서비스 계정으로 크기와 SHA-256을 대조했다.
+- UTF-8 CSV의 열은 `DATE,USER,MESSAGE`, 대화 행은10개이며 모든 행 너비가3이다.
+  대화·학생 이름·파일명·원본 screenshot은 Git/Slack에 저장하지 않는다. 증거는 보호된
+  `/var/lib/eom-kakao/downloads/`의 해당 run receipt/payload이며, 원문 없는 진단은
+  `staging/kakao-1914-download-after.json`이다. 기존 수신 실패 기록은 그대로 보존했다.
+- 첫 pointer click은 sidebar의 scroll 정착 전 위치여서 download event가 없었다. 다시
+  최신 화면에서 버튼 hover를 확인하고 정확한 버튼을 눌렀으며, 실제 download event와
+  완료 capture는1건이다. 키보드 입력·메시지 전송·상담 상태 변경은0이다.
+- CSV 안에 `사진` 표식이3개 있으나 **사진 원본 확보·메시지 attachment occurrence 연결·
+  source admission·학생 PDF는 아직 PASS가 아니다.** 이 수신만으로 전체 방·기간·방향·
+  timezone 완전성을 주장하거나 AUTO를 켜지 않는다. 다음은 실제 사진 확보와 메시지 연결이다.
+- 이번 실증 중 runtime/API/Web/DB/GPU pin·인증 파일·채널 설정은 변경하지 않았다.
+
 ## 2026-11-16 19:01 UTC 설치본 headed 수신·종료 후 보존 PASS
 
 - stopped profile에서 `77fc7c0d6dbd190e20f8975788bca41e760e9f09`의 collector wheel

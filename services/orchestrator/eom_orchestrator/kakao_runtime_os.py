@@ -55,7 +55,15 @@ def protected_directory(
         os.close(fd)
 
 
-def read_protected(path: Path, *, uid: int, maximum: int, owners: frozenset[int]) -> bytes:
+def read_protected(
+    path: Path,
+    *,
+    uid: int,
+    maximum: int,
+    owners: frozenset[int],
+    gid: int | None = None,
+    mode: int | None = None,
+) -> bytes:
     with protected_directory(path.parent, owners=owners) as directory:
         fd = os.open(
             path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=directory
@@ -65,6 +73,8 @@ def read_protected(path: Path, *, uid: int, maximum: int, owners: frozenset[int]
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_uid != uid
+            or (gid is not None and before.st_gid != gid)
+            or (mode is not None and stat.S_IMODE(before.st_mode) != mode)
             or before.st_nlink != 1
             or before.st_mode & 0o022
             or not 0 < before.st_size <= maximum

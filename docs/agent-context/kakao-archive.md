@@ -193,6 +193,14 @@ event만 구독한다. 실제 SDK 다운로드를 허용하고 별도 로컬 sta
 이는 provider room/사진 occurrence 검증이나 Catalog의 accepted source가 아니다.
 다운로드 수신 source/fixture PASS와 설치 활성·실제 카카오 파일 수신은 따로 확인한다.
 
+`eom_orchestrator.kakao_download_inputs.read_received_kakao_download`는 이 로컬 수신물의
+owner 입력 adapter다. 기존 `kakao_runtime_os`의 FD 검사를 재사용해 exact run/fence,
+STARTED/완료 receipt, UID/GID/mode·크기/hash를 검사하고 bounded bytes를 한 번 읽는다.
+읽기 성공은 채널/방/학생 권한이나 사진 occurrence 정합을 뜻하지 않는다. source/media
+application의 정본 수락과 권한 검사는 별도이며, reader는 재다운로드·NAS/DB 쓰기를 하지 않는다.
+반복 수집의 실행 방식은 [수집 실행 계약](../architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)의
+실증 후 결정 절을 따른다. 전용 Codex 슬롯이나 임의 클릭 도구를 운영 수집에 추가하지 않는다.
+
 `kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
 허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은
 gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채널 검증/수집 성공으로 바꾸지
