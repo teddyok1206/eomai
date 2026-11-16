@@ -488,6 +488,7 @@ def test_unit_isolated_identity_lifetime_and_no_autorestart():
     for required in (
         "User=eom-kakao-remote",
         "Group=eom-kakao-proxy",
+        "RuntimeDirectoryPreserve=yes",
         "SupplementaryGroups=eom-kakao-vnc eom-kakao-grant",
         "KillMode=control-group",
         "SendSIGKILL=yes",

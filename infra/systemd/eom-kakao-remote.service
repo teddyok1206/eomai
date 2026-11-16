@@ -11,6 +11,7 @@ Group=eom-kakao-proxy
 SupplementaryGroups=eom-kakao-vnc eom-kakao-grant
 RuntimeDirectory=eom-kakao-remote
 RuntimeDirectoryMode=2750
+RuntimeDirectoryPreserve=yes
 WorkingDirectory=/run/eom-kakao-remote
 ExecStart=/opt/eom/conda/envs/eom-kakao-remote/bin/python -I -B -m eom_kakao_archive_gateway.supervisor
 Restart=no
