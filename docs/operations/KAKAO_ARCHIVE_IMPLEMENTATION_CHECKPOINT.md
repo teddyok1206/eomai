@@ -22,6 +22,14 @@
 - **운영 미반영**이다. API/Catalog/Web·DB0087·GPU pins, 실제 CSV/JPEG3건과 실패 이력은
   보존했다. 실제 source 수집 authority→질문 저장, 새 GUI를 지원하는 호환 운영 릴리스,
   실제 방→학생 PDF·다운로드와 전체 방 주기 수집은 여전히 남아 있다.
+- source `8cd61162b8bc18f49fe6f0a681195c60555c56bc`를 커밋·푸시했다. clean source의 공식
+  Web build/101개 file의 RECORD·offline 설치 simulation·pip check가 PASS다. wheel SHA는
+  `af7be9f083f50c62daba02a864143ce9478fdcbc5cca0feb3bf811835f7bf1dc`, closure SHA는
+  `b252f08bbf2afc5c89bcf4cb58e9ac9ed13b8f6d98668d56a26689f352c78b42`다. 위치는
+  `/tmp/eom-web-gui-build/8cd61162b8bc18f49fe6f0a681195c60555c56bc.3MjiY3/dist/`이며
+  `staging/kakao-question-composer-wheel.log`가 개발 증거다. 별도 pure/RPC/편집/문맥88개도 PASS다.
+  현재 원격 browser/remote는 MainPID0·정상 종료 상태를 재확인했다. 카카오 재로그인·수집,
+  사용자 계정 변경이나 GPU runtime 재시작은 하지 않았다.
 
 ## 2026-11-16 MANUAL 관측 → 기존 방 등록의 내부 연결 검증
 
