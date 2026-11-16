@@ -29,18 +29,20 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
-from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError, authorize_kakao_actor
+from eom_catalog_service.kakao_archive_authorization import (
+    KakaoArchiveError,
+    authorize_kakao_actor,
+    authorize_kakao_room_scope,
+)
 from eom_catalog_service.kakao_archive_commands import (
     kakao_command_sha256,
     lock_kakao_intent,
     validate_kakao_idempotency_key,
 )
-from eom_catalog_service.kakao_archive_models import KakaoChannelBindingRecord
 from eom_catalog_service.kakao_question_editing import (
     KakaoAttachmentSource,
     ResolvedKakaoQuestionSource,
 )
-from eom_catalog_service.kakao_room_models import KakaoRoomRecord
 from eom_catalog_service.kakao_source_models import (
     KakaoSourceCommandRecord,
     KakaoSourceHeadRecord,
@@ -65,6 +67,14 @@ class AcceptedKakaoSource:
     manifest: ArtifactMemberPointer
     publication_job_id: str
     replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedKakaoQuestionSource:
+    """Resolved content plus its exact accepted closure for late metadata checks."""
+
+    accepted: AcceptedKakaoSource
+    resolved: ResolvedKakaoQuestionSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,31 +135,14 @@ class KakaoSourceService:
     def _scope(
         self, session: Session, actor: ActorContext, binding_id: str, room_id: str, *, mutate: bool
     ) -> str:
-        owner = authorize_kakao_actor(
+        owner, _ = authorize_kakao_room_scope(
             session,
             actor,
+            binding_id,
+            room_id,
             PermissionKey.KAKAO_ARCHIVE_COLLECT if mutate else PermissionKey.KAKAO_ARCHIVE_READ,
-            now=datetime.now(UTC),
+            lock=mutate,
         )
-        binding_query = select(KakaoChannelBindingRecord).where(
-            KakaoChannelBindingRecord.source_binding_id == binding_id,
-            KakaoChannelBindingRecord.owner_operator_id == owner,
-        )
-        binding = session.scalar(binding_query.with_for_update() if mutate else binding_query)
-        if binding is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-        if binding.state == "RETIRED":
-            raise KakaoArchiveError("KAKAO_ARCHIVE_BINDING_RETIRED")
-        room_query = select(KakaoRoomRecord).where(
-            KakaoRoomRecord.room_id == room_id,
-            KakaoRoomRecord.source_binding_id == binding_id,
-            KakaoRoomRecord.owner_operator_id == owner,
-        )
-        room = session.scalar(room_query.with_for_update() if mutate else room_query)
-        if room is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-        if room.state != "ACTIVE":
-            raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_RETIRED")
         # DRAFT is not upgraded here. The mandatory actual capture owner alone can
         # approve the exact verified-channel/run/attempt authority below.
         return owner
@@ -564,6 +557,14 @@ class KakaoSourceService:
         No owner handoff or latest fallback: the caller retains the same actor and
         resolves each distinct source revision once per bounded application request.
         """
+        return self.resolve_question_source_context(
+            actor, source_binding_id, room_id, source_revision_id=source_revision_id
+        ).resolved
+
+    def resolve_question_source_context(
+        self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
+    ) -> AcceptedKakaoQuestionSource:
+        """Read once, retaining immutable source provenance for post-I/O adoption."""
         accepted = self.get_source(
             actor, source_binding_id, room_id, source_revision_id=source_revision_id
         )
@@ -629,4 +630,69 @@ class KakaoSourceService:
             validate_source_pointer_metadata_batch(
                 session, (accepted.manifest, *source_admission_pointers(admission))
             )
-        return resolved
+        return AcceptedKakaoQuestionSource(accepted, resolved)
+
+    def validate_question_source_metadata(
+        self,
+        session: Session,
+        actor: ActorContext,
+        contexts: tuple[AcceptedKakaoQuestionSource, ...],
+    ) -> None:
+        """Current source ACL/lifecycle in a caller's short transaction; no file I/O.
+
+        Only already-resolved contexts enter here. Norm/image checks alone would
+        miss withdrawal of the accepted resolution, raw snapshot or capture proof.
+        """
+        scopes = {
+            (
+                item.accepted.resolution.admission.source_binding_id,
+                item.accepted.resolution.admission.room_id,
+            )
+            for item in contexts
+        }
+        owners = {
+            (binding, room): self._scope(session, actor, binding, room, mutate=False)
+            for binding, room in scopes
+        }
+        expected = {item.accepted.resolution.source_revision_id: item for item in contexts}
+        if len(expected) != len(contexts):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_SOURCE_DUPLICATED")
+        rows = tuple(
+            session.scalars(
+                select(KakaoSourceRevisionRecord).where(
+                    KakaoSourceRevisionRecord.source_revision_id.in_(tuple(expected))
+                )
+            )
+        )
+        if len(rows) != len(expected):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        pointers: list[ArtifactMemberPointer] = []
+        for row in rows:
+            item = expected[row.source_revision_id]
+            accepted, resolved = item.accepted, item.resolved
+            admission = accepted.resolution.admission
+            if (
+                row.owner_operator_id != owners[(admission.source_binding_id, admission.room_id)]
+                or (
+                    row.source_binding_id,
+                    row.room_id,
+                    row.normalization_revision_id,
+                    row.manifest_artifact_id,
+                    row.manifest_artifact_revision_id,
+                    row.manifest_sha256,
+                    row.publication_job_id,
+                )
+                != (
+                    admission.source_binding_id,
+                    admission.room_id,
+                    resolved.normalization.normalization_revision_id,
+                    accepted.manifest.artifact_id,
+                    accepted.manifest.artifact_revision_id,
+                    accepted.manifest.sha256,
+                    accepted.publication_job_id,
+                )
+                or resolved.pointer != admission.normalization
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_SOURCE_INVALID")
+            pointers.extend((accepted.manifest, *source_admission_pointers(admission)))
+        validate_source_pointer_metadata_batch(session, tuple(pointers))

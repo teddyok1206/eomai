@@ -38,6 +38,19 @@ exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재
 저장 연결의 범위와 후속 질문/출력 책임은
 [저장 설계](../architecture/KAKAO_ARCHIVE_DURABLE_CONTENT.md)에 정리한다.
 
+`resolve_question_source_context`는 같은 해석에 accepted source closure를 함께 반환한다.
+`validate_question_source_metadata`는 I/O 없는 짧은 transaction에서 원본·resolution·capture
+근거의 metadata와 현재 owner 권한을 다시 검사한다. 정규화/사진만 확인하는 것으로 원본
+접근 철회 검사를 대신하지 않는다. 이 내부 context는 새로운 실행 권한을 부여하지 않는다.
+
+`kakao_question_service.py`는 accepted source 후보의 최초 저장과 exact revision 조회·검토
+수정을 담당한다. 서버 ID/시각/mapping을 작은 command에 예약하고 기존 publisher 밖의 I/O
+뒤에 current를 CAS로 채택한다. 다른 key의 같은 origin은 명시적 중복 오류이며 수동 결과를
+덮지 않는다. `resolve_questions`는 packet/export의 ordered exact selection을 한 번에 읽고,
+고유 source마다 한 번 해석한다. 목록은 작은 metadata만 읽는다. schema는
+`kakao_question_store.py`, DB는 `kakao_question_models.py`에 있고 본문은 Artifact다.
+이는 source/storage 구현 경계이며 API·GUI 전체 연결이나 운영 migration 완료 증거가 아니다.
+
 `kakao_archive_service.py`는 DRAFT 연결과 불변 정책 revision/명령 receipt의 소유자다.
 현재 session·permission·ADMIN 역할은 Identity repository에서 다시 확인하며 다른 owner의
 binding은 존재하지 않는 것과 같은 오류다. `kakao_archive_rpc.py`는 기존 Catalog API-peer

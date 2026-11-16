@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — 질문 owner, 832a4803 이후 소스 작업
+
+외부 검토 기준 뒤에 추가한 **질문 저장 use case의 소스/격리 검증**이다. 다음 사용자
+체크포인트의 목표는 계속 CSV·사진 → 편집 → packet → 학생별 PDF·Studio 다운로드이며,
+아래 중간 저장을 그 경로의 완료나 운영 활성화로 보고하지 않는다.
+
+- accepted source의 `turn_v1` 후보를 새 논리 질문으로 등록하고, exact revision의 본문
+  조회·확정/제외/선택 수정과 metadata 목록을 저장하는 owner를 추가했다. 생성 ID·시각·
+  mapping pin을 예약한 뒤 I/O 밖에서 기존 publisher를 사용하고 CAS로 채택한다.
+- 동일 intent 동시 접수·다른 intent의 competing edit·발행 직후 중단/재전송을 실제 임시
+  PostgreSQL에서 확인했다. 중단 재개는 원래 논리/revision/Artifact pointer를 재사용한다.
+  같은 시각·동일 문장인 두 occurrence도 두 개로 유지하며 DB에는 본문/사진을 넣지 않는다.
+- packet/export용 exact batch resolver는 입력 순서를 유지하고 고유 source당 한 번 해석한다.
+  같은 질문의 서로 다른 두 저장 버전을 읽어도 원본 resolution 해석 호출은 한 번이다.
+  현재 binding/room/Identity 권한과 accepted source closure를 I/O 뒤 다시 확인한다.
+- 첫 합동 DB 실행은 110 PASS/2 FAIL이었다. 새 head 상수 갱신 누락과, 테스트가 불변
+  Artifact approval을 수정하려던 잘못된 fixture였다. source 철회는 실제 binding retirement
+  use case로 검증하도록 바로잡았으며 immutable guard를 해제하지 않았다.
+- 수정·batch resolver와 재기동 후 표시 교정 보존 확인 뒤 공식 disposable DB 검사 **115 PASS**, Kakao 관련 전체 unit과
+  권한/의존성/개발 문맥/이전 release 계약 검사 **1062 PASS**다. unit 전체의 첫 invocation은
+  선택적 Pillow가 없는 API interpreter여서 collection 오류였다. 기존 테스트용 Pillow
+  11.3.0 materialization을 명시해 재실행했으며 운영 API 의존성은 바꾸지 않았다.
+  변경 5개 core 모듈 mypy, formatter/linter, canonical/mirror/reference audit도 PASS다.
+- source migration은 `20261116_0085`이며 실제 적용은 guarded disposable DB에만 했다.
+  운영은 앞선 0084 compatible set 그대로다. 이후 운영 반영 전 새 head의 compatible
+  release/context를 준비해야 하며, 1.26/0084로 새 소스를 배포하지 않는다.
+- 아직 미연결: 공개 질문 API/GUI, 분할·병합의 atomic adoption, packet/export owner와
+  인증 파일 다운로드, 실제 카카오 로그인·한 방/전체 방 수집·정기 실행.
+  실제 카카오 계정 실증은 여전히 NOT_PERFORMED이며 추가 인증 요청은 아직 하지 않았다.
+
 ## 운영 부분 배포 결과 — 2026-11-16 10:55 UTC
 
 사용자가 요청한 **미완성 기능의 부분 운영 배포**를 완료했다. 전체 KakaoTalk goal은

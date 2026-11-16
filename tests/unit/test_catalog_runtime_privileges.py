@@ -94,6 +94,16 @@ def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity()
     assert ("UPDATE", "kakao_remote_commands") not in grants
 
 
+def test_kakao_question_grants_cannot_rewrite_origin_body_or_history() -> None:
+    tables = {"kakao_questions", "kakao_question_commands", "kakao_question_revisions"}
+    assert tables <= set(READ_TABLES) & set(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    assert grants["UPDATE", "kakao_questions"] == {"current_revision_id", "resource_version"}
+    assert grants["UPDATE", "kakao_question_commands"] == {"state", "completed_at"}
+    assert ("UPDATE", "kakao_question_revisions") not in grants
+
+
 def test_native_index_owner_privileges_are_bounded_and_append_only():
     immutable = {"embedding_encodings", "embedding_source_bindings", "embedding_index_revisions"}
     assert immutable | {"embedding_indexes"} <= set(READ_TABLES)

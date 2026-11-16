@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
 from eom_identity_service.repository import active_role_assignments, effective_permissions
@@ -16,6 +16,9 @@ from eom_operator_identity.contracts import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.kakao_archive_models import KakaoChannelBindingRecord
+from eom_catalog_service.kakao_room_models import KakaoRoomRecord
+
 
 class KakaoArchiveError(ValueError):
     """Content-free failure safe for the application error mapper."""
@@ -23,6 +26,52 @@ class KakaoArchiveError(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def authorize_kakao_binding_scope(
+    session: Session,
+    actor: ActorContext,
+    binding_id: str,
+    permission: PermissionKey,
+    *,
+    lock: bool,
+) -> tuple[str, KakaoChannelBindingRecord]:
+    """Metadata-only accepted-content access; finish the transaction before I/O."""
+    owner = authorize_kakao_actor(session, actor, permission, now=datetime.now(UTC))
+    binding_query = select(KakaoChannelBindingRecord).where(
+        KakaoChannelBindingRecord.source_binding_id == binding_id,
+        KakaoChannelBindingRecord.owner_operator_id == owner,
+    )
+    binding = session.scalar(binding_query.with_for_update() if lock else binding_query)
+    if binding is None:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+    if binding.state == "RETIRED":
+        raise KakaoArchiveError("KAKAO_ARCHIVE_BINDING_RETIRED")
+    return owner, binding
+
+
+def authorize_kakao_room_scope(
+    session: Session,
+    actor: ActorContext,
+    binding_id: str,
+    room_id: str,
+    permission: PermissionKey,
+    *,
+    lock: bool,
+) -> tuple[str, KakaoRoomRecord]:
+    """Same owner/lifecycle and binding→room lock order for source and question work."""
+    owner, _ = authorize_kakao_binding_scope(session, actor, binding_id, permission, lock=lock)
+    room_query = select(KakaoRoomRecord).where(
+        KakaoRoomRecord.room_id == room_id,
+        KakaoRoomRecord.source_binding_id == binding_id,
+        KakaoRoomRecord.owner_operator_id == owner,
+    )
+    room = session.scalar(room_query.with_for_update() if lock else room_query)
+    if room is None:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+    if room.state != "ACTIVE":
+        raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_RETIRED")
+    return owner, room
 
 
 def authorize_kakao_actor(

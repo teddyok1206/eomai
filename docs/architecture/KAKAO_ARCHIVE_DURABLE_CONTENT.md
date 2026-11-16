@@ -1,6 +1,6 @@
 # KakaoTalk: 원본에서 질문·학생별 PDF까지의 저장 연결
 
-상태: **첫 원본 수락·조회 slice 구현/격리 검증, 질문·packet·출력 owner는 후속 구현**.
+상태: **원본 수락·질문 저장 owner의 소스/격리 검증, 공개 연결·분할/병합·packet·출력 owner는 후속**.
 실제 카카오 수집·운영 수락 증거는 아니다. 최초 설계 기준 소스는
 `4d190c32a01de55a4f19fc1c3697ec48762615d4`이며, 이 문서 작성은 런타임 설치·활성화를 변경하지 않는다.
 상위 요구사항은 [전체 명세](KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md) §§7–10,
@@ -225,3 +225,39 @@ NAS 경로/쿠키/본문을 log·URL에 싣지 않는다. GUI는 실제 capabili
 split/merge 원자성, immutable history, revoke/rename/remap 경쟁, export 중복 claim/중단/재조회와
 작은 DB payload를 검사한다. 동일 packet의 학생 2명·권한이 다른 owner 2명·원본 사진 포함 fixture로
 API/BFF/Chromium→PDF/PNG 경로를 확인한다. 운영 원본과 실제 학생 PDF 확인 전에는 live PASS로 보고하지 않는다.
+
+### 질문 owner의 첫 저장 연결
+
+기존 question-manifest/edit bytes는 유지하고 `question-store-v1`에 생성·변경 요청과 작은
+저장 descriptor를 정의한다. 최초 생성은 accepted source revision과 후보 ordinal을 명시한다.
+원본 해석은 공개 `resolve_question_source`를 사용한다. source의 첫 학생 occurrence를 origin으로
+기록하되 그것을 question ID로 사용하지 않는다. 같은 방·규칙·origin을 새 수집이나 다른 key로
+다시 생성하면 기존 질문을 덮어쓰는 대신 명시적 중복 오류를 반환한다. 새 증거의 반영 제안과
+분할/병합은 후속 명령이며 이 중복 방지 자체를 source stale 처리 완료로 간주하지 않는다.
+
+저장은 question head/revision/command 세 테이블이다. head의 origin과 최초 source FK는 유지하고,
+revision에는 작은 review/time/student/mapping projection과 manifest pointer만 둔다. 추가 source는
+manifest의 normalization pins를 source의 기존 unique index로 batch resolution한다. source 본문,
+선택 block, 사진은 DB에 복제하지 않는다. 목록은 방별 `(owner,binding,room,question_id)`와
+전체 `(owner,binding,question_id)` B-tree keyset이며
+본문 상세만 파일을 읽는다. 기간·학생 검색이 실제 붙을 때 해당 composite index를 추가한다.
+
+잠금은 기존 intent → binding → room → question 순서다. CREATE/EDIT reservation이 서버 ID·시각·
+mapping pin·expected version을 고정하고, I/O 밖의 publication 뒤 동일 command를 CAS로 채택한다.
+재전송은 원래 revision을 반환하고, 현재가 나중 버전이어도 최신 결과로 바꾸지 않는다. 새 수정은
+현재 mapping을 확인하되 역사적 읽기는 당시 pin을 보존한다. source lifecycle과 현재 권한은
+I/O 전후 확인한다. 다른 key의 competing edit는 한 번만 current를 바꿀 수 있다.
+
+이 단계는 컬렉션이나 worker 실행 큐를 추가하지 않는다. 한 후보 생성의 원본 해석 비용은 원본
+크기에 선형이다. 추후 수집 owner의 일괄 후보 생성은 고유 source당 한 번 해석한 context를
+재사용하도록 연결해야 하며, 모든 후보마다 전체 source를 재해석하는 loop는 허용하지 않는다.
+단순 파일 저장만으로는 stable ID·수동 수정·중단 후 같은 결과 채택을 보장할 수 없으므로 작은
+reservation과 불변 revision을 사용한다. 최초 저장·exact read·확정/제외/수정의 소스와 임시 DB
+검증은 진행했으며, 공개 API/GUI·분할/병합·운영 배포는 아직 후속이다. `resolve_questions`는
+ordered exact revision 집합을 indexed batch 조회하고 고유 source당 한 번씩만 해석한다.
+같은 원본의 여러 질문/버전을 읽을 때 원본 parse 수가 증가하지 않는 회귀 검사를 둔다.
+
+여기서 저장 명령은 Catalog 내부의 exact 편집 자료다. 공개 편집 API는 사용자 의도와
+서버 작성 근거를 구분해야 한다. 특히 사진 품질 수용의 actor/시각은 인증된 operator와
+해당 command reservation에서 부여하며, 브라우저가 보낸 `accepted_by`/시각을 새 결정의
+권한으로 사용하지 않는다. 이미 수락한 사진 품질 pin의 재표시와 새로운 품질 수용은 구별한다.

@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/question-store-v1/1.0",
+  "title": "Accepted private questions: exact commands and stored revision descriptors",
+  "$defs": {
+    "Create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "room_id",
+        "source_revision_id",
+        "candidate_ordinal",
+        "expected_mapping_revision_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-create/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^kakaoroom_[0-9a-f]{32}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^kakaosourcerev_[0-9a-f]{32}$"
+        },
+        "candidate_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "expected_mapping_revision_id": {
+          "type": "string",
+          "pattern": "^kakaomappingrev_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "Change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "expected_resource_version",
+        "edit"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-change/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^kakaoroom_[0-9a-f]{32}$"
+        },
+        "question_id": {
+          "type": "string",
+          "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+        },
+        "expected_resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483646
+        },
+        "edit": {
+          "$ref": "eom://schemas/kakao-archive/question-edit-v1/1.0"
+        }
+      }
+    },
+    "Stored": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "question_revision_id",
+        "previous_revision_id",
+        "resource_version",
+        "manifest",
+        "review_state",
+        "first_student_at_utc",
+        "student",
+        "created_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-stored-question/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^kakaoroom_[0-9a-f]{32}$"
+        },
+        "question_id": {
+          "type": "string",
+          "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+        },
+        "question_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        },
+        "previous_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "manifest": {
+          "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/pointer"
+        },
+        "review_state": {
+          "enum": [
+            "UNREVIEWED",
+            "CONFIRMED",
+            "EXCLUDED"
+          ]
+        },
+        "first_student_at_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "student": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/student"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "question",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-mutation/1.0"
+        },
+        "question": {
+          "$ref": "#/$defs/Stored"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-page/1.0"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/Stored"
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Create"
+    },
+    {
+      "$ref": "#/$defs/Change"
+    },
+    {
+      "$ref": "#/$defs/Stored"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    }
+  ]
+}

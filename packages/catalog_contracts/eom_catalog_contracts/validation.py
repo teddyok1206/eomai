@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "kakao-question-store-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-store-v1.schema.json",
+            "resources/kakao-archive/question-store-v1.schema.json",
+            "1.0",
+            "sha256:99a822a3fb39ff4eb9171514b9fa9828cc94fe59b270f39e0c01690a2017273c",
+        ),
         "kakao-media-blob-v1": CatalogSchemaResource(
             "schemas/kakao-archive/media-blob-v1.schema.json",
             "resources/kakao-archive/media-blob-v1.schema.json",
