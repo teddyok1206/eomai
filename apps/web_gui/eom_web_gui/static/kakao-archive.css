@@ -30,6 +30,12 @@
 .kakao-technical { font-size: var(--eom-type-caption, 13px); color: var(--eom-text-muted); }
 .kakao-technical dd { margin: 0 0 12px; overflow-wrap: anywhere; }
 .kakao-publications { margin-top: 24px; }
+.kakao-question-composer { margin-top: 24px; padding: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
+.kakao-question-composer[hidden] { display: none; }
+.kakao-question-composer h3 { margin-top: 0; }
+.kakao-composition-block { padding-block: 8px; border-bottom: 1px solid var(--eom-border); }
+.kakao-composition-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.kakao-composition-row > span { flex: 1 1 180px; overflow-wrap: anywhere; }
 .kakao-packet-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 20px; }
 .kakao-packet-form > label { display: grid; gap: 8px; flex: 1 1 160px; max-width: 420px; min-width: 0; }
 .kakao-packet-form > .kakao-review-check { display: flex; }

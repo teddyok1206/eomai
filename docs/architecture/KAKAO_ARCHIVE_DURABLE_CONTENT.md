@@ -220,6 +220,21 @@ output 예약 UNIQUE와 immutable trigger를 사용한다. migration rollback은
 raw Artifact 쓰기나 독립 CREATE를 Web에 노출하는 단순 대안은 권한·원자적 대체와 중복 방지
 경계를 깨므로 사용하지 않는다. RPC/API/BFF의 소스 연결과 운영 활성화는 구별한다.
 
+### 화면의 질문 나누기·합치기 연결
+
+화면은 위 `/questions/compose`와 현재 질문 v1 projection을 재사용한다. 원문 span의 절대
+offset을 v1이 제공하지 않으므로 첫 UI는 **메시지/사진 block 사이**에서 나누고, 합치기는
+사용자가 고른 질문의 명시적 순서를 전달한다. 문자열 내부 offset을 0부터 추측하거나
+표시문을 원문으로 다시 등록하지 않는다. block 내부 구간 편집은 exact source selection을
+노출하는 별도 후속 계약이 필요하다.
+
+별도 JS module이 작은 입력 ID/revision/version·block ID·미확정 요청 key만 관리한다.
+정본·중복 방지·학생/방 범위·원자적 저장은 기존 Catalog owner 책임이다. 배열 순회와
+ID set/map으로 최대100개 질문/230개 block을 처리하며 새 DB/queue/cache는 없다.
+응답 유실은 같은 key/body로 확인하고, 저장 완료 후 목록 갱신만 실패한 경우에는 저장된
+출력 열기만 재시도한다. 새 POST로 다시 조합하지 않는다. 같은 owner의 화면 이동 중
+미확정 intent를 보존하고 owner 변경 시 제거한다. 원문/비밀값을 browser storage에 넣지 않는다.
+
 순서는 **JSON Schema → frozen DTO → owner/ORM → Catalog RPC → API/BFF → GUI**이다.
 기존 `question-manifest-v1`, `question-edit-v1`, `question-packet-v1`, worker render 계약은 재사용한다.
 source-resolution/source-admission, 콘텐츠 command/page, export request/status/output receipt에 필요한

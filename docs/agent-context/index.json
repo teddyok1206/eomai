@@ -47,7 +47,7 @@
         "scripts/kakao/install_runtime.py",
         "apps/application_api/eom_api/routers/kakao_questions.py",
         "apps/web_gui/eom_web_gui/static/kakao-archive.js",
-        "apps/web_gui/eom_web_gui/static/kakao-manual.js"
+        "apps/web_gui/eom_web_gui/static/kakao-question-composer.js"
       ],
       "test_paths": [
         "tests/unit/test_kakao_archive_rules.py",

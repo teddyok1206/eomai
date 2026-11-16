@@ -169,6 +169,12 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 `static/kakao-archive.js`는 기존 api/session/presenter를 주입받는다. private 파일 URL은
 검증한 논리 ID와 pinned revision으로 만들고 source payload의 임의 URL을 쓰지 않는다.
 실제 API가 없는 화면은 fixture 검증일 뿐 수집 성공으로 표시하거나 운영 연결로 보고하지 않는다.
+`kakao-question-composer.js`는 기존 compose API에 block 사이 나누기와 순서 있는 질문 합치기를
+연결한다. 원문/사진 대신 ID·revision·version·block 선택만 POST하며 저장 규칙을 재구현하지 않는다.
+미확정 응답은 같은 key/body, 성공 후 목록 실패는 저장 결과 열기만 재시도한다. owner 변경은
+이전 intent/표시를 지우고, 저장 중 다른 질문을 열면 늦은 결과가 새 선택을 덮지 않는다.
+질문 v1에는 절대 text offset이 없으므로 문장 내부 분할이나 표시문 수정까지 지원한다고
+주장하지 않는다. source/API/browser 합성 검증과 실제 카카오/운영 활성화는 별도다.
 학생 디렉터리는 `kakao-students.js`가 담당한다. 실제 학생 RPC/API/BFF를 사용하며 연결
 선택과 독립된 owner/요청 순서 검사로 늦은 응답을 차단한다. 학생 생성 자체는 방 mapping이 아니다.
 `kakao-rooms.js`는 확인된 방 조회와 학생 연결/해제를 같은 경계에서 수행한다. 연결 변경은

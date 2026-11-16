@@ -1,5 +1,28 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 질문 나누기·합치기 GUI 연결 소스 검증
+
+- 기존 compose RPC/API/BFF·원자적 저장 owner를 그대로 사용하도록 Studio에 질문 나누기와
+  순서 있는 합치기 편집 영역을 연결했다. 별도 DB/queue·worker·AI/의존성은 추가하지 않았다.
+  source의 질문/방/학생 권한·CAS·불변 저장 규칙은 Catalog가 계속 소유한다.
+- 질문 목록의 `합칠 목록에 추가`와 상세의 `질문 나누기 준비`를 제공한다. 합치기 순서는
+  위/아래/빼기로 명시하며, 나누기는 메시지·사진 block 사이의 선택을 기존 BLOCK selector로
+  보낸다. v1 projection에 없는 원문 절대 offset을 추측하지 않으며 **문장 내부 분할·표시문
+  수정 UI는 아직 미구현**이다. 원문/사진을 다시 등록하거나 기존 packet/PDF를 변경하지 않는다.
+- 응답 유실 뒤 같은 key/body 재확인, 화면 닫기·다시 열기의 미확정 intent 보존, 성공 뒤
+  목록 열기만 실패했을 때 새 POST 없는 결과 열기, 다른 owner/scope 응답 거부와 이전
+  detached button 차단을 실제 Chromium 합성 입력으로 확인했다. 저장 중 다른 질문을
+  선택하면 늦은 완료가 새 선택을 덮지 않고 사용자가 저장 결과 열기를 선택하도록 했다.
+- controller 단독 검사 외에 실제 archive 화면의 split → 목록 재조회 → exact 새 질문 열기 →
+  merge → 목록/상세 갱신도 합성 API로 검증했다. 이미 저장한 packet의 revision은 유지됐다.
+  Kakao 브라우저·질문 BFF·wheel inventory·frontend/backend alignment·GUI 원칙 합동
+  **46 PASS**, strict mypy1 source·Ruff·JS module syntax PASS다. 기존 TestClient warning1건은 남는다.
+  처음 두 browser 호출은 기존 local browser cache 경로를 빠뜨린 환경 invocation 실패였으며,
+  올바른 기존 cache로 재실행했다. 새 browser/dependency를 설치하거나 실패를 숨기지 않았다.
+- **운영 미반영**이다. API/Catalog/Web·DB0087·GPU pins, 실제 CSV/JPEG3건과 실패 이력은
+  보존했다. 실제 source 수집 authority→질문 저장, 새 GUI를 지원하는 호환 운영 릴리스,
+  실제 방→학생 PDF·다운로드와 전체 방 주기 수집은 여전히 남아 있다.
+
 ## 2026-11-16 MANUAL 관측 → 기존 방 등록의 내부 연결 검증
 
 - `manual-room-intake-v1` schema와 frozen DTO를 먼저 정의하고, 기존 수신 reader → Artifact

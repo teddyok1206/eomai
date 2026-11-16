@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-question-composer.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id = (prefix, digit = '1') => prefix + '_' + digit.repeat(32);
@@ -44,7 +44,12 @@ async function api(path, options = {}) {
   if (url.pathname.startsWith('/kakao-archive/source-bindings/')) return binding;
   if (url.pathname === '/kakao-archive/rooms') return page([room(),...(fixture.secondRoom?[room('2')]:[])]);
   if (url.pathname.startsWith('/kakao-archive/rooms/')) return room(url.pathname.endsWith(id('kakaoroom','2'))?'2':'1');
-  if (url.pathname === '/kakao-archive/questions') return page(url.searchParams.get('room_id')===id('kakaoroom','2')?[{...row(2),room_id:id('kakaoroom','2')}]:[fixture.confirmed||row(1),row(2)]);
+  if (url.pathname === '/kakao-archive/questions') return page(url.searchParams.get('room_id')===id('kakaoroom','2')?[{...row(2),room_id:id('kakaoroom','2')}]:[...(fixture.compositionRows||[fixture.confirmed||row(1)]),row(2)]);
+  if (url.pathname === '/kakao-archive/questions/compose') {
+    const body=options.body,inputs=body.operation==='SPLIT'?[body.input]:body.inputs;
+    fixture.compositionRows=(body.operation==='SPLIT'?['4','5']:['6']).map(digit=>({...row(1),question_id:id('kakaoquestion',digit),question_revision_id:id('kakaoquestionrev',digit)}));
+    return {schema_version:'kakao-question-composition-result/1.0',composition_id:id('kakaocomposition',body.operation==='SPLIT'?'1':'2'),operation:body.operation,source_binding_id:body.source_binding_id,room_id:body.room_id,inputs,outputs:fixture.compositionRows,replayed:false};
+  }
   if (url.pathname.endsWith('/review')) {
     if(fixture.failReview){fixture.failReview=false;throw new Error('SYNTHETIC_RESPONSE_LOST');}
     fixture.confirmed={...row(1),question_revision_id:id('kakaoquestionrev','3'),previous_revision_id:revisionA,resource_version:2,review_state:'CONFIRMED'};
@@ -52,7 +57,8 @@ async function api(path, options = {}) {
   }
   if (url.pathname.startsWith('/kakao-archive/questions/')) {
     const first = path.includes(questionA + '/');
-    return {schema_version:'kakao-question-view/1.0',question:first?(fixture.confirmed||row(1)):row(2),review_reasons:['BOUNDARY_REVIEW'],boundary_uncertain:true,
+    const composed=fixture.compositionRows?.find(q=>url.pathname.includes(q.question_id+'/'));
+    return {schema_version:'kakao-question-view/1.0',question:composed||(first?(fixture.confirmed||row(1)):row(2)),review_reasons:['BOUNDARY_REVIEW'],boundary_uncertain:true,
       ordered_blocks:[{kind:'TEXT',block_id:'text-1',role:'student',text:first?'첫째 줄\\n<script>window.privateLeak=true</script>':'두 번째 학생의 질문 본문'},
         {kind:'IMAGE',block_id:'photo-1',role:'student',availability:'expired',attachment_id:id('kakaoattachment','2'),attachment_revision_id:id('kakaoattachmentrev','2'),source_quality:'UNKNOWN'},
         {kind:'IMAGE',block_id:'photo-2',role:'student',availability:'available',attachment_id:id('kakaoattachment'),attachment_revision_id:id('kakaoattachmentrev'),source_quality:'ORIGINAL'}]};
@@ -278,6 +284,30 @@ try {
   await page.getByRole('button',{name:'학생별 PDF 보기',exact:true}).last().click();
   await page.getByRole('heading',{name:'새 질문 자료',exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'PDF 내려받기',exact:true}).count(),1,'saved output history was lost');
+  await page.getByRole('button',{name:'첫 번째 학생의 질문',exact:true}).click();
+  await page.getByRole('button',{name:'질문 나누기 준비',exact:true}).click();
+  const composer=page.getByRole('region',{name:'질문 구성 편집'});
+  await composer.getByRole('checkbox',{name:'2번째 내용부터 새 질문'}).check();
+  await page.evaluate(()=>{fixture.held='/kakao-archive/questions/compose';fixture.release=null;});
+  await composer.getByRole('button',{name:'새 질문으로 저장',exact:true}).click();
+  await page.waitForFunction(()=>fixture.release!==null);
+  await page.getByRole('button',{name:'두 번째 학생의 질문',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-kakao="detail"]').textContent.includes('두 번째 학생의 질문 본문'));
+  await page.evaluate(()=>fixture.release());
+  await composer.getByRole('button',{name:'저장한 질문 열기',exact:true}).waitFor();
+  assert.match(await page.locator('[data-kakao="detail"]').textContent(),/두 번째 학생의 질문 본문/,'late saved output overwrote the newer selection');
+  await composer.getByRole('button',{name:'저장한 질문 열기',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.kakao-question-composer').textContent.includes('새 질문을 저장했습니다'));
+  assert.match(await page.locator('[data-kakao="detail"] details').textContent(),/kakaoquestion_4444/,'split output was not opened');
+  await page.getByRole('button',{name:'합칠 목록에 추가',exact:true}).nth(0).click();
+  await page.getByRole('button',{name:'합칠 목록에 추가',exact:true}).nth(1).click();
+  await composer.getByRole('button',{name:'새 질문으로 저장',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-kakao="detail"] details').textContent.includes('kakaoquestion_6666'));
+  const compositions=await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/questions/compose'));
+  assert.equal(compositions.length,2);assert.equal(compositions[0].body.input.question_revision_id,await page.evaluate(()=>fixture.confirmed.question_revision_id));
+  assert.deepEqual(compositions[0].body.partitions,[[{kind:'BLOCK',block_id:'text-1'}],[{kind:'BLOCK',block_id:'photo-1'},{kind:'BLOCK',block_id:'photo-2'}]]);
+  assert.deepEqual(compositions[1].body.inputs.map(q=>q.question_id),['4','5'].map(digit=>'kakaoquestion_'+digit.repeat(32)));
+  assert.equal(await page.evaluate(()=>fixture.savedQuestions[0].question_revision_id),await page.evaluate(()=>fixture.confirmed.question_revision_id),'composition rewrote a saved packet');
   await page.evaluate(()=>{fixture.duplicateBindings=true;return fixture.controller.refresh();});
   const channel=page.getByRole('combobox',{name:'카카오 채널'});
   assert.equal(await channel.getByRole('option',{name:'합성 채널 · 연결 1',exact:true}).getAttribute('value'),await page.evaluate(()=>fixture.ids.bindingId));

@@ -3,6 +3,7 @@ import {createKakaoStudents} from "./kakao-students.js";
 import {createKakaoRooms} from "./kakao-rooms.js";
 import {createKakaoManual} from "./kakao-manual.js";
 import {createKakaoPublications} from "./kakao-publications.js";
+import {createKakaoQuestionComposer} from "./kakao-question-composer.js";
 const BASE = "/kakao-archive";
 const ID = /^[a-z][a-z0-9_]{1,48}_[a-f0-9]{32}$/;
 const TERMINAL_RUNS = new Set(["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "PAUSED", "AUTH_REQUIRED"]);
@@ -59,6 +60,16 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   const students = createKakaoStudents({document, api, explainError});
   const manual = createKakaoManual({document, api, explainError, schedule, unschedule});
   const publications = createKakaoPublications({document, api, explainError, setStateStatus, schedule, unschedule});
+  const composer = createKakaoQuestionComposer({document, api, explainError,
+    captureView: () => ({generation, detailGeneration, currentRoom}), onSaved: async (result, view) => {
+    const unchanged = () => view.generation === generation && view.detailGeneration === detailGeneration && view.currentRoom === currentRoom;
+    if (!active || !readReady() || binding?.source_binding_id !== result.source_binding_id || (currentRoom && currentRoom !== result.room_id)) return false;
+    if (!unchanged()) return false;
+    const token = generation;
+    await loadQuestions(token);
+    if (!live(token) || !unchanged() || binding?.source_binding_id !== result.source_binding_id || (currentRoom && currentRoom !== result.room_id)) return false;
+    return await openQuestion(result.outputs[0].question_id, result.outputs[0].question_revision_id) === true;
+  }});
   const rooms = createKakaoRooms({document, api, explainError, onSelect: row => {
     if (!active || !readReady() || row.source_binding_id !== binding?.source_binding_id) return;
     const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear();
@@ -105,6 +116,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     void rooms.setBinding(null); questionRows.clear();
     void manual.setBinding(null);
     void publications.setBinding(null);
+    composer.setBinding(null);
     nodes.connection.replaceChildren(); nodes.run.replaceChildren();
     nodes.questions.replaceChildren();
     clearDetails(); stopTimer();
@@ -165,8 +177,9 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     publications.install(nodes.packets);
     nodes.students = node("section"); students.install(nodes.students);
     nodes.manual = node("section"); manual.install(nodes.manual);
+    nodes.composer = node("section", undefined, "kakao-question-composer"); composer.install(nodes.composer);
     rooms.install(nodes.rooms);
-    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.students, nodes.run, work, publicationSection);
+    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.students, nodes.run, work, nodes.composer, publicationSection);
     clearDetails(); syncBootstrapControls();
   }
 
@@ -317,6 +330,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       await rooms.setBinding(detail);
       await manual.setBinding(detail);
       await publications.setBinding(detail);
+      composer.setBinding(detail);
       if (!live(token)) return;
       nodes.connection.replaceChildren(node("strong", detail.display_name), status(detail.state));
       if (!archiveReady()) {
@@ -447,6 +461,9 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       if (allowed("export")) entry.append(button("자료에 넣기", () => {
         if (live(token) && currentRoom === roomId && request === questionListGeneration) publications.addQuestion(row);
       }));
+      if (allowed("edit")) entry.append(button("합칠 목록에 추가", () => {
+        if (live(token) && currentRoom === roomId && request === questionListGeneration) composer.add(row);
+      }));
       nodes.questions.append(entry);
     }
     if (!questionRows.size) empty(nodes.questions, "확인할 질문이 없습니다. 대화 수집과 학생 연결 상태를 확인해 주세요.");
@@ -464,7 +481,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   }
 
   async function openQuestion(questionId, revisionId) {
-    if (!active || !owner || !readReady()) return;
+    if (!active || !owner || !readReady()) return false;
     const token = generation, request = ++detailGeneration;
     empty(nodes.detail, "질문을 불러오고 있습니다.");
     try {
@@ -492,10 +509,17 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
         } else throw new Error("지원하지 않는 질문 구성입니다.");
       }
       if (value.review_reasons?.length) nodes.detail.append(node("p", "학생·질문 경계 또는 사진 연결에 확인할 사항이 있습니다.", "form-message"));
-      if (allowed("edit")) installQuestionReview(question, token, request);
+      if (allowed("edit")) {
+        installQuestionReview(question, token, request);
+        nodes.detail.append(button("질문 나누기 준비", () => {
+          if (live(token) && request === detailGeneration) composer.split(value);
+        }));
+      }
       nodes.detail.append(technicalDetails([["질문", questionId], ["보관된 버전", revisionId]]));
+      return true;
     } catch (error) {
       if (live(token) && request === detailGeneration) { empty(nodes.detail, "질문을 열지 못했습니다."); message(explainError(error), true); }
+      return false;
     }
   }
 
@@ -551,6 +575,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     rooms.setOwner(next);
     manual.setOwner(next);
     publications.setOwner(next);
+    composer.setOwner(next);
     owner = next || null; permissions = new Set(); roles = new Set();
     generation++; listGeneration++; collectionIntent = null; collectionPending = false; bindingIntent = null; bindingPending = false;
     if (installed) { clearPrivateView(); nodes.refresh.disabled = false; }
@@ -560,6 +585,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     rooms.setPermissions(values);
     manual.setPermissions(values);
     publications.setPermissions(values);
+    composer.setPermissions(values);
     permissions = new Set(values);
     generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
@@ -571,12 +597,13 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     if (installed) clearPrivateView();
     if (active && owner && allowed("read")) void refresh();
   }
-  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); publications.open(); await Promise.all([refresh(), students.open()]); }
+  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); publications.open(); composer.open(); await Promise.all([refresh(), students.open()]); }
   function close() {
     students.close();
     rooms.close();
     manual.close();
     publications.close();
+    composer.close();
     active = false; generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
     // A pending request keeps its key while the same owner navigates away and back.
