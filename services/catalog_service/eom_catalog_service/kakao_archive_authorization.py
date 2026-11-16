@@ -74,6 +74,34 @@ def authorize_kakao_room_scope(
     return owner, room
 
 
+def authorize_kakao_room_scopes(
+    session: Session,
+    actor: ActorContext,
+    binding_id: str,
+    room_ids: tuple[str, ...],
+    permission: PermissionKey,
+) -> str:
+    """Bounded read scope for an actual multi-room packet; one indexed room query."""
+    owner, _ = authorize_kakao_binding_scope(session, actor, binding_id, permission, lock=False)
+    identities = set(room_ids)
+    if not identities or len(identities) > 200:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_REQUEST_INVALID")
+    rooms = tuple(
+        session.scalars(
+            select(KakaoRoomRecord).where(
+                KakaoRoomRecord.owner_operator_id == owner,
+                KakaoRoomRecord.source_binding_id == binding_id,
+                KakaoRoomRecord.room_id.in_(identities),
+            )
+        )
+    )
+    if len(rooms) != len(identities):
+        raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+    if any(room.state != "ACTIVE" for room in rooms):
+        raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_RETIRED")
+    return owner
+
+
 def authorize_kakao_actor(
     session: Session,
     actor: ActorContext,

@@ -12,6 +12,9 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "kakao_packets",
+    "kakao_packet_commands",
+    "kakao_packet_revisions",
     "kakao_questions",
     "kakao_question_commands",
     "kakao_question_revisions",
@@ -179,6 +182,9 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_packets",
+    "kakao_packet_commands",
+    "kakao_packet_revisions",
     "kakao_questions",
     "kakao_question_commands",
     "kakao_question_revisions",
@@ -360,6 +366,8 @@ TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
 
 # Mutable room pointer only; session reads exclude tokens and credential material.
 COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    ("UPDATE", "kakao_packets", ("current_revision_id", "resource_version")),
+    ("UPDATE", "kakao_packet_commands", ("state", "completed_at")),
     ("UPDATE", "kakao_questions", ("current_revision_id", "resource_version")),
     ("UPDATE", "kakao_question_commands", ("state", "completed_at")),
     ("UPDATE", "kakao_source_heads", ("current_source_revision_id", "resource_version")),

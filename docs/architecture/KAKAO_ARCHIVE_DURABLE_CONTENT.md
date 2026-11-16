@@ -1,6 +1,6 @@
 # KakaoTalk: 원본에서 질문·학생별 PDF까지의 저장 연결
 
-상태: **원본 수락·질문 저장 owner의 소스/격리 검증, 공개 연결·분할/병합·packet·출력 owner는 후속**.
+상태: **원본·질문·packet 저장 owner의 소스/격리 검증, 공개 연결·분할/병합·출력 owner는 후속**.
 실제 카카오 수집·운영 수락 증거는 아니다. 최초 설계 기준 소스는
 `4d190c32a01de55a4f19fc1c3697ec48762615d4`이며, 이 문서 작성은 런타임 설치·활성화를 변경하지 않는다.
 상위 요구사항은 [전체 명세](KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md) §§7–10,
@@ -261,3 +261,23 @@ ordered exact revision 집합을 indexed batch 조회하고 고유 source당 한
 서버 작성 근거를 구분해야 한다. 특히 사진 품질 수용의 actor/시각은 인증된 operator와
 해당 command reservation에서 부여하며, 브라우저가 보낸 `accepted_by`/시각을 새 결정의
 권한으로 사용하지 않는다. 이미 수락한 사진 품질 pin의 재표시와 새로운 품질 수용은 구별한다.
+
+### Packet 저장 연결의 구체화
+
+묶음은 기존 packet manifest를 정본으로 하고 작은 head/revision/command 세 record로 연결한다.
+CREATE와 REVISE는 별도 typed 명령이다. 선택은 ordered exact question refs, KST 양끝 날짜,
+DRAFT/FINAL 및 답변 포함 여부이며 표시 제목은 작은 불변 revision 값이다. 사용자 입력으로
+collection completeness를 받지 않고 실제 수집 owner가 연결되기 전 coverage는 UNKNOWN이다.
+새 큐·사진 복사·worker 권한은 추가하지 않는다.
+
+예약은 owner/scope/key unique와 기존 intent 잠금을 재사용하고, binding → packet 순서로
+짧게 잠근다. ID·시각 예약 뒤 질문 batch resolver와 기존 packet publisher를 transaction 밖에서
+호출하고 원래 parent/version을 CAS로 채택한다. 같은 intent는 과거 결과를 반환하고 다른
+내용은 충돌이며, 선발행 뒤 중단도 같은 IDs/Artifact를 채택한다. revision/current/version의
+composite FK와 불변 trigger가 이 경계를 보강한다.
+
+목록은 owner+binding+packet ID의 B-tree keyset이고 O(log P + page size)다. 상세는 packet
+manifest 한 개만 읽고 현재 권한·선택 room·Artifact metadata를 재검사한다. 출력용 student
+resolver는 그 학생의 exact subset만 질문 batch resolver에 보내며 다른 학생의 원본을
+worker에 넘기지 않는다. 고유 source parse는 요청당 한 번이고 전체 입력 bound를 유지한다.
+파일만 발행하는 대안은 저장/새로고침/CAS/중단 복구를 제공하지 못하므로 채택하지 않는다.

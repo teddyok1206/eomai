@@ -104,6 +104,16 @@ def test_kakao_question_grants_cannot_rewrite_origin_body_or_history() -> None:
     assert ("UPDATE", "kakao_question_revisions") not in grants
 
 
+def test_packet_grants_only_update_current_head_and_completion_receipt() -> None:
+    tables = {"kakao_packets", "kakao_packet_commands", "kakao_packet_revisions"}
+    assert tables <= set(READ_TABLES) & set(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    assert grants["UPDATE", "kakao_packets"] == {"current_revision_id", "resource_version"}
+    assert grants["UPDATE", "kakao_packet_commands"] == {"state", "completed_at"}
+    assert ("UPDATE", "kakao_packet_revisions") not in grants
+
+
 def test_native_index_owner_privileges_are_bounded_and_append_only():
     immutable = {"embedding_encodings", "embedding_source_bindings", "embedding_index_revisions"}
     assert immutable | {"embedding_indexes"} <= set(READ_TABLES)

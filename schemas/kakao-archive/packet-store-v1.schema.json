@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/packet-store-v1/1.0",
+  "title": "Private immutable packet storage commands and projections",
+  "$defs": {
+    "Create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "title",
+        "questions",
+        "display_start_date",
+        "display_end_date_inclusive",
+        "mode",
+        "include_replies"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-packet-create/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/provenance"
+          }
+        },
+        "display_start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "display_end_date_inclusive": {
+          "type": "string",
+          "format": "date"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "include_replies": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Revise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "title",
+        "questions",
+        "display_start_date",
+        "display_end_date_inclusive",
+        "mode",
+        "include_replies",
+        "packet_id",
+        "parent_revision_id",
+        "expected_resource_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-packet-revise/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/provenance"
+          }
+        },
+        "display_start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "display_end_date_inclusive": {
+          "type": "string",
+          "format": "date"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "include_replies": {
+          "type": "boolean"
+        },
+        "packet_id": {
+          "type": "string",
+          "pattern": "^kakaopacket_[0-9a-f]{32}$"
+        },
+        "parent_revision_id": {
+          "type": "string",
+          "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+        },
+        "expected_resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483646
+        }
+      }
+    },
+    "Stored": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "packet_id",
+        "packet_revision_id",
+        "previous_revision_id",
+        "resource_version",
+        "title",
+        "manifest",
+        "display_start_date",
+        "display_end_date_inclusive",
+        "mode",
+        "include_replies",
+        "question_count",
+        "student_count",
+        "created_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-stored-packet/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "packet_id": {
+          "type": "string",
+          "pattern": "^kakaopacket_[0-9a-f]{32}$"
+        },
+        "packet_revision_id": {
+          "type": "string",
+          "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+        },
+        "previous_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "manifest": {
+          "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/pointer"
+        },
+        "display_start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "display_end_date_inclusive": {
+          "type": "string",
+          "format": "date"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "include_replies": {
+          "type": "boolean"
+        },
+        "question_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "student_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "packet",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-packet-mutation/1.0"
+        },
+        "packet": {
+          "$ref": "#/$defs/Stored"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-packet-page/1.0"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/Stored"
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaopacket_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Create"
+    },
+    {
+      "$ref": "#/$defs/Revise"
+    },
+    {
+      "$ref": "#/$defs/Stored"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    }
+  ]
+}

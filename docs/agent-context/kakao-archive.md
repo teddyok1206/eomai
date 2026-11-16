@@ -51,6 +51,13 @@ exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재
 `kakao_question_store.py`, DB는 `kakao_question_models.py`에 있고 본문은 Artifact다.
 이는 source/storage 구현 경계이며 API·GUI 전체 연결이나 운영 migration 완료 증거가 아니다.
 
+`kakao_packet_service.py`는 선택한 exact question revision·기간·출력 모드의 불변 묶음을
+저장한다. 새 선택은 새 packet revision이며 기존 묶음을 최신 질문으로 다시 구성하지 않는다.
+원본/사진은 복제하지 않고 기존 question batch resolver와 packet publisher를 사용한다.
+`resolve_student`는 선택 학생의 source만 해석해 출력 입력으로 넘기며 이름으로 합치지 않는다.
+metadata 목록은 본문을 읽지 않는다. 저장 DTO와 모델은 각각 `kakao_packet_store.py`,
+`kakao_packet_models.py`다. 이 저장 경계를 실제 PDF 실행·private download 연결과 구별한다.
+
 `kakao_archive_service.py`는 DRAFT 연결과 불변 정책 revision/명령 receipt의 소유자다.
 현재 session·permission·ADMIN 역할은 Identity repository에서 다시 확인하며 다른 owner의
 binding은 존재하지 않는 것과 같은 오류다. `kakao_archive_rpc.py`는 기존 Catalog API-peer

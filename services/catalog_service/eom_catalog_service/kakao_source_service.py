@@ -33,6 +33,7 @@ from eom_catalog_service.kakao_archive_authorization import (
     KakaoArchiveError,
     authorize_kakao_actor,
     authorize_kakao_room_scope,
+    authorize_kakao_room_scopes,
 )
 from eom_catalog_service.kakao_archive_commands import (
     kakao_command_sha256,
@@ -650,9 +651,14 @@ class KakaoSourceService:
             )
             for item in contexts
         }
-        owners = {
-            (binding, room): self._scope(session, actor, binding, room, mutate=False)
-            for binding, room in scopes
+        grouped: dict[str, list[str]] = {}
+        for binding, room in scopes:
+            grouped.setdefault(binding, []).append(room)
+        binding_owners = {
+            binding: authorize_kakao_room_scopes(
+                session, actor, binding, tuple(rooms), PermissionKey.KAKAO_ARCHIVE_READ
+            )
+            for binding, rooms in grouped.items()
         }
         expected = {item.accepted.resolution.source_revision_id: item for item in contexts}
         if len(expected) != len(contexts):
@@ -672,7 +678,7 @@ class KakaoSourceService:
             accepted, resolved = item.accepted, item.resolved
             admission = accepted.resolution.admission
             if (
-                row.owner_operator_id != owners[(admission.source_binding_id, admission.room_id)]
+                row.owner_operator_id != binding_owners[admission.source_binding_id]
                 or (
                     row.source_binding_id,
                     row.room_id,

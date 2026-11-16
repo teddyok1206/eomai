@@ -1,5 +1,29 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — packet owner, 0a812810 이후 소스 작업
+
+사용자가 goal을 다시 등록하면서 검증·커밋·푸시·운영 배포를 명시했다. 전체 범위는
+합성 입력의 PDF·Studio 다운로드 완주 후 실제 카카오 한 방, 전체 방 주기 수집까지다.
+이 중간 저장은 그 완료를 뜻하지 않으며 추가 로그인은 아직 요청하지 않았다.
+
+- 기존 질문 batch resolver와 packet publisher를 재사용해 선택한 exact question revisions,
+  순서, KST 기간, 답변 포함 설정, DRAFT/FINAL을 저장하는 packet owner를 추가했다.
+  제목은 작은 불변 DB revision 값이며 원문·사진·큰 선택 목록은 복사하지 않는다.
+- 같은 요청 동시 접수, 발행 직후 중단·원래 Artifact 재사용, competing parent/version CAS,
+  과거 packet 재조회, 이후 질문 수정 뒤에도 원래 선택 유지가 실제 임시 DB에서 통과했다.
+- 합성 학생 2명의 질문을 같은 packet에 저장하고 새 service instance로 다시 열었다.
+  `resolve_student`가 해당 학생의 exact question/source만 반환하며 같은 표시 이름으로
+  학생을 합치지 않는 것을 확인했다. 잘못된 학생·다른 owner·철회된 session은 거부한다.
+- 여러 방 접근은 기존 현재 Identity/binding 확인과 indexed room batch로 연결했다.
+  source closure의 현재 권한/metadata를 확인하되 방마다 같은 Identity 조회를 반복하지 않는다.
+- 최종 source unit·권한·문맥·이전 계약 **1081 PASS**, 공식 guarded PostgreSQL
+  **126 PASS**, 변경 core 5개 mypy·formatter/linter와 schema audit PASS다.
+  canonical 1459 / mirror 1106 / reference 12499이며 겹치는 테스트 수는 합산하지 않는다.
+- 새 source head `20261116_0086`은 disposable DB에만 적용했다. 실제 운영은 기존
+  0084 compatible release 그대로이며 AUTO/MANUAL과 실제 질문 PDF 제공을 활성화하지 않았다.
+  공개 API/GUI, atomic 분할/병합, export claim/실제 renderer/private download와
+  카카오 관리자 계정의 한 방/전체 방·주기 실증은 계속 남는다.
+
 ## 진행 중간 저장 — 질문 owner, 832a4803 이후 소스 작업
 
 외부 검토 기준 뒤에 추가한 **질문 저장 use case의 소스/격리 검증**이다. 다음 사용자
