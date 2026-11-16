@@ -149,7 +149,9 @@ def authorize_kakao_identity_session(
     No token, ActorSource or synthetic authenticated HTTP context is created here.
     """
     denied = "KAKAO_ARCHIVE_PERMISSION_DENIED"
-    operator = session.get(OperatorRecord, operator_id, populate_existing=True)
+    owner = authorize_kakao_current_operator(
+        session, operator_id=operator_id, permission=permission, admin_only=admin_only
+    )
     api_session = session.execute(
         select(
             ApiSessionRecord.operator_id,
@@ -159,15 +161,34 @@ def authorize_kakao_identity_session(
         ).where(ApiSessionRecord.api_session_id == identity_session_id)
     ).one_or_none()
     if (
+        api_session is None
+        or api_session.operator_id != owner
+        or api_session.revoked_at is not None
+        or api_session.absolute_expires_at <= now
+        or api_session.idle_expires_at <= now
+    ):
+        raise KakaoArchiveError(denied)
+    return owner
+
+
+def authorize_kakao_current_operator(
+    session: Session,
+    *,
+    operator_id: str,
+    permission: PermissionKey,
+    admin_only: bool = False,
+) -> str:
+    """Current Identity predicate, not request authentication or an execution grant.
+
+    Background owners must obtain this ID from their own accepted DB intent, not
+    from a caller/worker. Public requests still require authorize_kakao_actor.
+    """
+    operator = session.get(OperatorRecord, operator_id, populate_existing=True)
+    if (
         operator is None
         or operator.status != "ACTIVE"
         or operator.deleted_at is not None
         or operator.must_change_password
-        or api_session is None
-        or api_session.operator_id != operator.operator_id
-        or api_session.revoked_at is not None
-        or api_session.absolute_expires_at <= now
-        or api_session.idle_expires_at <= now
         or permission not in effective_permissions(session, operator.operator_id)
         or (
             admin_only
@@ -177,5 +198,5 @@ def authorize_kakao_identity_session(
             )
         )
     ):
-        raise KakaoArchiveError(denied)
+        raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
     return operator.operator_id

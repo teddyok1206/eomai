@@ -49,6 +49,10 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_collection.py",
+            "eom_catalog_contracts/resources/kakao-archive/collection-intent-v1.schema.json",
+            "eom_catalog_service/kakao_collection_models.py",
+            "eom_catalog_service/kakao_collection_service.py",
             "eom_catalog_contracts/kakao_media.py",
             "eom_catalog_contracts/kakao_source.py",
             "eom_catalog_contracts/resources/kakao-archive/media-blob-v1.schema.json",
@@ -212,6 +216,11 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "from eom_catalog_contracts.validation import load_schema; "
                 "assert load_schema('kakao-student-directory-v1')['$id'] == "
                 "'eom://schemas/kakao-archive/student-directory-v1/1.0'; "
+                "from eom_catalog_contracts.kakao_collection import KakaoRoomCollectionCreate; "
+                "KakaoRoomCollectionCreate(source_binding_id='kakaobinding_'+'1'*32, "
+                "room_id='kakaoroom_'+'2'*32, capability_revision_id='kakaocapabilityrev_'+'3'*32, "
+                "expected_binding_version=1, "
+                "expected_policy_revision_id='kakaopolicyrev_'+'4'*32); "
                 "print(Resolver.__module__)"
             ),
             str(wheel),

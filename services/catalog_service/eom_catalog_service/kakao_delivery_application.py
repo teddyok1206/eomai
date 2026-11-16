@@ -1,7 +1,10 @@
 """Private packet and student-PDF use cases over existing durable owners."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from eom_catalog_contracts.kakao_delivery_rpc import KakaoPacketStudent, KakaoPacketView
 from eom_catalog_contracts.kakao_export_store import KakaoExportCreate, KakaoExportMutation
@@ -9,8 +12,10 @@ from eom_catalog_contracts.kakao_question import KakaoQuestionProvenance
 from eom_operator_identity import ActorContext
 
 from .kakao_archive_authorization import KakaoArchiveError
-from .kakao_export_service import KakaoExportService
 from .kakao_packet_service import KakaoPacketService
+
+if TYPE_CHECKING:
+    from .kakao_export_service import KakaoExportService
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,42 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 단일 방 collection 의도·재조회 저장 owner
+
+- `collection-intent-v1` schema/mirror를 먼저 정의하고 `KakaoCollectionService`가 실제 현재
+  API actor·ADMIN/READ/COLLECT, 수락된 방 capability proof와 설치 adapter pin을 확인해
+  원래 policy/version·방·run identity를 고정하도록 연결했다. DB lock 밖에서 기존 capability
+  owner의 파일 검증을 재사용하고, 마지막 transaction에서 권한·version을 다시 확인한다.
+- DB0091의 작은 run/task 두 테이블에만 metadata를 저장한다. 같은 요청은 같은 run/task를
+  돌려주고, 다른 key로 같은 연결에 unfinished run을 중복 접수하지 않는다. 상태 GET이나
+  완료 접수 replay는 browser/파일 발행을 재실행하지 않는다. 최초 QUEUED 상태·첫 task의
+  atomic adoption·원래 pin/순서·terminal/FAILED 불변성을 DB guard와 FK/unique로 보호한다.
+  source bytes/사진·긴 JSON·NAS path·인증정보·새 queue/command bus는 추가하지 않았다.
+- 기존 Identity의 현재 계정/permission 판정을 공통 함수로 추출해 public session 검증과
+  저장된 run 준비가 같이 사용한다. public 요청은 계속 유효한 session이 필요하다. 내부
+  준비는 owner를 실제 accepted row에서 읽으므로 API session 만료를 가짜 인증으로 우회하지
+  않는다. 계정/role 철회·policy/adapter 변경·retired room/binding·terminal run은 새 준비를 거부한다.
+  **준비 metadata는 actual profile/attempt fence나 source admission 권한이 아니다.**
+- guarded disposable DB에서 same-key/다른-key 경합·저장 중 중단·원래 receipt 재조회·late
+  권한 변경·세션 만료와 현재 role 철회·정책/adapter pin·다른 방 capability 거부·초기 task
+  누락/불법 초기 성공·FAILED 보존을 확인했다. 실제 query plan의 partial unique index 사용
+  가능성과 ORM/migration 일치도 검사했다. 0091 적용→되돌림→재적용은 이 임시 DB에서만 수행했다.
+- PDF optional import 수정 이후의 최종 guarded DB 전체 회귀는 **223 PASS**다. 기존
+  TestClient deprecation warning1건은 별도 의존성 교체 없이 그대로 기록한다. 운영 DB나 실제
+  카카오 계정·원문을 이 persistence 테스트에 사용하지 않았다.
+- schema/pure/권한/의존성/개발 문맥·실제 offline wheel inventory/설치 import **85 PASS**,
+  strict mypy5 source·Ruff/format·shell syntax PASS다. 개발 문맥 index의 source/test 경로를
+  추가하며 각각40개 한도를 넘긴 두 실패는 하위 helper 항목을 note에 남기고 index를 간추려
+  해결했다. schema 한도를 늘리거나 검사 자체를 제거하지 않았다.
+- wheel 회귀에서 선택 Kakao runtime을 차단하면 기존 PDF application의 annotation-only
+  export import가 core Catalog 시작을 막는 결함을 발견했다. `TYPE_CHECKING`/지연 annotation으로
+  바꾸고 실제 기능 활성화 import는 기존 composition에 그대로 뒀다. worker/Pillow/Playwright가
+  없는 installed core import를 다시 통과했으며, 새 dependency나 가짜 fallback은 추가하지 않았다.
+- **소스 검증이며 운영 미반영**이다. 공개 collection RPC/API/Studio 시작 버튼, 공용 profile
+  AUTO claim/실제 epoch·attempt, source 권한·실제 방→학생 PDF, 전체 방/주기 실행은 남아 있다.
+  DRAFT/NOT_VERIFIED·AUTO 비활성은 그대로이며 이번 작업으로 실제 카카오 수집 성공을 주장하지
+  않는다. 운영 API/Catalog/Web·DB·GPU pins, 실제 수신물·FAILED 이력·사용자 인증정보는 변경하지
+  않았다. 실제 원격 browser/remote MainPID0·정상 종료를 재확인했고 취침 중 로그인 요청은 없다.
+
 ## 2026-11-16 수집 실행 방식 재검토·화면 이동 중 수신 관측 보강
 
 - 사용자의 코드/전용 Codex 슬롯 비교 요청을 기존 수집 실행 설계에 구체화했다. 반복 수집은

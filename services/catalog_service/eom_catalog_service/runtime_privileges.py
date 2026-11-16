@@ -12,6 +12,8 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "kakao_collection_runs",
+    "kakao_collection_tasks",
     "kakao_exports",
     "kakao_export_requests",
     "kakao_export_attempts",
@@ -187,6 +189,8 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_collection_runs",
+    "kakao_collection_tasks",
     "kakao_capability_acceptances",
     "kakao_manual_channel_pins",
     "kakao_exports",

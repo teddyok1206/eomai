@@ -133,7 +133,16 @@ replay는 같은 revision/Artifact를 읽고 adapter 변경·정책 수정으로
 `MANUAL_SELECTED_ROOM`은 확인된 단일 방의 내부 scope이며 전체 UI 목록/필터가 아니다.
 CSV 범위/방향/시간대·메시지/album identity·화질·읽음 여부는 UNKNOWN으로 남긴다.
 이 수락을 DRAFT binding의 ACTIVE 승격이나 실제 worker 실행 권한으로 사용하지 않는다.
-collection intent/claim/actual runtime/source admission의 연결은 별도 다음 단계다.
+실제 collection claim/runtime/source admission의 연결은 별도 다음 단계다.
+
+`kakao_collection_service.py`는 `collection-intent-v1`의 한 방 수집 의도를 현재 실제 API
+actor·수락된 capability proof로 검증해 run/ordered 첫 task를 원자적으로 저장한다. 같은 요청은
+원래 receipt, GET은 작은 상태만 읽으며 브라우저·Artifact 발행을 재실행하지 않는다. 작은
+run/task metadata만 DB0091에 두고 nonterminal binding partial unique·첫 task deferred guard·
+immutable pin/terminal history를 사용한다. 내부 `read_background_intent`는 저장된 owner의
+현재 권한을 재확인하는 준비 metadata일 뿐, API session/실행 권한/원본 수락을 가장하지 않는다.
+public actor/session 확인은 그대로다. 실제 공용 profile claim·epoch/attempt·source authority와
+전체 방/주기 실행은 아직 후속이며 이 owner를 활성화나 실제 수집 PASS로 간주하지 않는다.
 
 `kakao_question_editing.py`는 질문의 exact source span/사진·분할/병합·검토와 packet
 선택을 담당한다. `kakao_question_publication.py`는 결과 manifest만 기존 Artifact owner로

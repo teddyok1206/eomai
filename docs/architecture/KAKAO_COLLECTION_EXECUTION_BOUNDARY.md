@@ -141,7 +141,7 @@ AUTH_REQUIRED/PAUSING/PARTIAL을 여기에 추가하지 않는다. PDF/수집 �
 | room-student mapping revision | binding/room, mapping rev, previous rev, student ID 또는 명시적 UNMAPPED, exact display rev, actor/time, reason, request hash/key, result version | unique(room,revision number), unique(owner,room,idempotency key); room/binding/owner, student/owner, student/display composite FK |
 | collection run | run, owner, binding, policy/capability pins, state, current inventory pointer, active task, created/update UTC, next event sequence | owner+idempotency key/request hash; partial unique(binding) for nonterminal run; (state,created,run) |
 | room task | task, run, room, operation, state, current attempt, ordinal, result pointer | unique(run,room,operation); (run,state,ordinal); inventory task는 room NULL인 별도 부분 unique |
-| attempt | attempt, task, attempt number, command hash, profile/browser IDs, fence, lease owner/token/expiry, outcome/error, local-result receipt pointer, publication linkage | unique(task,attempt number), unique(profile,fence); (state,lease expiry,task); terminal history는 불변 |
+| attempt | attempt, task, attempt number, command hash, profile/browser IDs, fence, lease owner/token/expiry, outcome/error, local-result receipt pointer, publication linkage | unique(task,attempt number), unique(command); (state,lease expiry,task); terminal history는 불변. profile/fence unique는 실제 browser epoch가 소유 |
 | snapshot acceptance | snapshot/normalization revision, binding/room, accepted attempt, raw/normalization exact pointers, row count, observed time, source scope/timezone/order | unique(snapshot), unique(normalization), (room,observed,snapshot); publication Job FK 별도 |
 | media blob | binding, SHA, size/MIME/dimensions, original exact pointer | unique(binding,SHA); 다른 binding 전역 dedup 없음 |
 
@@ -465,3 +465,38 @@ service를 추가하지 않는다. **같은 path 안에서 바뀌는 UI나 방/�
 11. 더 단순한 run row 하나에 모든 방/프로세스/attempt를 덮어쓰면 재개 위치와 실제 프로세스
     identity를 잃는다. 반대로 room마다 브라우저를 재시작하는 구조도 불필요하다. 작은 run/task/
     attempt/epoch 관계만 두고 실제 UI selector·source 수락·전체 방 실행은 각 단계에서 검증한다.
+
+### 0091의 첫 구현 범위: 수집 의도와 방별 checkpoint
+
+`collection-intent-v1` schema를 먼저 정의하고 `KakaoCollectionService`가 현재 실제 API
+actor의 ADMIN/READ/COLLECT·binding/room 권한으로 한 방의 의도를 접수한다. 실제 수락된
+capability owner의 canonical proof를 DB lock 밖에서 해석한 뒤, 같은 방·scope·설치 adapter를
+확인한다. 짧은 owner/key → binding → room transaction에서 늦은 권한/version을 다시 확인하고
+run과 첫 QUEUED task를 함께 저장한다. 첫 단계의 scope는 MANUAL_SELECTED_ROOM이며 전체
+방 inventory의 대체물이 아니다. 실제 수집 활성화·브라우저 실행·정본 수락 권한을 만들지 않는다.
+
+DB에는 `kakao_collection_runs`와 `kakao_collection_tasks` 두 작은 metadata 테이블만 추가한다.
+run은 원래 request/version·policy hash·capability revision·adapter pin·owner를 보존하고
+current state/version만 이후 갱신할 수 있다. task는 방/순서 identity를 보존한다. 기존 room/
+capability/policy FK, same-key unique, nonterminal binding partial unique와 (run,state,ordinal)
+인덱스를 사용한다. deferred 초기 task guard가 run만 저장되는 것을 막으며 terminal row·원래
+pin·순서의 UPDATE/DELETE를 거부한다. 본문/사진/큰 JSON·NAS path·인증정보를 넣지 않는다.
+
+접근 패턴은 indexed exact run/key lookup·방별 중복 차단과 정렬된 checkpoint다. 수락/재조회는
+고정 개수의 indexed metadata 조회이며 첫 capability 해석만 bounded JSON bytes에 선형이다.
+초기 scale은 연결당 수천 방·수만 attempt를 가정한다. 같은 요청 replay와 상태 GET은 이미
+수락된 capability를 새 파일로 발행하거나 브라우저를 실행하지 않는다. 요청 body가 다르면
+conflict이고 다른 key의 unfinished run은 명시적 pending 오류다. 더 단순한 process-local dict는
+재시작/동시 접수에 부족하며, 별도 command table/queue는 원래 run receipt와 중복이라 만들지 않는다.
+
+`read_background_intent`는 오직 trusted owner composition의 **준비용 metadata read**다.
+owner는 저장된 run에서 읽고 Identity의 현재 ACTIVE/ADMIN/READ/COLLECT를 재확인한다.
+원래 HTTP 세션의 만료를 무시한 새 ActorContext/session을 만들지 않으며, public 조회는 계속
+유효한 현재 session을 요구한다. 계정/권한 철회·retired binding/room·정책 변경·adapter 불일치·
+terminal run은 신규 준비를 거부한다. 과거 receipt는 최신 정책/adapter로 바꾸지 않는다.
+
+이 metadata에는 actual attempt/profile fence·원본 source authority가 없다. 전체 capability
+evidence closure의 byte materialization/재인가는 실제 실행·수락 직전에 기존 owner가 수행해야
+한다. **이 read만으로 browser launch/source admission을 허용하면 안 된다.** 기존 공용 profile
+gate의 AUTO 소유, 실제 epoch/attempt, guarded activation과 full inventory·주기 실행은 다음
+구현이다. 이 첫 단계가 검증돼도 DRAFT/NOT_VERIFIED·AUTO 비활성은 그대로다.
