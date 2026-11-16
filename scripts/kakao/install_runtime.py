@@ -285,6 +285,7 @@ def check_identities(*, required: bool) -> None:
     allowed_members = {name: {name} for name in USERS}
     allowed_members.update(
         {
+            "eom-kakao-render": {"eom-kakao-render", "eom-catalog-manager"},
             "eom-kakao-vnc": {"eom-kakao", "eom-kakao-remote"},
             "eom-kakao-proxy": {"eom-kakao-remote", "caddy"},
             "eom-kakao-grant": {"eom-kakao-remote"},

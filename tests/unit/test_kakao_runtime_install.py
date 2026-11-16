@@ -203,6 +203,34 @@ def test_existing_worker_in_sudo_group_is_not_silently_repaired(monkeypatch):
         installer.check_identities(required=False)
 
 
+@pytest.mark.parametrize("member", ["eom-catalog-manager", "eom", "eom-kakao", "other-user"])
+def test_render_group_only_adds_catalog_owner_not_other_workers(monkeypatch, member):
+    monkeypatch.setattr(installer, "USERS", ("eom-kakao-render",))
+    monkeypatch.setattr(
+        installer.pwd,
+        "getpwnam",
+        lambda _: SimpleNamespace(
+            pw_uid=919, pw_gid=919, pw_dir="/nonexistent", pw_shell="/usr/sbin/nologin"
+        ),
+    )
+
+    def group(name):
+        if name != "eom-kakao-render":
+            raise KeyError(name)
+        return SimpleNamespace(gr_gid=919, gr_mem=[member])
+
+    monkeypatch.setattr(installer.grp, "getgrnam", group)
+    monkeypatch.setattr(
+        installer.grp, "getgrgid", lambda _: SimpleNamespace(gr_name="eom-kakao-render")
+    )
+    monkeypatch.setattr(installer.os, "getgrouplist", lambda *_: [919])
+    if member == "eom-catalog-manager":
+        installer.check_identities(required=False)
+    else:
+        with pytest.raises(installer.InstallError, match="OVERPRIVILEGED"):
+            installer.check_identities(required=False)
+
+
 def test_dedicated_dependency_metadata_not_ambient_imports(local):
     prefix = local / "prefix"
     required = {
