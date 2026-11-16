@@ -1,5 +1,34 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 MANUAL 반복 시작·종료 경계 — 소스 후속
+
+실제 첫 Chromium 시작의 root-owned HOME에서는 Crashpad `--database is required`와
+SIGTRAP이 발생했다. 같은 UID·NoNewPrivileges·PrivateNetwork의 빈 프로필에서 HOME만
+private writable profile로 바꾸었을 때 empty HTML 출력이 성공했다. `641d9fde`로 이를
+운영 browser role에 반영했으며 sandbox/user namespace를 해제하지 않았다. 이 offline
+headless 증거는 카카오 로그인이나 headed 브라우저 전체 경로의 PASS가 아니다.
+
+후속 실제 요청에서는 종료된 gateway의 `KAKAO_GATEWAY_SOCKET_EXISTS`를 확인했다.
+profile은 STOPPED·current lease NULL·flock 해제였고, 실패 lease는 ENDED로 보존됐다.
+directory 보존과 socket 수명 처리를 분리하는 수정은 다음과 같다.
+
+- 책임/정본: 각 browser/gateway runtime이 자신의 고정 Unix endpoint를 systemd
+  `ExecStopPost`에서 정리한다. DB·lease·profile·인증정보·request 감사본은 수정하지 않는다.
+- identity/해석: 고정 unit cgroup 또는 정확한 `.control` subgroup, 실행 UID/group,
+  socket type·단일 link·mode·inode를 확인한다. 연결이 실제 거절된 socket만 제거하고
+  unlink 직전 같은 device/inode/owner/group/link/mode를 대조한다. live endpoint는 거부한다.
+- 접근/복잡도: 고정 path 한 개의 O(1) stat/connect/unlink다. 별도 DB/index/cache/queue,
+  schema·wire contract·dependency는 추가하지 않는다. browser는 기존 profile flock도 쓴다.
+- 동시성/실패: 실제 unit 자식 종료 이후 hook이 수행된다. lock 경합·접속 성공·종류/소유권
+  불일치는 명시적 실패이며 타 endpoint를 지우거나 새 lease를 만들어 우회하지 않는다.
+  종료 기록을 지우지 않고 기존 owner coordinator가 원래 실패를 관측한다.
+- 단순 대안: directory를 무조건 지우면 request 감사본이 사라지고, 시작 때 임의 unlink하면
+  아직 살아 있는 runtime을 훼손할 수 있다. 기존 service lifecycle 안의 좁은 hook을 선택했다.
+
+소스 검증은 actual local Unix socket·flock과 synthetic fixed-scope identity를 사용한다.
+이는 실제 카카오 계정/CSV/사진 수집 PASS가 아니다. 운영 role 교체 후에는 network와 실제
+profile을 격리한 empty headed browser의 반복 시작·종료를 먼저 확인하고 사용자 재시도를 요청한다.
+
 ## 2026-11-16 동명 연결 선택·확정 거절 UI 후속
 
 사용자 문의 `webreq_a87c42c7e6651f6705653995`의 PROFILE_UNAVAILABLE를 확인했다.

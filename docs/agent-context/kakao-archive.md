@@ -156,6 +156,13 @@ PROFILE_UNAVAILABLE 거절은 선택 수정이 가능하지만 timeout/응답 �
 서버의 profile owner/binding fence를 UI 편의상 풀지 않는다. 다른 채널의 명시적 전환 경계와
 현재 복합 FK의 후속 검토는 durable-content 설계에 기록하며 아직 활성화로 주장하지 않는다.
 
+원격 browser/gateway의 종료 소켓은 각 격리 runtime의 `endpoint_cleanup.py`가 고정
+systemd `ExecStopPost`에서 정리한다. runtime directory와 request 감사본을 보존하는 것과
+죽은 통신 socket을 남기는 것은 다르다. 고정 unit scope·UID/group·socket inode·단일 link를
+확인하고 실제 연결이 거절된 경우에만 제거한다. browser는 같은 profile flock도 획득해야
+한다. 살아 있는 endpoint·잘못된 종류·변경된 inode는 거부하며 profile/인증/DB는 수정하지
+않는다. 정상/실패 종료 뒤 재시작은 이 lifecycle 경계에서 검증한다.
+
 `kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
 허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은
 gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채널 검증/수집 성공으로 바꾸지

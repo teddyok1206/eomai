@@ -813,6 +813,8 @@ def test_unit_is_single_mode_fixed_private_lifetime_and_no_restart():
         "MemoryMax=2G",
         "CPUQuota=200%",
         "-I -B -m eom_kakao_archive_collector.supervisor",
+        "ExecStopPost=/opt/eom/conda/envs/eom-kakao-browser/bin/python "
+        "-I -B -m eom_kakao_archive_collector.endpoint_cleanup",
         "InaccessiblePaths=/mnt/nas",
     ]:
         assert expected in text

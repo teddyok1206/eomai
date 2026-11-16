@@ -14,6 +14,7 @@ RuntimeDirectoryMode=0700
 RuntimeDirectoryPreserve=yes
 WorkingDirectory=/run/eom-kakao-private
 ExecStart=/opt/eom/conda/envs/eom-kakao-browser/bin/python -I -B -m eom_kakao_archive_collector.supervisor
+ExecStopPost=/opt/eom/conda/envs/eom-kakao-browser/bin/python -I -B -m eom_kakao_archive_collector.endpoint_cleanup
 Restart=no
 KillMode=mixed
 TimeoutStartSec=15

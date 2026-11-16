@@ -500,6 +500,8 @@ def test_unit_isolated_identity_lifetime_and_no_autorestart():
         "-/var/lib/eom-kakao -/run/eom-kakao-private",
         "/mnt/nas",
         "-I -B -m eom_kakao_archive_gateway.supervisor",
+        "ExecStopPost=/opt/eom/conda/envs/eom-kakao-remote/bin/python "
+        "-I -B -m eom_kakao_archive_gateway.endpoint_cleanup",
     ):
         assert required in text
     assert "EnvironmentFile=" not in text and "ExecStartPre=" not in text

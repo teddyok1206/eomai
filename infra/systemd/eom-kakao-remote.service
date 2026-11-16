@@ -14,6 +14,7 @@ RuntimeDirectoryMode=2750
 RuntimeDirectoryPreserve=yes
 WorkingDirectory=/run/eom-kakao-remote
 ExecStart=/opt/eom/conda/envs/eom-kakao-remote/bin/python -I -B -m eom_kakao_archive_gateway.supervisor
+ExecStopPost=/opt/eom/conda/envs/eom-kakao-remote/bin/python -I -B -m eom_kakao_archive_gateway.endpoint_cleanup
 Restart=no
 KillMode=control-group
 TimeoutStartSec=15
