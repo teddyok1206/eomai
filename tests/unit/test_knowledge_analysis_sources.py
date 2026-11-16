@@ -208,11 +208,17 @@ def test_approved_historical_item_revision_resolves_without_implicit_latest_look
 @pytest.mark.parametrize(
     "schema_ref",
     (
+        "eom.assessment.item-content/1.0",
+        "eom://schemas/item-registry/assessment-item-content-v1",
+        "eom.assessment.item-content/1.1",
+        "eom://schemas/item-registry/assessment-item-content-v1_1",
         "eom.assessment.item-content/2.0",
         "eom://schemas/item-registry/assessment-item-content-v2",
+        "eom.assessment.item-content/3.0",
+        "eom://schemas/item-registry/assessment-item-content-v3",
     ),
 )
-def test_approved_content_team_item_revision_resolves_for_analysis(schema_ref: str) -> None:
+def test_supported_canonical_item_revision_resolves_for_analysis(schema_ref: str) -> None:
     content_bytes = 768
     component = SimpleNamespace(
         required=True,
@@ -364,6 +370,31 @@ def test_approved_historical_item_eligibility_does_not_add_a_new_history_require
     require_historically_approved_item_revision(
         cast(ItemRevisionRecord, SimpleNamespace(revision_state="APPROVED"))
     )
+
+
+def test_unknown_canonical_schema_cannot_become_an_analysis_source() -> None:
+    session = cast(
+        Session,
+        _FakeSession(
+            {
+                (ItemRevisionRecord, ITEM_REVISION_ID): SimpleNamespace(
+                    revision_state="APPROVED", item_id=ITEM_ID
+                ),
+            },
+            scalar_rows=(
+                SimpleNamespace(
+                    required=True,
+                    media_type="application/json",
+                    schema_ref="eom.assessment.item-content/99.0",
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(KnowledgeAnalysisSourceError) as raised:
+        resolve_approved_item_source(
+            session, item_revision_id=ITEM_REVISION_ID, source_class="APPROVED_ITEM"
+        )
+    assert raised.value.code == "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE"
 
 
 def test_new_analysis_does_not_accept_a_superseded_item_revision() -> None:

@@ -188,3 +188,23 @@ JSON/XML이다. 이 일회성 보정에 별도 영속 cache나 전체 source 정
 
 이 문서/개발 후보는 운영 활성화나450개 완료 증거가 아니다. 실제 gate는 자료 학습 운영
 checkpoint에 append한다. 원문 파일과 과거 실행은 계속 보존한다.
+
+## 정확한 배점 문항의 기존 풀이·검색 소비 연결
+
+등록을 마친 canonical1.1도 같은 Item/Artifact 정본이다. Knowledge source resolver는 별도
+version 목록을 유지하지 않고 기존 `item_content_contract.ITEM_CONTENT_SCHEMAS`의 canonical/
+alias 집합을 재사용한다. 이 reader가 지원하지 않는 ref는 계속 거절한다. 실제 operator 권한,
+승인 이력·schema/media/hash·현재 Artifact 상태 검사는 그대로이며 SourceV2의 기존 generic
+schema-ref 계약이나 역사적 schema bytes를 바꾸지 않는다. 새로운 분석/검색 framework는 없다.
+
+등록 문항의 공개 풀이 reference index에서1.0과1.1은 같은 block 구조의 problem/body,
+interaction 및 answer/solution 필드를 공유한다. 같은 frozen field tuple을 쓰고 전체 version
+lookup은 불변으로 둔다.2/3의 editorial 구조와 locator/excerpt SHA, accepted base 참조는 그대로다.
+한 source pointer와 revision이 base→공개 풀이→embedding-text projection까지 이어져야 하며,
+수치 배점만 읽을 수 있다는 사실을 이 전체 소비 경계의 성공으로 대신하지 않는다.
+
+호환성은 실제 Registry1.5/2.5/2점 등록을 시작으로 기존 base/public-solution application,
+synthetic worker adapter, 실제 guarded PostgreSQL/Artifact commit 및 strict report reader와
+embedding-text projection을 함께 검사한다. 모델의 실제 풀이 품질·Graph 게시·vector commit은
+별도 운영 증거다. 이미 등록한1.1 문항이 분석 생성 전에 거절됐으면 같은 task/Item revision/
+idempotency key로 재개하고 원본·등록 문항·실패 기록을 고치지 않는다.

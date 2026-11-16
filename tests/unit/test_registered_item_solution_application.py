@@ -45,12 +45,12 @@ def source_fixture(version="3.0"):
     request = base_request()
     value = (
         dict(schema_version=version, body=[dict(text="조건")], solution=dict(explanation="해설"))
-        if version == "1.0"
+        if version in {"1.0", "1.1"}
         else dict(schema_version=version, stem="조건", explanations=dict(main="해설"))
     )
     paths = (
         ("/body/0/text", "/solution/explanation")
-        if version == "1.0"
+        if version in {"1.0", "1.1"}
         else ("/stem", "/explanations/main")
     )
     pointer = request.source.artifact_member
@@ -97,7 +97,7 @@ def source_fixture(version="3.0"):
     return request, proposal, value
 
 
-@pytest.mark.parametrize("version", ["1.0", "2.0", "3.0"])
+@pytest.mark.parametrize("version", ["1.0", "1.1", "2.0", "3.0"])
 def test_registered_reference_index_uses_exact_source_fields_not_anchor_names(version):
     request, document, source = source_fixture(version)
     # Names deliberately contradict their true JSON locations.

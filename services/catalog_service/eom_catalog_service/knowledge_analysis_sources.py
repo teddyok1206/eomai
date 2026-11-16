@@ -13,9 +13,6 @@ from typing import Literal, cast
 
 from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
-    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
-    ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
-    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
@@ -41,6 +38,7 @@ from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_catalog_service.artifacts import CatalogArtifactReader
+from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
     AssessmentSourceBundleRevisionRecord,
@@ -582,15 +580,7 @@ def _resolve_item_source(
     if (
         not component.required
         or component.media_type != ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE
-        or component.schema_ref
-        not in {
-            ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
-            ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
-            ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
-            "eom://schemas/item-registry/assessment-item-content-v1",
-            "eom://schemas/item-registry/assessment-item-content-v2",
-            "eom://schemas/item-registry/assessment-item-content-v3",
-        }
+        or component.schema_ref not in ITEM_CONTENT_SCHEMAS
     ):
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",

@@ -5,6 +5,37 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-16 00:11 UTC — 실제 원본 읽기 통과, canonical1.1의 풀이 소비 경계 수정
+
+회차3의 새11번(고유번호78612)을 실제 installed owner로 읽었다. 원문2점과 canonical1.0의
+2점이 일치하고 문제·해설 HWPX의 bytes/SHA 및 native section을 확인했다. 엑셀 worksheet/
+row/hash와 원본 단원도 연결되어 있다. 원본을 PDF로 재생성/캡처하지 않았다. 실제 모델의
+base/public 풀이를 마쳐 PUBLISHING이 됐고 다음 문항으로 진행했다. 아직25개 window의
+Graph 게시나 이 문항의 vector commit 완료 증거는 아니다.
+
+다음12번은 실제 원문1.5점/canonical1.1/1.5점 등록·두 native 문서 읽기까지 PASS였지만
+기존 Knowledge source resolver가 `Item Revision content component is incompatible`로
+거절했다. 중복 관리하던 canonical ref 목록에1.1이 빠진 실제 소비 결함이다. Material의
+자동 재시작을 멈췄고 같은 registered task/Item은 보존했다. 실제 readonly 진단은
+`staging/native-score-half-read-before-fix-20261116.json`에 있다.
+
+source resolver는 공통 canonical reader의 불변 schema mapping을 재사용하도록 수정했다.
+처음 end-to-end disposable 검사에서는1.1의 공개 풀이 reference field 분류도 빠져 있음을
+발견했고, block1.0/1.1에 같은 frozen field tuple을 연결했다. 양쪽 wire/schema bytes·권한·
+Artifact 검증이나 정본은 바꾸지 않는다. 최종 Material suite145 PASS(새 Native 세 배점의
+등록→base/public 풀이→strict read→embedding-text 포함), control2 PASS, Workflow4 PASS다.
+실제 AI 추론을 했다는 테스트가 아니며 전체450개의 운영 완료로 대체하지 않는다. 실패한
+첫 fixture run2건도 보존했다. 수정본의 설치·같은12번 재개 및 실제 풀이 승인은 다음이다.
+
+INDEX 원래 invocation7126e44f…는 CUDA4건을 실제 계산/등록해 head1420→1424가 되었고
+해당 GPU Workflow는 BATCH_COMPLETED다. CPU drain에서는 고정 unit의2/5/10초 상태 조회가
+모두 timeout하여 `LOCAL_INDEXING_RUNTIME_UNAVAILABLE`/`EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE`로
+종료했다. 실패와 네 기존 성공 encoding은 보존한다. INDEX metadata84 후보는 같은 기존
+PREPARE owner로 staging만 했으며 live runtime/DB 변경은0이다. 이 후보도 Knowledge1.1
+소비 수정이 없으므로 활성화하지 않는다. 새 수정 SDK로 대체 후보를 준비하며 기존 stage는
+보존한다. 현재 INDEX는 failed/PID0이고 새 metadata SDK/남은 CPU 요청 정리·재개는 미완료다.
+전체450개 목표는 ACTIVE이며 추가 사용자 인증은 아직 없다.
+
 ## 2026-11-15 23:07 UTC — exact-score 호환 운영 반영과 후속 등록 소유 관계 수정
 
 73ea7068의 Material ROLE1.40/Workflow3/Pack1.4·1.5를 기존 control owner로 release하고

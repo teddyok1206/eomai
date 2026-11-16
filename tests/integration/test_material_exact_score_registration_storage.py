@@ -8,13 +8,24 @@ Artifact hashes, concurrency and replay use the real owners. No live AI calls.
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from threading import Barrier
+from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts import (
+    CreateKnowledgeSolutionAnalysisCommand,
+    ReconcileKnowledgeAnalysisCommand,
+)
 from eom_catalog_contracts.material_item_lineage import (
     MATERIAL_ITEM_LINEAGE_V3_REF,
     MaterialItemLineageV3,
 )
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.models import ItemComponentRecord, ItemRevisionRecord
+from eom_catalog_service.solution_embedding_projection import project_public_solution_text
+from eom_catalog_service.solution_evidence_resolution import (
+    resolve_registered_solution_evidence_by_base_run,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.models import MaterialLearningRoleResultV3
 from sqlalchemy import func, select
@@ -35,12 +46,66 @@ from tests.integration.test_material_coverage_registration_storage import (
 from tests.integration.test_material_coverage_registration_storage import (
     registration_case as registration_case,
 )
+from tests.integration.test_material_native_reference_recovery_storage import _base_analysis
 from tests.integration.test_material_native_registration_storage import (
     native_registration_case as native_registration_case,
 )
+from tests.integration.test_registered_item_solution_application import _complete_solution
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 SCORES = [{"family": 3, "points": points} for points in ("1.5", "2.5", 2)]
+
+
+@pytest.mark.parametrize("native_registration_case", SCORES, indirect=True)
+def test_native_score_registration_flows_into_base_public_solution_and_embedding_text(
+    creative_engine, native_registration_case, tmp_path
+):
+    """Real owner/persistence chain; worker answers are the existing synthetic adapter."""
+    create, resolved, _binding = native_registration_case
+    registration = create()
+    item = registration.register_completed(
+        task_id=resolved.task_id, operator_id=resolved.operator_id
+    )
+    case = SimpleNamespace(
+        settings=registration.settings,
+        artifacts=registration.artifacts,
+        item=item,
+        command=SimpleNamespace(actor_id=resolved.operator_id),
+    )
+    base_id = _base_analysis(case, creative_engine, tmp_path)
+    analyses = KnowledgeAnalysisApplicationService(creative_engine, case.settings)
+    command = CreateKnowledgeSolutionAnalysisCommand(
+        base_analysis_run_id=base_id,
+        requested_by=resolved.operator_id,
+        idempotency_key="native-score-public-solution:" + uuid4().hex,
+    )
+    created = analyses.create_solution(command)
+    assert analyses.create_solution(command) == created
+    _complete_solution(
+        creative_engine,
+        case.settings,
+        created.analysis_run_id,
+        tmp_path / "native-score-public-worker",
+    )
+    accepted = analyses.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id, requested_by=resolved.operator_id
+        )
+    )
+    assert accepted.state == "ACCEPTED"
+    assert analyses.create_solution(command) == accepted
+    with analyses.sessions() as session:
+        evidence = resolve_registered_solution_evidence_by_base_run(
+            session, registration.artifacts, base_analysis_run_ids=(base_id,)
+        )[base_id]
+        assert evidence.source.item_revision_id == item.item_revision_id
+        expected = (
+            "eom.assessment.item-content/1.1"
+            if isinstance(resolved.role.output.learning_result.proposal.content.score.points, str)
+            else "eom.assessment.item-content/1.0"
+        )
+        assert evidence.source.artifact_member.schema_ref == expected
+        assert project_public_solution_text(evidence.report).status == "AVAILABLE"
 
 
 def assert_exact_registration(creative_engine, service, resolved, registered, count):

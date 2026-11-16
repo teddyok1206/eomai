@@ -67,6 +67,10 @@ read family 확장으로 입력/OpenAPI까지 묵시적으로 넓히지 않는�
 이는 source 후보이며 설치·실제 canary와 구 오류 Revision 복구는 운영 checkpoint에서 따로 확인한다.
 `test_material_exact_score_read.py`와 guarded `test_material_exact_score_registration_storage.py`가
 새 조회·source mismatch·등록·동시 재전송·중단 복구를 검사한다.
+Knowledge의 canonical source 허용 범위도 `item_content_contract.ITEM_CONTENT_SCHEMAS`를
+재사용한다. 공개 풀이 reference projection은 block1.0/1.1의 같은 불변 field 집합을 쓴다.
+위 guarded suite는 Native1.5/2.5/2점 실제 등록→base→공개 풀이→strict read→embedding-text의
+application 연결도 검사한다. 새 schema-ref 지원을 등록/read만 확인하고 끝내지 않는다.
 
 구 Native 배점의 선택적 재추출은 `material_native_score_reanalysis.py`가 소유한다. 기존
 terminal run의 quiescence·원문 배점·현재 Item을 확인해 문항별 작은 proof Artifact와 linked

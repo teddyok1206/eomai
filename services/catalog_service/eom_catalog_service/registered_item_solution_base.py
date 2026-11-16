@@ -12,6 +12,7 @@ import logging
 import re
 from collections import Counter
 from functools import lru_cache
+from types import MappingProxyType
 from typing import Any
 
 from eom_catalog_contracts import (
@@ -46,11 +47,15 @@ from eom_catalog_service.knowledge_proposal_resolution import (
 _EDITORIAL_PROBLEM_FIELDS = frozenset(
     {"stem", "bottom_stem", "inquiry", "labeled_blocks", "visuals", "statements", "choices"}
 )
-_SOURCE_FIELDS = {
-    "1.0": (frozenset({"body", "interaction"}), frozenset({"solution"})),
-    "2.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
-    "3.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
-}
+_BLOCK_SOURCE_FIELDS = (frozenset({"body", "interaction"}), frozenset({"solution"}))
+_SOURCE_FIELDS = MappingProxyType(
+    {
+        "1.0": _BLOCK_SOURCE_FIELDS,
+        "1.1": _BLOCK_SOURCE_FIELDS,
+        "2.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
+        "3.0": (_EDITORIAL_PROBLEM_FIELDS, frozenset({"answer", "explanations"})),
+    }
+)
 _LOGGER = logging.getLogger(__name__)
 _CONCEPTUAL_REFERENCE_TYPES = frozenset({"CONCEPT", "PROCESS", "OBSERVABLE_PROPERTY", "FORMULA"})
 
