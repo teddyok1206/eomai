@@ -1,5 +1,26 @@
 # Protected release-operator adapter
 
+## 2026-11-16 Kakao partial deployment / source 0084
+
+The user requested deployment before completing collection/question/export integration.
+Context/admission 1.26 pins source schema 0084 and the same four-wheel closure as 1.25.
+Exact closed upgrade callbacks accept 0079 or 0083, never an arbitrary head; verify/replay
+at 0084 is read-only. Historical 1.25/0083 bytes and meaning remain unchanged.
+
+This is the existing eleven-point boundary: operator responsibility and canonical
+Git/archive/wheel sources, immutable identities and verified pointers are unchanged.
+Access is fixed enum/key lookup, O(1) callback selection plus existing bounded tree
+admission, with no table/queue/cache/dependency added. Alembic retains its transaction;
+the existing Catalog role owner grants SELECT/INSERT on the three source tables and
+column-only UPDATE on source head/command, never revisions. Dependency direction and
+owner interfaces stay unchanged. Timeout/unknown state requires observation, not retry.
+Direct mutable-checkout Alembic would be shorter but bypasses this installed boundary.
+
+This release must keep manual runtime, remote transport and collection disabled.
+Prepared browser/PDF prefixes are not installed/activated by the partial API/Web release.
+New private history must not be removed by rollback; restore a schema-0084-compatible
+release set or keep the feature disabled. Existing numerical runs/pins are preserved.
+
 ## 2026-11-09 Excel content-planning successor
 
 Context/admission 1.22 pins `20261109_0076`, including the additive 0075 tables.

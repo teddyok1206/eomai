@@ -22,6 +22,11 @@ def test_every_released_schema_loads_and_emits_the_same_admission(synthetic_stag
     receipt_properties = schema["$defs"]["receipt"]["properties"]
     version = context_properties["schema_version"]["const"]
     body = _context_value() | {"schema_version": version}
+    if "kakao_contracts" in context_properties["wheels"]["required"]:
+        body["wheels"]["kakao_contracts"] = {
+            "name": "eom_kakao_archive_contracts-0.1.0-py3-none-any.whl",
+            "sha256": "sha256:" + "f" * 64,
+        }
     if "migration_revision" in context_properties:
         body["migration_revision"] = context_properties["migration_revision"]["const"]
     path.write_bytes(_json(body))
@@ -54,7 +59,7 @@ def test_context_inventory_is_exact_and_immutable():
 
 
 @pytest.mark.parametrize(
-    "version", ["release-operator-context/1.25", "release-operator-admission/1.25", [], {}, None]
+    "version", ["release-operator-context/999.0", "release-operator-admission/999.0", [], {}, None]
 )
 def test_unreleased_or_nonstring_version_has_stable_rejection(version):
     with pytest.raises(operator.OperatorRuntimeError, match="RELEASE_OPERATOR_JSON_INVALID"):
