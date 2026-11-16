@@ -19,11 +19,33 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from eom_kakao_archive_collector import driver_setup as setup
 from eom_kakao_archive_collector import manual_driver as driver
+from eom_kakao_archive_collector import supervisor
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = "sha256:" + "a" * 64
+
+
+def test_supervised_driver_and_chromium_use_private_writable_home(monkeypatch):
+    monkeypatch.setenv("HOME", "/root/not-the-browser-home")
+    monkeypatch.setattr(sys, "argv", ["eom-kakao-browser-supervisor"])
+    monkeypatch.setattr(
+        supervisor, "_prepare", Mock(return_value=(Path("/run/synthetic.json"), SHA))
+    )
+    monkeypatch.setattr(supervisor.signal, "signal", Mock())
+    monkeypatch.setattr(supervisor.grp, "getgrnam", lambda _: SimpleNamespace(gr_gid=999))
+    launched = Mock()
+    monkeypatch.setattr(supervisor.subprocess, "Popen", launched)
+
+    def supervised(launch, **_kwargs):
+        launch()
+        return 0
+
+    monkeypatch.setattr(supervisor, "supervise", supervised)
+    assert supervisor.main() == 0
+    assert launched.call_args.kwargs["env"]["HOME"] == str(setup.PROFILE)
+    assert setup.child_environment()["HOME"] == str(setup.PROFILE)
 
 
 def fence(mode="MANUAL"):
@@ -126,6 +148,7 @@ def test_manual_headed_sandbox_and_close_flush_precede_xvnc_stop(manual):
     assert child.returncode == 0 and context.close.await_count == 1
     call = playwright.chromium.launch_persistent_context.call_args
     assert call.args == (str(setup.PROFILE),)
+    assert call.kwargs["env"]["HOME"] == str(setup.PROFILE)
     assert call.kwargs == {
         "headless": False,
         "chromium_sandbox": True,

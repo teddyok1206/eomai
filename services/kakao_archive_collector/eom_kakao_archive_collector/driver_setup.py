@@ -284,7 +284,9 @@ def validate_setup(request: Path, profile: Path) -> ManualSetup:
 def child_environment() -> dict[str, str]:
     # Paths are not secret values. Inherit no tokens, debug flags, proxies or caller config.
     return {
-        "HOME": str(PROFILE.parent),
+        # The parent owns the profile lock and is deliberately not browser-writable.
+        # Chromium/Crashpad need private HOME state; keep it inside the same profile.
+        "HOME": str(PROFILE),
         "LANG": "C.UTF-8",
         "PATH": "/usr/bin:/bin",
         "TMPDIR": "/tmp",

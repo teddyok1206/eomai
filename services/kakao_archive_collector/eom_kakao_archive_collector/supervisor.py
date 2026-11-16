@@ -150,7 +150,7 @@ def main() -> int:
     try:
         snapshot, digest = _prepare()
         environment = {
-            "HOME": str(PROFILE.parent),
+            "HOME": str(PROFILE),
             "LANG": "C.UTF-8",
             "PATH": "/usr/bin:/bin",
             "TMPDIR": "/tmp",
