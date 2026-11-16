@@ -1,5 +1,32 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 20:00 UTC DOM 관측 browser 설치·격리 headed 검증 PASS
+
+- source `53cb1a1e7fade4b6d97160f67a67411df1d7d7b1`를 커밋·푸시하고, stopped-profile
+  경계에서 collector/pure-contract 두 wheel만 전용 browser prefix에 설치했다. wheel SHA는
+  각각 `3a6b1544d1699530050530c2f6b021c347db5a4ec61d37ab83fd55ff8dac0f69`,
+  `36305180d6863becdd8c9ea9c64c8136e229f69d1e93e89f60583766cf97d565`다.
+  현재 runtime prefix fingerprint·wheel bytes/RECORD·pip check·공식 stage/verify를 확인했고,
+  이전 package/config와 manifest rollback 위치도 보존했다. receipt는
+  `/var/lib/eom-kakao-observation-release-53cb1a1e/installed.json`이다.
+- 배포 중 기존 지원 preflight로 실행/lease/native 작업이 없는 시점을 확인했다. Catalog만
+  config 재조회 목적으로 재기동했고 API/Web·DB0087 및 INDEX/QUERY pin은 유지했다.
+  browser/remote는 그대로 STOPPED, HTTPS `/studio/login` GET200이다. profile·인증정보·
+  이전 실패/실제 CSV·사진을 바꾸거나 카카오 로그인·원격 session을 새로 만들지 않았다.
+- 실제 설치본의 `run_manual`/Xvnc readiness/SDK launch→download event→DOM projection→
+  byte/hash/receipt→context close를 전용 UID와 동일 보안 sandbox에서 두 cycle 실행했다.
+  실제 profile/NAS는 mask하고 private network와 익명 fulfilled HTTP/blob fixture만 사용했다.
+  source Git checkout/운영 계정 로그인/실제 카카오 요청을 input으로 쓰지 않았다.
+- 합성 capture4건의 RECEIVED와 원래 bytes/hash·exact page 연결·관측 OBSERVED/BLOB·
+  반복 text2개의 별도 parent·입력 field 제외·위험 버튼 클릭0·종료 후 보존·endpoint cleanup이
+  PASS이며 process exit0이다. `staging/kakao-observation-installed-headed-53cb1a1e.log`와
+  `/var/lib/eom-kakao-headed-observation-probe-53cb1a1e/`가 합성 증거다.
+- **이는 실제 카카오 DOM/selector나 사진 occurrence 정합 PASS가 아니다.** 현재 수집의
+  다음 병목은 확인된 provider 채널/방 관측을 받아 실제 source admission을 허가하는 기존
+  Catalog owner 연결이다. 단순 callback 허용·DRAFT를 fake ACTIVE로 바꾸기·과거 capture에
+  새 DOM을 붙이기는 하지 않는다. 그 owner/질문→packet→PDF 연결을 진행하며, 전체 방/주기
+  수집의 AUTO 활성화와 실제 학생 PDF는 여전히 미완료다. 취침 중 사용자에게 로그인 요청하지 않았다.
+
 ## 2026-11-16 제한된 다운로드 DOM 관측 소스·실제 Chromium 합성 검증
 
 - 수신 파일의 방/메시지 연결에 필요한 실제 DOM 근거를 수집하도록, 새 closed JSON Schema
