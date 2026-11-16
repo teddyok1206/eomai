@@ -1,5 +1,36 @@
 # KakaoTalk 구현 체크포인트
 
+## 최신 체크포인트 — 2026-11-16 MANUAL 연결·설치 전 경계
+
+- 이전 source checkpoint `1e33207c` 이후 수동 로그인 의도/짧은 접근 허가를 저장하는
+  Catalog owner와 0083 migration, 실제 API/RPC/BFF 및 화면 controller를 추가했다.
+  시작 접수는 PREPARING이며 실제 browser와 gateway 준비 확인 없이 ACTIVE가 되지 않는다.
+  현재 사용자·Identity session·ADMIN/remote 권한·binding owner를 다시 확인한다.
+- protected 프로필 최초 설치 증거와 실제 flock, browser/gateway의 boot·invocation·cgroup·
+  systemd Job 관측을 연결했다. PID 0/비활성이라도 queued Job이 있으면 인계하지 않는다.
+  만료·응답 유실·이전 실행 실패를 성공이나 새 실행 권한으로 바꾸지 않는다.
+- MANUAL Playwright/Xvnc driver와 별도 UDS gateway supervisor를 구현했다. gateway 종료는
+  이미 열린 stream도 닫으며, 같은 grant 재읽기는 TTL을 연장하지 않는다. Catalog에는 raw
+  VNC/profile cookie 접근 권한을 주지 않는다. AUTO collector/실제 selector는 후속 범위다.
+- 새 Kakao 전용 환경은 `/opt/eom/conda/envs/eom-kakao-*`를 사용한다. 기존 `/srv` 환경의
+  소유권을 완화하지 않는다. 고정 installer는 준비된 보호 prefix만 소비하며, 최초 profile
+  receipt는 runtime 업그레이드에서도 보존한다. 실제 prefix 준비·설치는 아직 하지 않았다.
+- 합동 source/API/BFF/Chromium/계약·의존성 검사 **973 PASS**, 공식 guarded disposable
+  PostgreSQL **73 PASS**. 후자는 동시 접수·동일 key 재전송·갱신/종료 경합과 현재 모드
+  검사까지 포함한다. 별도 설치·driver/browser/PDF 묶음 **192 PASS**, 프로필/RPC/API
+  독립 검토 **47 PASS**. 겹치는 검사는 합산한 고유 테스트 수로 표현하지 않는다.
+- 별도 집중 리뷰에서 잔존 gateway `.next` 파일을 최초 실행으로 오인할 수 있는 경계를
+  재현해 고쳤다. 같은 파일 관측 규칙을 재사용하며 추가 3개 부정 검사를 포함한 관련
+  **176 PASS**를 확인했다. 잔존 파일을 삭제하거나 실행을 강행하지 않는다.
+- 전역 import 추적 mypy는 이번에 변경하지 않은 `command_adapter.py`에서 기존
+  WorkflowRequest union 접근 오류 6개를 보고했다. Kakao 변경 모듈 검사는 별도로
+  수행하며 이 무관한 오류를 감추기 위해 출제/자료 학습 코드를 수정하지 않는다.
+- 아직 남은 활성화 경계: Catalog runtime coordinator 조립, 현재 lease의 Caddy admission,
+  전용 runtime 실제 설치·UID/sandbox 검사와 호환 migration release. `remoteViewEnabled`는
+  기본 꺼짐이며 소스 테스트를 운영 화면·카카오 로그인 성공으로 보고하지 않는다.
+- 운영 migration·배포·카카오 로그인·수집은 이 체크포인트에서 실행하지 않았다. 기존 문항,
+  GPU 실행·정본·실패 이력 및 인증 자료는 변경하지 않았다.
+
 ## 2026-11-16 착수
 
 사용자가 제공한 [설계 정본](../architecture/KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md)을

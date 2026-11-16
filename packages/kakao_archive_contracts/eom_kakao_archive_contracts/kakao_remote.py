@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from pydantic import AfterValidator, Field, StrictBool, model_validator
 
-from .render import BindingId, FrozenModel
+from .render import BindingId, FrozenModel, canonical_bytes
 
 SCHEMA_SHA256 = "9a597d9da6b7283a89b34c97853197ef3f7413d656b9faed0cb802368d7258eb"
 LEASE_TTL = timedelta(seconds=30)
@@ -153,6 +153,14 @@ class GatewayRevocation(FrozenModel):
         "OWNER_UNAVAILABLE",
         "RUNTIME_LOST",
     ]
+
+
+def gateway_execution_digest(grant: GatewayLeaseGrant) -> str:
+    """Pin one immutable gateway execution; heartbeat revisions never change its identity."""
+    values = grant.model_dump(
+        mode="json", exclude={"schema_version", "grant_revision", "authorized_at", "expires_at"}
+    )
+    return "sha256:" + hashlib.sha256(canonical_bytes(values)).hexdigest()
 
 
 class ProfileFence(FrozenModel):

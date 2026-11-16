@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/runtime-install-v1/1.0",
+  "title": "Operator-reviewed local Kakao runtime installation inputs, not runtime authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_commit", "profile_id", "runtime_sha256", "browser_assets_sha256", "novnc_assets_sha256", "chromium_member", "xvnc_sha256", "renderer_release_sha256", "payload_sha256"],
+  "properties": {
+    "schema_version": {"const": "kakao-runtime-install/1.0"},
+    "source_commit": {"type": "string", "maxLength": 40, "pattern": "^[0-9a-f]{40}$"},
+    "profile_id": {"type": "string", "maxLength": 45, "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+    "runtime_sha256": {
+      "type": "object", "additionalProperties": false,
+      "required": ["browser", "remote", "pdf"],
+      "properties": {"browser": {"$ref": "#/$defs/hash"}, "remote": {"$ref": "#/$defs/hash"}, "pdf": {"$ref": "#/$defs/hash"}}
+    },
+    "browser_assets_sha256": {"$ref": "#/$defs/hash"},
+    "novnc_assets_sha256": {"$ref": "#/$defs/hash"},
+    "chromium_member": {"type": "string", "maxLength": 256, "pattern": "^chromium-[0-9]+/chrome-linux(64)?/chrome$(?![\\s\\S])"},
+    "xvnc_sha256": {"$ref": "#/$defs/hash"},
+    "renderer_release_sha256": {"$ref": "#/$defs/hash"},
+    "payload_sha256": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eom-kakao-browser.service", "eom-kakao-remote.service", "eom-kakao-pdf@.service", "46-eom-kakao-runtime.rules", "eom-kakao-runtime.conf"],
+      "properties": {
+        "eom-kakao-browser.service": {"$ref": "#/$defs/hash"},
+        "eom-kakao-remote.service": {"$ref": "#/$defs/hash"},
+        "eom-kakao-pdf@.service": {"$ref": "#/$defs/hash"},
+        "46-eom-kakao-runtime.rules": {"$ref": "#/$defs/hash"},
+        "eom-kakao-runtime.conf": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "$defs": {"hash": {"type": "string", "maxLength": 71, "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

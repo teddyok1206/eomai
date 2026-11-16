@@ -31,7 +31,7 @@ from eom_kakao_archive_contracts.kakao_remote import (
     validate_profile_handoff,
     validate_remote_contract,
 )
-from eom_kakao_archive_worker.remote_gateway_lifetime import (
+from eom_kakao_archive_gateway.lifetime import (
     GatewayLifetimeState,
     RemoteGatewayLifetime,
 )

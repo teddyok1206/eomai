@@ -15,7 +15,7 @@ WorkingDirectory=/run/eom-kakao-render/%i
 TemporaryFileSystem=/run/eom-kakao-render:ro,mode=0711
 BindReadOnlyPaths=/var/lib/eom-catalog-api/staging/kakao-render/%i/input:/run/eom-kakao-render/%i/input
 BindPaths=/var/lib/eom-catalog-api/staging/kakao-render/%i/output:/run/eom-kakao-render/%i/output
-ExecStart=/srv/eom/conda/envs/eom-kakao-pdf/bin/python -I -B -m eom_kakao_archive_worker.fixed_render %i
+ExecStart=/opt/eom/conda/envs/eom-kakao-pdf/bin/python -I -B -m eom_kakao_archive_worker.fixed_render %i
 StandardOutput=null
 StandardError=journal
 NoNewPrivileges=yes

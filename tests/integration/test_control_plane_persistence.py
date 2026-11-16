@@ -4265,6 +4265,7 @@ def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: E
         curated_document_slot_models,
     )
     from eom_catalog_service.kakao_archive_models import KakaoChannelBindingRecord
+    from eom_catalog_service.kakao_manual_models import KakaoManualSessionRecord
     from eom_catalog_service.kakao_room_models import KakaoRoomRecord
     from eom_catalog_service.kakao_student_models import KakaoStudentRecord
     from eom_catalog_service.material_learning_models import LearningMaterialRecord
@@ -4278,6 +4279,7 @@ def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: E
     assert curated_document_slot_models.Base.metadata is Base.metadata
     assert KakaoChannelBindingRecord.__table__.metadata is Base.metadata
     assert KakaoRoomRecord.__table__.metadata is Base.metadata
+    assert KakaoManualSessionRecord.__table__.metadata is Base.metadata
     assert KakaoStudentRecord.__table__.metadata is Base.metadata
     assert LearningMaterialRecord.__table__.metadata is Base.metadata
     assert HwpxCuratedBuildRecord.__table__.metadata is Base.metadata

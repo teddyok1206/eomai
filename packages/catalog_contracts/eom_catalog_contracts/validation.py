@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "catalog-kakao-manual-request-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
+            "1.0",
+            "sha256:e005dd16a0192665486822aaefe6e9ec79ece77613fe7c6d9fad5e054242d2c5",
+        ),
+        "catalog-kakao-manual-response-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-manual-response-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-manual-response-v1.schema.json",
+            "1.0",
+            "sha256:b124e13f47389c71950430e928f6548d3ee5e122b249f5f759b15689b6fd639c",
+        ),
         "catalog-kakao-room-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-room-request-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-room-request-v1.schema.json",
@@ -51,6 +63,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/kakao-archive/room-directory-v1.schema.json",
             "1.0",
             "sha256:645346cd90cb882eed807d86f9dc4fe2683ad90a285cf6df657d7534237796df",
+        ),
+        "kakao-manual-session-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/manual-session-v1.schema.json",
+            "resources/kakao-archive/manual-session-v1.schema.json",
+            "1.0",
+            "sha256:4152358de7c3bc97d430d72e8327b432707261ecdfa8e9a2e914181fdcdc704e",
+        ),
+        "kakao-manual-execution-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/manual-execution-v1.schema.json",
+            "resources/kakao-archive/manual-execution-v1.schema.json",
+            "1.0",
+            "sha256:3aafecf29d2fdaf2dc2861cf8677c1ea8556db2c80738b906bd155e190c709d5",
         ),
         "catalog-kakao-student-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-student-request-v1.schema.json",

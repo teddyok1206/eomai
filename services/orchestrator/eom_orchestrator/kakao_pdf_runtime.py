@@ -17,7 +17,7 @@ from .kakao_pdf_files import KakaoPdfExecutionError, read_local
 from .native_exam_preparation import require_native_exam_runtime_python
 
 KAKAO_WORKSPACE_ROOT = Path("/var/lib/eom-catalog-api/staging/kakao-render")
-KAKAO_PYTHON = Path("/srv/eom/conda/envs/eom-kakao-pdf/bin/python")
+KAKAO_PYTHON = Path("/opt/eom/conda/envs/eom-kakao-pdf/bin/python")
 KAKAO_TEMPLATE = Path("/etc/systemd/system/eom-kakao-pdf@.service")
 KAKAO_ENVIRONMENT = Path("/etc/eom/kakao-pdf.env")
 KAKAO_WORKER = "eom-kakao-render"

@@ -50,3 +50,6 @@
 .kakao-room-edit { display: grid; gap: .75rem; }
 .kakao-room-edit label { display: grid; gap: .35rem; }
 .kakao-room-edit input, .kakao-room-edit select { width: 100%; min-width: 0; }
+.kakao-manual { padding: 16px 0; border-block-end: 1px solid var(--eom-border); }
+.kakao-manual[hidden] { display: none; }
+.kakao-manual-viewport iframe { display: block; width: 100%; height: min(70vh, 720px); border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }

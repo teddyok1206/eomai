@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-kakao-archive-gateway"
+version = "0.1.0"
+description = "Bounded private Kakao remote gateway lifetime supervisor"
+requires-python = ">=3.12,<3.13"
+dependencies = ["eom-kakao-archive-contracts==0.1.0"]
+
+[project.optional-dependencies]
+# The official 0.13.0 UDS listener/target avoids any TCP fallback. Dedicated runtime only.
+remote = ["websockify==0.13.0"]
+
+[project.scripts]
+eom-kakao-remote-supervisor = "eom_kakao_archive_gateway.supervisor:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_kakao_archive_gateway*"]

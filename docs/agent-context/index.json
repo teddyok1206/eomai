@@ -14,6 +14,9 @@
         "services/catalog_service/eom_catalog_service/kakao_archive_service.py",
         "services/catalog_service/eom_catalog_service/kakao_student_service.py",
         "services/catalog_service/eom_catalog_service/kakao_room_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_manual_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_manual_dispatch.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_manual_rpc.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_rooms.py",
         "services/catalog_service/eom_catalog_service/kakao_question_editing.py",
         "services/catalog_service/eom_catalog_service/kakao_question_publication.py",
@@ -25,8 +28,10 @@
         "packages/catalog_contracts/eom_catalog_contracts/kakao_archive_rpc.py",
         "apps/application_api/eom_api/routers/kakao_archive.py",
         "apps/application_api/eom_api/routers/kakao_students.py",
+        "apps/application_api/eom_api/routers/kakao_manual.py",
         "apps/web_gui/eom_web_gui/kakao_archive_routes.py",
         "apps/web_gui/eom_web_gui/kakao_student_routes.py",
+        "apps/web_gui/eom_web_gui/kakao_manual_routes.py",
         "services/catalog_service/eom_catalog_service/kakao_csv_parser.py",
         "services/catalog_service/eom_catalog_service/kakao_message_alignment.py",
         "services/catalog_service/eom_catalog_service/kakao_question_rules.py",
@@ -35,9 +40,14 @@
         "services/kakao_archive_collector/eom_kakao_archive_collector",
         "services/orchestrator/eom_orchestrator/kakao_pdf_execution.py",
         "services/orchestrator/eom_orchestrator/kakao_browser_runtime.py",
+        "services/orchestrator/eom_orchestrator/kakao_gateway_runtime.py",
+        "services/orchestrator/eom_orchestrator/kakao_profile_observation.py",
+        "services/orchestrator/eom_orchestrator/kakao_runtime_os.py",
+        "services/kakao_archive_gateway/eom_kakao_archive_gateway",
         "apps/web_gui/eom_web_gui/static/kakao-archive.js",
         "apps/web_gui/eom_web_gui/static/kakao-students.js",
-        "apps/web_gui/eom_web_gui/static/kakao-rooms.js"
+        "apps/web_gui/eom_web_gui/static/kakao-rooms.js",
+        "apps/web_gui/eom_web_gui/static/kakao-manual.js"
       ],
       "test_paths": [
         "tests/unit/test_kakao_archive_rules.py",
@@ -46,6 +56,9 @@
         "tests/unit/test_kakao_students.py",
         "tests/unit/test_kakao_rooms.py",
         "tests/integration/test_kakao_room_storage.py",
+        "tests/integration/test_kakao_manual_storage.py",
+        "tests/unit/test_kakao_manual_rpc.py",
+        "tests/api/test_kakao_manual_routes.py",
         "tests/unit/test_kakao_question_editing.py",
         "tests/unit/test_kakao_question_publication.py",
         "tests/unit/test_kakao_render_projection.py",
@@ -54,6 +67,8 @@
         "tests/integration/test_kakao_pdf_publication.py",
         "tests/unit/test_kakao_remote_runtime.py",
         "tests/unit/test_kakao_browser_runtime.py",
+        "tests/unit/test_kakao_gateway_runtime.py",
+        "tests/unit/test_kakao_profile_observation.py",
         "tests/unit/test_kakao_question_render.py",
         "tests/web_gui/test_kakao_archive_browser.py"
       ],
@@ -63,6 +78,7 @@
         "docs/architecture/KAKAO_PDF_EXECUTION_BOUNDARY.md",
         "docs/architecture/KAKAO_PRIVATE_RUNTIME_BOUNDARIES.md",
         "docs/architecture/KAKAO_BROWSER_EXECUTION_BOUNDARY.md",
+        "docs/architecture/KAKAO_REMOTE_GATEWAY_EXECUTION_BOUNDARY.md",
         "docs/architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md",
         "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
       ]

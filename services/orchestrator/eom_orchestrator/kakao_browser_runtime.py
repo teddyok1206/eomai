@@ -20,11 +20,12 @@ from typing import Literal
 from eom_kakao_archive_contracts import canonical_bytes
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence, validate_remote_contract
 
+from . import kakao_runtime_os as runtime_os
 from .native_exam_preparation import require_native_exam_runtime_python
 
 UNIT = "eom-kakao-browser.service"
 TEMPLATE = Path("/etc/systemd/system") / UNIT
-PYTHON = Path("/srv/eom/conda/envs/eom-kakao-browser/bin/python")
+PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 DRIVER = PYTHON.parent / "eom-kakao-browser-driver"
 ENVIRONMENT = Path("/etc/eom/kakao-browser.env")
 REQUEST = Path("/var/lib/eom-kakao-runtime/browser/request.json")
@@ -44,6 +45,7 @@ PROPERTIES = (
     "NotifyAccess",
     "KillMode",
     "Restart",
+    "Job",
     "ActiveState",
     "SubState",
     "MainPID",
@@ -88,58 +90,38 @@ class StoppedBrowserRun:
     main_exit_status: int
 
 
+@dataclass(frozen=True, slots=True)
+class ClosedBrowserDispatch:
+    """An unconfirmed dispatch is physically closed, not a successful run/flush receipt."""
+
+    fence: ProfileFence
+    command_sha256: str
+    dispatched_boot_id: str
+    observed_boot_id: str
+    observed_at: datetime
+    cgroup_state: Literal["ABSENT", "EMPTY"]
+    reason: Literal["START_NOT_CONFIRMED", "REBOOT_UNCLEAN"]
+    invocation_id: str
+    started_monotonic_us: int
+    unit_result: str
+    main_exit_code: int
+    main_exit_status: int
+
+
 @contextmanager
 def _directory(path: Path, *, owners: frozenset[int], protected: bool = True) -> Iterator[int]:
-    if not path.is_absolute() or ".." in path.parts:
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_PATH_INVALID")
-    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        for part in path.parts[1:]:
-            child = os.open(
-                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd
-            )
-            os.close(fd)
-            fd = child
-            info = os.fstat(fd)
-            if protected and (info.st_uid not in owners or info.st_mode & 0o022):
-                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_DIRECTORY_UNTRUSTED")
-        yield fd
-    finally:
-        os.close(fd)
+        with runtime_os.protected_directory(path, owners=owners, protected=protected) as directory:
+            yield directory
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _read(path: Path, *, uid: int, maximum: int, owners: frozenset[int]) -> bytes:
-    with _directory(path.parent, owners=owners) as directory:
-        fd = os.open(
-            path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=directory
-        )
-    with os.fdopen(fd, "rb") as stream:
-        before = os.fstat(stream.fileno())
-        if (
-            not stat.S_ISREG(before.st_mode)
-            or before.st_uid != uid
-            or before.st_nlink != 1
-            or before.st_mode & 0o022
-            or not 0 < before.st_size <= maximum
-        ):
-            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FILE_UNTRUSTED")
-        raw = stream.read(maximum + 1)
-        after = os.fstat(stream.fileno())
-        if (
-            before.st_dev,
-            before.st_ino,
-            before.st_size,
-            before.st_mtime_ns,
-            before.st_ctime_ns,
-        ) != (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-            after.st_ctime_ns,
-        ) or len(raw) != before.st_size:
-            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FILE_CHANGED")
-    return raw
+    try:
+        return runtime_os.read_protected(path, uid=uid, maximum=maximum, owners=owners)
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _digest(raw: bytes) -> str:
@@ -226,75 +208,24 @@ def _control_lock() -> Iterator[None]:
 
 
 def _boot_id() -> str:
-    # Kernel-owned, no user path or process-list scan.
-    with BOOT_ID.open("r", encoding="ascii") as stream:
-        value = stream.read(64).strip()
-    if re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", value) is None:
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_BOOT_UNKNOWN")
-    return value
+    try:
+        return runtime_os.boot_identity(BOOT_ID)
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _parse_show(raw: bytes) -> dict[str, str]:
     try:
-        if len(raw) > 16384:
-            raise ValueError
-        values: dict[str, str] = {}
-        for line in raw.decode("utf-8").splitlines():
-            key, value = line.split("=", 1)
-            if key not in PROPERTIES or key in values:
-                raise ValueError
-            values[key] = value
-        if set(values) != set(PROPERTIES):
-            raise ValueError
-        for key in (
-            "MainPID",
-            "ControlPID",
-            "ExecMainPID",
-            "ExecMainStartTimestampMonotonic",
-            "ExecMainCode",
-            "ExecMainStatus",
-        ):
-            if re.fullmatch(r"0|[1-9][0-9]{0,19}", values[key]) is None:
-                raise ValueError
-        if values["Result"] not in {
-            "success",
-            "exit-code",
-            "signal",
-            "core-dump",
-            "watchdog",
-            "timeout",
-            "start-limit-hit",
-            "resources",
-            "protocol",
-            "oom-kill",
-        }:
-            raise ValueError
-        return values
-    except (ValueError, UnicodeError):
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_OBSERVATION_INVALID") from None
+        return runtime_os.parse_unit_observation(raw, PROPERTIES)
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _show() -> dict[str, str]:
     try:
-        completed = subprocess.run(
-            [
-                "/usr/bin/systemctl",
-                "show",
-                UNIT,
-                "--no-pager",
-                "--property=" + ",".join(PROPERTIES),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=10,
-        )
-        if completed.returncode:
-            raise ValueError
-        return _parse_show(completed.stdout)
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_OBSERVATION_UNAVAILABLE") from None
+        return runtime_os.show_unit(UNIT, PROPERTIES)
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _trusted_unit(values: dict[str, str]) -> None:
@@ -315,40 +246,12 @@ def _trusted_unit(values: dict[str, str]) -> None:
 
 
 def _cgroup_closed() -> Literal["ABSENT", "EMPTY"]:
-    # The only accepted cgroup path is fixed by the installed unit, never supplied by a worker.
-    path = CGROUP_ROOT / CGROUP.lstrip("/")
     try:
-        with _directory(path, owners=frozenset({0})) as directory:
-            fd = os.open(
-                "cgroup.events", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory
-            )
-            with os.fdopen(fd, "rb") as stream:
-                raw = stream.read(1025)
-    except FileNotFoundError:
-        try:
-            path.lstat()
-        except FileNotFoundError:
-            pass
-        else:
-            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_CGROUP_UNKNOWN") from None
-        # Missing mount/controller is not a removed service cgroup.
-        with _directory(CGROUP_ROOT / "system.slice", owners=frozenset({0})):
-            pass
-        return "ABSENT"
-    if len(raw) > 1024:
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_CGROUP_UNKNOWN")
-    try:
-        values: dict[str, str] = {}
-        for line in raw.decode("ascii").splitlines():
-            key, value = line.split()
-            if key in values or key not in {"populated", "frozen"} or value not in {"0", "1"}:
-                raise ValueError
-            values[key] = value
-        if values.get("populated") != "0":
-            raise ValueError
-    except (ValueError, UnicodeError):
-        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_CGROUP_NOT_CLOSED") from None
-    return "EMPTY"
+        return runtime_os.cgroup_closed(
+            CGROUP_ROOT, UNIT, open_directory=lambda path: _directory(path, owners=frozenset({0}))
+        )
+    except runtime_os.KakaoRuntimeOsError as exc:
+        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_" + exc.reason) from None
 
 
 def _same_execution(run: BrowserRunHandle, values: dict[str, str]) -> None:
@@ -376,6 +279,7 @@ def _stopped(run: BrowserRunHandle, values: dict[str, str]) -> StoppedBrowserRun
         or values["SubState"] not in {"dead", "failed"}
         or values["MainPID"] != "0"
         or values["ControlPID"] != "0"
+        or values["Job"] != ""
     ):
         raise KakaoBrowserRuntimeError("KAKAO_BROWSER_STOP_UNCONFIRMED")
     return StoppedBrowserRun(
@@ -432,6 +336,109 @@ class FixedKakaoBrowserRuntime:
             self._installed()
             return self._running(fence, self._request(fence), _show())
 
+    def boot_identity(self) -> str:
+        """The owner records this with its dispatch intent before calling start."""
+        return _boot_id()
+
+    def observe_idle(self) -> runtime_os.IdleRuntimeObservation:
+        """First-install probe only; a prior dispatch still needs exact recovery evidence."""
+        with _control_lock():
+            self._installed()
+            values = _show()
+            _trusted_unit(values)
+            if (
+                values["Job"]
+                or values["ActiveState"] != "inactive"
+                or values["SubState"] != "dead"
+                or values["MainPID"] != "0"
+                or values["ControlPID"] != "0"
+                or values["ControlGroup"] not in {"", CGROUP}
+            ):
+                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_IDLE_UNCONFIRMED")
+            closed = _cgroup_closed()
+            never_dispatched = (
+                not _has_history()
+                and values["ExecMainStartTimestampMonotonic"] == "0"
+                and values["ExecMainPID"] == "0"
+                and not values["InvocationID"]
+                and not values["StatusText"]
+            )
+            return runtime_os.IdleRuntimeObservation(
+                UNIT, _boot_id(), datetime.now(UTC), closed, never_dispatched
+            )
+
+    def observe_dispatch(
+        self, fence: ProfileFence, *, command_sha256: str, dispatched_boot_id: str
+    ) -> BrowserRunHandle | ClosedBrowserDispatch:
+        """Read-only recovery for an exact staged start, including failure before READY.
+
+        Called only with the owner's stored intent. A closed result does not authorize
+        a new claim, prove profile flush, or replace the separate gateway stop check.
+        Missing/partial staging stays UNKNOWN; this never creates/deletes input files.
+        """
+        with _control_lock():
+            self._installed()
+            return self._dispatch_observation(
+                fence,
+                command_sha256=command_sha256,
+                dispatched_boot_id=dispatched_boot_id,
+                values=_show(),
+            )
+
+    def _dispatch_observation(
+        self,
+        fence: ProfileFence,
+        *,
+        command_sha256: str,
+        dispatched_boot_id: str,
+        values: dict[str, str],
+    ) -> BrowserRunHandle | ClosedBrowserDispatch:
+        if (
+            re.fullmatch(r"sha256:[0-9a-f]{64}", command_sha256) is None
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", dispatched_boot_id)
+            is None
+            or self._request(fence) != command_sha256
+        ):
+            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH")
+        _trusted_unit(values)
+        current_boot = _boot_id()
+        if values["ActiveState"] == "active":
+            if current_boot != dispatched_boot_id:
+                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_RUN_MISMATCH")
+            return self._running(fence, command_sha256, values)
+        if (
+            values["ActiveState"] not in {"inactive", "failed"}
+            or values["SubState"] not in {"dead", "failed"}
+            or values["MainPID"] != "0"
+            or values["ControlPID"] != "0"
+            or values["Job"] != ""
+            or values["ControlGroup"] not in {"", CGROUP}
+            or (
+                values["InvocationID"]
+                and re.fullmatch(r"[0-9a-f]{32}", values["InvocationID"]) is None
+            )
+        ):
+            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_STOP_UNCONFIRMED")
+        # Before READY, systemd may still show the previous invocation's status.
+        # We assert only closure of this fixed unit, not successful execution of
+        # the staged command or association of that previous outcome to this run.
+        return ClosedBrowserDispatch(
+            fence=fence,
+            command_sha256=command_sha256,
+            dispatched_boot_id=dispatched_boot_id,
+            observed_boot_id=current_boot,
+            observed_at=datetime.now(UTC),
+            cgroup_state=_cgroup_closed(),
+            reason="START_NOT_CONFIRMED"
+            if current_boot == dispatched_boot_id
+            else "REBOOT_UNCLEAN",
+            invocation_id=values["InvocationID"],
+            started_monotonic_us=int(values["ExecMainStartTimestampMonotonic"]),
+            unit_result=values["Result"],
+            main_exit_code=int(values["ExecMainCode"]),
+            main_exit_status=int(values["ExecMainStatus"]),
+        )
+
     def _running(
         self, fence: ProfileFence, digest: str, values: dict[str, str]
     ) -> BrowserRunHandle:
@@ -441,6 +448,7 @@ class FixedKakaoBrowserRuntime:
             or values["SubState"] != "running"
             or values["MainPID"] == "0"
             or values["ControlPID"] != "0"
+            or values["Job"] != ""
             or values["MainPID"] != values["ExecMainPID"]
             or values["ExecMainStartTimestampMonotonic"] == "0"
             or re.fullmatch(r"[0-9a-f]{32}", values["InvocationID"]) is None
@@ -462,7 +470,7 @@ class FixedKakaoBrowserRuntime:
         self,
         fence: ProfileFence,
         *,
-        prior: BrowserRunHandle | None,
+        prior: BrowserRunHandle | ClosedBrowserDispatch | None,
         assert_current: Callable[[ProfileFence], None],
     ) -> BrowserRunHandle:
         with _control_lock():
@@ -476,13 +484,25 @@ class FixedKakaoBrowserRuntime:
                     values["ActiveState"] != "inactive"
                     or values["MainPID"] != "0"
                     or values["ControlPID"] != "0"
+                    or values["Job"] != ""
                     or values["ExecMainStartTimestampMonotonic"] != "0"
                     or _has_history()
                 ):
                     raise KakaoBrowserRuntimeError("KAKAO_BROWSER_PRIOR_RUN_REQUIRED")
                 _cgroup_closed()
             else:
-                _stopped(prior, values)
+                if isinstance(prior, ClosedBrowserDispatch):
+                    closed = self._dispatch_observation(
+                        prior.fence,
+                        command_sha256=prior.command_sha256,
+                        dispatched_boot_id=prior.dispatched_boot_id,
+                        values=values,
+                    )
+                    if not isinstance(closed, ClosedBrowserDispatch):
+                        raise KakaoBrowserRuntimeError("KAKAO_BROWSER_STOP_UNCONFIRMED")
+                    prior = closed
+                else:
+                    _stopped(prior, values)
                 if (
                     fence.profile_id != prior.fence.profile_id
                     or fence.browser_run_id == prior.fence.browser_run_id

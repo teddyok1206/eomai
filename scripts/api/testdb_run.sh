@@ -135,6 +135,7 @@ if [[ "${action}" == "kakao-tests" ]]; then
   "${PYTHON}" -m alembic upgrade head
   "${PYTHON}" -m pytest -q tests/integration/test_kakao_archive_storage.py \
     tests/integration/test_kakao_room_storage.py \
+    tests/integration/test_kakao_manual_storage.py \
     tests/integration/test_kakao_pdf_publication.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
   exit 0

@@ -166,6 +166,14 @@ from eom_web_gui.kakao_archive_contracts import (
     BindingUpdatePolicy,
     SourceBinding,
 )
+from eom_web_gui.kakao_manual_contracts import (
+    ManualCommand,
+    ManualEnd,
+    ManualMutation,
+    ManualRenew,
+    ManualSession,
+    ManualStart,
+)
 from eom_web_gui.kakao_room_contracts import Room, RoomCommand, RoomMap, RoomMutation, RoomPage
 from eom_web_gui.kakao_student_contracts import (
     Student,
@@ -500,6 +508,21 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def kakao_manual_start(
+        self, session: WebSession, value: ManualStart, idempotency_key: str
+    ) -> ManualMutation: ...
+
+    async def kakao_manual_read(self, session: WebSession, lease_id: str) -> ManualSession: ...
+
+    async def kakao_manual_command(
+        self,
+        session: WebSession,
+        lease_id: str,
+        value: ManualCommand,
+        idempotency_key: str,
+        if_match: str | None,
+    ) -> ManualMutation: ...
+
     async def kakao_room_list(
         self,
         session: WebSession,
@@ -1360,6 +1383,77 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def kakao_manual_start(
+        self, session: WebSession, value: ManualStart, idempotency_key: str
+    ) -> ManualMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/manual-sessions",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            result = ManualMutation.model_validate(self._data(response))
+            if (
+                result.session.source_binding_id != value.source_binding_id
+                or result.session.phase != "PREPARING"
+                or result.session.ready
+            ):
+                raise ValueError("different manual start")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_manual_read(self, session: WebSession, lease_id: str) -> ManualSession:
+        response = await self._authorized(
+            session, "GET", f"/api/v1/kakao-archive/manual-sessions/{quote(lease_id, safe='')}"
+        )
+        try:
+            result = ManualSession.model_validate(self._data(response))
+            if result.lease_id != lease_id:
+                raise ValueError("different manual lease")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_manual_command(
+        self,
+        session: WebSession,
+        lease_id: str,
+        value: ManualCommand,
+        idempotency_key: str,
+        if_match: str | None,
+    ) -> ManualMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/manual-sessions/{quote(lease_id, safe='')}/commands",
+            json=value.model_dump(mode="json"),
+            headers={
+                "Idempotency-Key": idempotency_key,
+                **({"If-Match": if_match} if if_match is not None else {}),
+            },
+        )
+        try:
+            result = ManualMutation.model_validate(self._data(response))
+            item = result.session
+            if item.lease_id != lease_id:
+                raise ValueError("different manual lease")
+            if isinstance(value, ManualRenew) and (
+                item.phase != "ACTIVE" or item.grant_revision != value.expected_grant_revision + 1
+            ):
+                raise ValueError("different renewal")
+            if isinstance(value, ManualEnd) and (
+                item.phase != "STOPPING"
+                or item.resource_version != value.expected_resource_version + 1
+                or item.ready
+            ):
+                raise ValueError("different ending")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def kakao_room_list(
         self,
         session: WebSession,

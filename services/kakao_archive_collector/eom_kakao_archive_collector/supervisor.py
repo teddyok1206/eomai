@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import grp
 import hashlib
 import json
 import os
@@ -23,7 +24,7 @@ REQUEST = Path("/var/lib/eom-kakao-runtime/browser/request.json")
 PROFILE = Path("/var/lib/eom-kakao/profile")
 LOCK = PROFILE.parent / "profile.lock"
 PRIVATE = Path("/run/eom-kakao-private")
-DRIVER = Path("/srv/eom/conda/envs/eom-kakao-browser/bin/eom-kakao-browser-driver")
+DRIVER = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/eom-kakao-browser-driver")
 DRIVER_ENV = Path("/etc/eom/kakao-browser.env")
 GRACE_SECONDS = 20.0
 FORCE_SECONDS = 2.0
@@ -71,11 +72,12 @@ def supervise(
     stopping: threading.Event,
     notify_ready: Callable[[], None],
     grace_seconds: float = GRACE_SECONDS,
+    lock_gid: int | None = None,
 ) -> int:
     """Internal OS adapter seam for subprocess tests, not a public command/argv API."""
     if not 0 <= grace_seconds <= GRACE_SECONDS:
         raise BrowserRuntimeError("KAKAO_BROWSER_GRACE_INVALID")
-    with profile_lock(lock_path, uid=uid, parent_uids=parent_uids):
+    with profile_lock(lock_path, uid=uid, parent_uids=parent_uids, gid=lock_gid):
         if stopping.is_set():
             raise BrowserRuntimeError("KAKAO_BROWSER_START_CANCELLED")
         child = launch()
@@ -167,6 +169,7 @@ def main() -> int:
             lock_path=LOCK,
             uid=os.geteuid(),
             parent_uids=frozenset({0}),
+            lock_gid=grp.getgrnam("eom-kakao-control").gr_gid,
             stopping=stopping,
             notify_ready=lambda: _notify(digest),
         )

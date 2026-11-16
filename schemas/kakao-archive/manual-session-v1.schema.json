@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-session-v1/1.0",
+  "title": "Owner-scoped manual login intent and lifecycle; no channel verification authority",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Start"
+    },
+    {
+      "$ref": "#/$defs/Renew"
+    },
+    {
+      "$ref": "#/$defs/End"
+    },
+    {
+      "$ref": "#/$defs/Session"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    }
+  ],
+  "$defs": {
+    "BindingId": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "LeaseId": {
+      "type": "string",
+      "pattern": "^kakaoremotelease_[0-9a-f]{32}$"
+    },
+    "ProfileId": {
+      "type": "string",
+      "pattern": "^kakaoprofile_[0-9a-f]{32}$"
+    },
+    "Start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-start/1.0"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/BindingId"
+        }
+      }
+    },
+    "Renew": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "expected_grant_revision"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-command/1.0"
+        },
+        "action": {
+          "const": "RENEW"
+        },
+        "expected_grant_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "End": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "expected_resource_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-command/1.0"
+        },
+        "action": {
+          "const": "END"
+        },
+        "expected_resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "Session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "source_binding_id",
+        "phase",
+        "resource_version",
+        "grant_revision",
+        "created_at",
+        "expires_at",
+        "absolute_expires_at",
+        "ready",
+        "last_error",
+        "ended_reason",
+        "closed_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-session/1.0"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/LeaseId"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/BindingId"
+        },
+        "phase": {
+          "enum": [
+            "PREPARING",
+            "ACTIVE",
+            "STOPPING",
+            "ENDED",
+            "ERROR"
+          ]
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "grant_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "absolute_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "START_FAILED",
+                "RUNTIME_LOST",
+                "GATEWAY_START_FAILED",
+                "STOP_UNCONFIRMED",
+                "OWNER_UNAVAILABLE",
+                "REBOOT_UNCLEAN"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ended_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "USER_ENDED",
+                "EXPIRED",
+                "SESSION_REVOKED",
+                "SOURCE_REVOKED",
+                "RUNTIME_FAILED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "replayed"
+      ],
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/Session"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

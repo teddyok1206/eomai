@@ -50,8 +50,45 @@ def fence(mode="AUTO", epoch=1, run="1"):
 
 def lock_file(root):
     path = root / "profile.lock"
-    path.touch(mode=0o600)
+    path.touch(mode=0o640)
+    path.chmod(0o640)
     return path
+
+
+def test_owner_readonly_fd_can_hold_exclusive_lock_without_write_permission(safe_dir):
+    lock = lock_file(safe_dir)
+    program = """
+import errno,fcntl,os,sys,time
+fd=os.open(sys.argv[1],os.O_RDONLY|os.O_NOFOLLOW)
+assert fcntl.fcntl(fd,fcntl.F_GETFL)&os.O_ACCMODE==os.O_RDONLY
+fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+try:
+    os.write(fd,b'forbidden')
+except OSError as error:
+    assert error.errno==errno.EBADF
+else:raise AssertionError('readonly fd wrote')
+print('READ_ONLY_HELD',flush=True)
+time.sleep(30)
+"""
+    child = subprocess.Popen(
+        [sys.executable, "-c", program, str(lock)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout.readline().strip() == "READ_ONLY_HELD"
+        with (
+            pytest.raises(profile.BrowserRuntimeError, match="PROFILE_BUSY"),
+            profile.profile_lock(lock, uid=OWNER, parent_uids=ALLOWED, gid=os.getgid()),
+        ):
+            pytest.fail("read-only owner lock did not exclude browser")
+    finally:
+        child.terminate()
+        child.wait(timeout=5)
+    assert lock.read_bytes() == b""
+    with profile.profile_lock(lock, uid=OWNER, parent_uids=ALLOWED, gid=os.getgid()):
+        pass
 
 
 def test_actual_profile_flock_excludes_second_process_and_releases_on_exit(safe_dir):
@@ -95,7 +132,7 @@ def test_profile_lock_rejects_unsafe_installed_file_without_replacing(safe_dir, 
     elif bad == "hardlink":
         os.link(lock, safe_dir / "second")
     elif bad == "public":
-        lock.chmod(0o640)
+        lock.chmod(0o644)
     elif bad == "content":
         lock.write_text("untrusted")
     elif bad == "fifo":
@@ -383,6 +420,7 @@ def test_fixed_start_requires_prior_exact_stop_and_fresh_current_claim(gate, mon
     [
         {"MainPID": "22"},
         {"ControlPID": "22"},
+        {"Job": "1472"},
         {"ActiveState": "active"},
         {"InvocationID": "d" * 32},
         {"ExecMainPID": "22"},
@@ -457,6 +495,145 @@ def test_reboot_requires_reconcile_not_stale_pid_acceptance(gate, monkeypatch):
     monkeypatch.setattr(runtime, "_show", lambda: inactive())
     with pytest.raises(runtime.KakaoBrowserRuntimeError, match="RUN_MISMATCH"):
         gate.observe_stopped(handle())
+
+
+def test_unconfirmed_dispatch_recovers_exact_running_handle_without_launch(gate, monkeypatch):
+    monkeypatch.setattr(runtime, "_show", lambda: observed())
+    run = Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    result = gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    assert result == handle()
+    assert gate.boot_identity() == BOOT
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize("reboot", [False, True])
+def test_pre_ready_failure_and_reboot_are_closed_not_successful(gate, monkeypatch, reboot):
+    monkeypatch.setattr(
+        runtime,
+        "_show",
+        lambda: inactive(StatusText="", Result="exit-code", ExecMainStatus="78"),
+    )
+    if reboot:
+        monkeypatch.setattr(runtime, "_boot_id", lambda: "abcdefab-1234-1234-1234-123456789abc")
+    run, stage = Mock(), Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    monkeypatch.setattr(runtime, "_stage", stage)
+    result = gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    assert isinstance(result, runtime.ClosedBrowserDispatch)
+    assert result.reason == ("REBOOT_UNCLEAN" if reboot else "START_NOT_CONFIRMED")
+    assert result.unit_result == "exit-code" and result.main_exit_status == 78
+    assert result.dispatched_boot_id == BOOT and result.cgroup_state == "EMPTY"
+    stage.assert_not_called()
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"MainPID": "44"},
+        {"ControlPID": "44"},
+        {"Job": "1472"},
+        {"ActiveState": "activating", "SubState": "start"},
+        {"ControlGroup": "/system.slice/foreign.service"},
+        {"InvocationID": "invalid"},
+        {"NeedDaemonReload": "yes"},
+        {"FragmentPath": "/tmp/untrusted.service"},
+    ],
+)
+def test_pending_dispatch_never_turns_unknown_or_live_process_into_closed(gate, monkeypatch, bad):
+    monkeypatch.setattr(runtime, "_show", lambda: {**inactive(StatusText=""), **bad})
+    run = Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    with pytest.raises(runtime.KakaoBrowserRuntimeError):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    run.assert_not_called()
+
+
+def test_pending_dispatch_requires_matching_input_hash_and_empty_cgroup(gate, monkeypatch):
+    monkeypatch.setattr(runtime, "_show", lambda: inactive(StatusText=""))
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="FENCE_MISMATCH"):
+        gate.observe_dispatch(fence(), command_sha256="sha256:" + "0" * 64, dispatched_boot_id=BOOT)
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="FENCE_MISMATCH"):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id="invalid")
+    monkeypatch.setattr(
+        runtime,
+        "_cgroup_closed",
+        Mock(side_effect=runtime.KakaoBrowserRuntimeError("KAKAO_BROWSER_CGROUP_NOT_CLOSED")),
+    )
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="CGROUP_NOT_CLOSED"):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+
+
+def test_pre_ready_closure_allows_only_fresh_claim_and_reobserved_successor(gate, monkeypatch):
+    monkeypatch.setattr(runtime, "_show", lambda: inactive(StatusText=""))
+    prior = gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    assert isinstance(prior, runtime.ClosedBrowserDispatch)
+    start = Mock(return_value=subprocess.CompletedProcess([], 0))
+    monkeypatch.setattr(runtime.subprocess, "run", start)
+    monkeypatch.setattr(
+        runtime, "_show", Mock(side_effect=[inactive(StatusText=""), new_observation()])
+    )
+    stage = Mock(return_value=DIGEST)
+    monkeypatch.setattr(runtime, "_stage", stage)
+    current = Mock()
+    next_fence = fence("MANUAL", 2, "2")
+    assert gate.start(next_fence, prior=prior, assert_current=current).fence == next_fence
+    current.assert_called_once_with(next_fence)
+    stage.assert_called_once_with(next_fence, first=False)
+    assert start.call_count == 1
+    assert prior.reason == "START_NOT_CONFIRMED"
+    # A past closure observation never substitutes for a fresh physical check.
+    monkeypatch.setattr(runtime, "_show", lambda: observed())
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="STOP_UNCONFIRMED"):
+        gate.start(next_fence, prior=prior, assert_current=Mock())
+    assert start.call_count == 1
+
+
+def test_reboot_cannot_adopt_another_running_invocation(gate, monkeypatch):
+    monkeypatch.setattr(runtime, "_show", lambda: observed())
+    monkeypatch.setattr(runtime, "_boot_id", lambda: "abcdefab-1234-1234-1234-123456789abc")
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="RUN_MISMATCH"):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+
+
+@pytest.mark.parametrize("history", [False, True])
+def test_idle_inventory_reports_history_without_authorizing_or_repairing(
+    gate, monkeypatch, history
+):
+    monkeypatch.setattr(
+        runtime,
+        "_show",
+        lambda: inactive(
+            ExecMainPID="0", ExecMainStartTimestampMonotonic="0", InvocationID="", StatusText=""
+        ),
+    )
+    monkeypatch.setattr(runtime, "_has_history", lambda: history)
+    run, stage = Mock(), Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    monkeypatch.setattr(runtime, "_stage", stage)
+    result = gate.observe_idle()
+    assert result.unit == runtime.UNIT and result.boot_id == BOOT
+    assert result.never_dispatched is (not history) and result.cgroup_state == "EMPTY"
+    run.assert_not_called()
+    stage.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"Job": "9"},
+        {"MainPID": "9"},
+        {"ControlPID": "9"},
+        {"ActiveState": "failed", "SubState": "failed"},
+        {"ActiveState": "active", "SubState": "running"},
+        {"ControlGroup": "/other"},
+    ],
+)
+def test_idle_inventory_needs_actual_quiescence(gate, monkeypatch, change):
+    monkeypatch.setattr(runtime, "_show", lambda: {**inactive(), **change})
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="IDLE_UNCONFIRMED"):
+        gate.observe_idle()
 
 
 @pytest.mark.parametrize("case", ["missing", "duplicate", "unknown", "bad-pid", "huge"])
@@ -607,6 +784,34 @@ def test_first_use_cannot_ignore_existing_durable_history(gate, monkeypatch):
     with pytest.raises(runtime.KakaoBrowserRuntimeError, match="PRIOR_RUN_REQUIRED"):
         gate.start(fence(), prior=None, assert_current=Mock())
     run.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["first-start", "closed", "running", "prior-start"])
+def test_scheduled_systemd_job_blocks_adoption_and_replacement(gate, monkeypatch, operation):
+    # A start waiting for network-online may have no PID/cgroup yet. It still owns
+    # the staged input; replacing that input would let the old job run a new fence.
+    monkeypatch.setattr(runtime, "_show", lambda: inactive(StatusText=""))
+    prior = gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    pending = (
+        observed(Job="1472")
+        if operation == "running"
+        else inactive(Job="1472", ExecMainStartTimestampMonotonic="0")
+    )
+    monkeypatch.setattr(runtime, "_show", lambda: pending)
+    run, stage = Mock(), Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    monkeypatch.setattr(runtime, "_stage", stage)
+    with pytest.raises(runtime.KakaoBrowserRuntimeError):
+        if operation == "first-start":
+            gate.start(fence(), prior=None, assert_current=Mock())
+        elif operation == "closed":
+            gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+        elif operation == "running":
+            gate.observe_run(fence())
+        else:
+            gate.start(fence("MANUAL", 2, "2"), prior=prior, assert_current=Mock())
+    run.assert_not_called()
+    stage.assert_not_called()
 
 
 def test_revoked_current_authority_prevents_staging_or_start(gate, monkeypatch):

@@ -11,6 +11,9 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "kakao_profile_runtime",
+    "kakao_manual_sessions",
+    "kakao_remote_commands",
     "kakao_rooms",
     "kakao_room_mapping_revisions",
     "kakao_room_admissions",
@@ -169,6 +172,9 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_profile_runtime",
+    "kakao_manual_sessions",
+    "kakao_remote_commands",
     "kakao_rooms",
     "kakao_room_mapping_revisions",
     "kakao_room_admissions",
@@ -341,6 +347,30 @@ TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
 
 # Mutable room pointer only; session reads exclude tokens and credential material.
 COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    (
+        "UPDATE",
+        "kakao_profile_runtime",
+        ("mode", "fence_epoch", "gateway_epoch", "resource_version", "current_lease_id"),
+    ),
+    (
+        "UPDATE",
+        "kakao_manual_sessions",
+        (
+            "phase",
+            "resource_version",
+            "grant_revision",
+            "authorized_at",
+            "expires_at",
+            "last_error",
+            "ended_reason",
+            "closed_at",
+            "browser_invocation_id",
+            "browser_pid",
+            "browser_monotonic_us",
+            "browser_observed_at",
+            "gateway_invocation_id",
+        ),
+    ),
     ("UPDATE", "kakao_rooms", ("current_mapping_revision_id", "resource_version")),
     (
         "SELECT",

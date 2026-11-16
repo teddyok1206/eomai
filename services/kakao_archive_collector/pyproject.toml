@@ -10,8 +10,14 @@ requires-python = ">=3.12,<3.13"
 # Only staged input validation. Browser dependencies belong to the separately pinned driver.
 dependencies = ["eom-kakao-archive-contracts==0.1.0"]
 
+[project.optional-dependencies]
+# Official publisher release checked 2026-11-16. Install only in the dedicated
+# browser Conda runtime with its matching Chromium; never in the API/PDF runtime.
+manual-browser = ["playwright==1.65.2"]
+
 [project.scripts]
 eom-kakao-browser-supervisor = "eom_kakao_archive_collector.supervisor:main"
+eom-kakao-browser-driver = "eom_kakao_archive_collector.manual_driver:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,0 +1,14 @@
+// Catalog alone manages these fixed Kakao units; no restart/enable/property/transient grant.
+polkit.addRule(function(action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units"
+        || subject.user !== "eom-catalog-manager"
+        || !/^(start|stop)$/.test(action.lookup("verb") || "")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    const unit = action.lookup("unit") || "";
+    if (unit === "eom-kakao-browser.service" || unit === "eom-kakao-remote.service"
+        || /^eom-kakao-pdf@kakaoattempt_[0-9a-f]{32}\.service$/.test(unit)) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

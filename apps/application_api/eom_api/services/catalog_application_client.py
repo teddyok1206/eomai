@@ -206,6 +206,23 @@ from eom_catalog_contracts.kakao_archive_rpc import (
     parse_kakao_binding_reply,
     parse_kakao_binding_request,
 )
+from eom_catalog_contracts.kakao_manual import (
+    KakaoManualEnd,
+    KakaoManualMutation,
+    KakaoManualRenew,
+    KakaoManualSession,
+    KakaoManualStart,
+)
+from eom_catalog_contracts.kakao_manual_rpc import (
+    CommandKakaoManualRequest,
+    KakaoManualFailure,
+    KakaoManualRequest,
+    ReadKakaoManualRequest,
+    StartKakaoManualRequest,
+    check_kakao_manual_reply,
+    parse_kakao_manual_reply,
+    parse_kakao_manual_request,
+)
 from eom_catalog_contracts.kakao_room_rpc import (
     CommandKakaoRoomRequest,
     KakaoRoomFailure,
@@ -569,6 +586,57 @@ class CatalogApplicationClient:
             ) from error
         if isinstance(reply, KakaoRoomFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private room request failed")
+        return reply.result
+
+    def start_kakao_manual(
+        self, command: KakaoManualStart, *, actor: ActorContext, idempotency_key: str
+    ) -> KakaoManualMutation:
+        request = StartKakaoManualRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoManualMutation, self._request_kakao_manual(request))
+
+    def command_kakao_manual(
+        self,
+        lease_id: str,
+        command: KakaoManualRenew | KakaoManualEnd,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoManualMutation:
+        request = CommandKakaoManualRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "lease_id": lease_id,
+                "command": command,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return cast(KakaoManualMutation, self._request_kakao_manual(request))
+
+    def read_kakao_manual(self, lease_id: str, *, actor: ActorContext) -> KakaoManualSession:
+        request = ReadKakaoManualRequest.model_validate(
+            {**self._kakao_identity(actor), "lease_id": lease_id}
+        )
+        return cast(KakaoManualSession, self._request_kakao_manual(request))
+
+    def _request_kakao_manual(
+        self, request: KakaoManualRequest
+    ) -> KakaoManualMutation | KakaoManualSession:
+        try:
+            parsed = parse_kakao_manual_request(request.model_dump(mode="json"))
+            reply = parse_kakao_manual_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"), timeout_seconds=RESPONSE_TIMEOUT_SECONDS
+                )
+            )
+            check_kakao_manual_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private manual session invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoManualFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private manual session failed")
         return reply.result
 
     def content_workbook(

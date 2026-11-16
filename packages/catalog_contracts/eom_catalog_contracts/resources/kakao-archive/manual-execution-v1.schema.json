@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-execution-v1/1.0",
+  "title": "Internal owner observations for manual runtime; not browser inputs",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FreshProfile"
+    },
+    {
+      "$ref": "#/$defs/Runtime"
+    },
+    {
+      "$ref": "#/$defs/Closure"
+    },
+    {
+      "$ref": "#/$defs/Intent"
+    }
+  ],
+  "$defs": {
+    "FreshProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile_id",
+        "observed_at",
+        "never_used",
+        "boot_id",
+        "profile_empty",
+        "browser_stopped",
+        "gateway_stopped",
+        "profile_lock_released"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-fresh-profile/1.0"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "never_used": {
+          "type": "boolean"
+        },
+        "boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+        },
+        "profile_empty": {
+          "type": "boolean"
+        },
+        "browser_stopped": {
+          "type": "boolean"
+        },
+        "gateway_stopped": {
+          "type": "boolean"
+        },
+        "profile_lock_released": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "profile_id",
+        "browser_run_id",
+        "command_sha256",
+        "fence_epoch",
+        "gateway_epoch",
+        "observed_at",
+        "boot_id",
+        "invocation_id",
+        "main_pid",
+        "started_monotonic_us",
+        "browser_running",
+        "profile_locked",
+        "gateway_running",
+        "gateway_invocation_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-runtime-observation/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$"
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"
+        },
+        "command_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+        },
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "main_pid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "started_monotonic_us": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854776000
+        },
+        "browser_running": {
+          "type": "boolean"
+        },
+        "profile_locked": {
+          "type": "boolean"
+        },
+        "gateway_running": {
+          "type": "boolean"
+        },
+        "gateway_invocation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "profile_id",
+        "browser_run_id",
+        "command_sha256",
+        "fence_epoch",
+        "gateway_epoch",
+        "observed_at",
+        "kind",
+        "dispatch_boot_id",
+        "observed_boot_id",
+        "browser_stopped",
+        "gateway_stopped",
+        "profile_lock_released"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-closure-observation/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$"
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"
+        },
+        "command_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "kind": {
+          "enum": [
+            "STOPPED",
+            "PRE_READY_FAILED",
+            "REBOOT_UNCLEAN"
+          ]
+        },
+        "dispatch_boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+        },
+        "observed_boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+        },
+        "browser_stopped": {
+          "type": "boolean"
+        },
+        "gateway_stopped": {
+          "type": "boolean"
+        },
+        "profile_lock_released": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "profile_id",
+        "browser_run_id",
+        "command_sha256",
+        "fence_epoch",
+        "gateway_epoch",
+        "source_binding_id",
+        "owner_operator_id",
+        "dispatch_boot_id",
+        "identity_session_id",
+        "phase",
+        "resource_version",
+        "grant_revision",
+        "created_at",
+        "authorized_at",
+        "expires_at",
+        "absolute_expires_at",
+        "browser"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-manual-intent/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$"
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"
+        },
+        "command_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "owner_operator_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "dispatch_boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+        },
+        "identity_session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "phase": {
+          "enum": [
+            "PREPARING",
+            "ACTIVE",
+            "STOPPING",
+            "ENDED",
+            "ERROR"
+          ]
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "grant_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "authorized_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "absolute_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "browser": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Runtime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

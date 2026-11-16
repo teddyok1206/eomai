@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-manual-response-v1/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "START_KAKAO_MANUAL"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/manual-session-v1/1.0#/$defs/Mutation"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "COMMAND_KAKAO_MANUAL"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/manual-session-v1/1.0#/$defs/Mutation"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_MANUAL"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/manual-session-v1/1.0#/$defs/Session"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "START_KAKAO_MANUAL",
+            "COMMAND_KAKAO_MANUAL",
+            "READ_KAKAO_MANUAL"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "enum": [
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "KAKAO_ARCHIVE_PERMISSION_DENIED",
+            "KAKAO_ARCHIVE_RESOURCE_NOT_FOUND",
+            "KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT",
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "KAKAO_ARCHIVE_BINDING_RETIRED",
+            "KAKAO_ARCHIVE_RESULT_INVALID",
+            "KAKAO_ARCHIVE_RESULT_TOO_LARGE",
+            "KAKAO_ARCHIVE_STORED_MANUAL_SESSION_INVALID",
+            "KAKAO_ARCHIVE_REMOTE_NOT_READY",
+            "KAKAO_ARCHIVE_REMOTE_PROFILE_UNAVAILABLE",
+            "KAKAO_ARCHIVE_REMOTE_PROFILE_UNASSIGNED",
+            "KAKAO_ARCHIVE_REMOTE_PROFILE_BUSY",
+            "KAKAO_ARCHIVE_REMOTE_OBSERVATION_STALE",
+            "KAKAO_ARCHIVE_REMOTE_OBSERVATION_MISMATCH",
+            "KAKAO_ARCHIVE_REMOTE_RUNTIME_UNAVAILABLE",
+            "KAKAO_ARCHIVE_REMOTE_FENCE_STALE",
+            "KAKAO_ARCHIVE_REMOTE_LEASE_EXPIRED",
+            "KAKAO_ARCHIVE_REMOTE_STOP_UNCONFIRMED",
+            "CATALOG_APPLICATION_UNAVAILABLE",
+            "CATALOG_APPLICATION_INTERNAL_ERROR"
+          ]
+        }
+      }
+    }
+  ]
+}

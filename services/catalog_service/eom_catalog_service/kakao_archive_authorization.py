@@ -46,14 +46,40 @@ def authorize_kakao_actor(
         or actor.session_id is None
     ):
         raise KakaoArchiveError(denied)
-    operator = session.get(OperatorRecord, actor.operator_id, populate_existing=True)
+    return authorize_kakao_identity_session(
+        session,
+        operator_id=actor.operator_id,
+        identity_session_id=actor.session_id,
+        permission=permission,
+        now=now,
+        admin_only=admin_only,
+    )
+
+
+def authorize_kakao_identity_session(
+    session: Session,
+    *,
+    operator_id: str,
+    identity_session_id: str,
+    permission: PermissionKey,
+    now: datetime,
+    admin_only: bool = False,
+) -> str:
+    """Current lookup for a previously accepted owner intent, not request authentication.
+
+    Application callers first use authorize_kakao_actor. Background callers may pass
+    only IDs pinned in their own accepted intent, never arbitrary browser/worker IDs.
+    No token, ActorSource or synthetic authenticated HTTP context is created here.
+    """
+    denied = "KAKAO_ARCHIVE_PERMISSION_DENIED"
+    operator = session.get(OperatorRecord, operator_id, populate_existing=True)
     api_session = session.execute(
         select(
             ApiSessionRecord.operator_id,
             ApiSessionRecord.revoked_at,
             ApiSessionRecord.absolute_expires_at,
             ApiSessionRecord.idle_expires_at,
-        ).where(ApiSessionRecord.api_session_id == actor.session_id)
+        ).where(ApiSessionRecord.api_session_id == identity_session_id)
     ).one_or_none()
     if (
         operator is None

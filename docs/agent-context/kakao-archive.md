@@ -71,7 +71,15 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 `kakao-rooms.js`는 확인된 방 조회와 학생 연결/해제를 같은 경계에서 수행한다. 연결 변경은
 방 version·mapping parent·학생 표시 revision을 함께 확인한다. hard reload는 확정된 DB
 상태를 다시 읽으며, 아직 응답이 확정되지 않은 변경 intent는 같은 화면 세션에서만 보존한다.
-학생 이름과 변경 이유의 길이는 브라우저에서도 schema와 같은 Unicode code point 기준이다.
+학생·채널 이름과 변경 이유의 길이는 브라우저에서도 schema와 같은 Unicode code point 기준이다.
+
+`kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
+허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은
+gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채널 검증/수집 성공으로 바꾸지
+않는다. 시작은 PREPARING 접수이며, 브라우저·gateway 실관측 뒤에만 ACTIVE가 된다.
+같은 명령은 원래 응답을 재사용하고 수명을 늘리지 않는다. OS 호출은 DB 잠금 밖에서 한다.
+현재 Identity session·ADMIN·remote 권한을 재확인하며 내부 lookup은 실제 접수된 owner/
+session pointer를 사용한다. HTTP/RPC의 클라이언트는 profile·fence·READY·TTL을 주장할 수 없다.
 
 ## 실제 브라우저 프로세스 경계
 
@@ -82,10 +90,19 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 boot, cgroup 비어 있음과 exit status로 판정한다. 같은 실행의 시작 응답이 사라졌으면
 다시 launch하지 않고 원래 run을 관측한다.
 
-이 단계는 OS adapter 소스와 local subprocess 검증이다. driver, 카카오 selector, 원격
-gateway·영속 lease와 실제 전용 UID/systemd 설치는 아직 없다. READY 이전 시작 실패의
-staged intent도 보존하며, 후속 owner reconciliation 없이 marker를 삭제하거나 처음 실행으로
-위장해 재시작하지 않는다. 설치/권한/실사 미완료를 수집 성공으로 표시하지 않는다.
+MANUAL driver는 별도 collector 환경에서 Playwright와 Xvnc를 실행한다. 원격 gateway의
+기존 lifetime은 PDF worker에서 `eom_kakao_archive_gateway/lifetime.py`로 이동했으며,
+고정 UDS→UDS 통로와 짧은 grant 감시를 담당한다. `kakao_gateway_runtime.py`는 실제 VNC
+준비와 exact lease/epoch 실행을 확인한다. 공용 `kakao_runtime_os.py`는 두 고정 unit의
+보호 파일·boot·systemd·cgroup 관측만 담당하며 scheduler/권한 규칙을 갖지 않는다.
+
+READY 이전 실패와 reboot는 원래 staged intent/hash를 보존한 채 관측한다. PID가 없어도
+systemd Job이 남아 있으면 종료 완료가 아니다. 정확한 실제 종료가 확인되기 전 입력을
+갈아끼우거나 marker를 지우지 않는다. 종료 관측은 성공/flush 증거나 신규 권한이 아니다.
+
+이 단계는 소스/local subprocess/임시 DB 검증이며, actual selector·Caddy와 원격 admission·
+전용 UID/systemd 설치·실제 카카오 로그인/수집은 별도 gate다. `scripts/kakao/install_runtime.py`
+역시 준비된 보호 runtime만 설치하는 경계이며, 코드 존재를 설치 완료로 해석하지 않는다.
 
 ## 먼저 볼 코드·검사
 
@@ -94,6 +111,14 @@ staged intent도 보존하며, 후속 owner reconciliation 없이 marker를 삭�
 - `services/catalog_service/eom_catalog_service/kakao_archive_intake.py`
 - `services/catalog_service/eom_catalog_service/kakao_archive_service.py`
 - `services/catalog_service/eom_catalog_service/kakao_student_service.py`
+- `services/catalog_service/eom_catalog_service/kakao_room_service.py`
+- `services/catalog_service/eom_catalog_service/kakao_manual_service.py`
+- `packages/catalog_contracts/eom_catalog_contracts/kakao_manual_rpc.py`
+- `apps/application_api/eom_api/routers/kakao_manual.py`
+- `services/orchestrator/eom_orchestrator/kakao_browser_runtime.py`
+- `services/orchestrator/eom_orchestrator/kakao_gateway_runtime.py`
+- `services/kakao_archive_collector/eom_kakao_archive_collector/manual_driver.py`
+- `services/kakao_archive_gateway/eom_kakao_archive_gateway/supervisor.py`
 - `packages/catalog_contracts/eom_catalog_contracts/kakao_students.py`
 - `services/catalog_service/eom_catalog_service/kakao_archive_authorization.py`
 - `packages/catalog_contracts/eom_catalog_contracts/kakao_archive_rpc.py`

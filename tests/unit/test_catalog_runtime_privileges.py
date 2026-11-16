@@ -35,7 +35,7 @@ def test_kakao_binding_grants_are_append_only_and_session_read_is_column_bounded
     assert "api_sessions" not in READ_TABLES
     assert "api_sessions" not in INSERT_TABLES
     assert "api_sessions" not in UPDATE_TABLES
-    assert COLUMN_PRIVILEGES == (
+    assert tuple(row for row in COLUMN_PRIVILEGES if row[1] in {"kakao_rooms", "api_sessions"}) == (
         ("UPDATE", "kakao_rooms", ("current_mapping_revision_id", "resource_version")),
         (
             "SELECT",
@@ -49,6 +49,36 @@ def test_kakao_binding_grants_are_append_only_and_session_read_is_column_bounded
             ),
         ),
     )
+
+
+def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity() -> None:
+    tables = {"kakao_profile_runtime", "kakao_manual_sessions", "kakao_remote_commands"}
+    assert tables <= set(READ_TABLES) & set(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    assert grants["UPDATE", "kakao_profile_runtime"] == {
+        "mode",
+        "fence_epoch",
+        "gateway_epoch",
+        "resource_version",
+        "current_lease_id",
+    }
+    assert grants["UPDATE", "kakao_manual_sessions"] == {
+        "phase",
+        "resource_version",
+        "grant_revision",
+        "authorized_at",
+        "expires_at",
+        "last_error",
+        "ended_reason",
+        "closed_at",
+        "browser_invocation_id",
+        "browser_pid",
+        "browser_monotonic_us",
+        "browser_observed_at",
+        "gateway_invocation_id",
+    }
+    assert ("UPDATE", "kakao_remote_commands") not in grants
 
 
 def test_native_index_owner_privileges_are_bounded_and_append_only():

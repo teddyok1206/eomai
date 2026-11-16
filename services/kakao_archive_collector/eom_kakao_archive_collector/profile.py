@@ -36,7 +36,14 @@ def protected_directory(path: Path, *, allowed_uids: frozenset[int]) -> Iterator
         os.close(fd)
 
 
-def read_protected(path: Path, *, uid: int, limit: int, allowed_uids: frozenset[int]) -> bytes:
+def read_protected(
+    path: Path,
+    *,
+    uid: int,
+    limit: int,
+    allowed_uids: frozenset[int],
+    required_mode: int | None = None,
+) -> bytes:
     with protected_directory(path.parent, allowed_uids=allowed_uids) as directory:
         fd = os.open(
             path.name,
@@ -50,6 +57,7 @@ def read_protected(path: Path, *, uid: int, limit: int, allowed_uids: frozenset[
             or before.st_nlink != 1
             or before.st_uid != uid
             or before.st_mode & 0o022
+            or (required_mode is not None and stat.S_IMODE(before.st_mode) != required_mode)
             or not 0 < before.st_size <= limit
         ):
             raise BrowserRuntimeError("KAKAO_BROWSER_MEMBER_UNSAFE")
@@ -82,7 +90,9 @@ def read_protected(path: Path, *, uid: int, limit: int, allowed_uids: frozenset[
 
 
 @contextmanager
-def profile_lock(path: Path, *, uid: int, parent_uids: frozenset[int]) -> Iterator[None]:
+def profile_lock(
+    path: Path, *, uid: int, parent_uids: frozenset[int], gid: int | None = None
+) -> Iterator[None]:
     """Never create, replace or unlink the installed lock, including on contention."""
     with protected_directory(path.parent, allowed_uids=parent_uids) as directory:
         fd = os.open(
@@ -96,7 +106,8 @@ def profile_lock(path: Path, *, uid: int, parent_uids: frozenset[int]) -> Iterat
                 not stat.S_ISREG(info.st_mode)
                 or info.st_uid != uid
                 or info.st_nlink != 1
-                or stat.S_IMODE(info.st_mode) != 0o600
+                or stat.S_IMODE(info.st_mode) != 0o640
+                or (gid is not None and info.st_gid != gid)
                 or info.st_size != 0
             ):
                 raise BrowserRuntimeError("KAKAO_BROWSER_LOCK_UNSAFE")

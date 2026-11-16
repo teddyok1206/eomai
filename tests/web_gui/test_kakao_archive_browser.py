@@ -16,6 +16,7 @@ import pytest
         ("kakao_archive_bootstrap_browser_checks.mjs", "KAKAO_ARCHIVE_BOOTSTRAP_BROWSER=PASS"),
         ("kakao_students_browser_checks.mjs", "KAKAO_STUDENTS_BROWSER=PASS"),
         ("kakao_rooms_browser_checks.mjs", "KAKAO_ROOMS_BROWSER=PASS"),
+        ("kakao_manual_browser_checks.mjs", "KAKAO_MANUAL_BROWSER=PASS"),
     ],
 )
 def test_kakao_archive_browser_owner_replay_pins_and_safe_dom(script: str, marker: str) -> None:

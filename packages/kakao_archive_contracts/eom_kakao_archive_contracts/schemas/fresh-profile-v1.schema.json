@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/fresh-profile-v1/1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "profile_device", "profile_inode", "profile_mtime_ns", "profile_ctime_ns", "install_manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "kakao-profile-fresh-install/1.0"},
+    "profile_id": {"type": "string", "maxLength": 45, "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+    "profile_device": {"type": "integer", "minimum": 0},
+    "profile_inode": {"type": "integer", "minimum": 1},
+    "profile_mtime_ns": {"type": "integer", "minimum": 0},
+    "profile_ctime_ns": {"type": "integer", "minimum": 0},
+    "install_manifest_sha256": {"type": "string", "maxLength": 71, "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

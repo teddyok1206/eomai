@@ -7,7 +7,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const policy = {include_images:true,interval_minutes:1440,question_rule_version:"turn_v1",source_timezone:"unknown"};
 const policyHash = "sha256:" + createHash("sha256").update(JSON.stringify(policy)).digest("hex");
 const app = `
@@ -107,6 +107,19 @@ try {
   assert.notEqual(mutations[2].headers['Idempotency-Key'],mutations[3].headers['Idempotency-Key']);
   assert.deepEqual(mutations[3].body,mutations[4].body);
   assert.equal(await page.getByRole('button',{name:'연결 준비 해제',exact:true}).count(),0);
+
+  // Schema maxLength counts Unicode code points, not UTF-16 units or graphemes.
+  const unicodeName='😀'.repeat(128);
+  await name.fill(unicodeName);
+  assert.equal(await name.inputValue(),unicodeName);
+  await page.getByRole('button',{name:'연결 준비 저장',exact:true}).click();
+  await page.waitForFunction(expected=>fixture.binding.display_name===expected,unicodeName);
+  await page.waitForFunction(()=>document.querySelector('[role="status"]').textContent.includes('연결 준비만 저장'));
+  const beforeInvalid=await page.evaluate(()=>fixture.calls.filter(call=>call.method==='POST').length);
+  await name.fill('👩‍🔬'.repeat(43));
+  await page.getByRole('button',{name:'연결 준비 저장',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[role="status"]').textContent==='채널 이름을 확인해 주세요.');
+  assert.equal(await page.evaluate(()=>fixture.calls.filter(call=>call.method==='POST').length),beforeInvalid);
 
   await page.setViewportSize({width:375,height:900});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'bootstrap overflows mobile');

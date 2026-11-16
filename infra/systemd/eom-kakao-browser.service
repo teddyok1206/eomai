@@ -13,7 +13,7 @@ RuntimeDirectoryMode=0700
 # Preserve failed-run request snapshots until explicit owner cleanup/reboot.
 RuntimeDirectoryPreserve=yes
 WorkingDirectory=/run/eom-kakao-private
-ExecStart=/srv/eom/conda/envs/eom-kakao-browser/bin/python -I -B -m eom_kakao_archive_collector.supervisor
+ExecStart=/opt/eom/conda/envs/eom-kakao-browser/bin/python -I -B -m eom_kakao_archive_collector.supervisor
 Restart=no
 KillMode=mixed
 TimeoutStartSec=15
