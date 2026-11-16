@@ -256,6 +256,7 @@ def test_fixed_launch_has_no_secret_value_and_no_tcp_listener(monkeypatch):
     assert args[args.index("-rfbport") + 1] == "-1"
     assert args[args.index("-nolisten") + 1] == "tcp"
     assert args[args.index("-rfbunixmode") + 1] == "0660"
+    assert args[args.index("-extension") + 1] == "GLX"
     assert "None" not in args and "--no-sandbox" not in args and "-ac" not in args
     assert "never-inherit" not in repr(run.call_args)
     assert run.call_args.kwargs["stdout"] == run.call_args.kwargs["stderr"] == subprocess.DEVNULL
@@ -416,9 +417,12 @@ def test_socket_readiness_requires_live_owned_unix_endpoint(local, monkeypatch):
     path.chmod(0o660)
     monkeypatch.setattr(setup, "VNC_SOCKET", path)
     monkeypatch.setattr(driver.grp, "getgrnam", lambda name: SimpleNamespace(gr_gid=os.getgid()))
+    display = AsyncMock(side_effect=[False, True])
+    monkeypatch.setattr(driver, "_display_ready", display)
     child = Mock(poll=lambda: None)
     try:
         asyncio.run(driver._wait_xvnc(child, asyncio.Event()))
+        assert display.await_count == 2
         connection, _ = server.accept()
         connection.close()
         path.chmod(0o666)
@@ -426,6 +430,74 @@ def test_socket_readiness_requires_live_owned_unix_endpoint(local, monkeypatch):
             asyncio.run(driver._wait_xvnc(child, asyncio.Event()))
     finally:
         server.close()
+
+
+@pytest.mark.parametrize("status", [0, 1])
+def test_display_readiness_checks_real_auth_with_no_output_or_ambient_env(monkeypatch, status):
+    child = SimpleNamespace(returncode=status, wait=AsyncMock(return_value=status))
+    create = AsyncMock(return_value=child)
+    monkeypatch.setattr(driver.asyncio, "create_subprocess_exec", create)
+    monkeypatch.setenv("TEST_PRIVATE_TOKEN", "never-inherit")
+    assert asyncio.run(driver._display_ready()) is (status == 0)
+    assert create.call_args.args == (str(setup.XDPYINFO),)
+    assert create.call_args.kwargs == {
+        "stdin": asyncio.subprocess.DEVNULL,
+        "stdout": asyncio.subprocess.DEVNULL,
+        "stderr": asyncio.subprocess.DEVNULL,
+        "env": setup.child_environment(),
+    }
+
+
+def test_display_probe_cancel_kills_and_reaps_before_propagating(monkeypatch):
+    child = SimpleNamespace(
+        returncode=None,
+        wait=AsyncMock(side_effect=[asyncio.CancelledError(), 0]),
+        kill=Mock(),
+    )
+    monkeypatch.setattr(driver.asyncio, "create_subprocess_exec", AsyncMock(return_value=child))
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(driver._display_ready())
+    child.kill.assert_called_once()
+    assert child.wait.await_count == 2
+
+
+def test_x11_directory_prepared_once_inside_private_tmp(local, monkeypatch):
+    path = local / ".X11-unix"
+    monkeypatch.setattr(setup, "X11_DIRECTORY", path)
+    monkeypatch.setattr(setup, "X_SOCKET", path / "X94")
+    supervised = Mock()
+    monkeypatch.setattr(setup, "require_supervisor", supervised)
+    setup.prepare_x11_directory()
+    assert path.stat().st_mode & 0o7777 == 0o1777
+    inode = path.stat().st_ino
+    setup.prepare_x11_directory()
+    assert path.stat().st_ino == inode
+    assert supervised.call_count == 2
+
+
+def test_x11_directory_never_follows_existing_symlink_or_chmods_target(local, monkeypatch):
+    path = local / ".X11-unix"
+    target = local / "preserve"
+    target.mkdir(mode=0o700)
+    path.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(setup, "X11_DIRECTORY", path)
+    monkeypatch.setattr(setup, "X_SOCKET", path / "X94")
+    monkeypatch.setattr(setup, "require_supervisor", Mock())
+    with pytest.raises(OSError):
+        setup.prepare_x11_directory()
+    assert target.stat().st_mode & 0o7777 == 0o700 and path.is_symlink()
+
+
+def test_x11_directory_requires_supervision_before_any_creation(local, monkeypatch):
+    path = local / ".X11-unix"
+    monkeypatch.setattr(setup, "X11_DIRECTORY", path)
+    monkeypatch.setattr(setup, "X_SOCKET", path / "X94")
+    monkeypatch.setattr(
+        setup, "require_supervisor", Mock(side_effect=BrowserRuntimeError("UNSUPERVISED"))
+    )
+    with pytest.raises(BrowserRuntimeError, match="UNSUPERVISED"):
+        setup.prepare_x11_directory()
+    assert not path.exists()
 
 
 def test_actual_driver_sigterm_closes_context_before_display(local):

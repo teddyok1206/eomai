@@ -26,12 +26,14 @@ PLAYWRIGHT_VERSION = "1.65.2"
 BROWSER_ROOT = Path("/opt/eom/kakao-browser") / f"playwright-{PLAYWRIGHT_VERSION}"
 PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 XVNC = Path("/usr/bin/Xtigervnc")
+XDPYINFO = Path("/usr/bin/xdpyinfo")
 RELEASE = Path("/etc/eom/kakao-browser-driver.env")
 XAUTHORITY = PRIVATE / "Xauthority"
 PASSWORD = PROFILE.parent / "vnc.passwd"
 VNC_SOCKET = Path("/run/eom-kakao-vnc/vnc.sock")
 DISPLAY = ":94"
-X_SOCKET = Path("/tmp/.X11-unix/X94")
+X11_DIRECTORY = Path("/tmp/.X11-unix")
+X_SOCKET = X11_DIRECTORY / "X94"
 X_LOCK = Path("/tmp/.X94-lock")
 CGROUP = "0::/system.slice/eom-kakao-browser.service"
 
@@ -160,6 +162,7 @@ def _authority_state(directory: int, name: str) -> os.stat_result | None:
 def prepare_xauthority() -> None:
     """Rotate local display authority only while the real supervisor owns the profile."""
     require_supervisor()
+    prepare_x11_directory()
     if XAUTHORITY.parent != PRIVATE or XAUTHORITY.name != "Xauthority":
         raise BrowserRuntimeError("KAKAO_BROWSER_FIXED_INPUT_REQUIRED")
     for endpoint in (VNC_SOCKET, X_SOCKET, X_LOCK):
@@ -228,6 +231,35 @@ def prepare_xauthority() -> None:
                     os.unlink(temporary, dir_fd=directory)
 
 
+def prepare_x11_directory() -> None:
+    """Xvnc cannot create its conventional socket directory as an unprivileged UID.
+
+    This runs only inside the fixed supervised PrivateTmp unit, not the host /tmp.
+    Never follow a pre-existing link or chmod a directory owned by another UID.
+    """
+    require_supervisor()
+    path = X_SOCKET.parent
+    if path != X11_DIRECTORY:
+        raise BrowserRuntimeError("KAKAO_BROWSER_FIXED_INPUT_REQUIRED")
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        created = False
+    else:
+        created = True
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid not in {0, os.geteuid()}:
+            raise BrowserRuntimeError("KAKAO_BROWSER_X11_DIRECTORY_UNSAFE")
+        if created:
+            os.fchmod(fd, 0o1777)
+        elif stat.S_IMODE(info.st_mode) != 0o1777:
+            raise BrowserRuntimeError("KAKAO_BROWSER_X11_DIRECTORY_UNSAFE")
+    finally:
+        os.close(fd)
+
+
 def validate_setup(request: Path, profile: Path) -> ManualSetup:
     browser = pwd.getpwnam("eom-kakao")
     uid = browser.pw_uid
@@ -278,6 +310,8 @@ def validate_setup(request: Path, profile: Path) -> ManualSetup:
     matched = re.fullmatch(pattern, config)
     if matched is None or hash_executable(XVNC) != matched.group(1):
         raise BrowserRuntimeError("KAKAO_BROWSER_DRIVER_RELEASE_MISMATCH")
+    # The preinstalled X11 utility confirms display authentication, not just an RFB inode.
+    hash_executable(XDPYINFO)
     return ManualSetup(fence, matched.group(1), matched.group(2))
 
 
@@ -320,4 +354,8 @@ def xvnc_argv() -> tuple[str, ...]:
         "VncAuth",
         "-PasswordFile",
         str(PASSWORD),
+        # This private desktop does not need GLX. In PrivateDevices on the GPU host,
+        # automatic NVIDIA EGL discovery segfaulted before X11 became usable.
+        "-extension",
+        "GLX",
     )

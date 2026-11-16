@@ -13,6 +13,8 @@ dependencies = ["eom-kakao-archive-contracts==0.1.0"]
 [project.optional-dependencies]
 # Official publisher release checked 2026-11-16. Install only in the dedicated
 # browser Conda runtime with its matching Chromium; never in the API/PDF runtime.
+# Host x11-utils (xdpyinfo) verifies authenticated X11 readiness. Reuse the existing
+# system utility; it is not a Python dependency, background service or GPU workload.
 manual-browser = ["playwright==1.65.2"]
 
 [project.scripts]

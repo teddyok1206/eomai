@@ -104,8 +104,32 @@ async def _wait_xvnc(child: subprocess.Popen[bytes], stopping: asyncio.Event) ->
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(0.25)
             connection.connect(str(setup.VNC_SOCKET))
-        return
+        # RFB listens before Xvnc finishes X11 initialization. Wait for an actual
+        # authenticated X display; otherwise a crashing display looks ready to Chromium.
+        if await _display_ready():
+            if child.poll() is not None:
+                raise BrowserRuntimeError("KAKAO_BROWSER_XVNC_EXITED")
+            return
+        await asyncio.sleep(0.05)
     raise BrowserRuntimeError("KAKAO_BROWSER_XVNC_NOT_READY")
+
+
+async def _display_ready() -> bool:
+    child = await asyncio.create_subprocess_exec(
+        str(setup.XDPYINFO),
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+        env=setup.child_environment(),
+    )
+    try:
+        await asyncio.wait_for(child.wait(), timeout=0.5)
+    except BaseException:
+        if child.returncode is None:
+            child.kill()
+        await child.wait()
+        raise
+    return child.returncode == 0
 
 
 async def _stop_xvnc(child: subprocess.Popen[bytes]) -> None:

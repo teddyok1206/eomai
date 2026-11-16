@@ -1,5 +1,26 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 실제 empty headed runtime에서 확인한 X11 시작 실패
+
+- endpoint cleanup `01e04fff`를 두 전용 role에 반영하고 stage/verify·Catalog 재기동을
+  완료했다. receipt는 `/var/lib/eom-kakao-endpoint-release-01e04fff/installed.json`이다.
+  API/Web/pure contracts·기존 GPU 환경은 변경하지 않았고 profile/인증/실패 이력은 보존했다.
+- 사용자에게 재시도를 요청하기 전에 실제 설치 Playwright/Xvnc를 같은 UID·PrivateTmp·
+  PrivateDevices·NoNewPrivileges로 빈 프로필에서 실행했다. 실제 profile은 mask하고
+  PrivateNetwork를 켰다. 초기2개 canary는 실패했으며 원래 기술 기록을 보존한다.
+- RFB가 listen한 직후 Xvnc가 host NVIDIA EGL/GLX 초기화에서 SIGSEGV로 종료되는 것을
+  synthetic-only stderr에서 확인했다. 사설 `/tmp/.X11-unix` 부재도 함께 확인했다.
+  이는 계정 비밀번호나 카카오 권한 문제의 증거가 아니다.
+- 사설 X11 directory 준비와 Xvnc의 GLX 비활성화만 적용한 세 번째 격리 canary에서는
+  **authenticated X11 접속·headed Chromium 시작·정상 종료·소켓 정리 2회 PASS**다.
+  Chromium sandbox는 켜진 상태이며 `--no-sandbox`·GPU driver 수정·외부 접속은 없다.
+- source는 이 설정을 driver owner에 두고 RFB 뒤의 실제 X11 접속을 확인하도록 한다.
+  기존 host `x11-utils 7.7+6build2`의 `xdpyinfo`를 재사용하는 이유는 socket 존재와 정상
+  인증된 display 준비를 구별하기 위해서다. 새 Python 의존이나 상시 daemon은 없다.
+  짧은 probe의 stdout/stderr는 버리고 취소 시 kill/reap한다.
+- 위 canary는 아직 새 source wheel의 설치 완료나 실제 카카오 로그인 PASS가 아니다.
+  후속 installed wheel로 override 없는 같은 canary를 확인한 뒤 사용자에게 재시도를 요청한다.
+
 ## 2026-11-16 MANUAL 반복 시작·종료 경계 — 소스 후속
 
 실제 첫 Chromium 시작의 root-owned HOME에서는 Crashpad `--database is required`와

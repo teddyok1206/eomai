@@ -163,6 +163,12 @@ systemd `ExecStopPost`에서 정리한다. runtime directory와 request 감사�
 한다. 살아 있는 endpoint·잘못된 종류·변경된 inode는 거부하며 profile/인증/DB는 수정하지
 않는다. 정상/실패 종료 뒤 재시작은 이 lifecycle 경계에서 검증한다.
 
+headed MANUAL은 전용 PrivateTmp 안에 X11 socket directory를 준비한다. Xvnc의 불필요한
+GLX만 끄고 Chromium sandbox는 유지한다. RFB socket만 열린 것을 display 준비로 보지 않고
+기존 host `x11-utils`의 고정 `xdpyinfo`로 실제 Xauthority 접속이 성공한 뒤 Chromium을
+띄운다. probe 출력은 버리며 짧은 timeout/실제 child 종료를 확인한다. GPU 추론/임베딩이나
+호스트 그래픽 driver 설정은 변경하지 않는다.
+
 `kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
 허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은
 gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채널 검증/수집 성공으로 바꾸지
