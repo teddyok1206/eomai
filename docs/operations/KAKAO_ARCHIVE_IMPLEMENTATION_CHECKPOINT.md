@@ -10,6 +10,10 @@
   권한·policy·adapter·profile fence를 다시 검사해 command를 고정한다. 파일 I/O는 DB lock
   밖이다. Browser owner와 실제 두 번째 use case가 생긴 동일 lock 순서를 application 함수로
   공유했으며 private module 호출이나 별도 AUTO lock을 만들지 않았다.
+- 최종 pointer 점검에서 inventory를 command 파일 묶음에 같이 넣도록 한 최초 내부 연결을
+  수정했다. inventory는 한 canonical Artifact로 보관하고 command에는 복사하지 않는다.
+  DB에는 그 exact ID/revision/hash만 고정하며 같은 bytes의 다른 identity로 바꾸기도 거부한다.
+  source 전용·운영 미적용0093을 이 형태로 정리해 임시 DB 왕복·회귀를 다시 수행했다.
 - result/report의 계약·hash·원래 execution/room identity를 검증해 증거를 채택한다. 결과
   proof 수락만으로 원본·질문·run 완료를 표시하지 않는다. 기존 `KakaoSourceService`의
   mandatory callback을 실제 accepted attempt에 연결했고, 원본 owner가 CSV 재파싱·동일
@@ -33,9 +37,10 @@
   않았다. 공개 collection API/Studio 연결·실제 AUTO 시작/selector·권한 있는 현재 방 수집과
   사진 occurrence 정합→학생 PDF·전체 방/주기 수집은 남는다. source 저장의 성공을 목표
   완료로 간주하지 않는다. 기존 운영 DB0087·API/Web·GPU runtime pin은 변경하지 않았다.
-- 검증 결과: focused guarded DB10 PASS, 순수 계약/OS adapter/권한/의존성/문맥264 PASS,
+- 검증 결과: 새 capture owner11개를 포함한 전체 guarded DB **255 PASS**,
+  순수 계약/OS adapter/권한/의존성/문맥264 PASS,
   wire audit/실제 offline wheel inventory4 PASS, strict mypy5 source·Ruff/format·shell syntax
-  PASS, guarded migration0093 적용→되돌림→재적용 PASS. 전체 DB 최종 회귀 **254 PASS**,
+  PASS, guarded migration0093 적용→되돌림→재적용 PASS.
   기존 TestClient deprecation warning1건이다. 실제 browser/remote도 MainPID0·inactive·
   정상 종료를 확인했으며 새 로그인이나 카카오 조작은 수행하지 않았다.
 

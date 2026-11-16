@@ -94,6 +94,21 @@ class _CommandContext:
     command: ArtifactMemberPointer | None
 
 
+def _inventory_pointer(row: Attempt) -> ArtifactMemberPointer:
+    if (
+        row.inventory_artifact_id is None
+        or row.inventory_artifact_revision_id is None
+        or row.inventory_sha256 is None
+    ):
+        raise KakaoArchiveError(_INVALID)
+    return _pointer(
+        row.inventory_artifact_id,
+        row.inventory_artifact_revision_id,
+        "inventory.json",
+        row.inventory_sha256,
+    )
+
+
 class KakaoCollectionAttemptService:
     def __init__(
         self,
@@ -194,7 +209,9 @@ class KakaoCollectionAttemptService:
             "capability.json",
             cap_sha256,
         )
-        validate_source_pointer_metadata_batch(session, (pointer,))
+        validate_source_pointer_metadata_batch(
+            session, (pointer, *((_inventory_pointer(row),) if row.state != "RESERVED" else ()))
+        )
         return _CommandContext(
             _identity(row), pointer, None if row.state == "RESERVED" else _command_pointer(row)
         )
@@ -244,7 +261,11 @@ class KakaoCollectionAttemptService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
 
     def pin_command(
-        self, attempt_id: str, pointer: ArtifactMemberPointer
+        self,
+        attempt_id: str,
+        pointer: ArtifactMemberPointer,
+        *,
+        inventory_pointer: ArtifactMemberPointer,
     ) -> KakaoCollectionAttempt:
         if pointer.member_path != "command.json":
             raise KakaoArchiveError(_INVALID)
@@ -258,12 +279,11 @@ class KakaoCollectionAttemptService:
         capability = self._read(context.capability, CaptureCapability)
         if command.inventory is None:
             raise KakaoArchiveError(_INVALID)
-        inventory_pointer = _pointer(
-            pointer.artifact_id,
-            pointer.artifact_revision_id,
-            "inventory.json",
-            command.inventory.sha256,
-        )
+        if (
+            inventory_pointer.member_path != "inventory.json"
+            or inventory_pointer.sha256 != command.inventory.sha256
+        ):
+            raise KakaoArchiveError(_INVALID)
         inventory = self._read(inventory_pointer, CaptureInventory)
         try:
             validate_capture_inputs(command, capability, inventory)
@@ -290,7 +310,7 @@ class KakaoCollectionAttemptService:
                 session, (pointer, inventory_pointer, current.capability)
             )
             if row.state != "RESERVED":
-                if _command_pointer(row) != pointer:
+                if _command_pointer(row) != pointer or _inventory_pointer(row) != inventory_pointer:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
                 return _identity(row)
             self._current(browser, profile, run)
@@ -302,6 +322,9 @@ class KakaoCollectionAttemptService:
                 pointer.artifact_revision_id,
             )
             row.command_sha256, row.capability_sha256 = pointer.sha256, current.capability.sha256
+            row.inventory_artifact_id = inventory_pointer.artifact_id
+            row.inventory_artifact_revision_id = inventory_pointer.artifact_revision_id
+            row.inventory_sha256 = inventory_pointer.sha256
             row.resource_version, row.updated_at = row.resource_version + 1, datetime.now(UTC)
             task.state = "RUNNING"
             run.state, run.resource_version, run.updated_at = (
@@ -449,6 +472,7 @@ class KakaoCollectionAttemptService:
             self._authorize(session, run)
         cap = session.get(Capability, run.capability_revision_id)
         assert cap is not None
+        validate_source_pointer_metadata_batch(session, (_inventory_pointer(row),))
         auth = admission.authority
         if (
             (

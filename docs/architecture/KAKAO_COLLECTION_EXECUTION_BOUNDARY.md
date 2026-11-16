@@ -19,6 +19,8 @@
 원본 CSV/사진의 byte·관측·attachment coverage 검증은 기존 source owner가 계속 담당한다.
 결과 proof 수락과 원본 검증은 다르다. 기존 source owner의 실제 revision 수락 후에만
 task를 LOCAL_ACCEPTED로 진행하며, 이것도 질문 저장이나 run 전체 완료는 아니다.
+inventory는 command마다 JSON을 복사하지 않고 별도 canonical Artifact의 작은 pointer로
+고정한다. worker의 local inventory member는 명시적 입력 materialization에서만 만든다.
 
 접근은 task/attempt PK lookup와 task별 unique claim, run→browser exact FK다. attempt당
 O(1) metadata, member 검증은 bounded O(n)이다. task row lock 후 원래 attempt를 재조회하고,

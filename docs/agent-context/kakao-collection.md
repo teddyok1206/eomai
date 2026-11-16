@@ -29,6 +29,7 @@ canonical capability를 읽고 late 권한/fence를 재검사해 고정한다. �
 `authorize_source` callback이 실제 수락한 exact command/capability/result/report만 허용하고
 worker가 선언한 attempt/fence만 믿지 않는다. FAILED와 같은 요청의 재조회는 새 실행이 아니다.
 최초 attempt 저장 구현은 실제 AUTO 시작/selector/주기 실행을 활성화하지 않는다.
+inventory는 command Artifact에 복사하지 않고 별도 exact Artifact pointer로 저장·재인가한다.
 
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.

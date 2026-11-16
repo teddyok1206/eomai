@@ -43,6 +43,12 @@ class KakaoCollectionAttemptRecord(Base):
             name="fk_kakao_collection_attempt_result",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["inventory_artifact_id", "inventory_artifact_revision_id"],
+            ["artifact_revisions.logical_artifact_id", "artifact_revisions.revision_id"],
+            name="fk_kakao_collection_attempt_inventory",
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "attempt_id ~ '^kakaoattempt_[0-9a-f]{32}$' AND "
             "command_id ~ '^kakaocommand_[0-9a-f]{32}$' AND "
@@ -59,10 +65,14 @@ class KakaoCollectionAttemptRecord(Base):
         CheckConstraint(
             "(state = 'RESERVED' AND command_artifact_id IS NULL AND "
             "command_artifact_revision_id IS NULL AND command_sha256 IS NULL AND "
-            "capability_sha256 IS NULL) OR (state <> 'RESERVED' AND "
+            "capability_sha256 IS NULL AND inventory_artifact_id IS NULL AND "
+            "inventory_artifact_revision_id IS NULL AND inventory_sha256 IS NULL) OR "
+            "(state <> 'RESERVED' AND "
             "command_artifact_id IS NOT NULL AND command_artifact_revision_id IS NOT NULL AND "
             "command_sha256 IS NOT NULL AND command_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
-            "capability_sha256 IS NOT NULL AND capability_sha256 ~ '^sha256:[0-9a-f]{64}$')",
+            "capability_sha256 IS NOT NULL AND capability_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
+            "inventory_artifact_id IS NOT NULL AND inventory_artifact_revision_id IS NOT NULL AND "
+            "inventory_sha256 IS NOT NULL AND inventory_sha256 ~ '^sha256:[0-9a-f]{64}$')",
             name="ck_kakao_collection_attempt_command",
         ),
         CheckConstraint(
@@ -107,6 +117,9 @@ class KakaoCollectionAttemptRecord(Base):
     command_artifact_revision_id: Mapped[str | None] = mapped_column(String(36))
     command_sha256: Mapped[str | None] = mapped_column(String(71))
     capability_sha256: Mapped[str | None] = mapped_column(String(71))
+    inventory_artifact_id: Mapped[str | None] = mapped_column(String(41))
+    inventory_artifact_revision_id: Mapped[str | None] = mapped_column(String(36))
+    inventory_sha256: Mapped[str | None] = mapped_column(String(71))
     result_artifact_id: Mapped[str | None] = mapped_column(String(41))
     result_artifact_revision_id: Mapped[str | None] = mapped_column(String(36))
     result_sha256: Mapped[str | None] = mapped_column(String(71))

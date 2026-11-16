@@ -33,6 +33,7 @@ from eom_kakao_archive_contracts.capture import (
 )
 from eom_kakao_archive_contracts.execution import WorkerExecution
 from eom_kakao_archive_contracts.render import LocalMember
+from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
@@ -189,15 +190,16 @@ def command_input(attempt, reserved=None, **changes):
         )
         | changes
     )
-    pointer = publish(
-        attempt, {"command.json": command, "inventory.json": inventory}, "command.json"
-    )
-    return reserved, command, accepted, pointer
+    inventory_pointer = publish(attempt, {"inventory.json": inventory}, "inventory.json")
+    pointer = publish(attempt, {"command.json": command}, "command.json")
+    return reserved, command, accepted, pointer, inventory_pointer
 
 
 def result_input(attempt, *, status="PARTIAL", error=None):
-    reserved, command, cap, command_pointer = command_input(attempt)
-    attempt.service.pin_command(reserved.attempt_id, command_pointer)
+    reserved, command, cap, command_pointer, inventory_pointer = command_input(attempt)
+    attempt.service.pin_command(
+        reserved.attempt_id, command_pointer, inventory_pointer=inventory_pointer
+    )
     raw = (
         b"DATE,USER,MESSAGE\r\n"
         b"2026-11-16 12:00:00,anonymous,same question\r\n"
@@ -306,22 +308,56 @@ def test_claim_is_durable_and_replays_same_identity_under_concurrency(attempt):
 
 
 def test_command_adoption_replay_and_competing_pointer_rejected(attempt):
-    reserved, command, _, pointer = command_input(attempt)
-    first = attempt.service.pin_command(reserved.attempt_id, pointer)
+    reserved, command, _, pointer, inventory_pointer = command_input(attempt)
+    first = attempt.service.pin_command(
+        reserved.attempt_id, pointer, inventory_pointer=inventory_pointer
+    )
     assert first.state == "COMMAND_READY"
-    assert first == attempt.service.pin_command(reserved.attempt_id, pointer)
+    assert first == attempt.service.pin_command(
+        reserved.attempt_id, pointer, inventory_pointer=inventory_pointer
+    )
     other = publish(attempt, {"command.json": command}, "command.json")
     with pytest.raises(KakaoArchiveError):
-        attempt.service.pin_command(reserved.attempt_id, other)
+        attempt.service.pin_command(reserved.attempt_id, other, inventory_pointer=inventory_pointer)
     with Session(attempt.engine) as session:
         assert session.get(Task, reserved.task_id).state == "RUNNING"
         assert session.get(Run, reserved.run_id).state == "COLLECTING"
+        row = session.get(Attempt, reserved.attempt_id)
+        assert row.inventory_artifact_id == inventory_pointer.artifact_id
+        revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+        assert {member["file_name"] for member in revision.manifest["files"]} == {"command.json"}
+    assert pointer.artifact_id != inventory_pointer.artifact_id
+
+
+def test_different_inventory_identity_cannot_replace_pinned_source(attempt):
+    reserved, _, _, pointer, inventory_pointer = command_input(attempt)
+    attempt.service.pin_command(reserved.attempt_id, pointer, inventory_pointer=inventory_pointer)
+    raw = attempt.artifacts.read_member(
+        artifact_id=inventory_pointer.artifact_id,
+        revision_id=inventory_pointer.artifact_revision_id,
+        member_path="inventory.json",
+        sha256=inventory_pointer.sha256,
+        schema_ref=CAPTURE_REF,
+        media_type="application/json",
+        max_bytes=4 * 1024 * 1024,
+    )
+    different = publish(attempt, {"inventory.json": raw}, "inventory.json")
+    assert (
+        different.sha256 == inventory_pointer.sha256
+        and different.artifact_id != inventory_pointer.artifact_id
+    )
+    with pytest.raises(KakaoArchiveError, match="IDEMPOTENCY_CONFLICT"):
+        attempt.service.pin_command(reserved.attempt_id, pointer, inventory_pointer=different)
 
 
 def test_wrong_room_command_cannot_gain_execution_or_source_authority(attempt):
-    reserved, _, _, pointer = command_input(attempt, room_id="kakaoroom_" + "f" * 32)
+    reserved, _, _, pointer, inventory_pointer = command_input(
+        attempt, room_id="kakaoroom_" + "f" * 32
+    )
     with pytest.raises(KakaoArchiveError, match="IDENTITY_MISMATCH"):
-        attempt.service.pin_command(reserved.attempt_id, pointer)
+        attempt.service.pin_command(
+            reserved.attempt_id, pointer, inventory_pointer=inventory_pointer
+        )
     assert attempt.service.get_attempt(reserved.attempt_id).state == "RESERVED"
 
 
@@ -435,7 +471,7 @@ def test_failed_capture_history_cannot_be_replaced_by_success_or_restarted(attem
 
 
 def test_current_owner_revocation_during_artifact_io_blocks_adoption(attempt, monkeypatch):
-    reserved, _, _, pointer = command_input(attempt)
+    reserved, _, _, pointer, inventory_pointer = command_input(attempt)
     original = attempt.service._read
 
     def changed(*args):
@@ -450,7 +486,9 @@ def test_current_owner_revocation_during_artifact_io_blocks_adoption(attempt, mo
 
     monkeypatch.setattr(attempt.service, "_read", changed)
     with pytest.raises(KakaoArchiveError, match="PERMISSION_DENIED"):
-        attempt.service.pin_command(reserved.attempt_id, pointer)
+        attempt.service.pin_command(
+            reserved.attempt_id, pointer, inventory_pointer=inventory_pointer
+        )
     assert attempt.service.get_attempt(reserved.attempt_id).state == "RESERVED"
 
 

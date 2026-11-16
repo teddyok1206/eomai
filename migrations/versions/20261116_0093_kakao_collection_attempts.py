@@ -30,6 +30,8 @@ def upgrade() -> None:
             state VARCHAR(16) NOT NULL,
             command_artifact_id VARCHAR(41), command_artifact_revision_id VARCHAR(36),
             command_sha256 VARCHAR(71), capability_sha256 VARCHAR(71),
+            inventory_artifact_id VARCHAR(41), inventory_artifact_revision_id VARCHAR(36),
+            inventory_sha256 VARCHAR(71),
             result_artifact_id VARCHAR(41), result_artifact_revision_id VARCHAR(36),
             result_sha256 VARCHAR(71), result_status VARCHAR(16),
             report_sha256 VARCHAR(71), error_code VARCHAR(32),
@@ -45,6 +47,9 @@ def upgrade() -> None:
             CONSTRAINT fk_kakao_collection_attempt_result
                 FOREIGN KEY(result_artifact_id, result_artifact_revision_id)
                 REFERENCES artifact_revisions (logical_artifact_id, revision_id) ON DELETE RESTRICT,
+            CONSTRAINT fk_kakao_collection_attempt_inventory
+                FOREIGN KEY(inventory_artifact_id, inventory_artifact_revision_id)
+                REFERENCES artifact_revisions (logical_artifact_id, revision_id) ON DELETE RESTRICT,
             CONSTRAINT ck_kakao_collection_attempt_values CHECK (
                 attempt_id ~ '^kakaoattempt_[0-9a-f]{32}$' AND
                 command_id ~ '^kakaocommand_[0-9a-f]{32}$' AND
@@ -57,10 +62,14 @@ def upgrade() -> None:
             CONSTRAINT ck_kakao_collection_attempt_command CHECK (
                 (state = 'RESERVED' AND command_artifact_id IS NULL AND
                 command_artifact_revision_id IS NULL AND command_sha256 IS NULL AND
-                capability_sha256 IS NULL) OR (state <> 'RESERVED' AND
+                capability_sha256 IS NULL AND inventory_artifact_id IS NULL AND
+                inventory_artifact_revision_id IS NULL AND inventory_sha256 IS NULL) OR
+                (state <> 'RESERVED' AND
                 command_artifact_id IS NOT NULL AND command_artifact_revision_id IS NOT NULL AND
                 command_sha256 IS NOT NULL AND command_sha256 ~ '^sha256:[0-9a-f]{64}$' AND
-                capability_sha256 IS NOT NULL AND capability_sha256 ~ '^sha256:[0-9a-f]{64}$')),
+                capability_sha256 IS NOT NULL AND capability_sha256 ~ '^sha256:[0-9a-f]{64}$' AND
+                inventory_artifact_id IS NOT NULL AND inventory_artifact_revision_id IS NOT NULL AND
+                inventory_sha256 IS NOT NULL AND inventory_sha256 ~ '^sha256:[0-9a-f]{64}$')),
             CONSTRAINT ck_kakao_collection_attempt_result CHECK (
                 (state <> 'RESULT_ACCEPTED' AND result_artifact_id IS NULL AND
                 result_artifact_revision_id IS NULL AND result_sha256 IS NULL AND
@@ -104,16 +113,21 @@ def upgrade() -> None:
                 (('RESERVED','COMMAND_READY'),('COMMAND_READY','RESULT_ACCEPTED')) OR
              (to_jsonb(NEW) - ARRAY['state','resource_version','updated_at','command_artifact_id',
                 'command_artifact_revision_id','command_sha256','capability_sha256',
+                'inventory_artifact_id','inventory_artifact_revision_id','inventory_sha256',
                 'result_artifact_id','result_artifact_revision_id','result_sha256',
                 'result_status','report_sha256','error_code']) IS DISTINCT FROM
              (to_jsonb(OLD) - ARRAY['state','resource_version','updated_at','command_artifact_id',
                 'command_artifact_revision_id','command_sha256','capability_sha256',
+                'inventory_artifact_id','inventory_artifact_revision_id','inventory_sha256',
                 'result_artifact_id','result_artifact_revision_id','result_sha256',
                 'result_status','report_sha256','error_code']) OR
              (OLD.state <> 'RESERVED' AND ROW(NEW.command_artifact_id,
-                NEW.command_artifact_revision_id,NEW.command_sha256,NEW.capability_sha256)
+                NEW.command_artifact_revision_id,NEW.command_sha256,NEW.capability_sha256,
+                NEW.inventory_artifact_id,NEW.inventory_artifact_revision_id,NEW.inventory_sha256)
                 IS DISTINCT FROM ROW(OLD.command_artifact_id,OLD.command_artifact_revision_id,
-                OLD.command_sha256,OLD.capability_sha256)) THEN
+                OLD.command_sha256,OLD.capability_sha256,
+                OLD.inventory_artifact_id,OLD.inventory_artifact_revision_id,
+                OLD.inventory_sha256)) THEN
             RAISE EXCEPTION 'KAKAO_COLLECTION_ATTEMPT_IMMUTABLE';
           END IF;
           RETURN NEW;
