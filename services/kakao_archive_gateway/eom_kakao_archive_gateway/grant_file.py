@@ -51,7 +51,10 @@ def read_protected(
     limit: int,
     allowed_uids: frozenset[int],
     allowed_modes: frozenset[int] | None = None,
+    minimum_size: int = 1,
 ) -> bytes:
+    if not 0 <= minimum_size <= limit:
+        raise GatewayRuntimeError("KAKAO_GATEWAY_READ_LIMIT_INVALID")
     with protected_directory(path.parent, allowed_uids=allowed_uids) as directory:
         fd = os.open(
             path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=directory
@@ -64,7 +67,7 @@ def read_protected(
             or before.st_uid != uid
             or before.st_mode & 0o022
             or (allowed_modes is not None and stat.S_IMODE(before.st_mode) not in allowed_modes)
-            or not 0 < before.st_size <= limit
+            or not minimum_size <= before.st_size <= limit
         ):
             raise GatewayRuntimeError("KAKAO_GATEWAY_MEMBER_UNSAFE")
         raw = stream.read(limit + 1)

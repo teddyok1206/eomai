@@ -1,5 +1,26 @@
 # KakaoTalk 구현 체크포인트
 
+## 실제 첫 MANUAL 시작에서 확인한 후속 수정 — 진행 중
+
+사용자가 `카카오 로그인 준비`를 눌렀으나 원격 화면의 최초 시작이 ERROR로 끝났다.
+아직 카카오 인증에 도달하지 않았으며 기존 실패/lease/fence 기록을 보존한다.
+
+- noVNC1.6.0의 정상 빈 `.gitmodules`가 기존 nonempty grant reader의 공통 조건에
+  걸렸다. source tree를 임의 삭제하지 않고 static asset 검사에만 최소0byte를 명시했다.
+  grant/revocation·실행 interpreter·필수 HTML/JS는 여전히 nonempty다. wire schema,
+  profile/lease/권한, 고정 asset path·hash·size bound는 바꾸지 않는다.
+- 설계서의 별도 VncAuth 비밀번호는 installer가 의도적으로 만들지 않는다. 운영 활성화
+  전에 이 provisioning 확인이 빠져 있었다. 기존 TigerVNC 도구의 stdin으로만 암호를
+  전달하는 일회성 `scripts/kakao/provision_vnc_password.py`를 추가했다. 현재 profile
+  lock·실제 중지 확인 아래 고정 경로600의 새 파일만 생성하며 기존 비밀번호는 덮지 않는다.
+  계정 로그인/변경이나 브라우저 시작은 하지 않는다. argv/URL/로그/Artifact/Git에 값이 없다.
+- 사용자에게 전용 비밀번호 입력을 요청했다. 이는 Linux·Studio·카카오 비밀번호가 아니며
+  실제 noVNC 화면에서도 수동 입력한다. 코드가 암호를 조회해 대신 로그인하지 않는다.
+- gateway/OS adapter/coordinator/암호 helper **112 PASS**, source3개 mypy와 Ruff PASS다.
+  source 수정 후 새 gateway wheel과 별도 설치 successor 검증을 진행한다. 이 단락은
+  아직 실제 카카오 로그인 또는 source 수정 운영 완료의 선언이 아니다.
+
+
 ## 2026-11-16 보호 runtime 설치·MANUAL/PDF 활성화
 
 - API/Web/Catalog/QUERY 운영 source는 `8e2e11eb`, DB0087이다. build gate는

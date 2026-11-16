@@ -263,7 +263,11 @@ def _prepare() -> int:
             if count > 4096:
                 raise GatewayRuntimeError("KAKAO_GATEWAY_ASSETS_INVALID")
             raw = read_protected(
-                Path(directory) / name, uid=0, limit=8 * 1024 * 1024, allowed_uids=frozenset({0})
+                Path(directory) / name,
+                uid=0,
+                limit=8 * 1024 * 1024,
+                allowed_uids=frozenset({0}),
+                minimum_size=0,
             )
             total += len(raw)
             if total > 64 * 1024 * 1024:

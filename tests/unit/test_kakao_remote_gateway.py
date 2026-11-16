@@ -18,7 +18,11 @@ from unittest.mock import Mock
 import pytest
 from eom_kakao_archive_contracts.kakao_remote import GatewayLeaseGrant, GatewayRevocation
 from eom_kakao_archive_gateway import supervisor
-from eom_kakao_archive_gateway.grant_file import GatewayRuntimeError, read_owner_grant
+from eom_kakao_archive_gateway.grant_file import (
+    GatewayRuntimeError,
+    read_owner_grant,
+    read_protected,
+)
 from eom_kakao_archive_gateway.process import GatewayChild
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,6 +96,20 @@ def test_grant_reader_rejects_wrong_owner(secure_tmp):
     path = write_grant(secure_tmp)
     with pytest.raises(GatewayRuntimeError):
         read_owner_grant(path, owner_uid=os.getuid() + 1)
+
+
+def test_pinned_empty_static_asset_does_not_relax_grants_or_executables(secure_tmp):
+    path = secure_tmp / ".gitmodules"
+    path.write_bytes(b"")
+    path.chmod(0o640)
+    arguments = dict(uid=os.getuid(), limit=1024, allowed_uids=frozenset({0, os.getuid()}))
+    assert read_protected(path, minimum_size=0, **arguments) == b""
+    with pytest.raises(GatewayRuntimeError, match="MEMBER_UNSAFE"):
+        read_protected(path, **arguments)
+    with pytest.raises(GatewayRuntimeError, match="MEMBER_UNSAFE"):
+        read_owner_grant(path, owner_uid=os.getuid())
+    with pytest.raises(GatewayRuntimeError, match="READ_LIMIT_INVALID"):
+        read_protected(path, minimum_size=-1, **arguments)
 
 
 @pytest.mark.parametrize(
