@@ -27,7 +27,7 @@ from eom_kakao_archive_contracts.render import canonical_bytes
 
 from .manual_capture_files import create_capture_directory as _directory
 from .manual_capture_files import write_capture_receipt as _write_once
-from .manual_observation import ReadOnlyPage, observe_download_page
+from .manual_observation import ReadOnlyPage, download_page_path, observe_download_page
 from .profile import BrowserRuntimeError, protected_directory, read_protected
 
 ROOT = Path("/var/lib/eom-kakao/downloads")
@@ -192,7 +192,10 @@ class ManualDownloads:
         except Exception:
             self.failure = BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_RECEIPT_FAILED")
             return
-        task = asyncio.create_task(self._receive(download, started, directory, page=page))
+        event_path = download_page_path(page) if page is not None else None
+        task = asyncio.create_task(
+            self._receive(download, started, directory, page=page, event_path=event_path)
+        )
         self._tasks.add(task)
         task.add_done_callback(self._done)
 
@@ -208,11 +211,14 @@ class ManualDownloads:
         directory: Path,
         *,
         page: Page | None,
+        event_path: str | None,
     ) -> None:
         member, error, name = None, None, None
         try:
             if page is not None:
-                observation = await observe_download_page(page, started, download_url=download.url)
+                observation = await observe_download_page(
+                    page, started, download_url=download.url, event_path=event_path
+                )
                 _write_once(
                     directory / "page-observation.json",
                     canonical_bytes(observation.model_dump(mode="json", by_alias=True)),

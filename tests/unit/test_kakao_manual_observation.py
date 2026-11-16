@@ -162,11 +162,14 @@ def test_download_target_never_retains_signed_queries_credentials_or_cdn_url(url
 def test_fixed_read_only_evaluate_and_exact_capture_identity():
     started = start()
     page = SimpleNamespace(
-        url="https://business.kakao.com/space/example", evaluate=AsyncMock(return_value=document())
+        url=observer.ORIGIN + document()["path"], evaluate=AsyncMock(return_value=document())
     )
     result = asyncio.run(
         observer.observe_download_page(
-            page, started, download_url="blob:https://business.kakao.com/opaque"
+            page,
+            started,
+            download_url="blob:https://business.kakao.com/opaque",
+            event_path=observer.download_page_path(page),
         )
     )
     assert result.status == "OBSERVED" and result.capture_id == started.capture_id
@@ -174,6 +177,48 @@ def test_fixed_read_only_evaluate_and_exact_capture_identity():
     page.evaluate.assert_awaited_once_with(observer.DOCUMENT_EXPRESSION)
     assert result.document and not result.document.truncated
     assert not any(hasattr(page, name) for name in ("click", "press", "fill", "keyboard"))
+
+
+def test_query_changes_are_not_identity_or_persisted_credentials():
+    page = SimpleNamespace(url=observer.ORIGIN + document()["path"] + "?token=secret#credential")
+    event_path = observer.download_page_path(page)
+    assert event_path == document()["path"]
+
+    async def evaluate(_expression):
+        page.url = observer.ORIGIN + document()["path"] + "?token=changed#new-credential"
+        return document()
+
+    page.evaluate = AsyncMock(side_effect=evaluate)
+    result = asyncio.run(
+        observer.observe_download_page(
+            page,
+            start(),
+            download_url="blob:" + observer.ORIGIN + "/opaque",
+            event_path=event_path,
+        )
+    )
+    assert result.status == "OBSERVED" and result.document
+    assert not any(part in result.model_dump_json() for part in ("secret", "credential", "token"))
+
+
+def test_unsupported_event_origin_cannot_become_supported_by_later_navigation():
+    page = SimpleNamespace(
+        url="https://accounts.kakao.com/login?credential=secret",
+        evaluate=AsyncMock(return_value=document()),
+    )
+    event_path = observer.download_page_path(page)
+    page.url = observer.ORIGIN + document()["path"]
+    result = asyncio.run(
+        observer.observe_download_page(
+            page,
+            start(),
+            download_url="blob:" + observer.ORIGIN + "/opaque",
+            event_path=event_path,
+        )
+    )
+    assert result.status == "UNAVAILABLE" and result.error_code == "UNSUPPORTED_ORIGIN"
+    assert result.document is None and "secret" not in result.model_dump_json()
+    page.evaluate.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -188,7 +233,7 @@ def test_fixed_read_only_evaluate_and_exact_capture_identity():
 )
 def test_observer_failures_are_explicit_without_raw_private_payload(case, error):
     page = SimpleNamespace(
-        url="https://business.kakao.com/page", evaluate=AsyncMock(return_value=document())
+        url=observer.ORIGIN + document()["path"], evaluate=AsyncMock(return_value=document())
     )
     if case == "different_origin":
         page.url = "https://accounts.kakao.com/login?password=secret"
@@ -202,7 +247,10 @@ def test_observer_failures_are_explicit_without_raw_private_payload(case, error)
         page.evaluate.return_value = None
     result = asyncio.run(
         observer.observe_download_page(
-            page, start(), download_url="https://k.kakaocdn.net/?credential=secret"
+            page,
+            start(),
+            download_url="https://k.kakaocdn.net/?credential=secret",
+            event_path=observer.download_page_path(page),
         )
     )
     assert result.status == "UNAVAILABLE" and result.error_code == error
@@ -217,7 +265,7 @@ def test_download_callback_writes_one_private_observation_and_owner_reads_it():
     async def run(root):
         callbacks = {}
         page = SimpleNamespace(
-            url="https://business.kakao.com/channel/room",
+            url=observer.ORIGIN + document()["path"],
             evaluate=AsyncMock(return_value=document()),
             on=lambda key, handler: callbacks.update({key: handler}),
         )
@@ -279,6 +327,54 @@ def test_observer_timeout_does_not_discard_successful_download_bytes():
         asyncio.run(run(root))
 
 
+@pytest.mark.parametrize("navigation", ["before_observer", "during_observer", "document_only"])
+def test_room_navigation_does_not_relabel_a_received_file(navigation):
+    from eom_kakao_archive_collector.manual_download import ManualDownloads
+
+    async def run(root):
+        original_path = document()["path"]
+        other_path = original_path + "-other-room"
+        page = SimpleNamespace(url=observer.ORIGIN + original_path)
+
+        async def evaluate(_expression):
+            if navigation == "during_observer":
+                page.url = observer.ORIGIN + other_path
+            path = (
+                other_path if navigation in {"before_observer", "document_only"} else original_path
+            )
+            return document() | dict(path=path)
+
+        page.evaluate = AsyncMock(side_effect=evaluate)
+        manager = ManualDownloads(fence(), root=root)
+        raw = b"original download, not another room's document"
+        download = transfer(manager, raw)
+        download.url = "blob:" + observer.ORIGIN + "/opaque"
+        manager.receive(download, "kakaopage_" + "d" * 32, page=page)
+        if navigation == "before_observer":
+            # Real SDK callbacks are synchronous; the observation coroutine runs later.
+            page.url = observer.ORIGIN + other_path
+        await drain(manager)
+        (receipt,) = results(manager)
+        assert receipt.phase == "RECEIVED" and manager.failure is None
+        result = read_received_kakao_download(
+            root=root,
+            fence=fence(),
+            capture_id=receipt.capture_id,
+            worker_uid=os.getuid(),
+            control_gid=os.getgid(),
+        )
+        assert result.payload == raw
+        assert result.observation and result.observation.status == "UNAVAILABLE"
+        assert result.observation.error_code == "OBSERVATION_INVALID"
+        assert result.observation.document is None
+        if navigation == "before_observer":
+            page.evaluate.assert_not_awaited()
+        await manager.close()
+
+    with download_root() as root:
+        asyncio.run(run(root))
+
+
 @pytest.mark.parametrize(
     "changed", ["capture_id", "page_instance_id", "fence_epoch", "observed_at"]
 )
@@ -327,7 +423,10 @@ def test_actual_observation_timeout_cancels_and_reaps_read(monkeypatch):
     page = SimpleNamespace(url="https://business.kakao.com/page", evaluate=slow)
     result = asyncio.run(
         observer.observe_download_page(
-            page, start(), download_url="blob:https://business.kakao.com/example"
+            page,
+            start(),
+            download_url="blob:https://business.kakao.com/example",
+            event_path=observer.download_page_path(page),
         )
     )
     assert result.error_code == "OBSERVATION_TIMEOUT" and cancelled == [True]

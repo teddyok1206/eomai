@@ -97,9 +97,10 @@ import asyncio, json, os, tempfile, time
 from pathlib import Path
 from playwright.async_api import async_playwright
 from eom_kakao_archive_collector.manual_download import ManualDownloads
-from eom_kakao_archive_collector.manual_observation import DOCUMENT_EXPRESSION
+from eom_kakao_archive_collector.manual_observation import (
+    DOCUMENT_EXPRESSION, download_page_path, observe_download_page)
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
-from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
+from eom_kakao_archive_contracts.manual_download import ManualDownloadResult, ManualDownloadStart
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
 os.umask(0o077)
 html = """<!doctype html><html><body>
@@ -173,6 +174,30 @@ async def main():
                 for node in nodes)
             assert any(node.is_image for node in nodes)
             assert await page.evaluate('window.danger')==0
+            # Same-origin SPA navigation between the event and DOM read must not
+            # attach another room's observation to the already received bytes.
+            event_path=download_page_path(page)
+            started=ManualDownloadStart.model_validate_json((capture/'started.json').read_bytes())
+            set_path="path => history.replaceState({}, '', path)"
+            other_path='/space/synthetic/channel/example/chats/other'
+            await page.evaluate(set_path,other_path+'?credential=NEVER_OUTPUT')
+            navigated=await observe_download_page(page,started,
+                download_url='blob:https://business.kakao.com/anonymous',event_path=event_path)
+            assert navigated.status=='UNAVAILABLE' and navigated.error_code=='OBSERVATION_INVALID'
+            assert navigated.document is None and 'NEVER_OUTPUT' not in navigated.model_dump_json()
+            await page.evaluate(set_path,event_path)
+            class NavigatingPage:
+                @property
+                def url(self):return page.url
+                async def evaluate(self,expression):
+                    value=await page.evaluate(expression)
+                    await page.evaluate(set_path,other_path)
+                    return value
+            during=await observe_download_page(NavigatingPage(),started,
+                download_url='blob:https://business.kakao.com/anonymous',event_path=event_path)
+            assert during.status=='UNAVAILABLE' and during.error_code=='OBSERVATION_INVALID'
+            assert during.document is None
+            await page.evaluate(set_path,event_path)
             await page.set_content('<html><body>'+('<span>문</span>'*3000)+'</body></html>')
             bounded=await page.evaluate(DOCUMENT_EXPRESSION)
             assert bounded['truncated'] and len(bounded['nodes'])==2048

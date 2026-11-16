@@ -229,6 +229,9 @@ query 없는 path·제한된 node metadata를 담는다. 입력·편집·로그�
 URL·cookie/storage는 제외한다. 기존 수신 receiver와 로컬 metadata writer를 재사용하며
 click/key/network tool을 노출하지 않는다. `kakao_download_inputs`는 이 선택적 관측이 있으면
 동일 capture·시각·권한/hash 경계에서 검증하고, 과거 관측 없음은 UNKNOWN으로 유지한다.
+receiver는 callback 시점의 정제된 page path를 고정하고 observer는 관측 전/후·document path를
+대조한다. 이동/불일치는 DOM만 UNAVAILABLE이며 정상 다운로드는 보존한다. 같은 path의 방
+변경까지 검증한 것이 아니고 provider identity/사진 occurrence 수락 책임은 별도다.
 DOM excerpt는 원본 CSV 본문이나 메시지 logical ID가 아니며, 미검증 selector를 활성화하지 않는다.
 반복 수집의 실행 방식은 [수집 실행 계약](../architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)의
 실증 후 결정 절을 따른다. 전용 Codex 슬롯이나 임의 클릭 도구를 운영 수집에 추가하지 않는다.

@@ -132,8 +132,20 @@ def download_target(url: str) -> ManualDownloadTarget:
     return ManualDownloadTarget(kind="UNAVAILABLE", path=None)
 
 
+def download_page_path(page: ReadOnlyPage) -> str | None:
+    """Capture the sanitized page location synchronously in the download callback."""
+    try:
+        return _same_origin_path(page.url)
+    except Exception:
+        return None
+
+
 async def observe_download_page(
-    page: ReadOnlyPage, started: ManualDownloadStart, *, download_url: str
+    page: ReadOnlyPage,
+    started: ManualDownloadStart,
+    *,
+    download_url: str,
+    event_path: str | None,
 ) -> ManualPageObservation:
     identity = started.model_dump(exclude={"phase", "schema_version", "started_at"})
     base = dict(
@@ -144,12 +156,14 @@ async def observe_download_page(
         document=None,
         error_code="UNSUPPORTED_ORIGIN",
     )
+    if event_path is None:
+        return ManualPageObservation.model_validate(base)
     try:
         page_path = _same_origin_path(page.url)
     except Exception:
         return ManualPageObservation.model_validate(base | {"error_code": "OBSERVATION_FAILED"})
-    if page_path is None:
-        return ManualPageObservation.model_validate(base)
+    if page_path != event_path:
+        return ManualPageObservation.model_validate(base | {"error_code": "OBSERVATION_INVALID"})
     try:
         document = await asyncio.wait_for(page.evaluate(DOCUMENT_EXPRESSION), OBSERVATION_SECONDS)
     except TimeoutError:
@@ -159,8 +173,19 @@ async def observe_download_page(
     if document is None:
         return ManualPageObservation.model_validate(base)
     try:
-        return ManualPageObservation.model_validate(
+        observation = ManualPageObservation.model_validate(
             base | {"status": "OBSERVED", "document": document, "error_code": None}
         )
+        # The event callback, evaluated document and current page must agree. A
+        # later room's DOM must not become evidence for an earlier download.
+        if (
+            observation.document is None
+            or observation.document.path != event_path
+            or download_page_path(page) != event_path
+        ):
+            return ManualPageObservation.model_validate(
+                base | {"error_code": "OBSERVATION_INVALID"}
+            )
+        return observation
     except ValueError:
         return ManualPageObservation.model_validate(base | {"error_code": "OBSERVATION_INVALID"})

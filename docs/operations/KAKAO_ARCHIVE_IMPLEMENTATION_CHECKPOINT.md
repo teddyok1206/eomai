@@ -1,5 +1,31 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 수집 실행 방식 재검토·화면 이동 중 수신 관측 보강
+
+- 사용자의 코드/전용 Codex 슬롯 비교 요청을 기존 수집 실행 설계에 구체화했다. 반복 수집은
+  기존 고정 Playwright adapter, Codex는 개발·진단으로 분리한다. 사진 확보 성공 여부와
+  무관한 결정이며, 모델 슬롯/운영 프롬프트·새 서비스/registry·외부 LLM은 추가하지 않는다.
+  확인하지 않은 selector나 전용 프롬프트만으로 위험 동작 금지를 보장한다고 주장하지 않는다.
+- 기존 source에서 download callback 뒤 관측 coroutine 실행 전, 관측 중, 반환 document의
+  path만 다른 세 경우를 회귀 테스트로 재현했다. 수정 전3건 모두 잘못된 DOM을 OBSERVED로
+  기록했다. receiver가 event 시점의 정제된 path를 고정하고 observer가 전/후·document를
+  대조하도록 고쳤다. 불일치는 기존 UNAVAILABLE/OBSERVATION_INVALID이며 정상 bytes와
+  원래 수신 이력은 보존한다. query/credential은 저장하지 않으며 unsupported origin이
+  나중의 화면 이동으로 지원된 관측이 될 수 없다.
+- 이 검사는 같은 path에서의 UI 변경, provider 방/메시지 identity나 사진 occurrence 정합의
+  증명이 아니다. 해당 실제 관측/수락 gate는 남아 있고 AUTO는 비활성이다. 과거 실제
+  CSV/JPEG에 새 DOM을 소급해서 붙이지 않았다. schema/DB/API·권한·profile 설정 변경은 없다.
+- 합동 **478 PASS**에는 실제 설치 Chromium을 사용한 익명 합성2검사가 포함된다. 실제 SDK
+  다운로드 보존·SPA path 변경 전/후 거부·반복 occurrence·입력 필드 제외·위험 버튼 클릭0·
+  외부 요청0을 확인했다. 새 browser 검사의 첫 실패1건은 fixture에 Start 대신 terminal Result를
+  넘긴 오류였으며 올바른 원래 started receipt로 수정해 재검증했다. strict mypy2 source,
+  Ruff/format·개발 문맥 검사도 PASS다. 이 변경은 DB를 수정하지 않으므로 앞서0090까지의
+  disposable DB 결과를 보존하고 이번에 불필요하게 재실행하지 않았다.
+- **소스 검증이며 운영 미반영**이다. 원격 browser/remote는 MainPID0·inactive·Result success를
+  재확인했다. 운영 API/Catalog/Web·DB0087·GPU pins·실제 수신물·FAILED 이력과 사용자 인증은
+  변경하지 않았다. 실제 방→source→학생 PDF·전체 방 주기 수집은 여전히 미완료다.
+  다음 수직 경로는 이미 수락된 capability를 실제 collection 실행/현재 권한에 연결하는 것이다.
+
 ## 2026-11-16 확인된 MANUAL 방의 capability 수락 owner
 
 - 먼저 `capability-verification-v1` schema/mirror와 frozen DTO를 정의했다. 요청은 이미 확인한
