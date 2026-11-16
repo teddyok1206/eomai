@@ -20,6 +20,26 @@
   source 수정 후 새 gateway wheel과 별도 설치 successor 검증을 진행한다. 이 단락은
   아직 실제 카카오 로그인 또는 source 수정 운영 완료의 선언이 아니다.
 
+후속 운영 반영:
+
+- `c352037e`의 gateway wheel `sha256:c2ddb3d6789bc65b90c354433f1bfd6b017a32dedbbf6724f0085a758af74e36`을
+  실제 미실행/중지 상태에서 설치하고 Supervisor source pin을 갱신했다. API/Web/pure
+  contracts는 바꾸지 않았다. VNC 비밀번호는 worker 소유600·8byte·단일 link의 metadata만
+  확인했으며 값을 조회하지 않았다.
+- 첫 후속 설치 verify는 실패한 systemd gateway 종료 시 `/run/eom-kakao-remote`가
+  삭제된 것을 확인했다. 실제 runtime lifecycle 문제이며, root가 DB 상태를 수정해
+  성공으로 표시하지 않았다. `692b3bfd`에서 gateway도 browser와 같이
+  `RuntimeDirectoryPreserve=yes`로 정렬했다. 빈 실행 폴더만 유지하며 socket/process
+  종료·fence 검사는 그대로다. gateway/installer87개 검사 PASS다.
+- 현재 worker source는 c352, remote unit source는692b다. 새 successor manifest와
+  source pin을 명시적으로 적용해 stage/verify 후 Catalog를 재기동했다. 운영 evidence는
+  `/var/lib/eom-kakao-gateway-release-c352037e/installed.json`, 현재 설치 검증 입력은 같은
+  폴더의 `install-manifest-runtime-dir.json`과 `payload`다. 최초 publication/manifest는
+  역사적 predecessor로 보존하며, 최초 hash를 현재 successor의 검증값으로 사용하지 않는다.
+- Catalog/API/Web/Caddy 및 HTTPS login은 정상이다. 실패한 MANUAL intent는 여전히
+  원래 기록이며 사용자가 `로그인 연결 종료 → 카카오 로그인 준비`로 새 연결을 여는
+  supported 경로를 안내했다. 실제 카카오 로그인/한 방/CSV·사진/PDF는 아직 NOT_VERIFIED다.
+
 
 ## 2026-11-16 보호 runtime 설치·MANUAL/PDF 활성화
 
