@@ -23,6 +23,9 @@ from typing import Any, NoReturn
 PREFIXES = {
     name: Path("/opt/eom/conda/envs") / f"eom-kakao-{name}" for name in ("browser", "remote", "pdf")
 }
+PROFILE_DIRECTORY = Path("/var/lib/eom-kakao/profile")
+BROWSER_RUNTIME_DIRECTORY = Path("/var/lib/eom-kakao-runtime/browser")
+REMOTE_RUNTIME_DIRECTORY = Path("/var/lib/eom-kakao-runtime/remote")
 BROWSER = Path("/opt/eom/kakao-browser/playwright-1.65.2")
 NOVNC = Path("/opt/eom/kakao-remote/releases/novnc-1.6.0/noVNC")
 XVNC = Path("/usr/bin/Xtigervnc")
@@ -414,6 +417,12 @@ def layout() -> tuple[Layout, ...]:
     return (
         Layout(Path("/var/lib/eom-kakao"), 0, grp.getgrnam("eom-kakao-control").gr_gid, 0o750),
         Layout(Path("/var/lib/eom-kakao/profile"), browser.pw_uid, browser.pw_gid, 0o700),
+        Layout(
+            Path("/var/lib/eom-kakao/downloads"),
+            browser.pw_uid,
+            grp.getgrnam("eom-kakao-control").gr_gid,
+            0o2750,
+        ),
         Layout(root, 0, 0, 0o755),
         Layout(root / "browser", owner.pw_uid, browser.pw_gid, 0o2750),
         Layout(root / "remote", owner.pw_uid, grp.getgrnam("eom-kakao-grant").gr_gid, 0o2750),
@@ -667,32 +676,36 @@ def apply_layout(
     else:
         check_identities(required=True)
     entries = layout()
-    profile_created = create and not os.path.lexists(entries[1].path)
+    by_path = {entry.path: entry for entry in entries}
+    profile = by_path[PROFILE_DIRECTORY]
+    browser = by_path[BROWSER_RUNTIME_DIRECTORY]
+    remote = by_path[REMOTE_RUNTIME_DIRECTORY]
+    profile_created = create and not os.path.lexists(profile.path)
     for entry in entries:
         exact_layout(entry, create=create)
     for entry in (
         Layout(
             Path("/var/lib/eom-kakao/profile.lock"),
-            entries[1].uid,
+            profile.uid,
             grp.getgrnam("eom-kakao-control").gr_gid,
             0o640,
         ),
         Layout(
             Path("/var/lib/eom-kakao-runtime/browser/control.lock"),
-            entries[3].uid,
-            entries[3].gid,
+            browser.uid,
+            browser.gid,
             0o600,
         ),
         Layout(
             Path("/var/lib/eom-kakao-runtime/remote/control.lock"),
-            entries[4].uid,
-            entries[4].gid,
+            remote.uid,
+            remote.gid,
             0o600,
         ),
     ):
         exact_layout(entry, create=create, content=b"")
     initial_manifest = fresh_receipt(
-        entries[1].path,
+        profile.path,
         FRESH_RECEIPT,
         profile_id=profile_id,
         manifest_sha256=manifest_sha256,

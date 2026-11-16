@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-download-v1/1.0",
+  "title": "Untrusted local MANUAL download observation, not source admission",
+  "$defs": {
+    "Identity": {
+      "type": "object",
+      "required": ["schema_version", "capture_id", "profile_id", "browser_run_id", "fence_epoch", "page_instance_id", "started_at"],
+      "properties": {
+        "schema_version": {"const": "kakao-manual-download/1.0"},
+        "capture_id": {"type": "string", "pattern": "^kakaodownload_[0-9a-f]{32}$"},
+        "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+        "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+        "fence_epoch": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "page_instance_id": {"type": "string", "pattern": "^kakaopage_[0-9a-f]{32}$"},
+        "started_at": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"}
+      }
+    },
+    "Member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "size_bytes", "sha256"],
+      "properties": {
+        "relative_path": {"const": "payload.bin"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "Start": {
+      "allOf": [{"$ref": "#/$defs/Identity"}],
+      "type": "object", "unevaluatedProperties": false,
+      "required": ["phase"],
+      "properties": {"phase": {"const": "STARTED"}}
+    },
+    "Result": {
+      "allOf": [{"$ref": "#/$defs/Identity"}],
+      "type": "object", "unevaluatedProperties": false,
+      "required": ["phase", "completed_at", "suggested_filename", "member", "error_code"],
+      "properties": {
+        "phase": {"enum": ["RECEIVED", "FAILED"]},
+        "completed_at": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+        "suggested_filename": {"type": ["string", "null"], "minLength": 1, "maxLength": 1024},
+        "member": {"oneOf": [{"$ref": "#/$defs/Member"}, {"type": "null"}]},
+        "error_code": {"enum": [null, "DOWNLOAD_FAILED", "DOWNLOAD_CANCELLED", "DOWNLOAD_TIMEOUT", "DOWNLOAD_LIMIT", "DOWNLOAD_EMPTY", "DOWNLOAD_FILE_INVALID"]}
+      },
+      "if": {"properties": {"phase": {"const": "RECEIVED"}}},
+      "then": {"properties": {"error_code": {"type": "null"}, "member": {"$ref": "#/$defs/Member"}}},
+      "else": {"properties": {"error_code": {"type": "string"}, "member": {"type": "null"}}}
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/Start"}, {"$ref": "#/$defs/Result"}]
+}

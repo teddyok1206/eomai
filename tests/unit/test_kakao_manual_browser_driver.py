@@ -116,6 +116,7 @@ def manual(local, monkeypatch):
         callbacks["close"](object())
 
     context = SimpleNamespace(
+        pages=[],
         close=AsyncMock(side_effect=close),
         on=lambda event, callback: callbacks.update({event: callback}) or stopping.set(),
     )
@@ -132,6 +133,14 @@ def manual(local, monkeypatch):
     monkeypatch.setattr(setup, "require_supervisor", Mock())
     monkeypatch.setattr(setup, "prepare_xauthority", Mock())
     monkeypatch.setattr(setup, "require_chromium", Mock())
+    downloads = SimpleNamespace(
+        incoming=local / "downloads",
+        subscribe=Mock(),
+        observe_incoming=Mock(),
+        failure=None,
+        close=AsyncMock(),
+    )
+    monkeypatch.setattr(driver, "ManualDownloads", Mock(return_value=downloads))
     config = setup.ManualSetup(fence(), SHA, SHA)
     try:
         yield config, stopping, playwright, context, child, events, callbacks
@@ -152,7 +161,8 @@ def test_manual_headed_sandbox_and_close_flush_precede_xvnc_stop(manual):
     assert call.kwargs == {
         "headless": False,
         "chromium_sandbox": True,
-        "accept_downloads": False,
+        "accept_downloads": True,
+        "downloads_path": str(events.parent / "downloads"),
         "timeout": driver.START_SECONDS * 1000,
         "env": setup.child_environment(),
         "handle_sigterm": False,
@@ -522,12 +532,16 @@ deadline=time.monotonic()+3
 while not ready.exists() and child.poll() is None and time.monotonic()<deadline:time.sleep(.01)
 assert ready.exists()
 class Context:
+    pages=[]
     def on(self,*args):print('READY',flush=True)
     async def close(self):record('context')
 ctx=Context()
 p=SimpleNamespace(chromium=SimpleNamespace(executable_path='/opt/pinned/chrome',
     launch_persistent_context=AsyncMock(return_value=ctx)),stop=AsyncMock(side_effect=lambda:record('transport')))
 d._start_playwright=AsyncMock(return_value=p);d._start_xvnc=lambda:child;d._wait_xvnc=AsyncMock()
+d.ManualDownloads=lambda _:SimpleNamespace(
+    incoming=events.parent/'downloads',subscribe=lambda *args:None,
+    observe_incoming=lambda:None,failure=None,close=AsyncMock())
 s.require_supervisor=lambda:None;s.require_chromium=lambda *args:None
 s.prepare_xauthority=lambda:None
 f=ProfileFence.model_validate({'schema_version':'kakao-profile-fence/1.0','profile_id':'kakaoprofile_'+'a'*32,

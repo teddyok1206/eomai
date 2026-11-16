@@ -185,6 +185,14 @@ GLX만 끄고 Chromium sandbox는 유지한다. RFB socket만 열린 것을 disp
 띄운다. probe 출력은 버리며 짧은 timeout/실제 child 종료를 확인한다. GPU 추론/임베딩이나
 호스트 그래픽 driver 설정은 변경하지 않는다.
 
+pure `manual_download.py` 계약과 collector의 동명 adapter는 승인된 MANUAL 내보내기
+event만 구독한다. 실제 SDK 다운로드를 허용하고 별도 로컬 staging에 시작/종료 receipt와
+고정 payload member를 보관해 context 종료 뒤에도 남긴다. suggested filename은 metadata이고
+경로/identity가 아니며 URL·인증정보를 저장하지 않는다. 동일 event는 한 번, 같은 filename의
+새 event는 별도 capture다. 크기/건수/대기 상한과 취소·부분 파일 검사를 적용한다.
+이는 provider room/사진 occurrence 검증이나 Catalog의 accepted source가 아니다.
+다운로드 수신 source/fixture PASS와 설치 활성·실제 카카오 파일 수신은 따로 확인한다.
+
 `kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
 허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은
 gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채널 검증/수집 성공으로 바꾸지

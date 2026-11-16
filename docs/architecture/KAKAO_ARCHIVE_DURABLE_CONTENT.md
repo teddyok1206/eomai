@@ -290,6 +290,41 @@ group을 추가할 뿐 renderer를 Catalog/NAS/eom group에 추가하지 않는�
 
 ## 10. 실패·재시도·멱등·출력 수명
 
+### MANUAL 내보내기 파일 수신 — 2026-11-16 실증 후속
+
+1. 책임은 기존 browser driver의 local download adapter다. 사람이 승인해 누른
+   내보내기/사진 다운로드를 수신할 뿐 방을 열거나 버튼을 누르거나 원본 수락 권한을 만들지 않는다.
+2. 다운로드 bytes는 아직 untrusted local staging이다. canonical source는 기존 Catalog가
+   현재 owner/fence와 실제 채널·방·capture 근거를 검증해 발행한 Artifact revision이다.
+3. 각 download에 별도 capture ID를 부여하고 실제 profile/browser run/epoch와 연결한다.
+   start/result receipt는 별도 파일로 한 번씩 쓰며 시작 기록을 완료 기록으로 덮지 않는다.
+4. 결과는 고정 local member·byte count·SHA와 원래 suggested filename만 가진다. URL,
+   cookie·session·인증정보는 받지 않는다. filename은 identity나 경로·메시지 join key가 아니다.
+   page instance ID는 browser 안의 창 구분일 뿐 provider room identity가 아니다.
+5. 연산은 page별 event subscription, capture ID key lookup, 제한된 진행 파일 관측,
+   완료 파일의 한 번 streaming hash/copy다. event 처리에 DOM 전체 스캔이나 DB 조회가 없다.
+6. process-local map/set은 실행 중 작업만 관리한다. 보관은 기존 profile 전용 UID가 쓰는
+   `/var/lib/eom-kakao/downloads/<browser_run>/<capture>/`와 작은 immutable JSON receipt다.
+   부모는 root 설치·setgid control group read-only이며 Catalog가 정식 수락할 수 있다.
+7. 파일 하나당32MiB, 한 MANUAL run 최대16건·수락 bytes128MiB, 다운로드 대기60초다.
+   incoming 크기도 관측해 넘으면 취소한다. 이는 수락/취소 상한이지 OS disk hard quota가
+   아니다. 네트워크/파일 I/O 사이 잠깐의 초과 가능성을 숨기지 않고 temp 파일은 context가 정리한다.
+   완료 해시는 O(bytes), 메모리는 고정 chunk, monitoring은 O(진행 파일 수)이며 수가 제한된다.
+8. DB transaction/새 queue는 없다. 이미 supervisor가 가진 profile flock과 실제 run fence를
+   재사용한다. 중단 시 먼저 download cancel/reap와 FAILED receipt, 그 뒤 context를 닫는다.
+   완료 payload는 context 종료 후에도 남고 완료 receipt 없는 파일은 수집 성공이 아니다.
+9. pure schema/model은 기존 worker-contract package, SDK·파일 adapter는 collector에 둔다.
+   worker는 NAS/DB를 읽거나 쓰지 않는다. 기존 설치 layout/unit의 writable path만 좁게 추가한다.
+10. 같은 download event는 하나의 task만 만든다. 새 실제 내보내기는 새 capture이며
+    기존 실패/부분 bytes를 성공으로 바꾸거나 filename으로 dedup하지 않는다. 종료된 run을
+    재시작해 클릭을 재생하지 않는다. 이후 owner admission은 기존 source 멱등 계약을 사용한다.
+11. `accept_downloads=True`만 켜는 대안은 context 종료 때 파일이 사라지고 파일/방 연결과
+    실패 증거가 없다. 별도 download server나 AI 판독은 필요 없으며 도입하지 않는다.
+
+이 MANUAL 보관은 CSV·사진 자동 수집/정합 또는 accepted source의 대체 증거가 아니다.
+실제 버튼 다운로드와 격리 fixture 다운로드는 별도 검증한다. 기본80%/window manager 개선은
+별도 display 책임이며 다운로드를 위해 현재 profile/비밀번호를 수정하지 않는다.
+
 ### 채널 선택은 데이터이며 특정 채널을 코드에 고정하지 않는다
 
 사용자가 다른 채널로 바꿀 수 있어야 하므로 채널 이름/ID를 조건문·기본값·수집 selector에

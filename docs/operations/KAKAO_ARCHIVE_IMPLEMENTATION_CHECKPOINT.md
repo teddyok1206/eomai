@@ -1,5 +1,26 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 18:50 UTC MANUAL 다운로드 수신 source·실제 Chromium 합성 검증
+
+- 다운로드 차단 원인을 기존 MANUAL driver에서 수정했다. JSON Schema 2020-12/frozen
+  download receipt를 먼저 정의한 뒤, SDK event 수신→로컬 고정 member→완료 byte/hash→별도
+  terminal receipt로 연결했다. 시작/실패 기록과 기존 profile/인증정보는 덮지 않는다.
+- 실제 설치 Chromium으로 익명 data-URL CSV 2건을 내려받았다. 같은 filename이지만 다른
+  capture를 유지하며, context 종료 뒤에도 결과 byte/hash와 파일이 보존되는 것을 검증했다.
+  sandbox는 켜져 있고 실제 카카오 profile·대화·외부 네트워크 자료는 사용하지 않았다.
+- empty/oversize/timeout/취소/위험 경로/중복 event/즉시 종료와 installer/runtime 검사
+  **138 PASS**, source3개 strict mypy·Ruff 및 schema audit1467/mirror1113 PASS다.
+  첫 합성 Chromium 검사는 headless-shell 미설치와 test process의 다른 umask 때문에
+  실패했다. 기존 설치 Chromium과 운영과 같은0077 umask로 명시해 재검증했으며,
+  실제 boundary의 파일 권한 검사·sandbox를 해제하지 않았다.
+- root 설치 download directory는 browser UID/control group의2750이고, browser unit에
+  그 path만 쓰기를 추가한다. 기존 private profile·NAS/DB 접근 금지는 그대로다. installer는
+  layout 위치 변경이 lock owner에 영향을 주지 않도록 path map으로 identity를 조회한다.
+- **현재는 source 검증 완료이며 운영 반영은 다음 단계**다. API/Catalog/Web·DB0087,
+  INDEX/QUERY pin은 바꾸지 않는다. stopped-profile 경계에서 browser collector와 그 pure
+  contract wheel만 같은 release로 설치하고 실제 설치본 합성 수신까지 확인할 예정이다.
+  사용자의 실제 CSV 재시도/학생 PDF는 아직 PASS가 아니다. 로그인 요청은 설치 검증 뒤다.
+
 ## 2026-11-16 18:36 UTC 실제 내보내기 시도·공개 질문 조합 연결
 
 - 사용자가 번역 팝업을 직접 닫았고, 방 우측 위 메뉴 열기→스크롤과 내보내기 버튼 실행을

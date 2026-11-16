@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import driver_setup as setup
+from .manual_download import ManualDownloads, Page
 from .profile import BrowserRuntimeError
 
 START_SECONDS = 10.0
@@ -26,6 +27,8 @@ XVNC_STOP_SECONDS = 3.0
 
 
 class BrowserContext(Protocol):
+    @property
+    def pages(self) -> list[Page]: ...
     def on(self, event: str, callback: Callable[..., None]) -> None: ...
     async def close(self) -> None: ...
 
@@ -40,6 +43,7 @@ class BrowserType(Protocol):
         headless: bool,
         chromium_sandbox: bool,
         accept_downloads: bool,
+        downloads_path: str,
         timeout: float,
         env: dict[str, str],
         handle_sigterm: bool,
@@ -156,6 +160,7 @@ async def run_manual(config: setup.ManualSetup, stopping: asyncio.Event) -> None
     child: subprocess.Popen[bytes] | None = None
     playwright: Playwright | None = None
     context: BrowserContext | None = None
+    downloads: ManualDownloads | None = None
     closed = asyncio.Event()
     failure: BaseException | None = None
     try:
@@ -170,12 +175,14 @@ async def run_manual(config: setup.ManualSetup, stopping: asyncio.Event) -> None
         if stopping.is_set():
             raise BrowserRuntimeError("KAKAO_BROWSER_START_CANCELLED")
         setup.require_supervisor()
+        downloads = ManualDownloads(config.fence)
         opened = await asyncio.wait_for(
             playwright.chromium.launch_persistent_context(
                 str(setup.PROFILE),
                 headless=False,
                 chromium_sandbox=True,
-                accept_downloads=False,
+                accept_downloads=True,
+                downloads_path=str(downloads.incoming),
                 timeout=START_SECONDS * 1000,
                 env=setup.child_environment(),
                 handle_sigterm=False,
@@ -186,12 +193,18 @@ async def run_manual(config: setup.ManualSetup, stopping: asyncio.Event) -> None
             timeout=START_SECONDS + 1,
         )
         context = opened
+        opened.on("page", downloads.subscribe)
+        for page in opened.pages:
+            downloads.subscribe(page)
         opened.on("close", lambda *_: closed.set())
         while not stopping.is_set():
             if child.poll() is not None:
                 raise BrowserRuntimeError("KAKAO_BROWSER_XVNC_EXITED")
             if closed.is_set():
                 raise BrowserRuntimeError("KAKAO_BROWSER_CONTEXT_CLOSED")
+            downloads.observe_incoming()
+            if downloads.failure is not None:
+                raise downloads.failure
             try:
                 await asyncio.wait_for(stopping.wait(), timeout=0.1)
             except TimeoutError:
@@ -199,6 +212,14 @@ async def run_manual(config: setup.ManualSetup, stopping: asyncio.Event) -> None
     except BaseException as error:
         failure = error
     finally:
+        # Record incomplete transfers before context close removes SDK temp files.
+        if downloads is not None:
+            try:
+                await downloads.close()
+                if downloads.failure is not None:
+                    failure = failure or downloads.failure
+            except Exception:
+                failure = failure or BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_STOP_FAILED")
         # Do not close the display before the browser can flush its persistent profile.
         if context is not None:
             try:

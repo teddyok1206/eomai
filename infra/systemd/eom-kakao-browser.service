@@ -48,6 +48,7 @@ LimitNOFILE=1024
 LimitCORE=0
 ReadOnlyPaths=/var/lib/eom-kakao-runtime/browser/request.json /etc/eom/kakao-browser.env
 ReadWritePaths=/var/lib/eom-kakao/profile /var/lib/eom-kakao/profile.lock /run/eom-kakao-private
+ReadWritePaths=/var/lib/eom-kakao/downloads
 # VNC directory/socket creation and access are an independently verified install gate.
 ReadWritePaths=-/run/eom-kakao-vnc
 InaccessiblePaths=/mnt/nas /home/eom/EOM -/home/eom/EOMIS /root /srv/eom/worker-homes
