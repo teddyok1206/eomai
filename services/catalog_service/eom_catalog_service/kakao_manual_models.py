@@ -30,9 +30,18 @@ class KakaoProfileRuntimeRecord(Base):
             name="ck_kakao_profile_versions",
         ),
         CheckConstraint(
-            "mode <> 'STOPPED' OR current_lease_id IS NULL", name="ck_kakao_profile_stopped"
+            "mode <> 'STOPPED' OR "
+            "(current_lease_id IS NULL AND current_collection_browser_run_id IS NULL)",
+            name="ck_kakao_profile_stopped",
+        ),
+        CheckConstraint(
+            "(current_lease_id IS NULL OR current_collection_browser_run_id IS NULL) AND "
+            "(mode <> 'MANUAL' OR current_lease_id IS NOT NULL) AND "
+            "(mode <> 'AUTO' OR current_collection_browser_run_id IS NOT NULL)",
+            name="ck_kakao_profile_dispatch_owner",
         ),
         UniqueConstraint("profile_id", name="uq_kakao_profile_id"),
+        UniqueConstraint("owner_operator_id", "profile_id", name="uq_kakao_profile_operator"),
         UniqueConstraint(
             "owner_operator_id", "source_binding_id", "profile_id", name="uq_kakao_profile_owner"
         ),
@@ -44,6 +53,19 @@ class KakaoProfileRuntimeRecord(Base):
             ],
             name="fk_kakao_profile_owner",
             ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["profile_id", "current_collection_browser_run_id", "fence_epoch"],
+            [
+                "kakao_collection_browsers.profile_id",
+                "kakao_collection_browsers.browser_run_id",
+                "kakao_collection_browsers.fence_epoch",
+            ],
+            name="fk_kakao_profile_current_collection_browser",
+            ondelete="RESTRICT",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
         ),
         ForeignKeyConstraint(
             ["profile_id", "current_lease_id"],
@@ -64,6 +86,7 @@ class KakaoProfileRuntimeRecord(Base):
     gateway_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
     current_lease_id: Mapped[str | None] = mapped_column(String(49))
+    current_collection_browser_run_id: Mapped[str | None] = mapped_column(String(48))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -115,13 +138,21 @@ class KakaoManualSessionRecord(Base):
         UniqueConstraint("owner_operator_id", "lease_id", name="uq_kakao_manual_owner"),
         UniqueConstraint("profile_id", "fence_epoch", name="uq_kakao_manual_fence"),
         ForeignKeyConstraint(
-            ["owner_operator_id", "source_binding_id", "profile_id"],
+            ["owner_operator_id", "profile_id"],
             [
                 "kakao_profile_runtime.owner_operator_id",
-                "kakao_profile_runtime.source_binding_id",
                 "kakao_profile_runtime.profile_id",
             ],
             name="fk_kakao_manual_profile_owner",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["owner_operator_id", "source_binding_id"],
+            [
+                "kakao_channel_bindings.owner_operator_id",
+                "kakao_channel_bindings.source_binding_id",
+            ],
+            name="fk_kakao_manual_binding_owner",
             ondelete="RESTRICT",
         ),
     )

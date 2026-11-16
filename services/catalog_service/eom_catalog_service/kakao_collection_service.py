@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from eom_catalog_contracts.kakao_capability import CAPABILITY_VERIFICATION_REF
 from eom_catalog_contracts.kakao_collection import (
     AcceptedKakaoRoomCollection,
     KakaoCollectionStatus,
@@ -25,7 +24,6 @@ from .kakao_archive_authorization import (
     KakaoArchiveError,
     authorize_kakao_actor,
     authorize_kakao_binding_scope,
-    authorize_kakao_current_operator,
     authorize_kakao_room_scope,
 )
 from .kakao_archive_commands import (
@@ -34,12 +32,13 @@ from .kakao_archive_commands import (
     validate_kakao_idempotency_key,
 )
 from .kakao_archive_models import KakaoChannelBindingRecord, KakaoCollectionPolicyRevisionRecord
-from .kakao_capability_models import KakaoCapabilityAcceptanceRecord
 from .kakao_capability_service import KakaoCapabilityService
+from .kakao_collection_authorization import (
+    authorize_kakao_collection_preparation,
+    validate_kakao_collection_pins,
+)
 from .kakao_collection_models import KakaoCollectionRunRecord as Run
 from .kakao_collection_models import KakaoCollectionTaskRecord as Task
-from .kakao_room_models import KakaoRoomRecord
-from .kakao_source_pointers import validate_source_pointer_metadata_batch
 
 _TERMINAL = frozenset({"COMPLETED", "PARTIAL", "FAILED", "CANCELLED"})
 
@@ -80,32 +79,6 @@ class KakaoCollectionService:
                 updated_at=row.updated_at,
             )
         )
-
-    @staticmethod
-    def _pins(session: Session, row: Run) -> ArtifactMemberPointer:
-        capability = session.get(KakaoCapabilityAcceptanceRecord, row.capability_revision_id)
-        policy = session.get(KakaoCollectionPolicyRevisionRecord, row.policy_revision_id)
-        if (
-            capability is None
-            or capability.owner_operator_id != row.owner_operator_id
-            or capability.source_binding_id != row.source_binding_id
-            or capability.room_id != row.anchor_room_id
-            or capability.adapter_release_sha256 != row.adapter_release_sha256
-            or policy is None
-            or policy.source_binding_id != row.source_binding_id
-            or policy.sha256 != row.policy_sha256
-        ):
-            raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_PIN_INVALID")
-        pointer = ArtifactMemberPointer(
-            artifact_id=capability.manifest_artifact_id,
-            artifact_revision_id=capability.manifest_artifact_revision_id,
-            member_path="verification.json",
-            schema_ref=CAPABILITY_VERIFICATION_REF,
-            media_type="application/json",
-            sha256=capability.manifest_sha256,
-        )
-        validate_source_pointer_metadata_batch(session, (pointer,))
-        return pointer
 
     @staticmethod
     def _receipt(session: Session, row: Run, *, replayed: bool) -> AcceptedKakaoRoomCollection:
@@ -175,7 +148,7 @@ class KakaoCollectionService:
             if prior is not None:
                 if prior.request_sha256 != digest:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
-                self._pins(session, prior)
+                validate_kakao_collection_pins(session, prior)
                 return self._receipt(session, prior, replayed=True)
             self._precondition(binding, command)
 
@@ -198,7 +171,7 @@ class KakaoCollectionService:
             if prior is not None:
                 if prior.request_sha256 != digest:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
-                self._pins(session, prior)
+                validate_kakao_collection_pins(session, prior)
                 return self._receipt(session, prior, replayed=True)
             self._precondition(binding, command)
             policy = session.get(
@@ -234,7 +207,7 @@ class KakaoCollectionService:
                 created_at=now,
                 updated_at=now,
             )
-            self._pins(session, row)
+            validate_kakao_collection_pins(session, row)
             session.add(row)
             session.flush()
             session.add(
@@ -273,7 +246,7 @@ class KakaoCollectionService:
                 PermissionKey.KAKAO_ARCHIVE_READ,
                 lock=False,
             )
-            self._pins(session, row)
+            validate_kakao_collection_pins(session, row)
             return self._status(row)
 
     def read_background_intent(self, run_id: str) -> StoredKakaoCollectionIntent:
@@ -286,37 +259,9 @@ class KakaoCollectionService:
             row = session.get(Run, run_id)
             if row is None:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-            for permission in (
-                PermissionKey.KAKAO_ARCHIVE_READ,
-                PermissionKey.KAKAO_ARCHIVE_COLLECT,
-            ):
-                authorize_kakao_current_operator(
-                    session,
-                    operator_id=row.owner_operator_id,
-                    permission=permission,
-                    admin_only=True,
-                )
-            binding = session.get(KakaoChannelBindingRecord, row.source_binding_id)
-            if binding is None or binding.owner_operator_id != row.owner_operator_id:
-                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-            if binding.state == "RETIRED":
-                raise KakaoArchiveError("KAKAO_ARCHIVE_BINDING_RETIRED")
-            if row.state in _TERMINAL:
-                raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_TERMINAL")
-            if binding.current_policy_revision_id != row.policy_revision_id:
-                raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_POLICY_CHANGED")
-            if row.adapter_release_sha256 != self.capabilities.adapter_sha256:
-                raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_ADAPTER_CHANGED")
-            pointer = self._pins(session, row)
-            # Room lifecycle is checked without synthesizing an OPERATOR actor.
-            room = session.get(KakaoRoomRecord, row.anchor_room_id)
-            if (
-                room is None
-                or room.owner_operator_id != row.owner_operator_id
-                or room.source_binding_id != row.source_binding_id
-                or room.state != "ACTIVE"
-            ):
-                raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_RETIRED")
+            pointer = authorize_kakao_collection_preparation(
+                session, row, adapter_release_sha256=self.capabilities.adapter_sha256
+            )
             return StoredKakaoCollectionIntent(
                 self._receipt(session, row, replayed=True), pointer, self._status(row)
             )

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/collection-browser-v1/1.0",
+  "oneOf": [{"$ref": "#/$defs/intent"}, {"$ref": "#/$defs/observation"}],
+  "$defs": {
+    "run": {"type": "string", "pattern": "^kakaorun_[0-9a-f]{32}$"},
+    "binding": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "profile": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+    "browser": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "boot": {"type": "string", "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"},
+    "version": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "utc": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+    "nullableUtc": {"anyOf": [{"$ref": "#/$defs/utc"}, {"type": "null"}]},
+    "invocation": {"type": ["string", "null"], "pattern": "^[0-9a-f]{32}$"},
+    "pid": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+    "monotonic": {"type": ["integer", "null"], "minimum": 1, "maximum": 9223372036854775807},
+    "intent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "run_id", "source_binding_id", "profile_id", "browser_run_id", "fence_epoch", "epoch_number", "command_sha256", "dispatch_boot_id", "phase", "resource_version", "created_at", "closed_at", "browser_invocation_id", "browser_pid", "browser_monotonic_us", "browser_observed_at", "last_error"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-browser-intent/1.0"},
+        "run_id": {"$ref": "#/$defs/run"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "profile_id": {"$ref": "#/$defs/profile"},
+        "browser_run_id": {"$ref": "#/$defs/browser"},
+        "fence_epoch": {"$ref": "#/$defs/version"},
+        "epoch_number": {"$ref": "#/$defs/version"},
+        "command_sha256": {"$ref": "#/$defs/hash"},
+        "dispatch_boot_id": {"$ref": "#/$defs/boot"},
+        "phase": {"enum": ["PREPARING", "RUNNING", "STOPPING", "CLOSED"]},
+        "resource_version": {"$ref": "#/$defs/version"},
+        "created_at": {"$ref": "#/$defs/utc"},
+        "closed_at": {"$ref": "#/$defs/nullableUtc"},
+        "browser_invocation_id": {"$ref": "#/$defs/invocation"},
+        "browser_pid": {"$ref": "#/$defs/pid"},
+        "browser_monotonic_us": {"$ref": "#/$defs/monotonic"},
+        "browser_observed_at": {"$ref": "#/$defs/nullableUtc"},
+        "last_error": {"enum": [null, "START_FAILED", "RUNTIME_LOST", "OWNER_UNAVAILABLE", "REBOOT_UNCLEAN"]}
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "profile_id", "browser_run_id", "fence_epoch", "command_sha256", "dispatch_boot_id", "observed_boot_id", "observed_at", "kind", "profile_locked", "gateway_stopped", "invocation_id", "main_pid", "started_monotonic_us", "runtime_error"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-browser-observation/1.0"},
+        "profile_id": {"$ref": "#/$defs/profile"},
+        "browser_run_id": {"$ref": "#/$defs/browser"},
+        "fence_epoch": {"$ref": "#/$defs/version"},
+        "command_sha256": {"$ref": "#/$defs/hash"},
+        "dispatch_boot_id": {"$ref": "#/$defs/boot"},
+        "observed_boot_id": {"$ref": "#/$defs/boot"},
+        "observed_at": {"$ref": "#/$defs/utc"},
+        "kind": {"enum": ["RUNNING", "STOPPED", "PRE_READY_FAILED", "REBOOT_UNCLEAN"]},
+        "profile_locked": {"type": "boolean"},
+        "gateway_stopped": {"type": "boolean"},
+        "invocation_id": {"$ref": "#/$defs/invocation"},
+        "main_pid": {"$ref": "#/$defs/pid"},
+        "started_monotonic_us": {"$ref": "#/$defs/monotonic"},
+        "runtime_error": {"enum": [null, "START_FAILED", "RUNTIME_LOST", "REBOOT_UNCLEAN"]}
+      }
+    }
+  }
+}

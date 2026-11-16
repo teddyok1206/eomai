@@ -49,6 +49,12 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_collection_browser.py",
+            "eom_catalog_contracts/resources/kakao-archive/collection-browser-v1.schema.json",
+            "eom_catalog_service/kakao_collection_authorization.py",
+            "eom_catalog_service/kakao_collection_browser_models.py",
+            "eom_catalog_service/kakao_collection_browser_service.py",
+            "eom_orchestrator/kakao_collection_browser_runtime.py",
             "eom_catalog_contracts/kakao_collection.py",
             "eom_catalog_contracts/resources/kakao-archive/collection-intent-v1.schema.json",
             "eom_catalog_service/kakao_collection_models.py",
@@ -214,6 +220,8 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "from eom_orchestrator.general_chat_model_selection "
                 "import current_chat_model_settings; "
                 "from eom_catalog_contracts.validation import load_schema; "
+                "assert load_schema('kakao-collection-browser-v1')['$id'] == "
+                "'eom://schemas/kakao-archive/collection-browser-v1/1.0'; "
                 "assert load_schema('kakao-student-directory-v1')['$id'] == "
                 "'eom://schemas/kakao-archive/student-directory-v1/1.0'; "
                 "from eom_catalog_contracts.kakao_collection import KakaoRoomCollectionCreate; "
@@ -238,6 +246,7 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
     import_orders = (
         (
             "eom_catalog_service.kakao_archive_service",
+            "eom_catalog_service.kakao_collection_browser_service",
             "eom_catalog_service.kakao_student_service",
             "eom_catalog_service.kakao_room_service",
             "eom_catalog_service.kakao_media_publication",

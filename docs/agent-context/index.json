@@ -4,6 +4,44 @@
   "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
   "topics": [
     {
+      "id": "kakao-collection",
+      "note": "kakao-collection.md",
+      "keywords": ["KakaoTalk", "수집", "프로필", "AUTO", "MANUAL", "epoch", "수집 재개"],
+      "source_paths": [
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_browser.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_browser_models.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_browser_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_authorization.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_models.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_collection.py",
+        "services/catalog_service/eom_catalog_service/kakao_capability_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_room_intake.py",
+        "services/catalog_service/eom_catalog_service/kakao_manual_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_manual_models.py",
+        "services/orchestrator/eom_orchestrator/kakao_browser_runtime.py",
+        "services/orchestrator/eom_orchestrator/kakao_manual_runtime.py",
+        "services/orchestrator/eom_orchestrator/kakao_collection_browser_runtime.py",
+        "services/orchestrator/eom_orchestrator/kakao_profile_observation.py"
+      ],
+      "test_paths": [
+        "tests/unit/test_kakao_collection_browser_contracts.py",
+        "tests/unit/test_kakao_collection_browser_runtime.py",
+        "tests/integration/test_kakao_collection_browser_storage.py",
+        "tests/unit/test_kakao_collection_contracts.py",
+        "tests/integration/test_kakao_collection_storage.py",
+        "tests/integration/test_kakao_manual_storage.py",
+        "tests/integration/test_kakao_capability_storage.py",
+        "tests/integration/test_kakao_room_intake.py",
+        "tests/unit/test_kakao_browser_runtime.py"
+      ],
+      "reference_paths": [
+        "docs/architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md",
+        "docs/architecture/KAKAO_BROWSER_EXECUTION_BOUNDARY.md",
+        "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
+      ]
+    },
+    {
       "id": "kakao-archive",
       "note": "kakao-archive.md",
       "keywords": ["KakaoTalk", "카카오", "학생 질문", "CSV", "질문집 PDF", "비공개 대화", "packet", "학생별 PDF 다운로드"],
@@ -17,9 +55,6 @@
         "services/catalog_service/eom_catalog_service/kakao_manual_service.py",
         "services/catalog_service/eom_catalog_service/kakao_source_service.py",
         "services/catalog_service/eom_catalog_service/kakao_capability_service.py",
-        "services/catalog_service/eom_catalog_service/kakao_collection_service.py",
-        "services/catalog_service/eom_catalog_service/kakao_collection_models.py",
-        "packages/catalog_contracts/eom_catalog_contracts/kakao_collection.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_packet_store.py",
         "services/catalog_service/eom_catalog_service/kakao_export_service.py",
         "services/catalog_service/eom_catalog_service/kakao_question_editing.py",
@@ -81,8 +116,6 @@
         "tests/unit/test_kakao_room_intake.py",
         "tests/integration/test_kakao_room_intake.py",
         "tests/integration/test_kakao_capability_storage.py",
-        "tests/integration/test_kakao_collection_storage.py",
-        "tests/unit/test_kakao_collection_contracts.py",
         "tests/unit/test_kakao_pdf_execution.py",
         "tests/unit/test_kakao_remote_runtime.py",
         "tests/unit/test_kakao_browser_runtime.py",

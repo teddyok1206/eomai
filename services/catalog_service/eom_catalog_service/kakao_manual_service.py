@@ -401,13 +401,17 @@ class KakaoManualService:
                 )
                 session.add(profile)
                 session.flush()
-            if (
-                profile.owner_operator_id != owner
-                or profile.source_binding_id != binding.source_binding_id
-            ):
+            if profile.owner_operator_id != owner:
                 raise _error("REMOTE_PROFILE_UNAVAILABLE")
-            if profile.mode != "STOPPED" or profile.current_lease_id is not None:
+            if (
+                profile.mode != "STOPPED"
+                or profile.current_lease_id is not None
+                or profile.current_collection_browser_run_id is not None
+            ):
                 raise _error("REMOTE_PROFILE_BUSY")
+            # Historical sessions pin their own binding; only the positively
+            # closed current assignment moves, never an old lease or source.
+            profile.source_binding_id = binding.source_binding_id
             fence = ProfileFence(
                 schema_version="kakao-profile-fence/1.0",
                 profile_id=self._profile_id,
@@ -516,7 +520,12 @@ class KakaoManualService:
                     Lease.profile_id == profile.profile_id, Lease.fence_epoch == epoch
                 )
             )
-            if row is None or row.phase != "ENDED" or row.closed_at is None:
+            if (
+                row is None
+                or row.phase != "ENDED"
+                or row.closed_at is None
+                or row.owner_operator_id != intent.owner_operator_id
+            ):
                 raise _error("REMOTE_FENCE_STALE")
             return _intent(row)
 

@@ -203,8 +203,9 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 동명 channel binding은 화면에서만 목록 내 연결 번호로 구분하고 실제 요청은 exact ID를
 유지한다. 이름으로 합치거나 특정 채널명을 코드에 고정하지 않는다. MANUAL START의 확정된
 PROFILE_UNAVAILABLE 거절은 선택 수정이 가능하지만 timeout/응답 유실은 같은 intent를 유지한다.
-서버의 profile owner/binding fence를 UI 편의상 풀지 않는다. 다른 채널의 명시적 전환 경계와
-현재 복합 FK의 후속 검토는 durable-content 설계에 기록하며 아직 활성화로 주장하지 않는다.
+서버의 profile owner/fence를 UI 편의상 풀지 않는다. source는 실제 STOPPED 확인 뒤 같은
+owner의 다른 binding 전환을 지원하도록 history의 profile/binding FK를 분리한다. 자세한
+collection claim·종료 경계는 [수집 실행 문맥](kakao-collection.md)을 참고하며 운영 활성화와 구분한다.
 
 원격 browser/gateway의 종료 소켓은 각 격리 runtime의 `endpoint_cleanup.py`가 고정
 systemd `ExecStopPost`에서 정리한다. runtime directory와 request 감사본을 보존하는 것과

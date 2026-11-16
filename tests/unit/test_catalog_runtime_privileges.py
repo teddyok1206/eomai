@@ -70,6 +70,8 @@ def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity()
     assert tables.isdisjoint(UPDATE_TABLES)
     grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
     assert grants["UPDATE", "kakao_profile_runtime"] == {
+        "current_collection_browser_run_id",
+        "source_binding_id",
         "mode",
         "fence_epoch",
         "gateway_epoch",
@@ -92,6 +94,29 @@ def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity()
         "gateway_invocation_id",
     }
     assert ("UPDATE", "kakao_remote_commands") not in grants
+
+
+def test_collection_browser_grants_do_not_allow_rewriting_owner_or_command_pins() -> None:
+    tables = {"kakao_collection_runs", "kakao_collection_browsers"}
+    assert tables <= set(READ_TABLES) & set(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    assert grants["UPDATE", "kakao_collection_runs"] == {
+        "current_browser_run_id",
+        "resource_version",
+        "updated_at",
+    }
+    assert grants["UPDATE", "kakao_collection_browsers"] == {
+        "phase",
+        "resource_version",
+        "closed_at",
+        "close_kind",
+        "browser_invocation_id",
+        "browser_pid",
+        "browser_monotonic_us",
+        "browser_observed_at",
+        "last_error",
+    }
 
 
 def test_kakao_question_grants_cannot_rewrite_origin_body_or_history() -> None:

@@ -29,6 +29,15 @@ class KakaoCollectionRunRecord(Base):
             "owner_operator_id", "source_binding_id", "run_id", name="uq_kakao_collection_owner"
         ),
         ForeignKeyConstraint(
+            ["run_id", "current_browser_run_id"],
+            ["kakao_collection_browsers.run_id", "kakao_collection_browsers.browser_run_id"],
+            name="fk_kakao_collection_current_browser",
+            ondelete="RESTRICT",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["owner_operator_id", "source_binding_id", "anchor_room_id"],
             [
                 "kakao_rooms.owner_operator_id",
@@ -104,6 +113,7 @@ class KakaoCollectionRunRecord(Base):
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    current_browser_run_id: Mapped[str | None] = mapped_column(String(48))
 
 
 class KakaoCollectionTaskRecord(Base):

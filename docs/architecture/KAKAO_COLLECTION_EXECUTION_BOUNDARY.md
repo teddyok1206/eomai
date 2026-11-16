@@ -500,3 +500,34 @@ evidence closure의 byte materialization/재인가는 실제 실행·수락 직�
 한다. **이 read만으로 browser launch/source admission을 허용하면 안 된다.** 기존 공용 profile
 gate의 AUTO 소유, 실제 epoch/attempt, guarded activation과 full inventory·주기 실행은 다음
 구현이다. 이 첫 단계가 검증돼도 DRAFT/NOT_VERIFIED·AUTO 비활성은 그대로다.
+
+### 다음 연결: 공용 프로필과 실제 collection browser epoch
+
+- 기존 `kakao_profile_runtime`을 단일 gate로 유지한다. collection browser epoch 한 테이블과
+  profile/run의 current pointer만 추가한다. worker task/attempt, source authority나 별도 queue를
+  이 record로 대체하지 않는다. epoch는 process lifetime, task는 수집 작업 identity다.
+- worker가 받는 고정 입력은 기존 `ProfileFence` schema를 재사용한다. owner 간 intent/
+  running/closure 관측은 새 `collection-browser-v1`의 작은 typed metadata이며 public/worker가
+  보낸 bool을 authority로 받지 않는다. 실제 OS 관측 callback은 필수이고 lock 밖에서 실행한다.
+- same-owner의 다른 binding 전환을 위해 MANUAL history의 (owner,binding,profile) FK를
+  (owner,profile)와 (owner,binding)로 분리한다. 과거 lease/수신물은 수정하지 않는다. 실제 정지·
+  profile lock 해제 확인 전이나 다른 owner로는 바꾸지 않는다. 채널 identity는 별도 관측이다.
+- binding → 기존 installed-profile advisory gate → profile → run → epoch 순서로 잠근다.
+  시작 예약은 AUTO 소유와 증가 fence를 원자적으로 고정한다. 재조회는 같은 epoch를 반환하고
+  불명확한 이전 dispatch/이미 CLOSED인 원래 run을 새 browser로 자동 재생성하지 않는다.
+- (profile,fence), (run,epoch_number), non-CLOSED profile의 partial unique와 exact current
+  FK를 사용한다. 접근은 indexed lookup이며 큰 payload·원문·사진·인증정보는 저장하지 않는다.
+  수천 방을 같은 browser lifetime에서 순회할 수 있고 room마다 browser를 재시작하지 않는다.
+- PREPARING/RUNNING/STOPPING/CLOSED와 version으로 관리한다. running 관측의 실제 boot/
+  invocation/PID/monotonic start가 고정되고, stop timeout은 CLOSED가 아니다. 종료 callback의
+  정확한 실행·gateway 정지·profile lock 해제·freshness를 확인해야만 profile을 반환한다.
+- closure와 cleanup은 이미 접수된 epoch로 수행하므로 계정/정책 철회 뒤에도 실제 프로세스를
+  정지할 수 있다. 새 실행 준비/수락은 현재 accepted run의 권한·policy/adapter pin을 재검사한다.
+  HTTP session이나 worker actor를 가장하지 않는다. terminal epoch와 과거 실패는 보존한다.
+- epoch 예약/시작만으로 상위 run이나 문항 수집이 완료되지 않는다. parent run의 수집 상태는
+  실제 command/task owner가 관리한다. browser 종료는 current pointer만 반환하며 자동 retry·
+  source 수락·guarded activation은 후속 경계다. DRAFT의 예약도 AUTO 실증/활성화가 아니다.
+- 이 claim은 실제 방→CSV/사진→질문/PDF 경로를 위한 선행 저장 경계다. 현재 core/remote와
+  같은 OS adapter를 재사용하고, 실제 selector나 원격 브라우저를 fixture 근거로 활성화하지 않는다.
+- process-local bool lock이나 두 번째 AUTO 전용 mutex는 재시작/MANUAL 경합에 부족하다.
+  반대로 browser record에 방별 result를 복제하거나 새 runtime service를 만드는 것도 불필요하다.

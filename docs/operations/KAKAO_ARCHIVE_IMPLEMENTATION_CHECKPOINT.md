@@ -1,5 +1,43 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 공용 profile gate·collection browser lifetime 저장 연결
+
+- 기존 MANUAL과 같은 `kakao_profile_runtime` gate/advisory lock을 사용해 collection browser
+  epoch를 예약·재조회하고, 실제 관측 뒤 RUNNING/STOPPING/CLOSED를 수락하는 owner를 추가했다.
+  `collection-browser-v1` schema/mirror를 먼저 정의했고, worker 입력은 기존 ProfileFence와
+  canonical hash를 그대로 재사용한다. DB0092에는 browser lifetime 한 테이블과 profile/run의
+  exact current pointer만 추가했다. 별도 AUTO mutex·queue·runtime service는 만들지 않았다.
+- 같은 run의 동시 예약은 같은 epoch이며, CLOSED/불명확한 실행의 재조회도 새 browser를
+  만들지 않는다. 실제 callback은 lock 밖에서 실행하고 현재 version/fence·boot/invocation/
+  PID/monotonic start를 다시 대조한다. 미확인 종료/timeout이면 profile을 반환하지 않는다.
+  현재 owner/policy/adapter 권한은 공유 application 함수로 모아 두 기존 owner가 재사용한다.
+  정지 cleanup은 권한 철회 뒤에도 접수된 exact epoch로 수행할 수 있다.
+- MANUAL history의 profile FK와 binding FK를 분리해 같은 사용자가 실제 정지한 profile로
+  다른 자기 연결을 고를 수 있게 했다. 과거 lease/수신 proof는 수정하지 않는다. 첫 DB 회귀의
+  **239 PASS/1 FAIL**은 옛 profile assignment trigger가 이 전환을 여전히 막던 원인이었다.
+  trigger를 제거하지 않고 owner/profile identity는 불변, binding만 STOPPED·새 fence의 새
+  MANUAL/AUTO claim에서 바꿀 수 있게 좁혔다. active/새 fence 없음/다른 owner는 계속 거부한다.
+- 기존 fixed OS adapter의 정확한 실행 관측·stop 후 재관측을 새 owner metadata로 반환하는
+  Orchestrator adapter를 구현했다. 다른 invocation은 중지하지 않고, 실제 gateway가 예상과
+  달리 살아 있으면 그 소유자의 정리 대상으로 남긴다. reboot/PRE_READY_FAILED/비정상 exit는
+  성공으로 재해석하지 않으며 runtime error와 처음의 owner error를 보존한다. **새 browser
+  start/selector는 이 adapter에 아직 없고, 실제 호스트에서 새 AUTO를 실행한 증거도 아니다.**
+- 최종 guarded disposable PostgreSQL 회귀 **244 PASS**, source/계약/OS adapter 합성·권한/
+  의존성/개발 문맥·offline installed wheel 회귀 **256 PASS**, strict mypy7 source·Ruff/format·
+  shell syntax PASS다. 0092 적용→되돌림→재적용·ORM metadata 일치와 MANUAL/AUTO 경합,
+  중복 관측·late 권한 철회·unknown stop·새 MANUAL 이후 old closure 재조회·실패 보존을 검증했다.
+  개발 권한 검사의 옛 profile UPDATE 열 기대값1건도 새 current pointer/닫힌 binding 전환
+  계약에 맞췄으며, table-wide UPDATE나 owner/command pin 수정 권한은 주지 않는다.
+  기존 TestClient deprecation warning1건은 남는다. 운영 DB에는 pytest/migration을 하지 않았다.
+- browser 이력이나 새 cross-binding history가 있는 DB의 downgrade는 먼저 검토를 요구하며,
+  오래된 FK에 맞추려고 이력을 덮어쓰거나 지우지 않는다. 개발 문맥은 UI/PDF와 수집 실행으로
+  나누어 기존 index 한도를 유지했고 runtime package/worker 입력에는 포함하지 않는다.
+- **소스 검증이며 운영 미반영**이다. 운영 API/Catalog/Web·DB·GPU pins·실제 CSV/JPEG·
+  FAILED 이력·인증정보를 바꾸지 않았다. 실제 browser/remote는 MainPID0·inactive·정상 종료다.
+  실제 capture command/attempt와 source authority, 공개 collection API/Studio 연결, guarded
+  activation·실제 방→학생 PDF·전체 방 주기 수집은 여전히 남아 있다. parent run은 예약/종료만으로
+  COMPLETED가 되지 않으며 DRAFT/NOT_VERIFIED·AUTO 비활성도 유지한다. 목표는 미완료다.
+
 ## 2026-11-16 단일 방 collection 의도·재조회 저장 owner
 
 - `collection-intent-v1` schema/mirror를 먼저 정의하고 `KakaoCollectionService`가 실제 현재
