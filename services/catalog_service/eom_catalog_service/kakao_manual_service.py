@@ -22,6 +22,10 @@ from eom_catalog_contracts.kakao_manual import (
     ManualError,
     Phase,
 )
+from eom_catalog_contracts.kakao_manual_runtime_values import (
+    manual_profile_fence as manual_profile_fence,
+)
+from eom_catalog_contracts.kakao_manual_runtime_values import recorded_manual_gateway_grant
 from eom_kakao_archive_contracts.kakao_remote import (
     AUTHORITY_MAX_AGE,
     LEASE_MAX_LIFETIME,
@@ -103,17 +107,6 @@ def _view(row: Lease, now: datetime, receipt: Receipt | None = None) -> KakaoMan
         raise _error("STORED_MANUAL_SESSION_INVALID") from None
 
 
-def manual_profile_fence(intent: KakaoManualIntent) -> ProfileFence:
-    """Exact immutable browser command; no paths or provider assertions."""
-    return ProfileFence(
-        schema_version="kakao-profile-fence/1.0",
-        profile_id=intent.profile_id,
-        browser_run_id=intent.browser_run_id,
-        fence_epoch=intent.fence_epoch,
-        mode="MANUAL",
-    )
-
-
 def manual_gateway_grant(intent: KakaoManualIntent) -> GatewayLeaseGrant:
     """Internal gateway value, never a public authority claim or standalone permission."""
     if (
@@ -122,19 +115,7 @@ def manual_gateway_grant(intent: KakaoManualIntent) -> GatewayLeaseGrant:
         or intent.phase not in {"PREPARING", "ACTIVE"}
     ):
         raise _error("REMOTE_NOT_READY")
-    return GatewayLeaseGrant(
-        schema_version="kakao-remote-gateway-grant/1.0",
-        lease_id=intent.lease_id,
-        source_binding_id=intent.source_binding_id,
-        profile_id=intent.profile_id,
-        fence_epoch=intent.fence_epoch,
-        gateway_epoch=intent.gateway_epoch,
-        grant_revision=intent.grant_revision,
-        issued_at=intent.created_at,
-        authorized_at=intent.authorized_at,
-        expires_at=intent.expires_at,
-        absolute_expires_at=intent.absolute_expires_at,
-    )
+    return recorded_manual_gateway_grant(intent)
 
 
 def _intent(row: Lease) -> KakaoManualIntent:
@@ -178,6 +159,8 @@ def _intent(row: Lease) -> KakaoManualIntent:
                 "expires_at": row.expires_at,
                 "absolute_expires_at": row.absolute_expires_at,
                 "browser": browser,
+                "last_error": row.last_error,
+                "ended_reason": row.ended_reason,
             }
         )
         if kakao_command_sha256(manual_profile_fence(result)) != result.command_sha256:
@@ -465,6 +448,77 @@ class KakaoManualService:
             row = self._owned(session, actor, lease_id, owner)
             self._authority(session, row, self._binding(session, owner, row.source_binding_id), now)
             return _view(row, now)
+
+    def authorize_session(
+        self, actor: ActorContext, lease_id: str, *, observe_runtime: RuntimeObserver
+    ) -> KakaoManualSession:
+        """Read-only proxy admission, distinct from a possibly stale history view.
+
+        The actual runtime probe runs without row locks. Recheck both the current
+        actor and exact accepted revision afterward; never launch, renew or reconcile.
+        """
+        with self._sessions() as session, session.begin():
+            now = self._now()
+            owner = self._authorize(session, actor, now)
+            self._owned(session, actor, lease_id, owner)
+            row, profile, binding = self._locked(session, lease_id)
+            self._authority(session, row, binding, now)
+            self._live(row, profile, now)
+            if row.phase != "ACTIVE":
+                raise _error("REMOTE_NOT_READY")
+            before = _intent(row)
+        observed = observe_runtime(before)
+        with self._sessions() as session, session.begin():
+            now = self._now()
+            owner = self._authorize(session, actor, now)
+            self._owned(session, actor, lease_id, owner)
+            row, profile, binding = self._locked(session, lease_id)
+            self._authority(session, row, binding, now)
+            self._live(row, profile, now)
+            if row.phase != "ACTIVE" or row.resource_version != before.resource_version:
+                raise _error("PRECONDITION_FAILED")
+            self._observation(row, observed, now, gateway=True)
+            return _view(row, now)
+
+    def get_current_intent(self) -> KakaoManualIntent | None:
+        """Internal fixed-profile coordinator lookup, never public request authorization."""
+        with self._sessions() as session, session.begin():
+            profile = self._profile(session)
+            if profile is None or profile.current_lease_id is None:
+                return None
+            row = session.get(Lease, profile.current_lease_id)
+            if row is None or row.profile_id != profile.profile_id:
+                raise _error("REMOTE_FENCE_STALE")
+            return _intent(row)
+
+    def get_predecessor_intent(
+        self, intent: KakaoManualIntent, *, fence_epoch: int | None = None
+    ) -> KakaoManualIntent | None:
+        """Exact earlier closed fence, optionally from protected staged input; not latest."""
+        epoch = intent.fence_epoch - 1 if fence_epoch is None else fence_epoch
+        if epoch == 0 and intent.fence_epoch == 1:
+            return None
+        if isinstance(epoch, bool) or not 0 < epoch < intent.fence_epoch:
+            raise _error("REMOTE_FENCE_STALE")
+        with self._sessions() as session, session.begin():
+            profile = self._profile(session)
+            if (
+                profile is None
+                or profile.profile_id != intent.profile_id
+                or (
+                    profile.owner_operator_id != intent.owner_operator_id
+                    or profile.source_binding_id != intent.source_binding_id
+                )
+            ):
+                raise _error("REMOTE_FENCE_STALE")
+            row = session.scalar(
+                select(Lease).where(
+                    Lease.profile_id == profile.profile_id, Lease.fence_epoch == epoch
+                )
+            )
+            if row is None or row.phase != "ENDED" or row.closed_at is None:
+                raise _error("REMOTE_FENCE_STALE")
+            return _intent(row)
 
     def get_intent(self, lease_id: str, *, require_live: bool = True) -> KakaoManualIntent:
         """Internal coordinator lookup. Not a request-authentication alternative."""

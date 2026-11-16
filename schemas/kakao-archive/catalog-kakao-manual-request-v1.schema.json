@@ -133,7 +133,7 @@
           "pattern": "(?:Z|\\+00:00)$"
         },
         "operation": {
-          "const": "READ_KAKAO_MANUAL"
+          "enum": ["READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"]
         },
         "lease_id": {
           "$ref": "eom://schemas/kakao-archive/manual-session-v1/1.0#/$defs/LeaseId"

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Self
+from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from eom_kakao_archive_contracts.kakao_remote import RemoteTransportPolicy
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 DEFAULT_CONFIG_PATH = Path("/etc/eom/web-gui.yaml")
 
@@ -74,6 +77,17 @@ class WebSettings(StrictSettings):
     upstreams: UpstreamSettings = UpstreamSettings()
     sessions: SessionSettings = SessionSettings()
     reference_item_start_enabled: bool = False
+    kakao_remote_transport: RemoteTransportPolicy | None = None
+
+    @model_validator(mode="after")
+    def remote_uses_installed_https_host(self) -> Self:
+        policy = self.kakao_remote_transport
+        if policy is not None and (
+            not self.sessions.cookie_secure
+            or urlsplit(policy.expected_origin).hostname not in self.server.allowed_hosts
+        ):
+            raise ValueError("Kakao remote requires Secure cookies and an allowed HTTPS host")
+        return self
 
 
 class WebSecrets(StrictSettings):

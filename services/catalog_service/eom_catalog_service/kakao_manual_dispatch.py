@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from eom_catalog_contracts.application import CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 from eom_catalog_contracts.kakao_archive_rpc import RequestId
@@ -37,7 +37,9 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 
 from .kakao_archive_authorization import KakaoArchiveError
-from .kakao_manual_service import KakaoManualService
+
+if TYPE_CHECKING:
+    from .kakao_manual_service import KakaoManualService
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,8 +119,13 @@ def dispatch_kakao_manual(
                     reply = CommandKakaoManualReply(request_id=request.request_id, result=result)
                 else:
                     reply = ReadKakaoManualReply(
+                        operation=request.operation,
                         request_id=request.request_id,
-                        result=service.get_session(actor, request.lease_id),
+                        result=service.authorize_session(
+                            actor, request.lease_id, observe_runtime=application.observe_runtime
+                        )
+                        if request.operation == "AUTHORIZE_KAKAO_MANUAL"
+                        else service.get_session(actor, request.lease_id),
                     )
                 reply = parse_kakao_manual_reply(reply.model_dump(mode="json"))
                 check_kakao_manual_reply(request, reply)

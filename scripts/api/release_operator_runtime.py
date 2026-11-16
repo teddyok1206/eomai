@@ -54,6 +54,7 @@ MIGRATION_REVISION_0076 = "20261109_0076"
 MIGRATION_REVISION_0077 = "20261110_0077"
 MIGRATION_REVISION_0078 = "20261112_0078"
 MIGRATION_REVISION_0079 = "20261112_0079"
+MIGRATION_REVISION_0083 = "20261116_0083"
 POSTGRES_ENV = "/etc/eom/secrets/postgres.env"
 API_PREFIX = Path("/srv/eom/conda/envs/eom-api")
 API_NATIVE_MEMBER = Path("lib/python3.12/site-packages/pymupdf/_extra.so")
@@ -90,6 +91,7 @@ _SCHEMA_V1_21_SHA256 = "sha256:09680bb4c77b06e7ca583b8f1e4ab969491687340df5d03d8
 _SCHEMA_V1_22_SHA256 = "sha256:91c7c41dac479c0c9beca07f47442b473d437904e263ea5114b51ce3c463a166"
 _SCHEMA_V1_23_SHA256 = "sha256:bd8077ff752a294b96bd43ebfe06a27843df7ac854382947592ece5ba5273ed3"
 _SCHEMA_V1_24_SHA256 = "sha256:a5d9a74e47d655fc0e43c8639aa4230a58367b22c2c4e9342eb986d73b1b0d78"
+_SCHEMA_V1_25_SHA256 = "sha256:21170f7caac30b45e22d2717982de1196050042f0bf52753aafa618c6e58dde8"
 ERROR_CODES = frozenset(
     {
         "RELEASE_OPERATOR_ROOT_REQUIRED",
@@ -131,6 +133,7 @@ class _ReleaseContextFormat:
     schema_name: str
     schema_sha256: str
     migration_revision: str
+    wheel_keys: tuple[str, ...] = ("platform", "api_contracts", "api")
 
 
 # One finite table owns context/receipt/schema/head compatibility. Historical
@@ -260,6 +263,12 @@ _CONTEXT_FORMATS = MappingProxyType(
             _SCHEMA_V1_24_SHA256,
             MIGRATION_REVISION_0079,
         ),
+        "release-operator-context/1.25": _ReleaseContextFormat(
+            "release_operator_context_v1_25.schema.json",
+            _SCHEMA_V1_25_SHA256,
+            MIGRATION_REVISION_0083,
+            ("platform", "api_contracts", "api", "kakao_contracts"),
+        ),
     }
 )
 _ADMISSION_CONTEXTS = MappingProxyType(
@@ -329,6 +338,8 @@ class Callback(StrEnum):
     MIGRATION_VERIFY_0079 = "MIGRATION_VERIFY_0079"
     MIGRATION_UPGRADE_0079 = "MIGRATION_UPGRADE_0079"
     MIGRATION_UPGRADE_0079_FROM_0077 = "MIGRATION_UPGRADE_0079_FROM_0077"
+    MIGRATION_VERIFY_0083 = "MIGRATION_VERIFY_0083"
+    MIGRATION_UPGRADE_0083_FROM_0079 = "MIGRATION_UPGRADE_0083_FROM_0079"
     API_ROLE_BOOTSTRAP = "API_ROLE_BOOTSTRAP"
     CATALOG_ROLE_RECONCILE = "CATALOG_ROLE_RECONCILE"
     HWPX_ROLE_RECONCILE = "HWPX_ROLE_RECONCILE"
@@ -393,6 +404,11 @@ _MIGRATION_CALLBACKS = MappingProxyType(
         Callback.MIGRATION_VERIFY_0077: (MIGRATION_REVISION_0077, None),
         Callback.MIGRATION_UPGRADE_0077: (MIGRATION_REVISION_0077, MIGRATION_REVISION_0076),
         Callback.MIGRATION_VERIFY_0079: (MIGRATION_REVISION_0079, None),
+        Callback.MIGRATION_VERIFY_0083: (MIGRATION_REVISION_0083, None),
+        Callback.MIGRATION_UPGRADE_0083_FROM_0079: (
+            MIGRATION_REVISION_0083,
+            MIGRATION_REVISION_0079,
+        ),
         Callback.MIGRATION_UPGRADE_0079: (MIGRATION_REVISION_0079, MIGRATION_REVISION_0078),
         Callback.MIGRATION_UPGRADE_0079_FROM_0077: (
             MIGRATION_REVISION_0079,
@@ -425,7 +441,7 @@ class OperatorContext:
     source_snapshot_sha256: str
     runtime_prefix: Path
     runtime_tree_sha256: str
-    wheels: tuple[WheelPin, WheelPin, WheelPin]
+    wheels: tuple[WheelPin, ...]
     schema_version: str = "release-operator-context/1.0"
     migration_revision: str = MIGRATION_REVISION
 
@@ -541,8 +557,15 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
     prefix = Path(value["runtime_prefix"])
     if str(prefix) != value["runtime_prefix"] or ".." in prefix.parts:
         raise OperatorRuntimeError("RELEASE_OPERATOR_PATH_INVALID")
-    wheels = tuple(WheelPin(**value["wheels"][key]) for key in ("platform", "api_contracts", "api"))
-    expected_names = ("eom_platform-", "eom_api_contracts-", "eom_application_api-")
+    keys = _CONTEXT_FORMATS[value["schema_version"]].wheel_keys
+    wheels = tuple(WheelPin(**value["wheels"][key]) for key in keys)
+    package_prefixes = {
+        "platform": "eom_platform-",
+        "api_contracts": "eom_api_contracts-",
+        "api": "eom_application_api-",
+        "kakao_contracts": "eom_kakao_archive_contracts-",
+    }
+    expected_names = tuple(package_prefixes[key] for key in keys)
     if any(
         not pin.name.startswith(prefix) for pin, prefix in zip(wheels, expected_names, strict=True)
     ):
@@ -554,7 +577,7 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
         source_snapshot_sha256=value["source_snapshot_sha256"],
         runtime_prefix=Path(value["runtime_prefix"]),
         runtime_tree_sha256=value["runtime_tree_sha256"],
-        wheels=(wheels[0], wheels[1], wheels[2]),
+        wheels=wheels,
         schema_version=value["schema_version"],
         migration_revision=(
             MIGRATION_REVISION

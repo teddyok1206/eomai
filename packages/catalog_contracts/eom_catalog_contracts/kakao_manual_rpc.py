@@ -19,7 +19,7 @@ from .models import FrozenModel, UtcDatetime
 from .validation import validate_contract
 
 type KakaoManualOperation = Literal[
-    "START_KAKAO_MANUAL", "COMMAND_KAKAO_MANUAL", "READ_KAKAO_MANUAL"
+    "START_KAKAO_MANUAL", "COMMAND_KAKAO_MANUAL", "READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"
 ]
 type KakaoManualErrorCode = Literal[
     "KAKAO_ARCHIVE_REQUEST_INVALID",
@@ -69,7 +69,7 @@ class CommandKakaoManualRequest(_ApiIdentity):
 
 
 class ReadKakaoManualRequest(_ApiIdentity):
-    operation: Literal["READ_KAKAO_MANUAL"] = "READ_KAKAO_MANUAL"
+    operation: Literal["READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"] = "READ_KAKAO_MANUAL"
     lease_id: KakaoManualLeaseId
 
 
@@ -96,7 +96,7 @@ class CommandKakaoManualReply(_OkReply):
 
 
 class ReadKakaoManualReply(_OkReply):
-    operation: Literal["READ_KAKAO_MANUAL"] = "READ_KAKAO_MANUAL"
+    operation: Literal["READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"] = "READ_KAKAO_MANUAL"
     result: KakaoManualSession
 
 
@@ -148,6 +148,8 @@ def check_kakao_manual_reply(request: KakaoManualRequest, reply: KakaoManualRepl
             raise ValueError(invalid)
     elif isinstance(request, ReadKakaoManualRequest):
         if not isinstance(reply, ReadKakaoManualReply) or reply.result.lease_id != request.lease_id:
+            raise ValueError(invalid)
+        if request.operation == "AUTHORIZE_KAKAO_MANUAL" and not reply.result.ready:
             raise ValueError(invalid)
     else:
         if not isinstance(reply, CommandKakaoManualReply):

@@ -25,9 +25,21 @@
     },
     {
       "$ref": "#/$defs/stop"
+    },
+    {
+      "$ref": "#/$defs/presentation"
     }
   ],
   "$defs": {
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "remote_view_enabled"],
+      "properties": {
+        "schema_version": {"const": "kakao-remote-presentation/1.0"},
+        "remote_view_enabled": {"type": "boolean"}
+      }
+    },
     "lease": {
       "type": "object",
       "additionalProperties": false,
@@ -474,6 +486,7 @@
             "ROLE_REVOKED",
             "SOURCE_REVOKED",
             "OWNER_UNAVAILABLE",
+            "EXPIRED",
             "RUNTIME_LOST"
           ]
         }

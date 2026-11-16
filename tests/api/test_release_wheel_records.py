@@ -90,6 +90,51 @@ def test_release_wheel_record_verifier_accepts_exact_member_set_hashes_and_sizes
     verify_wheel_record(_wheel(tmp_path))
 
 
+def test_kakao_release_requires_explicit_complete_four_wheel_closure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    paths = tuple(
+        str(_wheel(tmp_path, distribution=distribution))
+        for distribution in (
+            "eom_platform",
+            "eom_api_contracts",
+            "eom_application_api",
+            "eom_kakao_archive_contracts",
+        )
+    )
+    assert main(paths) == 2  # Historical default remains exactly three wheels.
+    assert main(paths[:3]) == 0
+    assert main(("--kakao-release", *paths)) == 0
+    assert main(("--kakao-release", *paths[:3])) == 2
+    assert main(("--kakao-release", *paths, paths[0])) == 2
+    assert main(("--kakao-release", *paths[:3], paths[0])) == 2
+    capsys.readouterr()
+    assert main(("--kakao-release", "--emit-identity", *paths)) == 0
+    payload = json.loads(capsys.readouterr().out.split("=", 1)[1])
+    assert payload["schema_version"] == "release-wheel-inspection-identity/1.0"
+    assert {value["filename"] for value in payload["wheels"]} == {Path(path).name for path in paths}
+    for identity in payload["wheels"]:
+        wheel = tmp_path / identity["filename"]
+        assert identity["sha256"] == "sha256:" + hashlib.sha256(wheel.read_bytes()).hexdigest()
+
+
+def test_kakao_release_does_not_accept_unknown_wheel_or_bad_contract_record(
+    tmp_path: Path,
+) -> None:
+    predecessor = tuple(
+        str(_wheel(tmp_path, distribution=name))
+        for name in ("eom_platform", "eom_api_contracts", "eom_application_api")
+    )
+    unknown = str(_wheel(tmp_path, distribution="not_a_release_dependency"))
+    assert main(("--kakao-release", *predecessor, unknown)) == 2
+
+    def wrong_hash(rows: list[list[str]], _: str) -> None:
+        rows[0][1] = _digest(b"not the package payload")
+
+    pure = _wheel(tmp_path, distribution="eom_kakao_archive_contracts", record_mutation=wrong_hash)
+    assert main(("--kakao-release", *predecessor, str(pure))) == 1
+
+
 def test_platform_only_cli_verifies_one_wheel_not_the_full_api_release(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

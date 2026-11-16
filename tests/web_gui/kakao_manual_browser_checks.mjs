@@ -10,12 +10,13 @@ const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "ka
 const app = `
 import {createKakaoManual} from './kakao-manual.js';
 const id=p=>p+'_'+'1'.repeat(32), binding={source_binding_id:id('kakaobinding'),state:'DRAFT'};
-const f=window.fixture={calls:[],timers:new Map(),serial:0,time:Date.now(),current:null,receipts:new Map(),failStart:true,failRenew:false,holdRead:false,release:null};
+const f=window.fixture={calls:[],timers:new Map(),serial:0,time:Date.now(),current:null,receipts:new Map(),failStart:true,failRenew:false,holdRead:false,release:null,configEnabled:false,holdConfig:false,releaseConfig:null};
 const prepare=()=>({schema_version:'kakao-manual-session/1.0',lease_id:id('kakaoremotelease'),source_binding_id:binding.source_binding_id,
  phase:'PREPARING',resource_version:1,grant_revision:0,created_at:new Date(f.time).toISOString(),expires_at:null,
  absolute_expires_at:new Date(f.time+1200000).toISOString(),ready:false,last_error:null,ended_reason:null,closed_at:null});
 const api=async(path,options={})=>{
  const call={path,method:options.method||'GET',body:options.body,headers:options.headers};f.calls.push(call);
+ if(path.endsWith('/remote/configuration')) {const enabled=f.configEnabled;if(f.holdConfig){f.holdConfig=false;await new Promise(r=>f.releaseConfig=r);}return {schema_version:'kakao-remote-presentation/1.0',remote_view_enabled:enabled};}
  if(call.method==='GET') {const result=structuredClone(f.current);if(f.holdRead){f.holdRead=false;await new Promise(r=>f.release=r);}return result;}
  const key=options.headers['Idempotency-Key'];if(f.receipts.has(key))return {...structuredClone(f.receipts.get(key)),replayed:true};
  if(path.endsWith('/manual-sessions')) f.current=prepare();
@@ -72,7 +73,7 @@ try {
   // Source feature flag alone is insufficient; active lease still required.
   await page.evaluate(()=>fixture.mount(true));await start.click();assert.equal(await page.locator('iframe').count(),0);
   await page.evaluate(()=>fixture.ready());await page.getByRole('button',{name:'로그인 상태 확인'}).click();
-  await page.locator('iframe').waitFor();assert.equal(await page.locator('iframe').getAttribute('src'),'/studio/admin/remote/');
+  await page.locator('iframe').waitFor();assert.equal(await page.locator('iframe').getAttribute('src'),'/studio/admin/remote/vnc.html');
   const frameHandle=await page.locator('iframe').elementHandle();
   await page.evaluate(()=>{fixture.time+=10000;fixture.runHeartbeat();});await page.waitForFunction(()=>fixture.current.grant_revision===2);
   assert.ok(await frameHandle.evaluate(el=>el.isConnected),'renewal replaced the live login frame');
@@ -81,6 +82,15 @@ try {
   await page.waitForTimeout(50);assert.equal(await page.locator('iframe').count(),0);
   assert.equal(await page.evaluate(()=>fixture.timers.size),0);
   assert.equal(await page.locator('main').isVisible(),false);
+  // Production controller reads presentation configuration, not a hard-coded flag.
+  await page.evaluate(()=>{fixture.configEnabled=true;return fixture.mount(null);});
+  await start.click();assert.equal(await page.locator('iframe').count(),0);
+  await page.evaluate(()=>fixture.ready());await page.getByRole('button',{name:'로그인 상태 확인'}).click();
+  await page.locator('iframe').waitFor();
+  await page.evaluate(()=>{fixture.holdConfig=true;return fixture.mount(null);});
+  await page.waitForFunction(()=>fixture.releaseConfig!==null);
+  await page.evaluate(()=>{fixture.controller.setOwner('other-owner');fixture.releaseConfig();});
+  await page.waitForTimeout(50);assert.equal(await page.locator('iframe').count(),0);
   assert.equal(await page.evaluate(()=>localStorage.length),0);
   assert.equal(await page.evaluate(()=>sessionStorage.length),0);
   assert.deepEqual(errors,[]);console.log('KAKAO_MANUAL_BROWSER=PASS');

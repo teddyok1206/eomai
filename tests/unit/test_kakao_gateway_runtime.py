@@ -164,6 +164,48 @@ def test_observe_current_heartbeat_same_invocation_without_launch(gate, monkeypa
     launch.assert_not_called()
 
 
+@pytest.mark.parametrize("terminal", ["ready", "failed"])
+def test_pending_gateway_is_observed_until_ready_or_closed(gate, monkeypatch, terminal):
+    value = grant()
+    pending = observed(value, ActiveState="activating", SubState="start", Job="42", StatusText="")
+    final = (
+        observed(value)
+        if terminal == "ready"
+        else inactive(value, Result="exit-code", ExecMainStatus="1")
+    )
+    monkeypatch.setattr(runtime, "_current", lambda: value)
+    monkeypatch.setattr(runtime, "_show", Mock(side_effect=[pending, final]))
+    launch = Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", launch)
+    with pytest.raises(runtime.KakaoGatewayRuntimeError, match="START_PENDING"):
+        gate.observe_dispatch(value, dispatched_boot_id=BOOT)
+    result = gate.observe_dispatch(value, dispatched_boot_id=BOOT)
+    assert isinstance(
+        result, runtime.GatewayRunHandle if terminal == "ready" else runtime.ClosedGatewayDispatch
+    )
+    launch.assert_not_called()
+
+
+@pytest.mark.parametrize("history", [False, True])
+def test_missing_protected_grant_is_only_first_use_without_history(gate, monkeypatch, history):
+    monkeypatch.setattr(runtime, "_current", Mock(side_effect=FileNotFoundError))
+    monkeypatch.setattr(runtime, "_has_grant_history", lambda: history)
+    if history:
+        with pytest.raises(runtime.KakaoGatewayRuntimeError, match="PUBLICATION_UNCERTAIN"):
+            gate.observe_grant()
+    else:
+        assert gate.observe_grant() is None
+
+
+def test_revoked_running_gateway_can_only_be_recovered_for_teardown(gate, monkeypatch):
+    value = grant()
+    monkeypatch.setattr(runtime, "_current", lambda: revoked(value))
+    monkeypatch.setattr(runtime, "_show", lambda: observed(value))
+    assert gate.observe_for_stop(value, dispatched_boot_id=BOOT) == handle(value)
+    with pytest.raises(runtime.KakaoGatewayRuntimeError, match="RUN_MISMATCH"):
+        gate.observe_dispatch(value, dispatched_boot_id=BOOT)
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -445,7 +487,6 @@ def test_idle_first_inventory_is_not_history_recovery(gate, monkeypatch, history
         {"Job": "9"},
         {"MainPID": "9"},
         {"ControlPID": "9"},
-        {"ActiveState": "failed", "SubState": "failed"},
         {"ActiveState": "active", "SubState": "running"},
         {"ControlGroup": "/other"},
     ],
@@ -454,6 +495,24 @@ def test_idle_probe_rejects_non_idle(gate, monkeypatch, change):
     monkeypatch.setattr(runtime, "_show", lambda: {**inactive(grant()), **change})
     with pytest.raises(runtime.KakaoGatewayRuntimeError, match="IDLE_UNCONFIRMED"):
         gate.observe_idle()
+
+
+def test_physically_closed_failed_gateway_is_never_fresh_installation(gate, monkeypatch):
+    monkeypatch.setattr(
+        runtime,
+        "_show",
+        lambda: observed(
+            grant(),
+            ActiveState="failed",
+            SubState="failed",
+            MainPID="0",
+            ExecMainPID="0",
+            ExecMainStartTimestampMonotonic="0",
+            InvocationID="",
+            StatusText="",
+        ),
+    )
+    assert gate.observe_idle().never_dispatched is False
 
 
 def test_staging_trace_disables_never_dispatched_inventory(installed_file_tree):

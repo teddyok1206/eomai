@@ -215,3 +215,178 @@ lose access; DRAFT login is allowed but channel/capability stay unverified; pre-
 failure and reboot preserve history and require physical closure before reuse. Protected
 runtime tests must still prove actual gateway EOF, profile exclusion, permissions and
 fixed-unit child cleanup. None of the source tests substitute for that operational gate.
+
+## Manual runtime composition and proxy admission (next source slice)
+
+This slice composes existing boundaries, not a new execution framework. Catalog remains
+the durable owner; fixed browser/gateway adapters own OS I/O. A bounded coordinator reads
+the one profile's current lease by indexed key, advances PREPARING → ACTIVE or tears down
+STOPPING/ERROR, and uses existing public service transitions. No worker, AI queue or
+long database transaction is introduced. A dedicated bounded owner loop must not hold
+the unrelated Catalog application loop during systemd waits.
+
+Canonical input is the accepted manual intent, with its exact run/fence/boot/command
+hash; OS state is an observation, never an alternative lease. Prior execution lookup is
+by the same profile and predecessor fence, not arbitrary latest. O(log L) indexed lease
+lookup and O(1) profile/OS checks are sufficient. No copied profile or stored process
+output is needed. Current service CAS and OS control locks protect concurrent handlers.
+No new table or queue is expected; any necessary contract addition precedes behavior.
+
+An un-staged intent, a staged command with uncertain dispatch, a running execution and
+an observed closed execution are distinct. Lost replies observe the original identity
+before any further side effect. Browser readiness precedes a fresh gateway grant;
+ACTIVE requires both real observations. END/revocation/expiry denies admission first,
+closes the gateway's existing viewers, then stops the browser and verifies cgroups plus
+profile lock release. Failure history is retained. The coordinator never renews a grant
+on its own: only an authorized UI heartbeat can extend it within the original deadline.
+
+Proxy admission is a separate read-only operation in the existing manual RPC family.
+The API passes its real actor/session; Catalog checks current owner, binding, MANUAL
+fence, active unexpired lease and installed runtime observation. It returns only the
+existing bounded session view, never VNC/password/profile data. A history GET is not
+enough: it may legitimately show a stale ACTIVE row before reconciliation. Admission
+therefore fails closed on runtime, authority or concurrent revision changes without
+launching, renewing or retrying an execution.
+
+The existing BFF WebSession gains only a server-side lease/binding pointer from a
+validated START/read response. It is not authority; every private asset/WebSocket
+handshake reuses the API admission and normal token-refresh lock. No URL bearer or
+separate session store is introduced. Old/late responses must not overwrite a newer
+pointer; END clears only the same pointer. Missing/expired session denies access.
+
+Caddy must overwrite forwarded method/URI metadata, prevent direct public access to
+the admission endpoint, and strip cookie/authorization before the private gateway.
+Only fixed noVNC paths and the exact WebSocket path/method/same-origin handshake are
+allowed. A successful BFF admission is empty 204; uncertainty is never HTTP 200 false.
+This source work does not enable remoteViewEnabled or reload production Caddy.
+
+Tests cover shutdown and restart at dispatch/ready/publication boundaries, same-key
+replay and no autonomous renewal, revoked/current owner sessions, old or concurrent
+lease pointers, wrong origin/paths/upgrade, and actual HTTP status semantics. New
+service transitions are additionally checked in disposable PostgreSQL. Reusing a
+cached ACTIVE UI flag would be simpler but permits obsolete access; implementing a
+second authorization framework is unnecessary because these checks already have owners.
+
+The optional owner composition is disabled by default. `EOM_KAKAO_MANUAL_MODE=ENABLED`
+also requires exact protected profile/template/driver/supervisor pins; absent pins do not
+activate partial behavior. `EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256` identifies the
+original empty-profile installation receipt, not a later package-upgrade manifest.
+Disabled composition imports neither optional runtime code nor the Kakao worker wheel.
+
+A start timeout followed by the same staged command, boot and trusted unit's pending
+Job/activating state remains WAITING. It observes that original run, without relaunch,
+until actual readiness, terminal failure or the accepted lease deadline. Physical
+closure of a failed unit is not first-use proof or historical success. Ordinary expiry
+uses the existing gateway stop path with the explicit `EXPIRED` reason; it introduces
+neither an extra delay nor a new grant. Gateway/viewer closure still precedes browser
+shutdown and real profile-lock release.
+
+After an authorized heartbeat commits a new grant revision, private proxy admission
+may briefly fail closed until the bounded owner loop publishes that exact revision to
+the gateway. This is intentional: no adapter substitutes the old window, creates a
+new deadline or hides the gap with a general retry. Read-only admission re-observes OS
+identity outside DB locks and then rechecks current authority and the same revision.
+Parallel noVNC assets and heartbeat probes share one runtime wrapper's bounded (2-second
+acquisition) observation mutex, avoiding read/read contention on the existing OS control
+locks. Each call still obtains fresh evidence; this is not an authorization cache, an OS
+write-lock replacement or an unbounded wait. Failure to acquire remains explicit denial.
+
+### Compatible migration admission
+
+Kakao storage adds migrations 0080–0083 after the deployed 0079 baseline. Extend the
+existing protected release operator with context/admission 1.25 and exact 0079 → 0083
+upgrade plus 0083 verification. Do not reinterpret 1.24 or permit an arbitrary head/range.
+The existing source/wheel/tree hashes, root-private staging and role reconciliation
+remain the authority; this adds no DB values, queue or deployment service. The callback
+checks the predecessor, runs the existing Alembic chain once and verifies the target;
+same-context replay at 0083 does not rerun migration. Concurrent/timeout outcomes require
+actual revision observation before any retry, as in the existing operator contract.
+
+Only the new release's deployment verification selects 0083. Historical source/release
+manifests and all older callbacks remain unchanged. Source tests cover wrong predecessor,
+wrong context/head, same-key installation replay and schema byte/hash preservation;
+the Alembic chain itself is already exercised in disposable PostgreSQL. Actual deployment
+still requires the compatible installed API/Web/Catalog set and optional runtime wheels.
+
+The activated Catalog owner and Web transport require the small pure Kakao contracts
+wheel. Context 1.25 therefore pins it as a fourth exact wheel (`kakao_contracts`), while
+all preceding context families retain exactly their original three wheels. Browser,
+gateway and PDF runtime dependencies do not enter the API environment. The unreleased
+pure contracts support jsonschema 4.25.1–4.26.x; the dedicated runtime still pins 4.25.1
+and the API keeps its existing 4.26.0. Installing an incompatible wheel with `--no-deps`
+and ignoring `pip check` is not a deployment strategy.
+
+### BFF proxy implementation boundary
+
+The optional source Caddy snippet `config/caddy/kakao-remote.caddy` is not imported by
+the operational Caddyfile. It denies public access to the authorization endpoint,
+overwrites the original request metadata, admits only HTTP 204, and strips Studio
+credentials before the fixed gateway UDS. Its expanded forward-auth form follows
+[Caddy's documented authorization pre-check](https://caddyserver.com/docs/caddyfile/directives/forward_auth)
+and [response interception rules](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#intercepting-responses).
+
+The Web wheel depends on the pure `eom-kakao-archive-contracts` package solely to share
+fixed-path/Origin/WebSocket transport validation; it does not construct authority or
+runtime evidence. An absent installed transport policy denies proxy admission
+until the installed noVNC inventory supplies an exact immutable path allowlist and
+expected HTTPS origin. The UI starts disabled and reads only the presentation boolean; its
+iframe target is the fixed `/studio/admin/remote/vnc.html`, not a directory or query URL.
+
+Each in-memory WebSession stores only a frozen lease/binding/version/time pointer and
+a local response generation. START/read results are validated by the existing gateway.
+Replayed START receipts resolve the current read before changing that pointer. A late
+response cannot replace a newer pointer, END clears only its matching pointer, and
+session eviction/logout/expiry invalidates outstanding pointer updates. Admission
+rechecks the same pointer after API authorization, so a simultaneous END/logout cannot
+accept a stale in-flight response. No lease, credentials or private content is persisted
+in browser storage, forwarded to VNC, or added to URLs.
+
+### Installed Web presentation configuration
+
+Web's existing frozen configuration optionally contains the validated transport policy
+(exact HTTPS origin and installed noVNC static-path set). Omitted configuration keeps
+remote admission disabled; enabling requires Secure cookies and an allowed public host.
+An authenticated read returns only `kakao-remote-presentation/1.0` and one enabled boolean.
+This is presentation configuration, not lease authority, runtime health or permission to
+start a process. It performs no storage, worker, DB or network work. The existing manual
+controller loads it when opened and ignores responses after owner/view changes. An iframe
+still requires the separate ACTIVE/ready/current lease; every asset and WebSocket request
+still uses actual API/Catalog admission. No paths, policy, credential or origin inventory
+are exposed in the presentation reply. A static JavaScript flag alone was insufficient
+because the same installed Web wheel must remain usable with the optional runtime disabled.
+
+### Web offline dependency closure
+
+The Web build/install scripts own dependency materialization, not runtime admission.
+The existing `infra/conda/eom-web.requirements.lock` pins the complete Web distribution
+set, including the small pure Kakao contracts wheel and jsonschema's five-distribution
+closure. Existing Web dependency versions are unchanged. Browser/gateway/PDF packages
+and their dependencies never enter Web. Local EOM wheels come from the same source
+commit; third-party wheels are downloaded only during the unprivileged build stage.
+
+A standard pip requirements file records the exact distribution/version and one SHA-256
+per wheel. Its separately approved SHA pins the entire closure, while source commit and
+Web wheel SHA remain separate identities. The verifier uses a keyed distribution map,
+rejects duplicate/missing/extra wheels, and performs bounded O(total wheel bytes) reads.
+No DB, persistent queue or new wire protocol is introduced.
+
+Before privileged pip execution, the installer copies and verifies all approved bytes
+into a fresh root-private staging directory. Offline `--no-index --require-hashes`
+installation uses this protected set with dependency resolution enabled. A missing
+dependency cannot fall back to an index or the build interpreter. Both build simulation
+and installer preflight use an empty venv without system site packages; actual Web app
+and contract imports plus `pip check` must pass before the target environment is touched.
+An interrupted installation remains an explicit deployment failure, not an automatic
+retry or service restart. Existing compatible-release scheduling and rollback apply.
+The former single-wheel `--no-deps` installation was insufficient because API's richer
+build environment hid missing jsonschema dependencies in the isolated Web environment.
+
+The privileged installer itself runs from the existing reviewed root-private release
+source snapshot, not a developer checkout or a standalone copied shell script. Preserve
+`scripts/web_gui/{install_release.sh,wheel_closure.py}` and
+`infra/conda/eom-web.requirements.lock` in that snapshot. The operator independently
+checks the installer SHA before Bash starts; the installer checks root ownership,
+non-writable/non-symlink ancestors and independently approved helper/pin-lock SHA values
+before executing the helper. Build output reports these three hashes. No new release
+operator callback or authentication authority is added. A changed helper or lock needs
+a freshly reviewed bundle, not an override flag.

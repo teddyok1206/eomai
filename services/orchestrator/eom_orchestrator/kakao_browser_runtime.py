@@ -108,6 +108,12 @@ class ClosedBrowserDispatch:
     main_exit_status: int
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserStageObservation:
+    staged: bool
+    current_fence: ProfileFence | None
+
+
 @contextmanager
 def _directory(path: Path, *, owners: frozenset[int], protected: bool = True) -> Iterator[int]:
     try:
@@ -336,6 +342,36 @@ class FixedKakaoBrowserRuntime:
             self._installed()
             return self._running(fence, self._request(fence), _show())
 
+    def observe_stage(self, fence: ProfileFence) -> BrowserStageObservation:
+        """Observe exact protected input; a partial stage is not permission to relaunch."""
+        with _control_lock():
+            self._installed()
+            owner = pwd.getpwnam("eom-catalog-manager").pw_uid
+            try:
+                raw = _read(REQUEST, uid=owner, maximum=4096, owners=frozenset({0, owner}))
+            except FileNotFoundError:
+                if _has_history():
+                    raise KakaoBrowserRuntimeError("KAKAO_BROWSER_STAGE_UNCERTAIN") from None
+                return BrowserStageObservation(False, None)
+            try:
+                current = ProfileFence.model_validate(json.loads(raw))
+                if canonical_bytes(current.model_dump(mode="json")) != raw:
+                    raise ValueError
+            except ValueError:
+                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH") from None
+            if current == fence:
+                return BrowserStageObservation(True, current)
+            if current.profile_id != fence.profile_id or current.fence_epoch >= fence.fence_epoch:
+                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH")
+            with _directory(REQUEST.parent, owners=frozenset({0, owner})) as directory:
+                for name in (f"{fence.browser_run_id}.json", f"{fence.browser_run_id}.next"):
+                    try:
+                        os.stat(name, dir_fd=directory, follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    raise KakaoBrowserRuntimeError("KAKAO_BROWSER_STAGE_UNCERTAIN")
+            return BrowserStageObservation(False, current)
+
     def boot_identity(self) -> str:
         """The owner records this with its dispatch intent before calling start."""
         return _boot_id()
@@ -348,8 +384,8 @@ class FixedKakaoBrowserRuntime:
             _trusted_unit(values)
             if (
                 values["Job"]
-                or values["ActiveState"] != "inactive"
-                or values["SubState"] != "dead"
+                or values["ActiveState"] not in {"inactive", "failed"}
+                or values["SubState"] not in {"dead", "failed"}
                 or values["MainPID"] != "0"
                 or values["ControlPID"] != "0"
                 or values["ControlGroup"] not in {"", CGROUP}
@@ -357,7 +393,8 @@ class FixedKakaoBrowserRuntime:
                 raise KakaoBrowserRuntimeError("KAKAO_BROWSER_IDLE_UNCONFIRMED")
             closed = _cgroup_closed()
             never_dispatched = (
-                not _has_history()
+                values["ActiveState"] == "inactive"
+                and not _has_history()
                 and values["ExecMainStartTimestampMonotonic"] == "0"
                 and values["ExecMainPID"] == "0"
                 and not values["InvocationID"]
@@ -402,6 +439,10 @@ class FixedKakaoBrowserRuntime:
             raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH")
         _trusted_unit(values)
         current_boot = _boot_id()
+        if current_boot == dispatched_boot_id and (
+            values["ActiveState"] == "activating" or values["Job"]
+        ):
+            raise KakaoBrowserRuntimeError("KAKAO_BROWSER_START_PENDING")
         if values["ActiveState"] == "active":
             if current_boot != dispatched_boot_id:
                 raise KakaoBrowserRuntimeError("KAKAO_BROWSER_RUN_MISMATCH")

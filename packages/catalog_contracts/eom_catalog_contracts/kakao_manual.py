@@ -192,6 +192,8 @@ class KakaoManualIntent(_RuntimePins):
     expires_at: UtcDatetime | None
     absolute_expires_at: UtcDatetime
     browser: KakaoManualRuntimeObservation | None
+    last_error: ManualError | None = None
+    ended_reason: EndReason | None = None
 
     @model_validator(mode="after")
     def checked(self) -> Self:

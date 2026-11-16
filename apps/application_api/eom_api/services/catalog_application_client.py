@@ -620,6 +620,17 @@ class CatalogApplicationClient:
         )
         return cast(KakaoManualSession, self._request_kakao_manual(request))
 
+    def authorize_kakao_manual(self, lease_id: str, *, actor: ActorContext) -> KakaoManualSession:
+        """Current runtime admission, not historical state or a renewal command."""
+        request = ReadKakaoManualRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "operation": "AUTHORIZE_KAKAO_MANUAL",
+                "lease_id": lease_id,
+            }
+        )
+        return cast(KakaoManualSession, self._request_kakao_manual(request))
+
     def _request_kakao_manual(
         self, request: KakaoManualRequest
     ) -> KakaoManualMutation | KakaoManualSession:

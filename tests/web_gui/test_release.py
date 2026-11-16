@@ -13,7 +13,16 @@ def test_runtime_dependencies_are_pinned_and_explainable() -> None:
     project = tomllib.loads((ROOT / "apps/web_gui/pyproject.toml").read_text(encoding="utf-8"))
     dependencies = project["project"]["dependencies"]
     names = {re.split(r"[=<>]", value, maxsplit=1)[0].casefold() for value in dependencies}
-    assert names == {"anyio", "fastapi", "httpx", "pydantic", "pyyaml", "typer", "uvicorn"}
+    assert names == {
+        "eom-kakao-archive-contracts",
+        "anyio",
+        "fastapi",
+        "httpx",
+        "pydantic",
+        "pyyaml",
+        "typer",
+        "uvicorn",
+    }
     assert all("==" in value for value in dependencies)
     assert not names & {"jinja2", "react", "vue", "playwright"}
 
@@ -123,6 +132,33 @@ def test_release_build_requires_preview_assets_and_verifies_record_bytes() -> No
     assert "verify_installed_web_gui" in builder
     assert "Web GUI package contains an unrecorded file" in integrity
     assert "Web GUI installed file hash differs from RECORD" in integrity
+
+
+def test_release_closure_is_offline_resolved_in_an_empty_environment() -> None:
+    builder = (ROOT / "scripts/web_gui/build_release.sh").read_text(encoding="utf-8")
+    installer = (ROOT / "scripts/web_gui/install_release.sh").read_text(encoding="utf-8")
+    assert "packages/kakao_archive_contracts/" in builder
+    assert "--system-site-packages" not in builder + installer
+    assert "--no-deps" not in installer
+    assert "pip download" not in installer
+    assert "EXPECTED_CLOSURE_SHA256" in installer
+    assert 'verify_protected_member "${CLOSURE_HELPER}" "${EXPECTED_HELPER_SHA256}"' in installer
+    assert 'verify_protected_member "${RUNTIME_LOCK}" "${EXPECTED_PINS_SHA256}"' in installer
+    for source in (builder, installer):
+        assert "--no-index --only-binary=:all: --require-hashes" in source
+        assert "from eom_web_gui.app import create_app" in source
+        assert (
+            "from eom_kakao_archive_contracts.kakao_remote import validate_remote_transport"
+            in source
+        )
+        assert "--disable-pip-version-check check" in source
+    assert installer.index('"${CLOSURE_HELPER}" stage') < installer.index('"${WEB_PYTHON}" -m pip')
+    assert installer.index('verify_protected_member "${CLOSURE_HELPER}"') < installer.index(
+        '"${CLOSURE_HELPER}" stage'
+    )
+    assert installer.index("web_gui_offline_preflight=PASS") < installer.index(
+        '"${WEB_PYTHON}" -m pip'
+    )
 
 
 def test_smoke_waits_for_bounded_service_readiness() -> None:

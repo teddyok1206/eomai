@@ -81,6 +81,24 @@ gate를 사용해야 한다. DRAFT 연결의 첫 로그인은 허용하되 채�
 현재 Identity session·ADMIN·remote 권한을 재확인하며 내부 lookup은 실제 접수된 owner/
 session pointer를 사용한다. HTTP/RPC의 클라이언트는 profile·fence·READY·TTL을 주장할 수 없다.
 
+`AUTHORIZE_KAKAO_MANUAL`은 기존 history READ와 다르다. 현재 owner/Identity session/
+MANUAL fence/TTL을 검증하고, DB 잠금 밖의 실제 runtime 관측 뒤 같은 revision과 권한을
+다시 대조한다. GET admission은 실행·갱신·복구를 하지 않는다. API/BFF 성공은 빈 204다.
+WebSession에는 작은 lease/binding pointer만 두고 매 접속 때 API를 재조회한다. 세션 삭제·
+만료·이전 응답은 generation/CAS로 기존 연결을 되살리지 못한다. 고정 transport 검사는
+순수 Kakao contracts를 재사용하며 현재 lease 권한 규칙을 Web에 복제하지 않는다.
+
+Web의 선택 설정 `kakao_remote_transport`는 HTTPS origin과 설치된 정적 파일 경로만
+가진다. Secure cookie·허용 host를 확인하며 생략하면 접근이 꺼져 있다. 관리자는
+`remote/configuration`에서 boolean 표시 설정만 읽고, 실제 접속은 별도 현재 lease
+검사를 거친다. 구성 조회 응답만으로 ACTIVE나 로그인을 만들지 않는다.
+
+`kakao_manual_coordinator.py`는 고정 profile의 현재 intent를 기존 service 전이와 OS
+adapter에 연결한다. 별도 bounded thread가 systemd 대기를 담당해 기존 Catalog 업무를
+막지 않는다. `kakao_manual_composition.py`는 설치 pin이 없거나 비활성일 때 전용 worker
+package/UID를 요구하지 않는다. 정상 history GET이 active라고 보여도 실제 gateway
+admission이 보장되는 것은 아니다. 갱신 발행 직전에는 준비 상태가 일시 불일치할 수 있다.
+
 ## 실제 브라우저 프로세스 경계
 
 `kakao_browser_runtime.py`는 하나의 고정 systemd unit에 AUTO/MANUAL을 함께 연결한다.
@@ -103,6 +121,13 @@ systemd Job이 남아 있으면 종료 완료가 아니다. 정확한 실제 종
 이 단계는 소스/local subprocess/임시 DB 검증이며, actual selector·Caddy와 원격 admission·
 전용 UID/systemd 설치·실제 카카오 로그인/수집은 별도 gate다. `scripts/kakao/install_runtime.py`
 역시 준비된 보호 runtime만 설치하는 경계이며, 코드 존재를 설치 완료로 해석하지 않는다.
+`scripts/kakao/publish_runtime.py`는 초기 설치의 3개 prefix·2개 asset만 보호하며 기존
+install manifest와 정확한 dependency lock을 검사한다. Conda는 최종 전용 prefix에서
+준비하고 새 root inode로 게시한다. tmp 환경 복사·다른 환경 업그레이드·서비스 시작은 하지
+않는다. 일부 게시 후 실패하면 기록/준비본을 보존하고 별도 확인 없이 재설치하지 않는다.
+`config/caddy/kakao-remote.caddy`는 검증용 opt-in template이다. 운영 Caddyfile에는
+자동 import하지 않는다. forward metadata는 Caddy가 덮어쓰고, 허용된 private UDS로
+보내기 전에 cookie/authorization을 제거한다. 허가 실패를 200으로 반환하지 않는다.
 
 ## 먼저 볼 코드·검사
 

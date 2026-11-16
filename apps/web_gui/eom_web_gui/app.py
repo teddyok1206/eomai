@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, TypedDict
 from urllib.parse import urlsplit
 
+from eom_kakao_archive_contracts.kakao_remote import RemoteTransportPolicy
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -143,8 +144,14 @@ def create_app(
     settings: WebSettings | None = None,
     secrets_config: WebSecrets | None = None,
     gateway: ApplicationGateway | None = None,
+    remote_transport_policy: RemoteTransportPolicy | None = None,
 ) -> FastAPI:
     actual_settings = settings or (services.settings if services else load_settings())
+    if remote_transport_policy is not None:
+        actual_settings = WebSettings.model_validate(
+            {**actual_settings.model_dump(), "kakao_remote_transport": remote_transport_policy}
+        )
+    installed_remote_policy = actual_settings.kakao_remote_transport
     owned_gateway = gateway
     if services is None:
         secret_values = secrets_config or load_secrets()
@@ -283,7 +290,13 @@ def create_app(
     install_kakao_archive_routes(app, actual.gateway, require_session, require_admin_csrf)
     install_kakao_student_routes(app, actual.gateway, require_session, require_csrf)
     install_kakao_room_routes(app, actual.gateway, require_session, require_csrf)
-    install_kakao_manual_routes(app, actual.gateway, require_admin_session, require_admin_csrf)
+    install_kakao_manual_routes(
+        app,
+        actual.gateway,
+        require_admin_session,
+        require_admin_csrf,
+        remote_transport_policy=installed_remote_policy,
+    )
 
     @app.get("/studio", include_in_schema=False)
     async def studio_redirect() -> RedirectResponse:

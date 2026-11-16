@@ -801,7 +801,7 @@ verify_mock_exam_deployment_admission() {
 prepare_runtime_dependencies() {
   getent group eom-codex-auth >/dev/null || \
     fail "eom-codex-auth identity must be deployed before the API unit"
-  run_release_operator MIGRATION_VERIFY_0079 "${COMMIT}"
+  run_release_operator MIGRATION_VERIFY_0083 "${COMMIT}"
   run_release_operator API_ROLE_BOOTSTRAP "${COMMIT}"
 }
 
@@ -892,19 +892,19 @@ verify_release_wheel_records() {
   else
     release_wheels=("${DIST_DIR}"/*.whl)
   fi
-  ((${#release_wheels[@]} == 3)) || fail "release wheels are unavailable for RECORD verification"
+  ((${#release_wheels[@]} == 4)) || fail "release wheels are unavailable for RECORD verification"
   /usr/bin/chmod 0600 "${release_wheels[@]}"
   "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
-    "${release_wheels[@]}"
+    --kakao-release "${release_wheels[@]}"
 }
 
 capture_release_wheel_inspection_identity() {
   local -a release_wheels=("${DIST_DIR}"/*.whl)
-  ((${#release_wheels[@]} == 3)) || fail "release wheels are unavailable for identity capture"
+  ((${#release_wheels[@]} == 4)) || fail "release wheels are unavailable for identity capture"
   /usr/bin/chmod 0600 "${release_wheels[@]}"
   RELEASE_WHEEL_INSPECTION_IDENTITY="$(
     "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
-      --emit-identity "${release_wheels[@]}"
+      --kakao-release --emit-identity "${release_wheels[@]}"
   )"
   [[ "${RELEASE_WHEEL_INSPECTION_IDENTITY}" == \
     release_wheel_inspection_identity=\{* ]] || \
@@ -913,12 +913,12 @@ capture_release_wheel_inspection_identity() {
 
 verify_captured_release_wheel_inspection_identity() {
   local observed
-  (($# == 3)) || fail "release wheel identity verification requires exactly three wheels"
+  (($# == 4)) || fail "release wheel identity verification requires exactly four wheels"
   [[ -n "${RELEASE_WHEEL_INSPECTION_IDENTITY}" ]] || \
     fail "release wheel inspection identity was not captured"
   observed="$(
     "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
-      --emit-identity "$@"
+      --kakao-release --emit-identity "$@"
   )"
   [[ "${observed}" == "${RELEASE_WHEEL_INSPECTION_IDENTITY}" ]] || \
     fail "release wheel bytes changed after inspection"
@@ -936,6 +936,10 @@ build_release() {
   "${API_PYTHON}" -m pip wheel \
     --no-deps --no-build-isolation --wheel-dir "${DIST_DIR}" \
     "${SOURCE_ROOT}" >/dev/null
+
+  "${API_PYTHON}" -m pip wheel \
+    --no-deps --no-build-isolation --wheel-dir "${DIST_DIR}" \
+    "${SOURCE_ROOT}/packages/kakao_archive_contracts" >/dev/null
 
   mkdir -p "${STAGING_ROOT}/contracts/eom_api_contracts/schemas"
   cp "${SOURCE_ROOT}/packages/api_contracts/pyproject.toml" \
@@ -1050,12 +1054,63 @@ expected_migration_revision = source_migration_revision(Path(os.environ["REPOSIT
 
 dist = Path(os.environ["DIST_DIR"])
 wheels = sorted(dist.glob("*.whl"))
-if len(wheels) != 3:
-    raise SystemExit(f"expected 3 wheels, found {len(wheels)}")
+if len(wheels) != 4:
+    raise SystemExit(f"expected 4 wheels, found {len(wheels)}")
 by_prefix = {wheel.name.split("-", 1)[0]: wheel for wheel in wheels}
-required_wheels = {"eom_platform", "eom_api_contracts", "eom_application_api"}
+required_wheels = {
+    "eom_platform", "eom_api_contracts", "eom_application_api", "eom_kakao_archive_contracts"
+}
 if set(by_prefix) != required_wheels:
     raise SystemExit(f"unexpected wheel set: {sorted(by_prefix)}")
+
+def inspect_kakao_contract_source(wheel: Path, repository: Path) -> None:
+    """Bind the pure package to this archive, not an independently built wheel."""
+    from email.parser import BytesParser
+    import tomllib
+    from packaging.requirements import Requirement
+    from packaging.specifiers import SpecifierSet
+
+    package_name = "eom_kakao_archive_contracts"
+    source_root = repository / "packages/kakao_archive_contracts" / package_name
+    project = tomllib.loads((source_root.parent / "pyproject.toml").read_text())["project"]
+    expected = {
+        package_name + "/" + path.relative_to(source_root).as_posix(): path
+        for path in source_root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
+    if not expected or package_name + "/__init__.py" not in expected:
+        raise SystemExit("Kakao contracts source package is unavailable")
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+        metadata_names = [name for name in names if name.endswith(".dist-info/METADATA")]
+        if len(metadata_names) != 1:
+            raise SystemExit("Kakao contracts wheel metadata is unavailable")
+        metadata = BytesParser().parsebytes(archive.read(metadata_names[0]))
+        if (
+            metadata["Name"] != project["name"]
+            or metadata["Version"] != project["version"]
+            or SpecifierSet(metadata.get("Requires-Python", ""))
+            != SpecifierSet(project["requires-python"])
+            or {str(Requirement(value)) for value in metadata.get_all("Requires-Dist", [])}
+            != {str(Requirement(value)) for value in project["dependencies"]}
+        ):
+            raise SystemExit("Kakao contracts wheel metadata differs from the release source")
+        payload = {name for name in names if ".dist-info/" not in name}
+        if len(names) != len(set(names)) or payload != set(expected):
+            raise SystemExit("Kakao contracts wheel payload differs from the release source")
+        for name, path in expected.items():
+            if path.is_symlink() or archive.read(name) != path.read_bytes():
+                raise SystemExit("Kakao contracts wheel member differs from the release source")
+            if path.name.endswith(".schema.json"):
+                canonical = repository / "schemas/kakao-archive" / path.name
+                if canonical.is_symlink() or not canonical.is_file() or (
+                    archive.read(name) != canonical.read_bytes()
+                ):
+                    raise SystemExit("Kakao contracts schema differs from the canonical source")
+
+inspect_kakao_contract_source(
+    by_prefix["eom_kakao_archive_contracts"], Path(os.environ["REPOSITORY_ROOT"])
+)
 
 with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
     names = set(archive.namelist())
@@ -1992,6 +2047,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
                 str(platform_wheel),
                 str(by_prefix["eom_api_contracts"]),
                 str(by_prefix["eom_application_api"]),
+                str(by_prefix["eom_kakao_archive_contracts"]),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
@@ -2007,6 +2063,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         if path.stat().st_mode & 0o777 != expected_mode:
             raise SystemExit(f"installed simulation mode mismatch: {path.name}")
     check = r'''
+import importlib
 import importlib.util
 import json
 import os
@@ -2099,6 +2156,9 @@ if (
 ):
     raise SystemExit("Application API contracts were not imported from the release wheel")
 for recovery_module in (
+    "eom_kakao_archive_contracts",
+    "eom_kakao_archive_contracts.kakao_remote",
+    "eom_catalog_service.kakao_manual_service",
     "eom_operator_identity.errors",
     "eom_identity_service.local_admin_recovery",
     "eomctl.operator",
@@ -2113,6 +2173,7 @@ for recovery_module in (
         raise SystemExit(
             f"identity recovery module was not imported from the release wheel: {recovery_module}"
         )
+    importlib.import_module(recovery_module)
 recovery_help = CliRunner().invoke(
     eomctl_app,
     ["operator", "emergency-reset-admin-password", "--help"],
@@ -2667,7 +2728,7 @@ PY
 
 install_wheels() {
   mapfile -t wheels < <(find "${DIST_DIR}" -maxdepth 1 -type f -name '*.whl' | sort)
-  ((${#wheels[@]} == 3)) || fail "release wheels are unavailable"
+  ((${#wheels[@]} == 4)) || fail "release wheels are unavailable"
   # Re-open and verify the exact install arguments after every admission gate.
   verify_captured_release_wheel_inspection_identity "${wheels[@]}"
   (
@@ -2728,6 +2789,7 @@ runtime_package_roots: set[Path] = set()
 for module in (
     "eom_api",
     "eom_api_contracts",
+    "eom_kakao_archive_contracts",
     "eom_operator_identity",
     "eom_operator_identity.errors",
     "eom_identity_service.local_admin_recovery",
@@ -2749,6 +2811,8 @@ for module in (
     runtime_package_roots.add(origin.parent)
 
 for module in (
+    "eom_kakao_archive_contracts.kakao_remote",
+    "eom_catalog_service.kakao_manual_service",
     "eom_operator_identity.errors",
     "eom_identity_service.local_admin_recovery",
     "eomctl.operator",
@@ -2805,7 +2869,9 @@ if (
     or eomctl_help.stderr
 ):
     raise SystemExit("installed eomctl emergency recovery command is unavailable")
-for name in ("eom-application-api", "eom-api-contracts", "eom-platform"):
+for name in (
+    "eom-application-api", "eom-api-contracts", "eom-platform", "eom-kakao-archive-contracts"
+):
     distribution = importlib.metadata.distribution(name)
     direct_url = distribution.read_text("direct_url.json")
     if direct_url and json.loads(direct_url).get("dir_info", {}).get("editable") is True:
@@ -2863,7 +2929,8 @@ payload = {
         "history forbids blind schema downgrade; old wheels alone may fail exact-head readiness. "
         "Withdraw the new UI entrypoint using a compatible retained Web release while keeping "
         "the new platform/schema and history, or use a separately reviewed compatible release "
-        "set. Restore only verified nonsecret configuration/unit predecessors, then verify."
+        "set including its pinned pure Kakao contracts wheel; never downgrade that dependency "
+        "independently. Restore only verified nonsecret configuration/unit predecessors, then verify."
     ),
 }
 Path(os.environ["RECORD"]).write_text(json.dumps(payload, indent=2) + "\n", encoding="ascii")

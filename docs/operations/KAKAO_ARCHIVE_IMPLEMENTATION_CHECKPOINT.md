@@ -1,5 +1,79 @@
 # KakaoTalk 구현 체크포인트
 
+## 최신 후속 — 2026-11-16 runtime coordinator·현재 접속 승인
+
+기준 source checkpoint는 `7fe0c345d3b5c95c42c72ae67e371be0988bb92c`다.
+다음은 소스/격리 검증 결과이며 아직 운영 설치·카카오 인증·실제 수집 결과가 아니다.
+
+- Catalog 현재 MANUAL intent와 고정 browser/gateway를 연결했다. 별도 bounded thread가
+  같은 실행의 준비·종료를 관측하며 원래 Catalog 업무 loop를 막지 않는다. 시작 응답 유실은
+  원래 staged 실행을 확인하며 새 launch로 우회하지 않는다. 만료는 기존 gateway stop으로
+  즉시 닫고 browser 종료를 확인한다. 실패 이력을 성공으로 바꾸지 않는다.
+- private `AUTHORIZE_KAKAO_MANUAL`은 단순 history READ와 분리된다. 현재 owner/session/
+  fence/TTL → 실제 OS 관측 → 같은 revision과 권한을 다시 검사한다. API/BFF는 성공 때만
+  빈 204를 반환한다. noVNC asset과 WebSocket 모두 이 경계를 통과하며 읽기는 갱신하지 않는다.
+- 독립 검토에서 병렬 asset·heartbeat의 읽기 lock 충돌을 재현했다. 실제 read observation만
+  짧게 직렬화하고 매 요청의 새 관측·현재 권한 검사를 보존했다. 권한 캐시나 503 무시로
+  덮지 않았다. coordinator/OS/remote 집중 검사 **304 PASS**, 관련 8개 모듈 mypy PASS.
+- 공식 disposable DB 후속 검사 **78 PASS**: 5개 실제 admission/predecessor 검사를 추가했다.
+  통합 수정 중 import 누락으로 처음 22 FAIL/56 PASS가 발생했고, `ProfileFence` import를
+  복원한 뒤 같은 공식 경로로 78개를 재검증했다. 운영 DB는 사용하지 않았다.
+- WebSession은 작은 lease pointer와 응답 generation만 보관한다. 늦은 read·logout·END가
+  이전 화면을 되살리지 못한다. Caddy opt-in template의 실제 로컬 proxy 검사도 수행했다.
+  HTTPS origin·정적 파일 allowlist 설정은 기본 생략이며 Secure cookie·허용 host를 요구한다.
+  화면은 boolean 표시 설정만 읽는다. 실제 ACTIVE lease 없이 원격 iframe이 열리지 않는다.
+- Web 설정/현재 admission·실제 Chromium/remote 규칙 **136 PASS** 후, 주입 경로의 동일
+  HTTPS 설정 검사를 보강해 설정/admission **49 PASS**를 확인했다. 기존 Starlette/httpx
+  deprecation warning은 남아 있으며 이 변경에서 무관한 의존성을 교체하지 않았다.
+- API 배포 입력은 새 context 1.25에서만 pure Kakao contracts를 포함한 정확한 4개 wheel과
+  migration 0083을 사용한다. historical context 1.0–1.24의 bytes/3-wheel 의미는 보존했다.
+  관련 API 배포 검증 **120 PASS**, 실제 별도 설치 wheel/import 검증 PASS다. dirty source의
+  임시 build는 테스트용이며 final release로 재사용하지 않는다.
+- 합동 검사 첫 실행은 **646 PASS/1 FAIL**이었다. 실패는 개발 문맥 index의 경로 43개가
+  자체 40개 상한을 넘은 것으로, 중복 탐색 경로를 줄인 뒤 문맥 검사 **13 PASS**다.
+  운영 기능 오류가 아니며 상한을 완화해 통과시키지 않았다.
+- 후속 최종 합동 검사 **693 PASS**(API/BFF·현재 접속 승인·Chromium/Caddy·설치 wheel·
+  배포/의존성/개발 문맥 포함), 실제 disposable PostgreSQL 78 PASS와 별도다. root의
+  Web/pure-contract 4개 모듈 mypy·Ruff/format도 PASS다.
+- Web은 기존 API 환경에 기대지 않는 빈 Web interpreter venv에서 30개 exact wheel을
+  오프라인 설치하고 `pip check`, 실제 app/contract import, 95개 RECORD 검사를 통과했다.
+  기존 third-party 버전은 유지하며 jsonschema의 빠진 의존성만 완전한 잠금 목록에 포함했다.
+  운영 installer는 root 보호 source snapshot의 helper/lock을 독립 SHA로 검증한다.
+- 고정 초기 publisher는 3개 전용 Conda prefix와 Playwright/noVNC 두 경로만 준비·검증·
+  새 root inode로 게시한다. 기존 install manifest를 참조하며 기존 prefix 업그레이드나
+  서비스 활성화는 하지 않는다. 관련 installer/publisher **62 PASS**, 독립 검토에서 실제
+  임시 3환경의 isolated dependency 검사와 5개 tree fingerprint도 PASS다. 실제 `/opt`
+  게시·apt 설치·계정 생성은 아직 실행하지 않았다. 중간 실패는 검증되지 않은 설치 상태로
+  보존하고 성공 receipt를 만들지 않으며, 이를 자동 배포 성공으로 취급하지 않는다.
+- 아직 남은 경계: 전용 prefix의 root 보호 설치·실제 UID/systemd/VNC·Caddy 연결, 최종
+  clean-commit 호환 release 및 운영 migration, 카카오 실제 로그인/selector/한 방 수집,
+  원본 수락·질문/packet/export 영속 owner 연결과 실제 PDF 제공. 구현·시험 성공을 전체
+  운영 완료로 표시하지 않는다. 기존 문항/임베딩/인증 자료에는 변경이 없다.
+
+### 다음 영속 연결의 최소 순서
+
+0080–0083은 binding/student/room/manual owner까지만 제공한다. 공개된 질문·packet
+화면 fixture와 Artifact 발행 helper가 DB 수락까지 구현했다는 뜻은 아니다.
+
+1. source 수락 owner가 actual attempt/fence 또는 명시 수동입력 provenance, 현재 owner/
+   binding/room을 검사하고 snapshot/normalization/occurrence ID를 먼저 예약한다.
+   기존 parser·capture publisher를 사용하고 사진 blob은 binding+SHA로만 dedup한다.
+2. 정규화·alignment·원문·사진은 Artifact, DB에는 exact pointer와 occurrence 관계만 둔다.
+   기존 `ResolvedKakaoQuestionSource`를 영속 resolver에서 구성해 source 권한을 재검사한다.
+3. 기존 질문 생성/편집/분할/병합·publisher를 수락 owner에 연결한다. split/merge의 입력
+   supersede와 결과 current pointer는 한 transaction이며 수동 편집을 재수집으로 덮지 않는다.
+4. packet은 선택한 exact question/student/mapping/기간/mode를 고정한다. export는 이 pin과
+   renderer/font/layout을 예약한 뒤 기존 PDF executor·publisher로 처리한다.
+5. same intent는 예약 ID·기존 publication key/완료 attempt를 재조회한다. Job metadata에는
+   ID/hash/count만 남기고 새 queue/framework나 원문 JSONB를 만들지 않는다. CAS 실패는
+   원래 current를 보존한다. source ACL을 확인한 private download만 기존 media transport에 잇는다.
+
+이 후속 단계의 schema/DDL은 아직 추가하지 않았다. 먼저 합성 CSV·사진 2개 → 질문 편집 →
+학생별 packet/PDF·PNG → 재조회 추가 render 0을 disposable DB와 실제 local PDF로 닫는다.
+날짜가 확인되지 않은 DRAFT는 날짜 추측 대신 명시적 미확인 표시가 필요하다. 현재 render
+projection의 DATE_UNVERIFIED 거부가 이 설계와 다르므로 해당 경계를 구현할 때 정합시킨다.
+실제 카카오 selector·완전성·사진 연결 capability는 로그인 전 UNKNOWN을 유지한다.
+
 ## 최신 체크포인트 — 2026-11-16 MANUAL 연결·설치 전 경계
 
 - 이전 source checkpoint `1e33207c` 이후 수동 로그인 의도/짧은 접근 허가를 저장하는

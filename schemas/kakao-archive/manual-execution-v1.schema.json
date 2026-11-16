@@ -263,11 +263,19 @@
         "authorized_at",
         "expires_at",
         "absolute_expires_at",
-        "browser"
+        "browser",
+        "last_error",
+        "ended_reason"
       ],
       "properties": {
         "schema_version": {
           "const": "kakao-manual-intent/1.0"
+        },
+        "last_error": {
+          "enum": [null, "START_FAILED", "RUNTIME_LOST", "GATEWAY_START_FAILED", "STOP_UNCONFIRMED", "OWNER_UNAVAILABLE", "REBOOT_UNCLEAN"]
+        },
+        "ended_reason": {
+          "enum": [null, "USER_ENDED", "EXPIRED", "SESSION_REVOKED", "SOURCE_REVOKED", "RUNTIME_FAILED"]
         },
         "lease_id": {
           "type": "string",

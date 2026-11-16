@@ -23,10 +23,11 @@ function checked(value, bindingId, leaseId = null) {
 }
 
 export function createKakaoManual({document, api, explainError = () => "잠시 후 다시 확인해 주세요.",
-  schedule = setTimeout, unschedule = clearTimeout, now = Date.now, remoteViewEnabled = false}) {
+  schedule = setTimeout, unschedule = clearTimeout, now = Date.now, remoteViewEnabled = null}) {
   let root, owner = null, active = false, binding = null, lease = null;
   let roles = new Set(), permissions = new Set(), generation = 0, timer = null, expiryTimer = null;
   let intent = null, busy = false, message = "", failed = false, frame = null;
+  let viewEnabled = remoteViewEnabled === true;
   const nodes = {};
   function node(tag, text, className = "") {
     const value = document.createElement(tag); if (text !== undefined) value.textContent = text;
@@ -62,14 +63,14 @@ export function createKakaoManual({document, api, explainError = () => "잠시 �
     nodes.status.textContent = message || (current ? ({PREPARING:"로그인 화면을 준비하고 있습니다.", ACTIVE:expired ? "연결 시간이 끝났습니다. 상태를 확인해 주세요." : "로그인 연결이 준비됐습니다.", STOPPING:"로그인 연결을 안전하게 닫고 있습니다.", ENDED:"로그인 연결을 닫았습니다.", ERROR:"로그인 연결을 완료하지 못했습니다. 기존 기록은 보존됩니다."}[current.phase]) : "카카오 로그인은 관리자가 이 연결에서 직접 진행합니다. 대화 수집이나 채널 확인을 자동으로 시작하지 않습니다.");
     nodes.status.className = `form-message${failed ? " error" : ""}`;
     nodes.detail.textContent = current ? `최대 종료 시각: ${new Date(current.absolute_expires_at).toLocaleTimeString("ko-KR", {timeZone:"Asia/Seoul", hour:"2-digit", minute:"2-digit"})}` : "비밀번호나 인증 코드를 이 화면의 일반 입력란에 적지 마세요.";
-    const view = Boolean(available() && current?.ready && current.phase === "ACTIVE" && !expired && !failed && (!pending || pending.kind === "RENEW") && remoteViewEnabled);
+    const view = Boolean(available() && current?.ready && current.phase === "ACTIVE" && !expired && !failed && (!pending || pending.kind === "RENEW") && viewEnabled);
     if (!view) removeFrame();
     if (view && !frame) {
       frame = node("iframe"); frame.title = "카카오 로그인 원격 화면";
-      frame.src = "/studio/admin/remote/"; frame.referrerPolicy = "no-referrer";
+      frame.src = "/studio/admin/remote/vnc.html"; frame.referrerPolicy = "no-referrer";
       frame.setAttribute("sandbox", "allow-scripts allow-same-origin"); nodes.viewport.append(frame);
     }
-    nodes.unavailable.hidden = remoteViewEnabled || !current?.ready;
+    nodes.unavailable.hidden = viewEnabled || !current?.ready;
     if (available() && current?.ready && !expired) {
       const token = generation;
       expiryTimer = schedule(() => { expiryTimer = null; if (live(token)) { render(); scheduleNext(); } }, Math.max(1, Date.parse(current.expires_at) - now()));
@@ -142,15 +143,29 @@ export function createKakaoManual({document, api, explainError = () => "잠시 �
       if (DENIED.has(error?.code)) { lease = null; intent = null; }
     } finally { if (live(token)) { busy = false; render(); scheduleNext(); } }
   }
-  function invalidate() { generation++; busy = false; stopTimer(); removeFrame(); message = ""; failed = false; }
+  async function loadConfiguration() {
+    if (remoteViewEnabled !== null || !permitted()) return;
+    const token = generation;
+    try {
+      const result = await api("/kakao-archive/remote/configuration");
+      if (token !== generation || !permitted()) return;
+      viewEnabled = result?.schema_version === "kakao-remote-presentation/1.0" && result.remote_view_enabled === true;
+    } catch {
+      if (token !== generation || !permitted()) return;
+      viewEnabled = false;
+    }
+    render();
+  }
+  function invalidate() { generation++; busy = false; stopTimer(); removeFrame(); message = ""; failed = false; if (remoteViewEnabled === null) viewEnabled = false; }
   function setOwner(value) { if (owner === value) return; invalidate(); owner = value || null; binding = null; lease = null; intent = null; roles.clear(); permissions.clear(); render(); }
   function setRoles(values) { invalidate(); roles = new Set(values); render(); }
   function setPermissions(values) { invalidate(); permissions = new Set(values); render(); }
   async function setBinding(value) {
     invalidate(); binding = value && BINDING.test(value.source_binding_id || "") ? value : null; render();
+    void loadConfiguration();
     if (available() && selectedLease()) await refresh();
   }
-  function open() { active = true; invalidate(); render(); if (available() && selectedLease()) void refresh(); }
+  function open() { active = true; invalidate(); render(); void loadConfiguration(); if (available() && selectedLease()) void refresh(); }
   function close() { active = false; invalidate(); render(); }
   return {install, setOwner, setRoles, setPermissions, setBinding, open, close, refresh};
 }

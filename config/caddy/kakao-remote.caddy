@@ -1,0 +1,51 @@
+# Optional source template, NOT imported by the operational Caddyfile.
+# After installed noVNC inventory + owner/API admission validation, import this
+# inside the existing site route BEFORE the generic /studio proxy.
+@kakao_remote_authorize path /studio/api/v1/kakao-archive/remote/authorize
+respond @kakao_remote_authorize 404
+
+@kakao_remote path /studio/admin/remote /studio/admin/remote/*
+route @kakao_remote {
+	# Expanded forward_auth: only empty 204 is the BFF admission contract.
+	# Caddy overwrites all metadata; client-supplied forwarding values are ignored.
+	reverse_proxy 127.0.0.1:8790 {
+		method GET
+		rewrite /studio/api/v1/kakao-archive/remote/authorize
+		header_up X-Forwarded-Method {http.request.orig_method}
+		header_up X-Forwarded-Uri {http.request.orig_uri}
+		header_up X-EOM-Remote-Protocol {http.request.proto}
+		header_up X-EOM-Remote-Origin {http.request.header.Origin}
+		header_up X-EOM-Remote-Upgrade {http.request.header.Upgrade}
+		header_up X-EOM-Remote-Connection {http.request.header.Connection}
+		header_up X-EOM-Remote-Version {http.request.header.Sec-WebSocket-Version}
+		header_up X-EOM-Remote-Key {http.request.header.Sec-WebSocket-Key}
+		header_up -Authorization
+		header_up -Upgrade
+		header_up -Connection
+		header_up -Sec-WebSocket-Key
+		header_up -Sec-WebSocket-Version
+		@admitted status 204
+		handle_response @admitted {
+			# No response is written; continue to the fixed private UDS below.
+		}
+		@unexpected status 2xx 3xx
+		handle_response @unexpected {
+			respond 503
+		}
+	}
+	uri strip_prefix /studio/admin/remote
+	reverse_proxy unix//run/eom-kakao-remote/gateway.sock {
+		header_up -Cookie
+		header_up -Authorization
+		header_up -Proxy-Authorization
+		header_up -X-CSRF-Token
+		header_up -X-EOM-Remote-*
+		header_up -X-Forwarded-Method
+		header_up -X-Forwarded-Uri
+		header_down -Set-Cookie
+		header_down Cache-Control no-store
+		header_down Referrer-Policy no-referrer
+		header_down X-Frame-Options SAMEORIGIN
+		header_down X-Content-Type-Options nosniff
+	}
+}

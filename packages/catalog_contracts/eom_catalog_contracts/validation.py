@@ -38,13 +38,13 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
             "1.0",
-            "sha256:e005dd16a0192665486822aaefe6e9ec79ece77613fe7c6d9fad5e054242d2c5",
+            "sha256:e9ee71fe6fc3482420bd3d00477c7d939a354a7e686ccc3e8821547e4f141fd9",
         ),
         "catalog-kakao-manual-response-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-manual-response-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-manual-response-v1.schema.json",
             "1.0",
-            "sha256:b124e13f47389c71950430e928f6548d3ee5e122b249f5f759b15689b6fd639c",
+            "sha256:fe425dc596b6b5ea1e7c584c981a142f8269ee184a559000595866b165defc1d",
         ),
         "catalog-kakao-room-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-room-request-v1.schema.json",
@@ -74,7 +74,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/kakao-archive/manual-execution-v1.schema.json",
             "resources/kakao-archive/manual-execution-v1.schema.json",
             "1.0",
-            "sha256:3aafecf29d2fdaf2dc2861cf8677c1ea8556db2c80738b906bd155e190c709d5",
+            "sha256:876b6a28a8947772efe3e47cb29b405e0271a90449f2196d4c29a6813cc372bf",
         ),
         "catalog-kakao-student-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-student-request-v1.schema.json",

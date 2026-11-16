@@ -104,6 +104,22 @@ def read_session(
     return one(request, result)
 
 
+@router.get(
+    "/{lease_id}/authorize",
+    operation_id="kakao_manual_authorize",
+    status_code=204,
+    response_class=Response,
+    dependencies=[Depends(REMOTE)],
+)
+def authorize_session(request: Request, lease_id: LeaseId, authentication: Auth) -> Response:
+    """Deny by status; a false HTTP 200 response would authorize a proxy request."""
+    with _boundary():
+        request.app.state.services.catalog_application.authorize_kakao_manual(
+            lease_id, actor=request.state.request_context.actor()
+        )
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
 @router.post(
     "/{lease_id}/commands",
     operation_id="kakao_manual_command",

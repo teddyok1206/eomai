@@ -507,6 +507,58 @@ def test_unconfirmed_dispatch_recovers_exact_running_handle_without_launch(gate,
     run.assert_not_called()
 
 
+@pytest.mark.parametrize("terminal", ["ready", "failed"])
+def test_staged_pending_dispatch_is_observed_until_ready_or_closed(gate, monkeypatch, terminal):
+    pending = observed(ActiveState="activating", SubState="start", Job="42", StatusText="")
+    final = observed() if terminal == "ready" else inactive(Result="exit-code", ExecMainStatus="1")
+    monkeypatch.setattr(runtime, "_show", Mock(side_effect=[pending, final]))
+    launch = Mock()
+    monkeypatch.setattr(runtime.subprocess, "run", launch)
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="START_PENDING"):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    result = gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+    assert isinstance(
+        result, runtime.BrowserRunHandle if terminal == "ready" else runtime.ClosedBrowserDispatch
+    )
+    launch.assert_not_called()
+
+
+def test_pending_label_does_not_skip_stage_hash_or_trusted_unit(gate, monkeypatch):
+    monkeypatch.setattr(
+        runtime, "_show", lambda: observed(ActiveState="activating", DropInPaths="/tmp/injected")
+    )
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="UNIT_UNTRUSTED"):
+        gate.observe_dispatch(fence(), command_sha256=DIGEST, dispatched_boot_id=BOOT)
+
+
+def test_stage_observation_distinguishes_fresh_current_and_skipped_fences(
+    gate, safe_dir, monkeypatch
+):
+    monkeypatch.setattr(runtime, "REQUEST", safe_dir / "request.json")
+    monkeypatch.setattr(runtime.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=OWNER))
+    assert gate.observe_stage(fence()) == runtime.BrowserStageObservation(False, None)
+    first = fence()
+    runtime.REQUEST.write_bytes(runtime.canonical_bytes(first.model_dump(mode="json")))
+    runtime.REQUEST.chmod(0o600)
+    assert gate.observe_stage(first) == runtime.BrowserStageObservation(True, first)
+    assert gate.observe_stage(fence(epoch=3, run="3")) == runtime.BrowserStageObservation(
+        False, first
+    )
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="FENCE_MISMATCH"):
+        gate.observe_stage(fence(epoch=1, run="4"))
+
+
+def test_partial_target_stage_is_uncertain_not_permission_to_launch(gate, safe_dir, monkeypatch):
+    monkeypatch.setattr(runtime, "REQUEST", safe_dir / "request.json")
+    monkeypatch.setattr(runtime.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=OWNER))
+    original, next_fence = fence(), fence(epoch=2, run="2")
+    runtime.REQUEST.write_bytes(runtime.canonical_bytes(original.model_dump(mode="json")))
+    runtime.REQUEST.chmod(0o600)
+    (safe_dir / (next_fence.browser_run_id + ".next")).touch()
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="STAGE_UNCERTAIN"):
+        gate.observe_stage(next_fence)
+
+
 @pytest.mark.parametrize("reboot", [False, True])
 def test_pre_ready_failure_and_reboot_are_closed_not_successful(gate, monkeypatch, reboot):
     monkeypatch.setattr(
@@ -625,7 +677,6 @@ def test_idle_inventory_reports_history_without_authorizing_or_repairing(
         {"Job": "9"},
         {"MainPID": "9"},
         {"ControlPID": "9"},
-        {"ActiveState": "failed", "SubState": "failed"},
         {"ActiveState": "active", "SubState": "running"},
         {"ControlGroup": "/other"},
     ],
@@ -634,6 +685,23 @@ def test_idle_inventory_needs_actual_quiescence(gate, monkeypatch, change):
     monkeypatch.setattr(runtime, "_show", lambda: {**inactive(), **change})
     with pytest.raises(runtime.KakaoBrowserRuntimeError, match="IDLE_UNCONFIRMED"):
         gate.observe_idle()
+
+
+def test_physically_closed_failed_unit_is_never_fresh_installation(gate, monkeypatch):
+    monkeypatch.setattr(
+        runtime,
+        "_show",
+        lambda: observed(
+            ActiveState="failed",
+            SubState="failed",
+            MainPID="0",
+            ExecMainPID="0",
+            ExecMainStartTimestampMonotonic="0",
+            InvocationID="",
+            StatusText="",
+        ),
+    )
+    assert gate.observe_idle().never_dispatched is False
 
 
 @pytest.mark.parametrize("case", ["missing", "duplicate", "unknown", "bad-pid", "huge"])

@@ -53,6 +53,7 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 )
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
 from eom_catalog_service.kakao_room_service import KakaoRoomService
 from eom_catalog_service.kakao_student_service import KakaoStudentService
 from eom_catalog_service.knowledge_analysis_batch_models import (
@@ -197,6 +198,7 @@ def serve() -> int:
     engine = build_engine()
     server: CatalogApplicationServer | None = None
     thread: threading.Thread | None = None
+    manual_thread: threading.Thread | None = None
     stopping = threading.Event()
 
     def stop(_signum: int, _frame: object) -> None:
@@ -325,6 +327,7 @@ def serve() -> int:
         external_item_previews = ExternalItemPreviewProjectionService(
             engine, profile=CHOICE_LAYOUT_OFFICE_PROFILE
         )
+        manual = build_kakao_manual_runtime(engine, os.environ)
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -382,6 +385,7 @@ def serve() -> int:
             kakao_archive=KakaoArchiveService(engine),
             kakao_students=KakaoStudentService(engine),
             kakao_rooms=KakaoRoomService(engine),
+            kakao_manual=manual.application if manual is not None else None,
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
                 retrieval=knowledge_retrieval,
@@ -393,6 +397,24 @@ def serve() -> int:
             daemon=True,
         )
         thread.start()
+        if manual is not None:
+            coordinator = manual.coordinator
+
+            def advance_manual() -> None:
+                previous = "IDLE"
+                while not stopping.wait(timeout=1):
+                    try:
+                        status = coordinator.advance_once()
+                    except Exception:
+                        status = "ERROR"
+                    if status == "ERROR" and previous != "ERROR":
+                        print("KAKAO_MANUAL_RUNTIME_RECONCILIATION_REQUIRED", flush=True)
+                    previous = status
+
+            manual_thread = threading.Thread(
+                target=advance_manual, name="eom-kakao-manual", daemon=True
+            )
+            manual_thread.start()
         runner_id = f"catalog-batch-runner:{os.getpid()}"
         while not stopping.wait(timeout=1):
             if not thread.is_alive():
@@ -426,6 +448,8 @@ def serve() -> int:
             server.server_close()
         if thread is not None:
             thread.join(timeout=5)
+        if manual_thread is not None:
+            manual_thread.join(timeout=5)
         engine.dispose()
 
 

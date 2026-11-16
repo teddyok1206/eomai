@@ -22,6 +22,7 @@ from typing import BinaryIO, Final
 _EXPECTED_DISTRIBUTIONS: Final = frozenset(
     {"eom_api_contracts", "eom_application_api", "eom_platform"}
 )
+_KAKAO_RELEASE_DISTRIBUTIONS: Final = _EXPECTED_DISTRIBUTIONS | {"eom_kakao_archive_contracts"}
 _MAX_WHEEL_BYTES: Final = 256 * 1024 * 1024
 _MAX_MEMBER_BYTES: Final = 64 * 1024 * 1024
 _MAX_TOTAL_UNCOMPRESSED_BYTES: Final = 512 * 1024 * 1024
@@ -230,7 +231,7 @@ def verify_wheel_record(path: Path) -> VerifiedWheelIdentity:
         ):
             raise WheelRecordError("WHEEL_RECORD_FILE_IDENTITY")
         expected_distribution = path.name.split("-", 1)[0]
-        if expected_distribution not in _EXPECTED_DISTRIBUTIONS:
+        if expected_distribution not in _KAKAO_RELEASE_DISTRIBUTIONS:
             raise WheelRecordError("WHEEL_RECORD_IDENTITY")
         with os.fdopen(os.dup(descriptor), "rb") as stream:
             _verify_open_wheel(stream, expected_distribution=expected_distribution)
@@ -289,15 +290,25 @@ def main(arguments: tuple[str, ...] | None = None) -> int:
             return 1
         print("platform_wheel_record_verification=PASS")
         return 0
+    # Archived releases keep their original three-wheel closure. Only the explicit
+    # Kakao release mode admits the fourth pure-contract dependency, never a subset.
+    kakao_release = bool(values and values[0] == "--kakao-release")
+    if kakao_release:
+        values = values[1:]
+    expected_distributions = (
+        _KAKAO_RELEASE_DISTRIBUTIONS if kakao_release else _EXPECTED_DISTRIBUTIONS
+    )
     emit_identity = bool(values and values[0] == "--emit-identity")
     if emit_identity:
         values = values[1:]
-    if len(values) != 3:
+    if len(values) != len(expected_distributions):
         print("release_wheel_record_verification=INVALID_ARGUMENTS", file=sys.stderr)
         return 2
     paths = tuple(Path(value) for value in values)
     distributions = {path.name.split("-", 1)[0] for path in paths}
-    if distributions != _EXPECTED_DISTRIBUTIONS or len({str(path) for path in paths}) != 3:
+    if distributions != expected_distributions or len({str(path) for path in paths}) != len(
+        expected_distributions
+    ):
         print("release_wheel_record_verification=INVALID_WHEEL_SET", file=sys.stderr)
         return 2
     try:

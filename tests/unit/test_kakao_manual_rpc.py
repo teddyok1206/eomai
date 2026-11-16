@@ -21,7 +21,7 @@ from eom_catalog_service.kakao_manual_service import KakaoManualService
 from tests.unit.kakao_manual_fixtures import IDENTITY, KEY, LEASE, session, start
 
 
-@pytest.mark.parametrize("action", ["start", "renew", "end", "read"])
+@pytest.mark.parametrize("action", ["start", "renew", "end", "read", "authorize"])
 def test_dispatch_uses_configured_probes_and_stored_intent_reply(action):
     owner = Mock(spec=KakaoManualService)
     profile, runtime = Mock(), Mock()
@@ -30,9 +30,13 @@ def test_dispatch_uses_configured_probes_and_stored_intent_reply(action):
         request = StartKakaoManualRequest(**IDENTITY, command=start(), idempotency_key=KEY)
         method = owner.start_session
         method.return_value = KakaoManualMutation(session=session(), replayed=True)
-    elif action == "read":
-        request = ReadKakaoManualRequest(**IDENTITY, lease_id=LEASE)
-        method = owner.get_session
+    elif action in {"read", "authorize"}:
+        request = ReadKakaoManualRequest(
+            **IDENTITY,
+            lease_id=LEASE,
+            operation="AUTHORIZE_KAKAO_MANUAL" if action == "authorize" else "READ_KAKAO_MANUAL",
+        )
+        method = owner.authorize_session if action == "authorize" else owner.get_session
         method.return_value = session("ACTIVE", 3, 1)
     else:
         command = (
@@ -56,12 +60,26 @@ def test_dispatch_uses_configured_probes_and_stored_intent_reply(action):
     assert actor.operator_id == IDENTITY["actor_id"] and not actor.permissions
     if action == "start":
         assert method.call_args.kwargs["observe_profile"] is profile
-    if action == "renew":
+    if action in {"renew", "authorize"}:
         assert method.call_args.kwargs["observe_runtime"] is runtime
-    if action != "read":
+    if action not in {"read", "authorize"}:
         assert method.call_args.kwargs["idempotency_key"] == KEY
     profile.assert_not_called()
     runtime.assert_not_called()
+
+
+@pytest.mark.parametrize("phase", ["PREPARING", "STOPPING", "ERROR"])
+def test_proxy_admission_cannot_use_a_non_ready_history_view(phase):
+    owner = Mock(spec=KakaoManualService)
+    owner.authorize_session.return_value = session(phase, 3, 1)
+    request = ReadKakaoManualRequest(**IDENTITY, lease_id=LEASE, operation="AUTHORIZE_KAKAO_MANUAL")
+    result = json.loads(
+        dispatch_kakao_manual(
+            KakaoManualApplication(owner, Mock(), Mock()), request.model_dump(mode="json")
+        )
+    )
+    assert result["error_code"] == "KAKAO_ARCHIVE_RESULT_INVALID"
+    owner.get_session.assert_not_called()
 
 
 @pytest.mark.parametrize("field", ["roles", "profile_path", "fence_epoch", "grant", "runtime"])

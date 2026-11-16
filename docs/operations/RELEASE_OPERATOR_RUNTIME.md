@@ -242,6 +242,33 @@ in the release script has been redesigned. The root-private launcher is the new
 boundary for these seven callbacks only; existing release checks and service
 installation still need their established reviewed operator execution context.
 
+### Web offline closure handoff (source implementation, not activation evidence)
+
+The current Web installer must run from the protected exact source snapshot above.
+Copying `install_release.sh` alone is insufficient: preserve the original relative
+locations of `scripts/web_gui/install_release.sh`, `scripts/web_gui/wheel_closure.py`
+and `infra/conda/eom-web.requirements.lock`. Use fresh root-controlled inodes, not
+ownership changes on files still held by the developer. Independently verify the
+installer SHA and its protected ancestors **before** starting Bash in a clean environment.
+Its helper and pin-lock are verified again before helper execution.
+
+The clean unprivileged Web build prints the commit, Web wheel SHA, whole closure SHA,
+installer SHA, helper SHA and pin-lock SHA. Retain those independent reviewed values
+with the existing compatible-release record. The command now takes six arguments:
+
+```text
+/usr/bin/bash <protected-source>/scripts/web_gui/install_release.sh \
+  <web-wheel> <web-sha256> <commit> <closure-sha256> <helper-sha256> <pins-sha256>
+```
+
+`web-wheel` remains within the fixed `/tmp/eom-web-gui-build/.../dist/` build directory.
+The installer copies every hash-pinned wheel and standard pip requirements lock into
+a fresh root-private directory, resolves and imports them in an empty offline venv,
+then installs the identical closure into Web with no network or `--no-deps` bypass.
+No service restart is implicit. Use the existing approved release window, installed
+record and compatible rollback procedure. Preserve prior package/wheel evidence;
+do not retry a failed in-place install without first observing its actual state.
+
 ## Recorded operational application
 
 The 2026-10-10 release completed at 16:07:55 UTC for commit

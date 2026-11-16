@@ -12,7 +12,10 @@ from unittest.mock import Mock
 import pytest
 from eom_api.app import create_app
 from eom_api.dependencies import get_authentication
-from eom_api.services.catalog_application_client import CatalogApplicationClient
+from eom_api.services.catalog_application_client import (
+    CatalogApplicationClient,
+    CatalogApplicationClientError,
+)
 from eom_catalog_contracts.kakao_manual import KakaoManualEnd, KakaoManualMutation, KakaoManualRenew
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication
@@ -33,6 +36,7 @@ def manual_client():
     catalog = SimpleNamespace(
         start_kakao_manual=Mock(return_value=KakaoManualMutation(session=session(), replayed=True)),
         read_kakao_manual=Mock(return_value=session()),
+        authorize_kakao_manual=Mock(return_value=session("ACTIVE", 3, 1)),
         command_kakao_manual=Mock(),
     )
     services.catalog_application, services.audit = catalog, Mock()
@@ -84,6 +88,43 @@ def test_remote_operations_require_actual_admin_and_permission(manual_client, ad
     )
     catalog.start_kakao_manual.assert_not_called()
     catalog.read_kakao_manual.assert_not_called()
+    assert client.get(ROOT + "/" + LEASE + "/authorize").status_code == 403
+    catalog.authorize_kakao_manual.assert_not_called()
+
+
+def test_proxy_admission_is_empty_204_and_does_not_start_or_renew(manual_client):
+    client, catalog, _ = manual_client
+    for _ in range(2):
+        response = client.get(ROOT + "/" + LEASE + "/authorize")
+        assert response.status_code == 204 and response.content == b""
+        assert response.headers["cache-control"] == "no-store"
+    actor = catalog.authorize_kakao_manual.call_args.kwargs["actor"]
+    assert actor.operator_id == OPERATOR_ID
+    assert actor.session_id is not None
+    catalog.start_kakao_manual.assert_not_called()
+    catalog.command_kakao_manual.assert_not_called()
+    catalog.read_kakao_manual.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "code,status",
+    [
+        ("KAKAO_ARCHIVE_PERMISSION_DENIED", 403),
+        ("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND", 404),
+        ("KAKAO_ARCHIVE_REMOTE_LEASE_EXPIRED", 409),
+        ("KAKAO_ARCHIVE_REMOTE_RUNTIME_UNAVAILABLE", 503),
+        ("KAKAO_ARCHIVE_REMOTE_OBSERVATION_MISMATCH", 503),
+        ("CATALOG_APPLICATION_INTERNAL_ERROR", 503),
+    ],
+)
+def test_proxy_admission_failure_never_returns_success(manual_client, code, status):
+    client, catalog, _ = manual_client
+    catalog.authorize_kakao_manual.side_effect = CatalogApplicationClientError(
+        code, "private runtime details must not be exposed"
+    )
+    response = client.get(ROOT + "/" + LEASE + "/authorize")
+    assert response.status_code == status
+    assert "private runtime details" not in response.text
 
 
 def test_end_uses_resource_etag_renew_uses_grant_revision(manual_client):
@@ -128,6 +169,7 @@ def manual_socket(tmp_path, *, api_peer=True):
     directory.mkdir(mode=0o750)
     owner = Mock()
     owner.get_session.return_value = session()
+    owner.authorize_session.return_value = session("ACTIVE", 3, 1)
     owner.start_session.return_value = KakaoManualMutation(session=session(), replayed=True)
     application = KakaoManualApplication(owner, Mock(), Mock())
     server = CatalogApplicationServer(
@@ -169,11 +211,14 @@ def test_same_api_request_reaches_same_intent_and_read_does_not_start(tmp_path):
         assert owner.start_session.call_args_list[0] == owner.start_session.call_args_list[1]
         count = owner.start_session.call_count
         assert client.read_kakao_manual(LEASE, actor=actor) == session()
+        assert client.authorize_kakao_manual(LEASE, actor=actor) == session("ACTIVE", 3, 1)
+        assert owner.authorize_session.call_args.args[0].session_id == actor.session_id
         assert owner.start_session.call_count == count
 
 
 @pytest.mark.parametrize(
-    "operation", ["START_KAKAO_MANUAL", "COMMAND_KAKAO_MANUAL", "READ_KAKAO_MANUAL"]
+    "operation",
+    ["START_KAKAO_MANUAL", "COMMAND_KAKAO_MANUAL", "READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"],
 )
 def test_chat_peer_cannot_control_remote_browser(tmp_path, operation):
     with manual_socket(tmp_path, api_peer=False) as (server, owner):

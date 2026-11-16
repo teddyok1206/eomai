@@ -26,6 +26,16 @@ class ApiTokens:
     refresh_expires_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class KakaoManualPointer:
+    """A server-side lookup hint only; each proxy handshake reauthorizes the exact lease."""
+
+    lease_id: str
+    source_binding_id: str
+    created_at: datetime
+    resource_version: int
+
+
 @dataclass(slots=True)
 class WebSession:
     session_id: str
@@ -38,6 +48,9 @@ class WebSession:
     replay_results: OrderedDict[tuple[str, str], bytes] = field(default_factory=OrderedDict)
     replay_result_bytes: int = 0
     refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    kakao_manual: KakaoManualPointer | None = None
+    kakao_manual_generation: int = 0
+    kakao_manual_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class SessionStore:
@@ -55,7 +68,8 @@ class SessionStore:
         with self._lock:
             self._prune(now)
             while len(self._sessions) >= self._maximum_sessions:
-                self._sessions.popitem(last=False)
+                _, evicted = self._sessions.popitem(last=False)
+                self._clear_manual(evicted)
             session = WebSession(
                 session_id=f"websession_{secrets.token_hex(32)}",
                 csrf_token=secrets.token_urlsafe(32),
@@ -79,7 +93,10 @@ class SessionStore:
 
     def delete(self, session_id: str) -> WebSession | None:
         with self._lock:
-            return self._sessions.pop(session_id, None)
+            removed = self._sessions.pop(session_id, None)
+            if removed is not None:
+                self._clear_manual(removed)
+            return removed
 
     def delete_other_operator_sessions(self, operator_id: str, *, except_session_id: str) -> int:
         """Remove cached Studio sessions invalidated by a credential change."""
@@ -92,7 +109,7 @@ class SessionStore:
                 and session.operator.get("operator_id") == operator_id
             )
             for session_id in session_ids:
-                self._sessions.pop(session_id, None)
+                self._clear_manual(self._sessions.pop(session_id))
             return len(session_ids)
 
     def save_draft(self, session: WebSession, draft: RequestDraft) -> None:
@@ -138,6 +155,13 @@ class SessionStore:
         for key, session in tuple(self._sessions.items()):
             if session.expires_at <= now:
                 self._sessions.pop(key)
+                self._clear_manual(session)
+
+    @staticmethod
+    def _clear_manual(session: WebSession) -> None:
+        with session.kakao_manual_lock:
+            session.kakao_manual = None
+            session.kakao_manual_generation += 1
 
 
 def utc_now() -> datetime:

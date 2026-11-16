@@ -51,6 +51,14 @@ immutable definition/active flag를 수정하지 않는다. 현재 policy 거부
 
 ## 배포와 백그라운드
 
+Web은 `scripts/web_gui/build_release.sh`가 pure Kakao contracts까지 포함한 전체
+`infra/conda/eom-web.requirements.lock` wheel 집합과 SHA 잠금파일을 만든다. 공식 installer는
+기존 Web wheel SHA·commit 외에 closure SHA를 별도로 받고, `wheel_closure.py`에서 모든
+bytes를 root-private staging에 검증한 뒤 빈 venv의 offline 설치·실제 app import를 먼저
+검사한다. API 환경에 이미 설치된 jsonschema를 Web의 의존성 증거로 삼지 않는다. 운영
+설치는 `--no-index --require-hashes`이고 dependency resolver를 생략하지 않는다. 개발 중
+dirty source의 격리 검증은 clean commit release build나 실제 운영 설치의 대체가 아니다.
+
 Excel 콘텐츠 편성0075/0076은 같은 protected operator의 context/admission1.22를 사용한다.
 정확한0074 predecessor부터 `MIGRATION_UPGRADE_0076_FROM_0074`로 이동하며 기존 migration은
 재해석하지 않는다. 새 head에서 옛 API의 exact-head readiness는 통과하지 않으므로,

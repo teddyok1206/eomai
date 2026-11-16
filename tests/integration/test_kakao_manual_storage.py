@@ -509,3 +509,74 @@ def test_live_intent_cannot_ignore_durable_profile_mode(h: Harness) -> None:
         h.service.get_intent(item.lease_id)
     # Cleanup observation remains available; changing mode is not physical closure.
     assert h.service.get_intent(item.lease_id, require_live=False).lease_id == item.lease_id
+
+
+def test_proxy_admission_is_read_only_and_observer_has_no_db_lock(h: Harness) -> None:
+    item = h.ready()
+
+    def observe(intent):
+        with h.engine.begin() as connection:
+            connection.execute(text("SELECT slot_key FROM kakao_profile_runtime FOR UPDATE NOWAIT"))
+        return h.observe(intent, gateway=True)
+
+    result = h.service.authorize_session(h.actor, item.lease_id, observe_runtime=observe)
+    assert result.ready and result.resource_version == item.resource_version
+    assert h.service.get_intent(item.lease_id) == item
+
+
+def test_proxy_admission_rechecks_authority_after_runtime_probe(h: Harness) -> None:
+    item = h.ready()
+
+    def observe(intent):
+        with Session(h.engine) as session, session.begin():
+            session.execute(
+                update(ApiSessionRecord)
+                .where(ApiSessionRecord.api_session_id == h.actor.session_id)
+                .values(revoked_at=h.now)
+            )
+        return h.observe(intent, gateway=True)
+
+    with pytest.raises(KakaoArchiveError, match="PERMISSION_DENIED"):
+        h.service.authorize_session(h.actor, item.lease_id, observe_runtime=observe)
+
+
+def test_proxy_admission_fails_if_end_occurs_during_probe(h: Harness) -> None:
+    item = h.ready()
+
+    def observe(intent):
+        h.service.end_session(
+            h.actor,
+            item.lease_id,
+            KakaoManualEnd(expected_resource_version=item.resource_version),
+            idempotency_key="end-during-probe-" + uuid4().hex,
+        )
+        return h.observe(intent, gateway=True)
+
+    with pytest.raises(KakaoArchiveError, match=r"LEASE_EXPIRED|PRECONDITION_FAILED"):
+        h.service.authorize_session(h.actor, item.lease_id, observe_runtime=observe)
+
+
+def test_history_read_is_not_proxy_admission(h: Harness) -> None:
+    item = h.start().session
+    assert h.service.get_session(h.actor, item.lease_id).phase == "PREPARING"
+    with pytest.raises(KakaoArchiveError, match="NOT_READY"):
+        h.service.authorize_session(
+            h.actor,
+            item.lease_id,
+            observe_runtime=lambda _: pytest.fail("pending session runtime probe"),
+        )
+    assert h.service.get_current_intent().lease_id == item.lease_id
+
+
+def test_exact_predecessor_lookup_preserves_failed_record(h: Harness) -> None:
+    first = h.start().session
+    h.service.fail_session(first.lease_id, expected_resource_version=1, error="START_FAILED")
+    h.service.accept_closed(
+        first.lease_id, observe_stopped=lambda i: h.close(i, kind="PRE_READY_FAILED")
+    )
+    assert h.service.get_current_intent() is None
+    current = h.service.get_intent(h.start().session.lease_id)
+    old = h.service.get_predecessor_intent(current)
+    assert old.lease_id == first.lease_id and old.phase == "ENDED"
+    with pytest.raises(KakaoArchiveError, match="FENCE_STALE"):
+        h.service.get_predecessor_intent(current, fence_epoch=current.fence_epoch)

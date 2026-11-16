@@ -49,6 +49,18 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_manual_rpc.py",
+            "eom_catalog_contracts/resources/kakao-archive/manual-session-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/manual-execution-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/catalog-kakao-manual-response-v1.schema.json",
+            "eom_catalog_service/kakao_manual_dispatch.py",
+            "eom_catalog_service/kakao_manual_service.py",
+            "eom_catalog_service/kakao_manual_models.py",
+            "eom_catalog_service/kakao_manual_composition.py",
+            "eom_catalog_service/kakao_manual_coordinator.py",
+            "eom_orchestrator/kakao_gateway_runtime.py",
+            "eom_orchestrator/kakao_profile_observation.py",
             "eom_catalog_contracts/kakao_student_rpc.py",
             "eom_catalog_contracts/kakao_room_rpc.py",
             "eom_catalog_contracts/kakao_rooms.py",
@@ -214,6 +226,10 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_contracts.kakao_room_rpc",
             "eom_catalog_service.kakao_question_publication",
             "eom_catalog_contracts.kakao_student_rpc",
+            "eom_catalog_contracts.kakao_manual_rpc",
+            "eom_catalog_service.kakao_manual_dispatch",
+            "eom_catalog_service.application_server",
+            "eom_catalog_service.application_runner",
         ),
         (
             "eom_workflow_runner.document_embedding_cpu_execution",
@@ -243,8 +259,15 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "-B",
                 "-c",
                 (
-                    "import importlib, sys; "
+                    "import importlib, importlib.abc, sys; "
                     "sys.path.insert(0, sys.argv[1]); "
+                    # Optional runtime packages may be present in the development
+                    # interpreter. Explicitly withhold them in the installed test.
+                    "exec('class WithoutKakaoRuntime(importlib.abc.MetaPathFinder):\\n"
+                    " def find_spec(self, fullname, path=None, target=None):\\n"
+                    '  if fullname.startswith(("eom_kakao_archive_", "playwright", '
+                    '"websockify")): raise ImportError("optional Kakao runtime absent")\'); '
+                    "sys.meta_path.insert(0, WithoutKakaoRuntime()); "
                     f"names = {modules!r}; "
                     "loaded = [importlib.import_module(name) for name in names]; "
                     "assert all(module.__file__.startswith(sys.argv[1] + '/') "

@@ -76,7 +76,7 @@
       ],
       "properties": {
         "operation": {
-          "const": "READ_KAKAO_MANUAL"
+          "enum": ["READ_KAKAO_MANUAL", "AUTHORIZE_KAKAO_MANUAL"]
         },
         "request_id": {
           "type": "string",
@@ -110,7 +110,8 @@
           "enum": [
             "START_KAKAO_MANUAL",
             "COMMAND_KAKAO_MANUAL",
-            "READ_KAKAO_MANUAL"
+            "READ_KAKAO_MANUAL",
+            "AUTHORIZE_KAKAO_MANUAL"
           ]
         },
         "request_id": {

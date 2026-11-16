@@ -30,6 +30,7 @@ from eom_kakao_archive_contracts.kakao_remote import (
     renew_remote_lease,
     validate_profile_handoff,
     validate_remote_contract,
+    validate_remote_transport,
 )
 from eom_kakao_archive_gateway.lifetime import (
     GatewayLifetimeState,
@@ -138,6 +139,12 @@ def revocation(grant, **updates):
     )
 
 
+def test_expiry_revocation_retains_expiry_not_runtime_failure(values):
+    expired = revocation(gateway_grant(values[0]), reason="EXPIRED")
+    assert expired.reason == "EXPIRED"
+    validate_remote_contract("revocation", expired.model_dump(mode="json"))
+
+
 def test_schema_first_exact_mirror_and_all_projection_values(values):
     canonical = Path("schemas/kakao-archive/private-remote-runtime-v1.schema.json").read_bytes()
     mirror = Path(
@@ -199,6 +206,16 @@ def test_exact_transport_admission_and_static_assets(values):
     )
     authorize(values, request=static)
     assert values[0].grant_revision == 1, "authorization GET must not renew or create"
+
+
+def test_transport_only_public_boundary_needs_no_fabricated_authority(values):
+    request, policy = values[3:]
+    assert validate_remote_transport(request, policy) is None
+    with pytest.raises(RemoteAuthorizationError, match="TRANSPORT_DENIED"):
+        validate_remote_transport(change(request, origin="https://other.invalid"), policy)
+    # Sharing transport checks does not weaken the separate full authority boundary.
+    with pytest.raises(RemoteAuthorizationError, match="PERMISSION_DENIED"):
+        authorize(values, authority=change(values[1], remote_permission=False))
 
 
 def test_static_asset_request_cannot_accept_a_cross_origin(values):

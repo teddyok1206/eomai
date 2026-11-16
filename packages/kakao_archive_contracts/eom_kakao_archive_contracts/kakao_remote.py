@@ -22,7 +22,7 @@ from pydantic import AfterValidator, Field, StrictBool, model_validator
 
 from .render import BindingId, FrozenModel, canonical_bytes
 
-SCHEMA_SHA256 = "9a597d9da6b7283a89b34c97853197ef3f7413d656b9faed0cb802368d7258eb"
+SCHEMA_SHA256 = "31cf4600c5be992aff7bb3a0f977d9a6607713b23af1bfdd709771a21c171285"
 LEASE_TTL = timedelta(seconds=30)
 LEASE_MAX_LIFETIME = timedelta(minutes=20)
 AUTHORITY_MAX_AGE = timedelta(seconds=5)
@@ -36,7 +36,15 @@ OperatorId = Annotated[str, Field(pattern=r"^operator_[0-9a-f]{32}$")]
 IdentitySessionId = Annotated[str, Field(pattern=r"^apisession_[0-9a-f]{32}$")]
 RuntimeMode = Literal["STOPPED", "AUTO", "PAUSING", "MANUAL", "AUTH_REQUIRED", "ERROR"]
 SchemaKind = Literal[
-    "lease", "authority", "runtime", "request", "grant", "revocation", "profile", "stop"
+    "lease",
+    "authority",
+    "runtime",
+    "request",
+    "grant",
+    "revocation",
+    "profile",
+    "stop",
+    "presentation",
 ]
 
 
@@ -151,6 +159,7 @@ class GatewayRevocation(FrozenModel):
         "ROLE_REVOKED",
         "SOURCE_REVOKED",
         "OWNER_UNAVAILABLE",
+        "EXPIRED",
         "RUNTIME_LOST",
     ]
 
@@ -190,6 +199,13 @@ class RemoteAuthorizationError(PermissionError):
         super().__init__(code)
         self.code = code
         self.status_code = status_code
+
+
+class RemotePresentation(FrozenModel):
+    """UI availability only; not process readiness, identity or lease authorization."""
+
+    schema_version: Literal["kakao-remote-presentation/1.0"] = "kakao-remote-presentation/1.0"
+    remote_view_enabled: StrictBool
 
 
 class RemoteTransportPolicy(FrozenModel):
@@ -272,6 +288,11 @@ def authorize_remote_request(
 ) -> None:
     """Return only on admission. HTTP adapters map rejection to non-2xx, never false/200."""
     _current_lease(lease, authority, runtime, now)
+    validate_remote_transport(request, policy)
+
+
+def validate_remote_transport(request: RemoteRequest, policy: RemoteTransportPolicy) -> None:
+    """Validate fixed HTTP/WS transport only; current Identity/runtime admission is separate."""
     if request.method != "GET" or any(
         ord(char) < 32 or ord(char) == 127
         for value in request.model_dump(exclude={"schema_version"}).values()
@@ -383,7 +404,7 @@ def validate_profile_handoff(
         raise ValueError("KAKAO_PROFILE_PRIOR_STOP_UNCONFIRMED")
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=9)
 def _validator(kind: SchemaKind) -> Draft202012Validator:
     raw = (
         files("eom_kakao_archive_contracts")

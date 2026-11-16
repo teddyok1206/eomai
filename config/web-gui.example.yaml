@@ -1,4 +1,6 @@
 schema_version: 1
+# Keep null until the HTTPS proxy and exact installed noVNC asset inventory are verified.
+kakao_remote_transport: null
 server:
   host: 127.0.0.1
   port: 8790

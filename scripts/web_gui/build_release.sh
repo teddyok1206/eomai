@@ -5,6 +5,8 @@ REPOSITORY_ROOT="/home/eom/EOM"
 EXPECTED_BRANCHES=("main" "feat/web-gui-v0" "feat/hwpx-application-api-v0")
 BUILD_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 RUNTIME_PYTHON="/srv/eom/conda/envs/eom-web/bin/python"
+CLOSURE_HELPER="${REPOSITORY_ROOT}/scripts/web_gui/wheel_closure.py"
+RUNTIME_LOCK="${REPOSITORY_ROOT}/infra/conda/eom-web.requirements.lock"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -38,7 +40,7 @@ STAGING="${BUILD_ROOT}/staging"
 DIST="${BUILD_ROOT}/dist"
 WHEEL="${DIST}/eom_web_gui-${VERSION}-py3-none-any.whl"
 
-mkdir -p "${STAGING}/eom_web_gui" "${DIST}"
+mkdir -p "${STAGING}/eom_web_gui" "${DIST}" "${BUILD_ROOT}/contracts"
 cp "${REPOSITORY_ROOT}/apps/web_gui/pyproject.toml" "${STAGING}/pyproject.toml"
 rsync -a --exclude='__pycache__' \
   "${REPOSITORY_ROOT}/apps/web_gui/eom_web_gui/" "${STAGING}/eom_web_gui/"
@@ -68,6 +70,18 @@ PY
 "${BUILD_PYTHON}" -m pip wheel \
   --no-deps --no-build-isolation --wheel-dir "${DIST}" "${STAGING}" >/dev/null
 [[ -f "${WHEEL}" ]] || fail "expected Web GUI wheel was not produced"
+
+# Both source distributions come from this same clean commit. Third-party downloads happen only
+# here, never in the privileged installer or an operating service environment.
+rsync -a --exclude='__pycache__' --exclude='*.egg-info' --exclude='build' \
+  "${REPOSITORY_ROOT}/packages/kakao_archive_contracts/" "${BUILD_ROOT}/contracts/"
+"${BUILD_PYTHON}" -m pip wheel --no-deps --no-build-isolation \
+  --wheel-dir "${DIST}" "${BUILD_ROOT}/contracts" >/dev/null
+"${BUILD_PYTHON}" -I "${CLOSURE_HELPER}" external --pins "${RUNTIME_LOCK}" \
+  > "${BUILD_ROOT}/external.requirements.lock"
+"${BUILD_PYTHON}" -m pip download --only-binary=:all: --no-deps \
+  --dest "${DIST}" --requirement "${BUILD_ROOT}/external.requirements.lock" >/dev/null
+"${BUILD_PYTHON}" -I "${CLOSURE_HELPER}" create --pins "${RUNTIME_LOCK}" --directory "${DIST}"
 
 WHEEL="${WHEEL}" COMMIT="${COMMIT}" VERSION="${VERSION}" STAGING="${STAGING}" \
   "${BUILD_PYTHON}" - <<'PY'
@@ -130,38 +144,36 @@ with zipfile.ZipFile(os.environ["WHEEL"]) as archive:
 print("web_gui_release_artifact=PASS")
 PY
 
-# Import the wheel against the actual isolated Web runtime.  The build interpreter owns many
-# platform contract packages that are intentionally absent from the Web service environment, so a
-# build-only import would not detect a forbidden undeclared runtime dependency.
-WHEEL="${WHEEL}" "${RUNTIME_PYTHON}" -I - <<'PY'
-import os
-import sys
-
-sys.path.insert(0, os.environ["WHEEL"])
-import eom_web_gui  # noqa: F401
-
-print("web_gui_target_runtime_import=PASS")
-PY
-
 printf 'web_gui_source_commit=%s\n' "${COMMIT}"
 printf 'web_gui_wheel=%s\n' "${WHEEL}"
 printf 'web_gui_wheel_sha256=%s\n' "$(sha256sum "${WHEEL}" | awk '{print $1}')"
+printf 'web_gui_installer_sha256=%s\n' "$(sha256sum "${REPOSITORY_ROOT}/scripts/web_gui/install_release.sh" | awk '{print $1}')"
+printf 'web_gui_closure_helper_sha256=%s\n' "$(sha256sum "${CLOSURE_HELPER}" | awk '{print $1}')"
+printf 'web_gui_runtime_pins_sha256=%s\n' "$(sha256sum "${RUNTIME_LOCK}" | awk '{print $1}')"
 
+# An empty venv made by the actual Web interpreter prevents API/system packages from hiding
+# incomplete dependency closure. pip must resolve everything offline from the approved wheel set.
 INSTALL_ROOT="${BUILD_ROOT}/installed"
-"${BUILD_PYTHON}" -m venv --system-site-packages "${INSTALL_ROOT}"
-"${INSTALL_ROOT}/bin/python" -m pip install --no-deps --force-reinstall "${WHEEL}" >/dev/null
+"${RUNTIME_PYTHON}" -m venv "${INSTALL_ROOT}"
+"${INSTALL_ROOT}/bin/python" -m pip --isolated --disable-pip-version-check install \
+  --no-index --only-binary=:all: --require-hashes --find-links "${DIST}" \
+  --requirement "${DIST}/release.requirements.lock" >/dev/null
+"${INSTALL_ROOT}/bin/python" -m pip --isolated --disable-pip-version-check check
 (
   cd /tmp
-  EXPECTED_COMMIT="${COMMIT}" "${INSTALL_ROOT}/bin/python" - <<'PY'
+  EXPECTED_COMMIT="${COMMIT}" "${INSTALL_ROOT}/bin/python" -I - <<'PY'
 from pathlib import Path
 
 import eom_web_gui
+from eom_web_gui.app import create_app
 from eom_web_gui.release_integrity import verify_installed_web_gui
+from eom_kakao_archive_contracts.kakao_remote import validate_remote_transport
 
 module_path = Path(eom_web_gui.__file__).resolve()
 if "/home/eom/EOM" in str(module_path):
     raise SystemExit("installed Web GUI imported from source checkout")
 result = verify_installed_web_gui(expected_commit=__import__("os").environ["EXPECTED_COMMIT"])
+assert callable(create_app) and callable(validate_remote_transport)
 print(f"web_gui_installed_simulation=PASS verified_files={result.verified_file_count}")
 PY
 )

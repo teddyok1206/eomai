@@ -403,6 +403,17 @@ class FixedKakaoGatewayRuntime:
     def boot_identity(self) -> str:
         return _boot_id()
 
+    def observe_grant(self) -> GatewayLeaseGrant | GatewayRevocation | None:
+        """Protected current input only; no publication, renewal or launch."""
+        with _control_lock():
+            self._installed()
+            try:
+                return _current()
+            except FileNotFoundError:
+                if _has_grant_history():
+                    raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_PUBLICATION_UNCERTAIN") from None
+                return None
+
     def observe_idle(self) -> runtime_os.IdleRuntimeObservation:
         """No grant/run required for initial inventory; never authorizes a start by itself."""
         with _control_lock():
@@ -411,8 +422,8 @@ class FixedKakaoGatewayRuntime:
             _trusted(values)
             if (
                 values["Job"]
-                or values["ActiveState"] != "inactive"
-                or values["SubState"] != "dead"
+                or values["ActiveState"] not in {"inactive", "failed"}
+                or values["SubState"] not in {"dead", "failed"}
                 or values["MainPID"] != "0"
                 or values["ControlPID"] != "0"
                 or values["ControlGroup"] not in {"", CGROUP}
@@ -420,7 +431,8 @@ class FixedKakaoGatewayRuntime:
                 raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_IDLE_UNCONFIRMED")
             closed = _cgroup_closed()
             never_dispatched = (
-                not _has_grant_history()
+                values["ActiveState"] == "inactive"
+                and not _has_grant_history()
                 and values["ExecMainStartTimestampMonotonic"] == "0"
                 and values["ExecMainPID"] == "0"
                 and not values["InvocationID"]
@@ -438,10 +450,34 @@ class FixedKakaoGatewayRuntime:
             current = _current()
             _matches(current, grant)
             values = _show()
+            _trusted(values)
+            if _boot_id() == dispatched_boot_id and (
+                values["ActiveState"] == "activating" or values["Job"]
+            ):
+                raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_START_PENDING")
             if values["ActiveState"] == "active":
                 if _boot_id() != dispatched_boot_id or not isinstance(current, GatewayLeaseGrant):
                     raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_RUN_MISMATCH")
                 return _running(current, values)
+            return _closed(grant, dispatched_boot_id, values)
+
+    def observe_for_stop(
+        self, grant: GatewayLeaseGrant, *, dispatched_boot_id: str
+    ) -> GatewayRunHandle | ClosedGatewayDispatch:
+        """Recover teardown after revocation publication; never authorizes proxy access."""
+        with _control_lock():
+            self._installed()
+            _matches(_current(), grant)
+            values = _show()
+            _trusted(values)
+            if _boot_id() == dispatched_boot_id and (
+                values["ActiveState"] == "activating" or values["Job"]
+            ):
+                raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_START_PENDING")
+            if values["ActiveState"] == "active":
+                if _boot_id() != dispatched_boot_id:
+                    raise KakaoGatewayRuntimeError("KAKAO_GATEWAY_RUN_MISMATCH")
+                return _running(grant, values)
             return _closed(grant, dispatched_boot_id, values)
 
     def start(

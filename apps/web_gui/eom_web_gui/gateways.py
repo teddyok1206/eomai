@@ -514,6 +514,8 @@ class ApplicationGateway(Protocol):
 
     async def kakao_manual_read(self, session: WebSession, lease_id: str) -> ManualSession: ...
 
+    async def kakao_manual_authorize(self, session: WebSession, lease_id: str) -> None: ...
+
     async def kakao_manual_command(
         self,
         session: WebSession,
@@ -1416,6 +1418,15 @@ class HttpApplicationGateway:
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_manual_authorize(self, session: WebSession, lease_id: str) -> None:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/manual-sessions/{quote(lease_id, safe='')}/authorize",
+        )
+        if response.status_code != 204 or response.content:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
 
     async def kakao_manual_command(
         self,

@@ -180,6 +180,16 @@ reviewed before fingerprint admission; pins include contracts0.1.0/pydantic2.13.
 jsonschema4.25.1, browser Playwright1.65.2, gateway websockify0.13.0, and PDF PyMuPDF1.26.7/
 Pillow11.3.0. The exact Chromium and noVNC1.6.0 trees are separately SHA-pinned.
 
+The unreleased pure contract wheel supports jsonschema>=4.25.1,<4.27 so it can also
+be consumed by the existing API's pinned4.26.0 without downgrading that runtime.
+This package compatibility range does not loosen dedicated runtime admission:
+browser/remote/PDF installation manifests still require jsonschema4.25.1. Both
+concrete versions must pass the same capture/remote/render contract regression suite
+in independent temporary environments. Web currently has no jsonschema installation;
+its reviewed dependency release must include the pure wheel and a hash-pinned
+validator dependency closure. Do not vendor these contracts into the platform wheel
+or satisfy the new dependency with an unrecorded runtime pip install.
+
 Read-only host inventory: Ubuntu24.04.4/systemd255/Caddy2.11.4; all Kakao units/users/groups
 are absent. Apt simulation (not installation) for TigerVNC1.13.1+dfsg-2build2 adds only
 `tigervnc-standalone-server`, `tigervnc-tools`, `tigervnc-common` and
@@ -259,3 +269,77 @@ failed records; restore only an exact prior compatible runtime/unit set during a
 window. No recursive uninstall, user deletion, apt downgrade, profile reset or generic
 systemctl authorization is added. A generic installer or executing Conda/pip as root would
 be broader and less auditable than this fixed boundary.
+
+## Shared API release dependency closure
+
+The API/Catalog owner needs the pure Kakao contracts, but not Playwright, websockify,
+Pillow or the PDF worker. The existing API builder therefore builds four independent
+wheels from one Git archive: platform, API contracts, application API and Kakao contracts.
+The release operator's 1.25 context pins the fourth wheel as `kakao_contracts`; it does
+not vendor that package into platform or resolve a floating dependency during install.
+
+Dominant operations are one keyed wheel inventory and ordered byte/RECORD verification:
+O(number of members + payload bytes), with no DB or worker changes. The pure wheel's
+complete package inventory, metadata and schema bytes must match the same release archive
+and canonical schemas. The existing temporary non-editable installation imports its
+actual Catalog consumer before acceptance. The captured four-wheel hashes/inodes are
+rechecked immediately before and after install and recorded together for compatible rollback.
+
+`verify_release_wheel_records.py` retains the historical three-wheel default and narrow
+owner-pair/platform-only modes. Only the explicit `--kakao-release` mode accepts exactly
+the new four-distribution set; it never silently accepts three. This avoids reinterpreting
+archived release evidence. The simpler alternative, an unpinned `pip install` of the pure
+package, would bypass source identity, offline installation and rollback closure.
+The normal clean-commit gate remains mandatory. A dirty-tree temporary build used during
+development is explicitly a test fixture, not a release candidate or deployment approval.
+
+### Initial fixed-prefix publication
+
+`scripts/kakao/publish_runtime.py` owns only the five fixed runtime/asset paths above.
+Its publication plan pins the existing install-manifest SHA and the complete installed
+distribution-name/version map for each role; it does not duplicate the install manifest's
+payload hashes or introduce another runtime registry. Approved hashes are operator
+inputs, never inferred as approval from mutable builder output. `prepare` creates only
+empty directories for the existing unprivileged `eom` builder. Conda/pip run separately
+as that builder at the final absolute prefixes; `/tmp` test environments are not moved
+into production prefixes.
+
+Access is a bounded sorted tree walk (O(files log files + bytes)), exact role/package
+maps and membership sets. Publication serializes on the existing install flock and
+requires stopped Kakao units/jobs. All five candidates are copied into new root-owned
+inodes in root-private quarantine before any target changes. Descriptor-relative,
+no-follow copying rejects special files, escaping links, unsafe modes and changing
+members. Source hard links are not retained. The protected snapshots must match the
+independently reviewed tree hashes before their original builder directories are moved
+to private retained backups and the snapshots take the fixed names.
+
+Only after fixed-path publication may a candidate interpreter execute, with `-I -S -B`
+and a clean environment. It verifies its exact Python prefix/version, installed package
+lock and actual dependency closure. This preserves Conda's absolute-prefix behavior and
+does not execute editable source, pip installation or post-link code as root. The helper
+and reused installer are independently hash-checked root-private files before execution.
+Bootstrap is the already protected Python 3.12.13 interpreter; no optional package is
+needed to parse the plan or copy candidates.
+
+This is initial-only, not an upgrade or rollback framework. Existing root-owned targets
+require the exact completed publication receipt and read-only verification; mixed or
+interrupted states are reconcile-required. A failure retains quarantine, builder backups
+and the phase receipt without automatic retry, deletion or service activation. Actual
+identities, units, credentials and proxy activation remain the existing separate installer
+and owner boundaries. Synthetic copy/closure tests do not certify a live installation.
+
+The root-private CLI is `publish_runtime.py prepare|fingerprint|publish|verify
+--installer <root-private-install_runtime.py> --installer-sha256 sha256:<reviewed-hash>`.
+`publish`/`verify` additionally require `--manifest <root-private-publication-plan.json>`,
+`--manifest-sha256 sha256:<reviewed-plan-hash>` and `--install-manifest
+<root-private-existing-install-manifest.json>`. Invoke it with the same protected
+Python 3.12.13 `-I -S -B` bootstrap as the installer. The `eom` builder uses `umask 022`
+for its separate final-prefix preparation; the publisher never runs Conda or pip.
+`fingerprint` reports candidate byte hashes, not an approval. Complete role locks must
+come from the final built wheels, not the earlier temporary dependency-preparation run.
+
+All targets must share the quarantine filesystem so rename is atomic per target. The
+five-target sequence is deliberately not advertised as one atomic transaction: a stopped
+window and retained per-target phase evidence make partial publication explicit. No
+candidate interpreter runs until all five snapshots are protected at their final paths;
+tree bytes are checked again after the read-only probes. No auth/profile file is copied.
