@@ -58,7 +58,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   const students = createKakaoStudents({document, api, explainError});
   const manual = createKakaoManual({document, api, explainError, schedule, unschedule});
   const rooms = createKakaoRooms({document, api, explainError, onSelect: row => {
-    if (!active || !archiveReady() || row.source_binding_id !== binding?.source_binding_id) return;
+    if (!active || !readReady() || row.source_binding_id !== binding?.source_binding_id) return;
     const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear();
     empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
     void loadQuestions(token).catch(error => { if (live(token)) message(explainError(error), true); });
@@ -86,9 +86,12 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   }
   function allowed(key) { return permissions.has(`kakao_archive:${key}`); }
   function mayManage() { return owner !== null && roles.has("ADMIN") && allowed("collect"); }
-  // These candidate read views are dormant until a released public contract explicitly
-  // verifies the source and permits archive reads. NOT_VERIFIED never reaches them.
+  // Capture/export controls still require verified capabilities; accepted question
+  // history uses its separate current-authorized read path below.
   function archiveReady() { return binding?.capability_state === "VERIFIED" && binding?.state === "ACTIVE" && binding?.allowed_actions?.includes("READ_ARCHIVE"); }
+  // Existing accepted content has its own current authorization. A channel which
+  // cannot currently collect may still have readable history; backend ACLs decide.
+  function readReady() { return allowed("read") && binding && ["DRAFT", "ACTIVE"].includes(binding.state); }
   function live(token) { return active && owner !== null && token === generation; }
   function stopTimer() { if (timer !== null) unschedule(timer); timer = null; }
   function clearDetails() {
@@ -319,6 +322,10 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
         }
         nodes.connection.append(technicalDetails([["연결", value], ["설정 버전", detail.resource_version], ["수집 정책", detail.policy_revision.policy_revision_id]]));
         syncBootstrapControls(); message(retired ? "연결 준비를 해제했습니다." : "연결 준비만 저장된 상태입니다. 대화 수집은 아직 시작하지 않았습니다.");
+        if (!retired) {
+          try { await loadQuestions(token); }
+          catch (error) { if (live(token)) { empty(nodes.questions, "질문 목록을 불러오지 못했습니다."); message(explainError(error), true); } }
+        }
         return;
       }
       const collect = button("전체 다시 수집", () => void collectAll());
@@ -415,12 +422,16 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     const page = pageValues(await api(`${BASE}/questions?${query}`));
     if (!live(token) || currentRoom !== roomId || request !== questionListGeneration) return;
     if (!cursor) questionRows.clear();
-    for (const row of page.items) { identifier(row.question_id); identifier(row.current_revision_id); questionRows.set(row.question_id, row); }
+    for (const row of page.items) {
+      identifier(row.question_id); identifier(row.question_revision_id); identifier(row.room_id);
+      if (row.source_binding_id !== binding.source_binding_id || (roomId && row.room_id !== roomId)) throw new Error("질문 목록의 소속이 다릅니다.");
+      questionRows.set(row.question_id, row);
+    }
     nodes.questions.replaceChildren();
     for (const row of questionRows.values()) {
       const entry = node("div", undefined, "kakao-list-row");
-      entry.append(button(row.title || `${row.student_display_name || "학생 미연결"}의 질문`, () => {
-        if (live(token) && currentRoom === roomId && request === questionListGeneration) void openQuestion(row.question_id, row.current_revision_id);
+      entry.append(button(`${row.student?.display_name || "학생 미연결"}의 질문`, () => {
+        if (live(token) && currentRoom === roomId && request === questionListGeneration) void openQuestion(row.question_id, row.question_revision_id);
       }),
         node("small", date(row.first_student_at_utc)), status(row.review_state)); nodes.questions.append(entry);
     }
@@ -439,15 +450,19 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   }
 
   async function openQuestion(questionId, revisionId) {
-    if (!active || !owner || !archiveReady() || !allowed("read")) return;
+    if (!active || !owner || !readReady()) return;
     const token = generation, request = ++detailGeneration;
     empty(nodes.detail, "질문을 불러오고 있습니다.");
     try {
-      const value = await api(`${BASE}/questions/${identifier(questionId)}/revisions/${identifier(revisionId)}`);
+      const query = new URLSearchParams({source_binding_id: binding.source_binding_id});
+      const roomId = questionRows.get(questionId)?.room_id;
+      if (roomId) query.set("room_id", roomId);
+      const value = await api(`${BASE}/questions/${identifier(questionId)}/revisions/${identifier(revisionId)}?${query}`);
       if (!live(token) || request !== detailGeneration) return;
-      if (value.question_id !== questionId || value.revision_id !== revisionId || value.source_binding_id !== binding.source_binding_id || !Array.isArray(value.ordered_blocks)) throw new Error("질문 연결 정보가 다릅니다.");
-      nodes.detail.replaceChildren(node("h4", value.student_display_name || "학생 연결 필요"),
-        node("p", date(value.first_student_at_utc), "muted-label"), status(value.review_state));
+      const question = value.question;
+      if (value.schema_version !== "kakao-question-view/1.0" || question?.question_id !== questionId || question.question_revision_id !== revisionId || question.source_binding_id !== binding.source_binding_id || (roomId && question.room_id !== roomId) || !Array.isArray(value.ordered_blocks)) throw new Error("질문 연결 정보가 다릅니다.");
+      nodes.detail.replaceChildren(node("h4", question.student?.display_name || "학생 연결 필요"),
+        node("p", date(question.first_student_at_utc), "muted-label"), status(question.review_state));
       for (const block of value.ordered_blocks) {
         if (block.kind === "TEXT" && typeof block.text === "string") nodes.detail.append(node("p", block.text, "kakao-message-text"));
         else if (block.kind === "IMAGE") {
@@ -455,16 +470,63 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
             nodes.detail.append(node("p", "미확보 사진 · 원본을 확인하기 전에는 완성 자료에 넣을 수 없습니다.", "form-message error")); continue;
           }
           const image = node("img"); image.alt = "질문에 첨부된 사진"; image.loading = "lazy";
-          image.src = `/studio/api/v1${BASE}/attachments/${identifier(block.attachment_id)}/preview?revision_id=${identifier(block.attachment_revision_id)}`;
+          const scope = new URLSearchParams({source_binding_id: question.source_binding_id, room_id: question.room_id});
+          image.src = `/studio/api/v1${BASE}/questions/${identifier(questionId)}/revisions/${identifier(revisionId)}/images/${identifier(block.attachment_id)}?${scope}`;
           image.addEventListener("error", () => {
             if (live(token) && request === detailGeneration) image.replaceWith(node("p", "사진을 불러오지 못했습니다. 원본 연결 상태를 확인해 주세요.", "form-message error"));
           }); nodes.detail.append(image);
         } else throw new Error("지원하지 않는 질문 구성입니다.");
       }
       if (value.review_reasons?.length) nodes.detail.append(node("p", "학생·질문 경계 또는 사진 연결에 확인할 사항이 있습니다.", "form-message"));
-      nodes.detail.append(technicalDetails([["질문", questionId], ["보관된 버전", revisionId], ["원문 정합", value.alignment_level]]));
+      if (allowed("edit")) installQuestionReview(question, token, request);
+      nodes.detail.append(technicalDetails([["질문", questionId], ["보관된 버전", revisionId]]));
     } catch (error) {
       if (live(token) && request === detailGeneration) { empty(nodes.detail, "질문을 열지 못했습니다."); message(explainError(error), true); }
+    }
+  }
+
+  function installQuestionReview(question, token, request) {
+    const form = node("form", undefined, "kakao-question-review"); form.setAttribute("aria-label", "질문 확인 저장");
+    const label = node("label", "확인 메모"), reason = node("textarea"); reason.rows = 2;
+    reason.placeholder = "확인한 내용이나 제외하는 이유를 적어 주세요."; label.append(reason);
+    const boundaryLabel = node("label", undefined, "kakao-review-check"), boundary = node("input"); boundary.type = "checkbox";
+    boundaryLabel.append(boundary, node("span", "이 내용이 하나의 질문인 것을 확인했습니다."));
+    const note = node("p", "확인 상태만 저장합니다. 원문과 사진은 바뀌지 않습니다.", "muted-label"); note.setAttribute("role", "status");
+    const confirm = button("질문 확인 완료", () => void save("CONFIRM"), "button secondary");
+    const exclude = button("출력에서 제외", () => void save("EXCLUDE"));
+    form.append(label, boundaryLabel, confirm, exclude, note); nodes.detail.append(form);
+    let intent = null, pending = false;
+    const current = () => live(token) && request === detailGeneration && nodes.detail.contains(form) && allowed("edit");
+    function controls() {
+      reason.disabled = pending || intent !== null; boundary.disabled = pending || intent !== null;
+      confirm.disabled = pending || (intent ? intent.action !== "CONFIRM" : !boundary.checked);
+      exclude.disabled = pending || (intent !== null && intent.action !== "EXCLUDE");
+      confirm.textContent = intent?.action === "CONFIRM" ? "같은 확인 저장 요청 확인" : "질문 확인 완료";
+      exclude.textContent = intent?.action === "EXCLUDE" ? "같은 제외 요청 확인" : "출력에서 제외";
+    }
+    boundary.addEventListener("change", controls); form.addEventListener("submit", event => event.preventDefault()); controls();
+    async function save(action) {
+      if (!current() || pending || (intent && intent.action !== action)) return;
+      if (!intent) {
+        const memo = reason.value.trim();
+        if (!memo || [...memo].length > 1000 || (action === "CONFIRM" && !boundary.checked)) { note.textContent = "확인 메모를 1,000자 이내로 적고, 질문 범위를 확인해 주세요."; return; }
+        intent = {action, key: `kakao-review-${globalThis.crypto.randomUUID()}`,
+          body: {schema_version: "kakao-question-edit/1.0", action, parent_revision_id: question.question_revision_id, reason: memo,
+            ...(action === "CONFIRM" ? {boundary_confirmed: true} : {})}};
+      }
+      pending = true; controls(); note.textContent = "확인 내용을 저장하고 있습니다.";
+      try {
+        const query = new URLSearchParams({source_binding_id: question.source_binding_id, room_id: question.room_id});
+        const result = await api(`${BASE}/questions/${identifier(question.question_id)}/review?${query}`, {method: "POST", mutation: true,
+          headers: {"Idempotency-Key": intent.key, "If-Match": `"v${question.resource_version}"`}, body: intent.body});
+        if (!current()) return;
+        const saved = result.question;
+        if (!saved || saved.question_id !== question.question_id || saved.source_binding_id !== question.source_binding_id || saved.room_id !== question.room_id || saved.previous_revision_id !== question.question_revision_id || saved.resource_version !== question.resource_version + 1) throw new Error("저장한 질문 버전을 확인하지 못했습니다.");
+        await loadQuestions(token);
+        if (current()) await openQuestion(saved.question_id, saved.question_revision_id);
+      } catch (error) {
+        if (current()) note.textContent = `저장 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인할 수 있습니다. ${explainError(error)}`;
+      } finally { pending = false; if (current()) controls(); }
     }
   }
 

@@ -49,7 +49,19 @@ exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재
 덮지 않는다. `resolve_questions`는 packet/export의 ordered exact selection을 한 번에 읽고,
 고유 source마다 한 번 해석한다. 목록은 작은 metadata만 읽는다. schema는
 `kakao_question_store.py`, DB는 `kakao_question_models.py`에 있고 본문은 Artifact다.
-이는 source/storage 구현 경계이며 API·GUI 전체 연결이나 운영 migration 완료 증거가 아니다.
+이는 source/storage 구현 경계이며 운영 migration 완료 증거가 아니다.
+
+질문 공개 연결은 `kakao_question_rpc.py` → 기존 API-only Catalog socket의
+`kakao_question_dispatch.py` → 위 owner와 `kakao_question_reads.py`다. exact 질문을 해석해
+원문 text와 사진 occurrence metadata만 화면 projection으로 내보낸다. 사진은 그 질문에
+포함된 attachment ID만 허용하고 verified FD를 연 뒤 현재 source/session을 다시 확인한다.
+room hint가 없는 deep link도 exact revision의 실제 room을 조회·재인가하며 latest로 바꾸지 않는다.
+`routers/kakao_questions.py`, Web의 `kakao_question_routes.py`/gateway와 실제 화면은
+목록·exact 열람·확인/제외의 같은 key/parent/ETag를 사용한다. 일반 사용자 리뷰에는
+클라이언트가 만든 quality acceptance stamp를 받지 않는다. BFF는 길이/hash를 검증한 뒤
+same-origin 사진만 내보낸다. 소스 조립은 accepted-source 읽기만 노출하며 capture authority가
+없는 원본 admission은 명시적으로 거부한다. 채널 수집 불가와 accepted history 읽기 불가를
+동일시하지 않는다. 이 연결의 source/임시 DB/브라우저 검증은 운영 활성화 증거가 아니다.
 
 `kakao_packet_service.py`는 선택한 exact question revision·기간·출력 모드의 불변 묶음을
 저장한다. 새 선택은 새 packet revision이며 기존 묶음을 최신 질문으로 다시 구성하지 않는다.

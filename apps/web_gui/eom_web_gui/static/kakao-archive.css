@@ -22,6 +22,11 @@
 .kakao-detail { background: var(--eom-surface); }
 .kakao-detail img, .kakao-export img { display: block; max-width: 100%; height: auto; object-fit: contain; margin: 16px 0; background: var(--eom-surface); }
 .kakao-message-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.kakao-question-review { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--eom-border); }
+.kakao-question-review > label, .kakao-question-review > p { flex-basis: 100%; margin: 0; }
+.kakao-question-review > label:first-child { display: grid; gap: 8px; }
+.kakao-question-review textarea { width: 100%; min-width: 0; resize: vertical; }
+.kakao-review-check { display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .kakao-technical { font-size: var(--eom-type-caption, 13px); color: var(--eom-text-muted); }
 .kakao-technical dd { margin: 0 0 12px; overflow-wrap: anywhere; }
 .kakao-publications { margin-top: 24px; }

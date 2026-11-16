@@ -129,7 +129,7 @@ PY
 
 cd "${REPOSITORY_ROOT}"
 if [[ "${action}" == "kakao-tests" ]]; then
-  export PYTHONPATH="${PYTHONPATH}:${REPOSITORY_ROOT}/packages/kakao_archive_contracts"
+  export PYTHONPATH="${PYTHONPATH}:${REPOSITORY_ROOT}/packages/kakao_archive_contracts:${REPOSITORY_ROOT}/apps/web_gui"
   export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
   export EOM_RUN_API_INTEGRATION=1 EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
   "${PYTHON}" -m alembic upgrade head
@@ -138,6 +138,7 @@ if [[ "${action}" == "kakao-tests" ]]; then
     tests/integration/test_kakao_manual_storage.py \
     tests/integration/test_kakao_source_storage.py \
     tests/integration/test_kakao_question_storage.py \
+    tests/integration/test_kakao_question_http.py \
     tests/integration/test_kakao_packet_storage.py \
     tests/integration/test_kakao_stored_student_pdf.py \
     tests/integration/test_kakao_export_storage.py \

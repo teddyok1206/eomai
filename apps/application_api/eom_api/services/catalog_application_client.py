@@ -223,6 +223,27 @@ from eom_catalog_contracts.kakao_manual_rpc import (
     parse_kakao_manual_reply,
     parse_kakao_manual_request,
 )
+from eom_catalog_contracts.kakao_question_rpc import (
+    ChangeKakaoQuestionRequest,
+    CreateKakaoQuestionRequest,
+    KakaoQuestionFailure,
+    KakaoQuestionImageDescriptor,
+    KakaoQuestionRequest,
+    KakaoQuestionView,
+    ListKakaoQuestionsRequest,
+    ReadKakaoQuestionImageReply,
+    ReadKakaoQuestionImageRequest,
+    ReadKakaoQuestionRequest,
+    check_kakao_question_reply,
+    parse_kakao_question_reply,
+    parse_kakao_question_request,
+)
+from eom_catalog_contracts.kakao_question_store import (
+    KakaoQuestionChange,
+    KakaoQuestionCreate,
+    KakaoQuestionMutation,
+    KakaoQuestionPage,
+)
 from eom_catalog_contracts.kakao_room_rpc import (
     CommandKakaoRoomRequest,
     KakaoRoomFailure,
@@ -587,6 +608,150 @@ class CatalogApplicationClient:
         if isinstance(reply, KakaoRoomFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private room request failed")
         return reply.result
+
+    def create_kakao_question(
+        self,
+        command: KakaoQuestionCreate,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoQuestionMutation:
+        request = CreateKakaoQuestionRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoQuestionMutation, self._request_kakao_question(request))
+
+    def change_kakao_question(
+        self,
+        command: KakaoQuestionChange,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoQuestionMutation:
+        request = ChangeKakaoQuestionRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoQuestionMutation, self._request_kakao_question(request))
+
+    def read_kakao_question(
+        self,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+        *,
+        actor: ActorContext,
+    ) -> KakaoQuestionView:
+        request = ReadKakaoQuestionRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": binding,
+                "room_id": room,
+                "question_id": question,
+                "question_revision_id": revision,
+            }
+        )
+        return cast(KakaoQuestionView, self._request_kakao_question(request))
+
+    def list_kakao_questions(
+        self,
+        binding: str,
+        *,
+        actor: ActorContext,
+        room_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> KakaoQuestionPage:
+        request = ListKakaoQuestionsRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": binding,
+                "room_id": room_id,
+                "limit": limit,
+                "cursor": cursor,
+            }
+        )
+        return cast(KakaoQuestionPage, self._request_kakao_question(request))
+
+    def _request_kakao_question(
+        self,
+        request: KakaoQuestionRequest,
+    ) -> (
+        KakaoQuestionMutation | KakaoQuestionView | KakaoQuestionPage | KakaoQuestionImageDescriptor
+    ):
+        try:
+            request = parse_kakao_question_request(request.model_dump(mode="json"))
+            reply = parse_kakao_question_reply(
+                self._raw_request(
+                    request.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_kakao_question_reply(request, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private question response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoQuestionFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private question request failed")
+        return reply.result
+
+    def download_kakao_question_image(
+        self,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+        attachment: str,
+        *,
+        actor: ActorContext,
+    ) -> ProxiedItemMedia:
+        request = ReadKakaoQuestionImageRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": binding,
+                "room_id": room,
+                "question_id": question,
+                "question_revision_id": revision,
+                "attachment_id": attachment,
+            }
+        )
+        payload = request.model_dump(mode="json")
+        parse_kakao_question_request(payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            connection.sendall(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            )
+            connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+            value = json.loads(self._read_media_header(connection))
+            if not isinstance(value, dict):
+                raise ValueError("invalid private image header")
+            reply = parse_kakao_question_reply(value)
+            check_kakao_question_reply(request, reply)
+            if isinstance(reply, KakaoQuestionFailure):
+                raise CatalogApplicationClientError(
+                    reply.error_code, "Private question image unavailable"
+                )
+            if not isinstance(reply, ReadKakaoQuestionImageReply):
+                raise ValueError("unrelated private image response")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=reply.result.media_type,
+                content_length=reply.result.content_length,
+                sha256=reply.result.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            connection.close()
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private question media boundary unavailable"
+            ) from error
 
     def start_kakao_manual(
         self, command: KakaoManualStart, *, actor: ActorContext, idempotency_key: str

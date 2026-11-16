@@ -54,6 +54,7 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
+from eom_catalog_service.kakao_question_composition import build_kakao_question_application
 from eom_catalog_service.kakao_room_service import KakaoRoomService
 from eom_catalog_service.kakao_student_service import KakaoStudentService
 from eom_catalog_service.knowledge_analysis_batch_models import (
@@ -385,6 +386,7 @@ def serve() -> int:
             kakao_archive=KakaoArchiveService(engine),
             kakao_students=KakaoStudentService(engine),
             kakao_rooms=KakaoRoomService(engine),
+            kakao_questions=build_kakao_question_application(engine),
             kakao_manual=manual.application if manual is not None else None,
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,

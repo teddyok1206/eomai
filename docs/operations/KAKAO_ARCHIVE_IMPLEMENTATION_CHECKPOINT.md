@@ -1,5 +1,43 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — 실제 질문 API·Studio 열람/확인 저장 연결
+
+`b84952fa` 이후 기존 source/question owner를 API-only Catalog socket과 실제 API/BFF에
+연결했다. 새 queue·DB migration·파일 서버·AI 호출은 없다. 이번 단계는 **합성 자료의
+저장→Studio HTTP 열람/검토 저장** 완료이며 실제 카카오 수집·PDF 다운로드의 완료가 아니다.
+
+- 질문 목록은 작은 metadata만 읽고, 상세는 exact question revision에서 원문 span과 사진
+  occurrence를 해석한다. 두 개의 동일 메시지와 같은 PNG의 두 첨부 identity를 보존한다.
+  deep link에 room hint가 없어도 실제 room을 다시 인가하며 잘못된 room은 거부한다.
+- 사진 URL은 질문/revision/attachment ID만 받고 임의 Artifact/member/path를 받지 않는다.
+  현재 owner/session/source를 FD 열기 전후 다시 확인하고, 기존 bounded length/SHA proxy를
+  거친 same-origin 원본 bytes만 화면에 내보낸다. 다른 학생/owner의 사진은 보이지 않는다.
+- 일반 확인/제외는 기존 parent·If-Match·멱등 key를 사용한다. 브라우저는 응답 유실 시
+  동일 body/key로 다시 확인하며 다른 내용으로 바꾸지 않는다. 저장한 revision과 상태는
+  새로고침·새 service instance 뒤에도 유지된다. 원문·사진은 바꾸지 않는다.
+  공개 리뷰로 클라이언트가 만든 actor/시각/사진 품질 수용 stamp를 받지 않는다.
+- 기존 채널의 현재 수집 불가와 수락된 질문의 읽기 불가를 구분했다. DRAFT history 열람은
+  현재 backend 권한을 확인하지만 collection/export capability를 활성화하지 않는다.
+- 공식 guarded disposable PostgreSQL **149 PASS (64.81초)**. 그중 새 합성 검사는 실제
+  Studio BFF→HTTP gateway→API→API-peer UDS→Catalog owner→PG/Artifact를 통과해
+  생성/replay·원문/사진·확인 저장/replay·목록 재조회를 수행한다. HTTP 인증은 합성 fixture이고
+  Catalog는 실제 임시 Identity session/권한을 재검사한다. HTTPS/live 인증 증거는 아니다.
+- Kakao source/API/BFF·브라우저·권한/의존성/문맥/배포/표시 검사 **1347 PASS**.
+  이어 추가한 다섯 API-peer 거부 분기를 포함한 질문 HTTP 집중 검사 **13 PASS**다.
+  겹치는 수를 합산하지 않는다. 변경 core 9개 focused mypy, Ruff/format, shell와 schema
+  audit(1462 canonical / 1108 mirror / 12537 reference) PASS다.
+- 최초 브라우저 실행은 ambient Node18과 headless shell이 없는 새 runtime을 잘못 선택해
+  실행 전 실패했다. 기존 설치된 Playwright/Chromium test 환경으로 재실행했다. 첫 신규
+  BFF fixture의 중복 Host와 publisher filename 추정도 수정해 실제 계약과 대조했다.
+  통합 검사의 Web source 경로 누락은 해당 guarded purpose 안에서만 보완했다.
+  기존 Starlette/httpx deprecation warning은 유지하며 운영 의존성은 바꾸지 않았다.
+- 운영 DB는 여전히 **0084**, source head는 **0087**이다. 이번 API/Web/Catalog 소스는
+  아직 배포하지 않았다. 앞선 83203f88 wheel 준비본에는 이번 연결이 없으므로 새 후보로
+  다시 빌드해야 한다. 실제 카카오 계정 검증은 **NOT_PERFORMED**, AUTO/MANUAL 비활성이다.
+- 다음은 packet/export의 API·실행 coordinator·Studio PDF 다운로드를 이어 붙여 합성 입력의
+  첫 사용자 경로를 닫는 것이다. source 후보 수락 연결과 atomic 분할/병합도 남아 있다.
+  그 뒤 호환 release/보호 runtime 배포와 실제 한 방→전체 주기 수집 검증을 진행한다.
+
 ## 진행 중간 저장 — 영속 출력 요청·claim·현재 권한 파일 열기
 
 `99f97a65` 뒤에 기존 PDF executor/publisher를 바꾸지 않고 export 저장 owner를 연결했다.

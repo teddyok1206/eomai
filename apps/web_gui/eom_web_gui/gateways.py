@@ -174,6 +174,13 @@ from eom_web_gui.kakao_manual_contracts import (
     ManualSession,
     ManualStart,
 )
+from eom_web_gui.kakao_question_contracts import (
+    QuestionCreate,
+    QuestionMutation,
+    QuestionPage,
+    QuestionReview,
+    QuestionView,
+)
 from eom_web_gui.kakao_room_contracts import Room, RoomCommand, RoomMap, RoomMutation, RoomPage
 from eom_web_gui.kakao_student_contracts import (
     Student,
@@ -464,6 +471,13 @@ class ItemMedia:
 
 
 @dataclass(frozen=True)
+class KakaoQuestionMedia:
+    content: DownloadContent
+    content_type: str
+    etag: str
+
+
+@dataclass(frozen=True)
 class DocumentReviewPdfDownload:
     content: DownloadContent
     content_type: str
@@ -552,6 +566,53 @@ class ApplicationGateway(Protocol):
         idempotency_key: str,
         if_match: str,
     ) -> RoomMutation: ...
+
+    async def kakao_question_list(
+        self,
+        session: WebSession,
+        binding: str,
+        *,
+        room_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> QuestionPage: ...
+
+    async def kakao_question_read(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+    ) -> QuestionView: ...
+
+    async def kakao_question_create(
+        self,
+        session: WebSession,
+        value: QuestionCreate,
+        idempotency_key: str,
+    ) -> QuestionMutation: ...
+
+    async def kakao_question_review(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str,
+        question: str,
+        value: QuestionReview,
+        idempotency_key: str,
+        if_match: str,
+    ) -> QuestionMutation: ...
+
+    async def kakao_question_image(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+        attachment: str,
+    ) -> KakaoQuestionMedia: ...
 
     async def kakao_student_list(
         self, session: WebSession, *, limit: int = 50, cursor: str | None = None
@@ -1612,6 +1673,202 @@ class HttpApplicationGateway:
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_list(
+        self,
+        session: WebSession,
+        binding: str,
+        *,
+        room_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> QuestionPage:
+        _require_id(binding, "kakaobinding_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/questions",
+            params={
+                "source_binding_id": binding,
+                "limit": limit,
+                **({"room_id": room_id} if room_id else {}),
+                **({"cursor": cursor} if cursor else {}),
+            },
+            timeout=130.0,
+        )
+        try:
+            result = QuestionPage.model_validate(self._data(response))
+            ids = tuple(item.question_id for item in result.items)
+            if (
+                len(ids) > limit
+                or ids != tuple(sorted(set(ids)))
+                or any(
+                    item.source_binding_id != binding
+                    or (room_id is not None and item.room_id != room_id)
+                    or (cursor is not None and item.question_id <= cursor)
+                    for item in result.items
+                )
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different question page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_read(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+    ) -> QuestionView:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (room, "kakaoroom_"),
+            (question, "kakaoquestion_"),
+            (revision, "kakaoquestionrev_"),
+        ):
+            if value is not None:
+                _require_id(value, prefix)
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/questions/{question}/revisions/{revision}",
+            params={"source_binding_id": binding, **({"room_id": room} if room else {})},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionView.model_validate(self._data(response))
+            q = result.question
+            if (q.source_binding_id, q.question_id, q.question_revision_id) != (
+                binding,
+                question,
+                revision,
+            ) or (room is not None and q.room_id != room):
+                raise ValueError("different question version")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_create(
+        self,
+        session: WebSession,
+        value: QuestionCreate,
+        idempotency_key: str,
+    ) -> QuestionMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/questions",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionMutation.model_validate(self._data(response))
+            q = result.question
+            if (
+                (q.source_binding_id, q.room_id) != (value.source_binding_id, value.room_id)
+                or q.resource_version != 1
+                or q.previous_revision_id is not None
+                or q.review_state != "UNREVIEWED"
+            ):
+                raise ValueError("different created question")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_review(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str,
+        question: str,
+        value: QuestionReview,
+        idempotency_key: str,
+        if_match: str,
+    ) -> QuestionMutation:
+        for identity, prefix in (
+            (binding, "kakaobinding_"),
+            (room, "kakaoroom_"),
+            (question, "kakaoquestion_"),
+        ):
+            _require_id(identity, prefix)
+        match = re.fullmatch(r'"v([1-9][0-9]*)"', if_match)
+        if match is None:
+            raise GatewayError(status=412, code="API_PRECONDITION_FAILED")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/questions/{question}/review",
+            params={"source_binding_id": binding, "room_id": room},
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionMutation.model_validate(self._data(response))
+            q = result.question
+            if (
+                (q.source_binding_id, q.room_id, q.question_id) != (binding, room, question)
+                or q.previous_revision_id != value.parent_revision_id
+                or q.resource_version != int(match.group(1)) + 1
+                or q.review_state != ("CONFIRMED" if value.action == "CONFIRM" else "EXCLUDED")
+            ):
+                raise ValueError("different reviewed question")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_image(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+        attachment: str,
+    ) -> KakaoQuestionMedia:
+        for identity, prefix in (
+            (binding, "kakaobinding_"),
+            (room, "kakaoroom_"),
+            (question, "kakaoquestion_"),
+            (revision, "kakaoquestionrev_"),
+            (attachment, "kakaoattachment_"),
+        ):
+            if identity is not None:
+                _require_id(identity, prefix)
+        async with self._download(
+            session,
+            f"/api/v1/kakao-archive/questions/{question}/revisions/{revision}/images/{attachment}",
+            params={"source_binding_id": binding, **({"room_id": room} if room else {})},
+            timeout=130.0,
+        ) as response:
+            media = response.headers.get("content-type", "").split(";", 1)[0]
+            prefixes = {
+                "image/png": (b"\x89PNG\r\n\x1a\n",),
+                "image/jpeg": (b"\xff\xd8",),
+                "image/webp": (b"RIFF",),
+            }
+            etag = response.headers.get("etag", "")
+            if (
+                media not in prefixes
+                or response.headers.get("content-disposition") != "inline"
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            content = await self._verified_download_body(
+                response,
+                error_code="APPLICATION_API_RESPONSE_INVALID",
+                maximum_bytes=32 * 1024 * 1024,
+                expected_sha256=etag[1:-1],
+                prefixes=prefixes[media],
+            )
+            return KakaoQuestionMedia(content, media, etag)
 
     async def kakao_student_create(
         self, session: WebSession, value: StudentCreate, idempotency_key: str

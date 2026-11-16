@@ -22,6 +22,7 @@ const api=async(path,options={})=>{
   fixture.calls.push({path,method:options.method||'GET',body:options.body,headers:options.headers,mutation:options.mutation});
   if(path.startsWith('/kakao-archive/students?'))return {items:[],next_cursor:null};
   if(path.startsWith('/kakao-archive/rooms?'))return {items:[],next_cursor:null};
+  if(path.startsWith('/kakao-archive/questions?'))return {items:[],next_cursor:null};
   if(fixture.held&&options.method==='POST'){fixture.held=false;await new Promise(resolve=>fixture.release=resolve);}
   if(path==='/kakao-archive/source-bindings'){
     if(options.method!=='POST')return {items:fixture.binding?[fixture.binding]:[],next_cursor:null};
@@ -77,7 +78,7 @@ try {
   assert.equal(await page.locator('#kakao-archive-root script').count(),0);
   assert.equal(await page.locator('[data-kakao="collect"]').count(),0,'unverified binding enabled collection');
   assert.equal(await page.getByRole('button',{name:'학생별 PDF 보기'}).count(),0);
-  assert.ok(await page.evaluate(()=>fixture.calls.every(call=>call.path.startsWith('/kakao-archive/source-bindings')||call.path.startsWith('/kakao-archive/students?')||call.path.startsWith('/kakao-archive/rooms?'))),'DRAFT read nonexistent downstream');
+  assert.ok(await page.evaluate(()=>fixture.calls.every(call=>call.path.startsWith('/kakao-archive/source-bindings')||call.path.startsWith('/kakao-archive/students?')||call.path.startsWith('/kakao-archive/rooms?')||call.path.startsWith('/kakao-archive/questions?'))),'DRAFT enabled capture or export rather than accepted-history read');
 
   // A stale version is rejected, not replayed with a silently substituted latest revision.
   await page.getByRole('button',{name:'연결 준비 해제',exact:true}).click();

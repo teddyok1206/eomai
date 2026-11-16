@@ -179,6 +179,24 @@ source-resolution/source-admission, 콘텐츠 command/page, export request/statu
 우회하거나 다른 owner의 자료를 ADMIN이라는 이유로 공개하지 않는다. private response는 `no-store`이며
 NAS 경로/쿠키/본문을 log·URL에 싣지 않는다. GUI는 실제 capability가 생긴 동작만 활성화한다.
 
+### 실제 질문 열람·검토의 공개 연결
+
+기존 API-only Catalog socket에 질문 operation family를 추가한다. 책임은 실제 API actor를
+기존 question owner에 전달하고 검증한 결과를 공개 read projection으로 내보내는 것이다.
+정본·논리/revision·Artifact/hash는 위 §§2–4 그대로이며 새 DB/registry/queue는 없다.
+목록은 기존 indexed metadata page, 상세는 exact question revision과 고유 source 한 번 해석,
+사진은 그 질문 revision에 실제 포함된 attachment occurrence로만 연다. 비용은 목록 page와
+선택 block/source/file bytes에 선형이다. 원문을 DB나 별도 preview Artifact에 복사하지 않는다.
+
+현재 owner/session/source 권한을 유지하며 사진 FD를 연 뒤에도 closure metadata를 다시
+확인한다. browser의 임의 Artifact/member/path·역할·실행 권한 주장은 받지 않는다.
+검토 저장은 기존 reserve→I/O→CAS와 같은 key replay를 재사용하며 If-Match를 요구한다.
+공개 확인/제외 명령은 서버의 actor/시각으로 기록한다. 기존 내부 EDIT와 사진 품질 수락의
+서버 stamp를 구별하며, 브라우저가 actor/시각을 채워야만 하는 버튼은 만들지 않는다.
+API/BFF는 transport와 presentation validation만 담당한다. binary 스트림은 기존 verified
+member/프록시의 length·SHA 검사 경계를 재사용하며 새로운 파일 서버를 만들지 않는다.
+소스 조회 성공만으로 실제 수집 capability나 전체 이력 확보를 선언하지 않는다.
+
 ## 10. 실패·재시도·멱등·출력 수명
 
 - 같은 intent+같은 request는 원래 결과/진행을 반환한다. 다른 내용은 409이며 새 ID로 우회하지 않는다.

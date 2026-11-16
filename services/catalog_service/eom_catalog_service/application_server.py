@@ -126,6 +126,7 @@ from eom_catalog_contracts.curated_document_delivery_application import (
 )
 from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
+from eom_catalog_contracts.kakao_question_rpc import KAKAO_QUESTION_OPERATIONS
 from eom_catalog_contracts.kakao_room_rpc import KAKAO_ROOM_OPERATIONS
 from eom_catalog_contracts.kakao_student_rpc import KAKAO_STUDENT_OPERATIONS
 from eom_identifiers import canonical_json_bytes
@@ -240,6 +241,8 @@ from eom_catalog_service.item_similarity_publication_service import (
 from eom_catalog_service.kakao_archive_dispatch import dispatch_kakao_binding
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
+from eom_catalog_service.kakao_question_composition import KakaoQuestionApplication
+from eom_catalog_service.kakao_question_dispatch import dispatch_kakao_question
 from eom_catalog_service.kakao_room_dispatch import dispatch_kakao_room
 from eom_catalog_service.kakao_room_service import KakaoRoomService
 from eom_catalog_service.kakao_student_dispatch import dispatch_kakao_student
@@ -350,6 +353,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if isinstance(raw_operation, str) and raw_operation in KAKAO_ROOM_OPERATIONS:
                 self.wfile.write(dispatch_kakao_room(self.server.kakao_rooms, value))
                 self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in KAKAO_QUESTION_OPERATIONS:
+                questions = self.server.kakao_questions
+                dispatch_kakao_question(
+                    None if questions is None else questions.questions,
+                    None if questions is None else questions.reads,
+                    value,
+                    cast(BinaryIO, self.wfile),
+                )
                 return
             if isinstance(raw_operation, str) and raw_operation in CONTENT_PLANNING_OPERATIONS:
                 self.wfile.write(dispatch_content_planning(self.server.content_planning, value))
@@ -2088,6 +2100,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         kakao_archive: KakaoArchiveService | None = None,
         kakao_students: KakaoStudentService | None = None,
         kakao_rooms: KakaoRoomService | None = None,
+        kakao_questions: KakaoQuestionApplication | None = None,
         kakao_manual: KakaoManualApplication | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
@@ -2135,6 +2148,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.kakao_archive = kakao_archive
         self.kakao_students = kakao_students
         self.kakao_rooms = kakao_rooms
+        self.kakao_questions = kakao_questions
         self.kakao_manual = kakao_manual
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag

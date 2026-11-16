@@ -54,7 +54,10 @@
       "states": {
         "DRAFT": {"label": "연결 준비", "audience": "USER", "tone": "neutral", "icon": "■"},
         "RETIRED": {"label": "연결 준비 해제됨", "audience": "USER", "tone": "neutral", "icon": "■"},
-        "NOT_VERIFIED": {"label": "채널 확인 전", "audience": "USER", "tone": "warning", "icon": "◆"}
+        "NOT_VERIFIED": {"label": "채널 확인 전", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "UNREVIEWED": {"label": "질문 확인 전", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "CONFIRMED": {"label": "질문 확인 완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "EXCLUDED": {"label": "출력에서 제외됨", "audience": "USER", "tone": "neutral", "icon": "■"}
       }
     },
     "workflow": {
