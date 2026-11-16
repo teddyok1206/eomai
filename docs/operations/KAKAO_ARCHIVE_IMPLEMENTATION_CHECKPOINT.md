@@ -44,6 +44,14 @@ verify callback이 source head0087이 아닌0084를 가리키던 것을0087로 �
 고정돼 있던 배포 회귀 검사의 기대값/closed callback 집합을 실제 지원된0084/0087과 대조한다.
 이 수정은 추가 migration 실행이나 운영 변경이 아니며 새 wheel 검증 뒤 후속 release에 포함한다.
 
+위 정렬은 `36174ceb7f2e9e70f41165effe222e9d9788e589`로 커밋·푸시했고 OpenAPI/배포
+회귀 **56 PASS**를 확인했다. 같은 commit의 공식 API four-wheel build/RECORD/격리 import·
+OpenAPI 검사는 PASS다. UI는 `c081dd76e0f1a56b91d48209689f3cc9c5f2a5ae`의 공식 Web wheel
+closure/빈 환경 offline 설치/97 runtime member 검증이 PASS다. API build 위치는
+`/tmp/eom-api-build/36174ceb7f2e9e70f41165effe222e9d9788e589.CzFLjX/dist`, Web은
+`/tmp/eom-web-gui-build/c081dd76e0f1a56b91d48209689f3cc9c5f2a5ae.W5MlXf/dist`다.
+이 패키지 검증은 아직 운영 migration·서비스 교체·실제 질문 PDF 제공의 증거가 아니다.
+
 ## 진행 중간 저장 — 영속 출력 요청·claim·현재 권한 파일 열기
 
 `99f97a65` 뒤에 기존 PDF executor/publisher를 바꾸지 않고 export 저장 owner를 연결했다.
