@@ -386,3 +386,39 @@ page instance만으로 메시지 occurrence를 알 수 없으므로, 기존 MANU
 적용하면 필요한 방을 누락할 수 있다는 것은 설계상 추론이다. 따라서 전체 방 수집과 질문 단위
 구성 뒤의 출력 기간 선택을 분리한다. 열람한 가이드에서는 CSV `USER` 열의 발신 방향 의미나
 실제 export 범위의 검증 근거를 확인하지 못했으므로, 문서만으로 capability를 상향하지 않는다.
+
+## Collection intent와 공용 profile gate 연결
+
+1. Catalog collection owner가 현재 실제 ADMIN/READ/COLLECT로 단일 방 수집 의도를 접수한다.
+   첫 public command는 `KakaoRoomCollectionCreate`다. 이는 전체 방 수집의 대체물이 아니라
+   실제 한 방 실증을 위한 첫 단계이며, 전체 목록 수집·주기 실행은 여전히 완료 조건이다.
+2. 원본은 기존 Artifact이며 run/task/attempt/browser epoch에는 작은 ID·pin·state만 저장한다.
+   새로운 범용 큐나 Job 상태 enum을 만들지 않는다. 처음 선택한 room/capability/policy는 불변이다.
+3. 하나의 run이 순서 있는 task를 소유하고 한 번에 하나만 실행한다. browser epoch는 실제
+   persistent context의 identity/lifecycle이다. 여러 방의 command가 같은 browser/fence를 사용할
+   수 있으므로 `unique(profile,fence)`는 browser epoch에 두고 attempt에 두지 않는다.
+4. profile은 기존 `kakao_profile_runtime` 한 gate를 재사용한다. AUTO current-browser pointer만
+   추가하고 MANUAL lease와 동시에 소유할 수 없게 한다. DB 예약 뒤 실제 OS 시작/종료는 기존
+   Orchestrator adapter가 관측한다. 시간 만료나 DB 예약 자체를 프로세스 실행·종료로 보지 않는다.
+5. primary access는 owner/binding/key replay, active run lookup, run별 ordered task claim, exact
+   epoch/attempt lookup이다. unique/partial B-tree와 FK를 사용한다. 초기 수천 방/run, 수만
+   attempt 이력을 가정하며 본문 list scan이나 N+1은 없다. 상태 집계는 run별 bounded aggregate다.
+6. source/파일 I/O 중 DB lock은 잡지 않는다. profile 예약 순서는 binding → 기존 installed-profile
+   advisory gate → profile → run이다. 실제 runtime을 관측한 뒤 같은 epoch/pointer를 CAS로 수락한다.
+   source 발행은 기존 publication intent를 재사용하며 worker 재실행과 구분한다.
+7. background 권한은 원래 HTTP session의 만료와 분리한다. owner는 **저장된 run/task 참조**에서
+   읽고 현재 Identity ACTIVE/ADMIN/READ/COLLECT·binding·capability·policy를 재검사한다. worker가
+   owner/role/session을 주장하거나 새 OPERATOR ActorContext를 가장하지 않는다. 내부 참조는
+   public RPC/worker 입력에서 생성할 수 없다. 공개 요청의 기존 session 검증은 그대로 유지한다.
+8. 첫 actual binding/profile owner는 보존한다. 같은 Studio owner가 STOPPED profile로 다른
+   자기 binding을 선택할 수 있도록 MANUAL history의 profile FK와 binding FK를 분리한다.
+   과거 lease를 현재 binding에 종속시키지 않으며 다른 owner로 profile을 넘기지 않는다.
+   actual channel identity는 기존 수락 proof와 매 실행 관측으로 검증하고 이름으로 선택하지 않는다.
+9. unknown dispatch/살아 있는 worker는 같은 epoch를 조회한다. 새 browser/attempt를 자동
+   생성하지 않는다. 명시적 중단·권한 상실은 profile을 붙잡은 채 종료 관측을 거치며 FAILED는
+   보존한다. 이미 검증된 local output의 발행 복구와 실제 재수집 retry는 다른 경계다.
+10. 계층은 기존 API → Catalog application/state → typed contract, Orchestrator OS adapter다.
+    worker는 local command/result만 사용한다. 새 browser service나 Codex 슬롯을 추가하지 않는다.
+11. 더 단순한 run row 하나에 모든 방/프로세스/attempt를 덮어쓰면 재개 위치와 실제 프로세스
+    identity를 잃는다. 반대로 room마다 브라우저를 재시작하는 구조도 불필요하다. 작은 run/task/
+    attempt/epoch 관계만 두고 실제 UI selector·source 수락·전체 방 실행은 각 단계에서 검증한다.
