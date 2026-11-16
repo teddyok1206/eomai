@@ -58,7 +58,9 @@ def source_store(creative_engine, tmp_path):
 
     service = KakaoSourceService(creative_engine, artifacts=artifacts, authorize_capture=authority)
 
-    def prepare(*, previous=None, texts=("private question", "private question"), room_id=None):
+    def prepare(
+        *, previous=None, texts=("private question", "private question"), room_id=None, photos=None
+    ):
         counter = 0
 
         def publish(name, payload, schema, media):
@@ -91,6 +93,7 @@ def source_store(creative_engine, tmp_path):
             previous=previous,
             texts=texts,
             publish=publish,
+            photos=photos,
         )
         allowed[admission.authority.attempt_id] = admission
         return admission, data

@@ -58,6 +58,13 @@ exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재
 metadata 목록은 본문을 읽지 않는다. 저장 DTO와 모델은 각각 `kakao_packet_store.py`,
 `kakao_packet_models.py`다. 이 저장 경계를 실제 PDF 실행·private download 연결과 구별한다.
 
+`kakao_pdf_inputs.py`는 그 학생의 exact selection을 기존 render projection에 연결하는
+로컬 materialization adapter다. 원본 사진은 검증된 Artifact FD에서 pointer별 한 번 읽고
+occurrence 수와 순서는 유지한다. 파일·font의 hash와 source 권한을 확인하고 기존 파일을
+덮지 않는다. worker command에는 로컬 member만 들어가며 NAS/DB/인증정보를 넘기지 않는다.
+이 단계의 입력 생성·실제 합성 렌더·Artifact 조회 시험은 export 상태 owner나 HTTP
+다운로드·운영 sandbox 활성화의 대체 증거가 아니다.
+
 `kakao_archive_service.py`는 DRAFT 연결과 불변 정책 revision/명령 receipt의 소유자다.
 현재 session·permission·ADMIN 역할은 Identity repository에서 다시 확인하며 다른 owner의
 binding은 존재하지 않는 것과 같은 오류다. `kakao_archive_rpc.py`는 기존 Catalog API-peer

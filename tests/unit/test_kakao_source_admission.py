@@ -62,6 +62,7 @@ def source_case(
     context=True,
     publish=None,
     previous=None,
+    photos=None,
 ):
     binding, room = binding or identity("kakaobinding"), room or identity("kakaoroom")
     sid, nid = identity("kakaosnapshotrev"), identity("kakaonormalizationrev")
@@ -72,6 +73,17 @@ def source_case(
         writer.writerow(("2026-11-15 18:00:00", "private-name", value))
     raw = output.getvalue().encode("utf-8-sig")
     roles = roles or ("student",) * len(texts)
+    photos = photos or {}
+    photo_observations = {
+        row: KakaoAttachmentObservation(
+            attachment_id=identity("kakaoattachment"),
+            attachment_revision_id=identity("kakaoattachmentrev"),
+            album_ordinal=1,
+            availability="available",
+            association="SOURCE_VERIFIED",
+        )
+        for row in photos
+    }
     norm = parse_kakao_csv(
         raw,
         source_binding_id=binding,
@@ -89,7 +101,8 @@ def source_case(
                 role=role,
                 role_evidence_id="direction-observed" if role != "unknown" else None,
                 source_message_id=f"observed-{i}" if provider_ids else None,
-                kind="text",
+                kind="attachment" if i in photos else "text",
+                attachments=(photo_observations[i],) if i in photos else (),
             )
             for i, role in enumerate(roles, 1)
         ),
@@ -181,10 +194,23 @@ def source_case(
         unknown_sender_rows=sum(role == "unknown" for role in roles),
         first_source_at_utc=min(times) if times else None,
         last_source_at_utc=max(times) if times else None,
-        attachment_bubbles_observed=0,
+        attachment_bubbles_observed=len(photos),
         attachment_inventory_complete=True,
         unresolved_attachment_bubbles=0,
-        attachments=(),
+        attachments=tuple(
+            CaptureAttachment(
+                **photo_observations[row].model_dump(),
+                row_ordinal=row,
+                quality_level="original_verified",
+                member=local(
+                    "outputs/photo-" + sha256_bytes(photo[0])[7:23] + ".png", photo[0], "image/png"
+                ),
+                width_px=photo[1],
+                height_px=photo[2],
+                failure_reason=None,
+            )
+            for row, photo in photos.items()
+        ),
         room_complete=complete,
     )
     commandraw = canonical_json_bytes(command.model_dump(mode="json"))
@@ -220,6 +246,42 @@ def source_case(
         payloads[(value.artifact_id, value.artifact_revision_id, value.member_path)] = data
         return value
 
+    photo_members = {}
+    media_receipts = {}
+    attachments = []
+    for row, (raw_photo, width, height) in photos.items():
+        digest = sha256_bytes(raw_photo)
+        if digest not in photo_members:
+            receipt = KakaoMediaBlobReceipt(
+                source_binding_id=binding,
+                source_sha256=digest,
+                source_bytes=len(raw_photo),
+                media_type="image/png",
+                width_px=width,
+                height_px=height,
+                pixel_count=width * height,
+            )
+            photo_members[digest] = (
+                pointer("original.png", raw_photo, MEDIA_FORMAT_REF, "image/png"),
+                pointer(
+                    "media.json",
+                    canonical_json_bytes(receipt.model_dump(mode="json")),
+                    MEDIA_BLOB_REF,
+                ),
+                receipt,
+            )
+        original, receipt_pointer, receipt = photo_members[digest]
+        observation = photo_observations[row]
+        attachments.append(
+            KakaoSourceAttachment(
+                attachment_id=observation.attachment_id,
+                attachment_revision_id=observation.attachment_revision_id,
+                original=original,
+                media_receipt=receipt_pointer,
+                quality="ORIGINAL",
+            )
+        )
+        media_receipts[observation.attachment_id] = receipt
     admission = KakaoSourceAdmission(
         source_binding_id=binding,
         room_id=room,
@@ -244,7 +306,7 @@ def source_case(
             capture_report=pointer("report.json", reportraw, CAPTURE_REF),
             capture_result=pointer("result.json", resultraw, CAPTURE_REF),
         ),
-        attachments=(),
+        attachments=tuple(attachments),
     )
     return (
         admission,
@@ -256,7 +318,7 @@ def source_case(
             capability_bytes=capraw,
             report_bytes=reportraw,
             result_bytes=resultraw,
-            media_receipts={},
+            media_receipts=media_receipts,
         ),
         payloads,
     )

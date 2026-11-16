@@ -118,3 +118,26 @@ PDF/PNG binary pointer 형식 식별자는 각각
 적용하지 않으며 실제 media/bytes 검증은 격리 renderer와 core acceptance가 수행한다.
 layout은 기존 `eom://schemas/kakao-archive/worker-question-layout/1.0`을 사용한다.
 이 연결의 소스/합성 검증은 실제 DB export 수락·권한별 다운로드·운영 활성화 증거가 아니다.
+
+## 저장된 학생 묶음의 실제 입력 물질화
+
+`kakao_pdf_inputs.py`는 Catalog가 `resolve_student`로 해석한 exact 학생 selection을 받아
+기존 render projection에 연결한다. 책임은 이 한 입력 경계뿐이며 export 예약·claim·worker
+실행·DB 수락을 겸하지 않는다. 실제 학생 원본과 packet이 정본이고 로컬 입력은 일시 materialization이다.
+
+선택한 source의 가용 사진은 ArtifactMemberPointer의 전체 identity를 map key로 사용해 한 번씩
+검증된 FD로 읽는다. attachment occurrence는 줄이지 않는다. 본문·사진 순서, 누락 표시와 명시적
+transform은 기존 projection이 담당한다. 원본 사진·font를 packet마다 NAS에 재발행하지 않는다.
+사진 하나 32MiB, 고유 사진 합계 256MiB와 기존 manifest bound를 지키며 비용은 고유 입력 bytes에
+선형이다. 이미지를 decode하거나 줄이거나 캡처하지 않는다.
+
+입력은 설정된 local staging root 아래의 새 owner-only 0700 디렉터리에 exclusive로 작성한다.
+NAS 및 staging root 자체를 입력 폴더로 쓰는 것은 거부한다. 기존 파일·링크를 덮지 않고
+실패한 staging도 남긴다. font는 고정 설치 profile이 제공한 LocalMember의 hash/size/media와
+실제 regular single-link FD를 검증한다. 이 함수가 임의 폰트·runtime 경로를 공개 API 입력으로
+허용하는 것은 아니다. 실제 profile 설치는 별도 runtime admission 책임이다.
+
+필수 `authorize` callback은 물질화 전과 후에 현재 source/packet/session을 재검사한다.
+완료한 입력은 기존 `KakaoPdfExecutor` → `publish_kakao_pdf`로 넘어간다. 이 adapter 추가는
+새 큐나 DB schema를 요구하지 않으며 입력 helper 시험을 실제 Studio 다운로드 성공으로
+간주하지 않는다. 단순 임의 경로 전달은 다른 학생/가변 파일/누락 이미지를 구별하지 못해 사용하지 않는다.

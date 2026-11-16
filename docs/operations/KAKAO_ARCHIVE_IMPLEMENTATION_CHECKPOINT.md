@@ -1,5 +1,31 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — 저장된 대화·사진에서 학생별 PDF까지
+
+`871e2df3` 뒤에 기존 source/question/packet owner와 renderer/Artifact publisher를 연결했다.
+이 단계는 **실제 저장소와 별도 PDF subprocess를 사용하는 합성 입력 검증**이다. Studio의
+다운로드 API, 보호된 운영 worker, 실제 카카오 계정 수집의 완료를 뜻하지 않는다.
+
+- `resolve_student`의 exact selection만 local staging 아래 새 전용 입력 디렉터리에
+  물질화한다. 원본 사진은 검증된 Artifact FD에서 고유 pointer별 한 번 읽고 bytes를
+  바꾸지 않는다. 같은 PNG가 두 메시지에 붙은 경우 binary는 한 번 읽되 사진 occurrence
+  두 개와 순서는 실제 PDF에도 남는다. NAS를 worker 입력 폴더로 사용하는 것은 거부한다.
+- 임시 PostgreSQL의 CSV·사진 수락 → 질문 저장·확정 → FINAL packet → 실제 PDF 렌더 →
+  canonical Artifact 발행·검증된 파일 재조회가 통과했다. 같은 이름의 서로 다른 학생을
+  별도 한 페이지 PDF로 출력하고 다른 학생의 문장이 섞이지 않음을 확인했다.
+- 같은 완료 attempt의 publication replay는 같은 output pointer를 반환하며 추가 render를
+  하지 않는다. 이는 아직 없는 HTTP export 요청의 멱등 검증을 대체하지 않는다.
+- 다른 학생 selection, 잘못된 font hash, 파일/디렉터리 링크, NAS 입력 경로, 기존 파일이
+  있는 입력 폴더를 거부한다. 물질화 뒤 session이 철회되면 결과를 반환하지 않고 실패한
+  staging을 보존한다. PDF subprocess에는 DB URL·인증정보를 상속하지 않는다.
+- 공식 guarded PostgreSQL 최종 검사 **135 PASS (42.62초)**, 변경 Python formatter/linter,
+  입력 adapter mypy 및 `git diff --check` PASS다. 앞선 동일 경계의 134 PASS 뒤 NAS 경로
+  거부 검사를 추가한 결과이며, 겹치는 수를 합산하지 않는다. 기존 source unit 1081 PASS와
+  개발 문맥 13 PASS도 참조한다.
+- wire schema·DB migration·운영 runtime을 추가 변경하지 않았다. source head는 0086,
+  운영은 앞서 기록한 0084 release 그대로다. 다음 연결은 영속 export 접수·완료 pointer와
+  현재 권한을 확인하는 API/Studio 조회·다운로드이며, 실제 카카오 한 방/전체 수집도 남는다.
+
 ## 진행 중간 저장 — packet owner, 0a812810 이후 소스 작업
 
 사용자가 goal을 다시 등록하면서 검증·커밋·푸시·운영 배포를 명시했다. 전체 범위는
