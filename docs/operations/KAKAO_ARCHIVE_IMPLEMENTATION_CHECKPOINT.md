@@ -1,5 +1,34 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 보호 runtime 설치·MANUAL/PDF 활성화
+
+- API/Web/Catalog/QUERY 운영 source는 `8e2e11eb`, DB0087이다. build gate는
+  `0b1b3c2c`, 설치 owner-group 수정은 `157d7c7e`로 각각 커밋·푸시했다. 각 component의
+  source를 같은 SHA라고 단정하지 않는다. 전용 runtime package 코드는 eb9→8e 사이
+  변경 없음을 Git diff로 확인하고 eb9에서 만든 새 4-wheel을 실제 전용 prefix에 설치했다.
+- browser/remote/pdf의 `pip check`, 5개 runtime/asset tree fingerprint, root inode
+  publication과 별도 installer stage/verify, 실제 전용 UID·group·systemd template
+  검증을 완료했다. 원래 builder tree는 `/opt/eom/.kakao-runtime-publish-3jjj0s70`에
+  복구/감사를 위해 보존했다. source 원본·인증정보를 worker에게 복사하지 않았다.
+- 최초 stage는 Catalog owner를 render group에 추가한 뒤 동일 owner를 금지하던 installer
+  allowlist 불일치에서 중단됐다. worker 권한을 넓히지 않고 owner의 좁은 I/O group만
+  허용하도록 수정했다. renderer/타 worker/임의 계정 분리 포함 installer **47 PASS** 후
+  동일 manifest의 stage/verify를 완료했다. 실패 기록은 보존했다.
+- 설치 manifest SHA는 `sha256:fad5939db96ddab355607e13a4ea0170d94b346d7340ae69d1df1654bcdb32c7`,
+  publication plan SHA는 `sha256:8d40ce61453790e29b3c3ad108c34d4381da5aaef470ca86483324620e61237e`다.
+  installer source157d의 별도 SHA는 `sha256:5aaf7dfea16f8a58ebbd1cfd109e0ef7ee638a3cc38e7358739c70259c44d504`다.
+- 실제 설치 noVNC inventory에서 Web의 exact static path allowlist를 구성하고, 기존
+  Caddy route에 현재 owner/session/lease 검사를 통과하는 private UDS 경로만 연결했다.
+  Catalog MANUAL/PDF만 ENABLED이며 **AUTO collection은 여전히 비활성**이다.
+  Catalog/Web/Caddy 재기동 후 공개 HTTPS login200, API READY, 무인증 remote401을 확인했다.
+- 운영 기록은 `/var/lib/eom-kakao-runtime-activation-157d7c7e/activated.json`이다.
+  기존 Caddy/Web 설정은 같은 private directory에 복구용으로 보존했다. 개인 인증정보나
+  실제 대화·사진을 개발 Git/Slack에 넣지 않았다.
+- 사용자에게 `일반 → KakaoTalk → 카카오 로그인 준비`의 실제 로그인 요청을 보냈다.
+  **실제 카카오 로그인/한 방/CSV/사진/학생 PDF는 아직 NOT_VERIFIED**다. 실제 로그인과
+  2단계 인증을 관측하지 않은 상태를 전체 업무 성공으로 보고하지 않는다. 메시지 전송은 금지다.
+
+
 ## 2026-11-16 후속 운영 release — 학생별 PDF 연결 소스 반영
 
 1. 실제 사용 경로: `eb9e7e1f`에 질문 선택/packet/PDF API·BFF·Studio 연결을 커밋·푸시했다.
