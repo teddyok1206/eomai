@@ -1,5 +1,27 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 17:49 UTC 사용자 채팅방 열림 확인·분할/병합 선택 입력
+
+- 사용자가 원격 화면에서 카카오 채팅방을 열었다고 확인했다. 실제 browser/remote unit도
+  17:42:48/49 UTC 이후 ACTIVE이며 PID가 존재한다. 이는 **USER_VERIFIED 로그인·화면**
+  증거다. 실제 채널/방 selector·CSV 범위·사진 occurrence 연결은 아직 확인하지 않았고,
+  수집 또는 학생 PDF 완료로 확대하지 않는다. 메시지는 보내지 않았다.
+- 사용자가 연 연결은 유지한다. 아래 source 작업으로 현재 Catalog/browser를 재시작하거나
+  MANUAL 권한·profile/인증 파일·기존 실패 이력을 변경하지 않았다. 실제 화면의 메뉴 위치를
+  확인하기 위한 사용자 screenshot을 요청했으며, 로그인 인증정보는 요청하지 않았다.
+- JSON Schema 2020-12 `question-compose-v1`과 frozen selection DTO를 추가했다.
+  Catalog의 `kakao_question_selections.py`가 exact revision/version과 작은 block/span
+  선택을 기존 `split_question`/`merge_questions`에 연결한다. 원문·사진 pointer·authority·
+  결과 ID는 browser 입력이 아니다. 같은 서버 예약으로 동일한 manifest를 재구성한다.
+- source 검증 **141 PASS**: canonical/mirror/hash, wire 입력 거부, source hash·부모
+  version 불일치, 글/사진 coverage, Unicode 경계, display override 보존, 학생 격리,
+  미확보 사진의 FINAL 차단, 원문 반복 occurrence 보존 및 기존 API import/route 회귀다.
+  초기 테스트의 미확보 사진 기대값은 review reason이 아니라 기존 FINAL blocker를
+  확인하도록 고쳤다. 운영 실패/원본을 수정하지 않았다.
+- Ruff·formatter·strict mypy 두 source PASS, wire audit1464개 canonical/1110개 mirror
+  참조 검사 PASS. **다중 질문 원자적 저장·SUPERSEDED 전환·공개 split/merge API/GUI는
+  후속이며 아직 활성 기능이 아니다.** 운영 release는 위 로그인 수정 compatible set 그대로다.
+
 ## 2026-11-16 17:36 UTC X11 수정 운영 반영·installed empty canary 완료
 
 - collector `41bbbaa9d4f31971ab1a3ecb4e489494c167f874` wheel

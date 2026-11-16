@@ -120,6 +120,11 @@ binding·owner 범위에서 수행하며 이전 mapping과 정확한 학생 표�
 선택을 담당한다. `kakao_question_publication.py`는 결과 manifest만 기존 Artifact owner로
 발행하고 CSV/사진은 다시 복사하지 않는다. 발행 후 DB 수락·현재 mapping/source 권한은
 호출 use case 책임이며 이 함수 자체가 private 원문 조회 권한은 아니다.
+`kakao_question_selections.py`는 `question-compose-v1`의 작은 block/span 선택과 exact
+질문 revision/version을 위 순수 분할·병합에 연결한다. 결과 ID/시각은 저장 owner가 예약해
+전달하며 요청이 원문·사진 pointer·권한을 주장하지 못한다. 아직 다중 질문의 원자적 저장과
+공개 명령 연결을 대신하지 않는다. 기존 `kakao_question_composition.py`는 다른 책임인
+application 조립 지점이며 이 선택 규칙과 구분한다.
 `kakao_render_projection.py`는 packet 안의 요청한 학생 subset만 골라 exact source를
 로컬 렌더 manifest로 바꾼다. source binding·질문 revision·학생 표시·사진 포인터를
 대조하며 다른 학생의 입력을 함께 넘기지 않는다.

@@ -158,6 +158,34 @@ source 재수락은 기존 confirmed 질문을 덮어쓰지 않는다. 변경 �
 
 ## 9. 계층·스키마·응용/API 계획
 
+### 질문 분할·병합 입력 연결
+
+분할·병합은 기존 `split_question`/`merge_questions`를 재사용한다. 화면이 전체 원문,
+사진 pointer, 학생/권한/작성자 또는 결과 ID를 다시 제출하지 않는다. 새
+`question-compose-v1` 명령은 binding/room과 입력 질문의 exact revision/version,
+분할할 block ID 또는 원문 code point 구간만 받는다. 병합 입력 순서는 출력 순서다.
+원문은 accepted question/source Artifact이며 명령은 원문을 대체하지 않는다.
+
+Catalog의 `kakao_question_selections.py`가 이미 읽은 질문들을 ID map으로 대조하고
+block selector를 기존 블록으로 해석한다. 학생·원문 hash·사진 연결·표시 수정은 입력에서
+물려받는다. 부분 text span의 새 block ID는 예약된 결과 질문 ID와 순번에서 만들고
+같은 예약을 재실행해도 바뀌지 않는다. UTF-16 위치를 원문 code point로 간주하지 않는다.
+표시 문구를 이미 고친 block은 전체를 옮길 수 있지만, 그 표시문 위치를 원문 위치로
+추측해 나눌 수는 없다. 사진은 전체 block을 한 번만 옮긴다.
+
+주 접근은 exact ID/version 조회, ordered partition, 누락/중복 검사다. 입력 100질문,
+출력 100질문, 질문당 기존 230블록 제한을 유지한다. map/set 구성은 O(B+Q),
+기존 source-span coverage 정렬은 O(B log B)이고 추가 공간은 O(B+Q)다.
+새 검색·cache·worker·의존성은 필요 없다. 공개 JSON Schema는 선택 입력만 정의하고
+owner의 실제 권한 검사·원본 해석·CAS를 대신하지 않는다.
+
+저장 owner는 기존 reserve→Artifact I/O→재인가/CAS 순서를 유지한다. 입력 전체의
+current/version을 검증하고 결과 ID/시각을 같은 command에 예약한 뒤 한 transaction에서
+새 질문들과 입력 SUPERSEDED를 함께 채택해야 한다. 실패하면 어떤 입력도 일부만
+교체하지 않는다. 원래 question revision과 packet 참조·수집 origin의 중복 방지 연결은
+보존한다. 두 개의 독립 CREATE 호출로 분할을 흉내 내는 대안은 부분 저장과 재수집 중복을
+막지 못하므로 사용하지 않는다. **이 입력 연결만으로 저장/API/GUI가 활성화되지는 않는다.**
+
 순서는 **JSON Schema → frozen DTO → owner/ORM → Catalog RPC → API/BFF → GUI**이다.
 기존 `question-manifest-v1`, `question-edit-v1`, `question-packet-v1`, worker render 계약은 재사용한다.
 source-resolution/source-admission, 콘텐츠 command/page, export request/status/output receipt에 필요한
