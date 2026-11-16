@@ -119,6 +119,13 @@ release operator의 context/schema hash/migration/receipt 형식은 기존 adapt
 새 버전을 inferred latest나 문자열 범위로 허용하지 않는다. 운영 helper hash 승인과
 소스 정리는 별개다. 역사적 설치 기록·staging wrapper를 정리 대상으로 오인하지 않는다.
 
+Kakao owner의 현재 session 확인과 기존 검색의 Identity fence가 같은 Catalog role을
+사용한다. 허용되는 비밀정보 없는 session metadata 5열은 Identity의
+`OPERATOR_SESSION_METADATA_COLUMNS`가 소유하며 grant와 fence 검사가 함께 참조한다.
+전체 세션 SELECT·추가 열·credential/token 읽기·IAM 쓰기는 여전히 금지한다.
+한쪽 grant만 바꾸면 다른 업무 owner의 시작 검사가 실패할 수 있으므로
+`test_operator_authorization_fence`의 limited-role disposable DB 검사와 SQL 검사를 함께 본다.
+
 INDEX readiness의 `LOCAL_EMBEDDING_READINESS_FAILED reason=...`은 제한된 원인 코드만
 남긴다. timeout·파일 변경·control 불일치를 구분하되 원문 stderr나 환경값을 출력하지
 않는다. 사용자 오류 코드와 실패 판정은 유지하며 이 진단 자체가 자동 retry 권한은 아니다.

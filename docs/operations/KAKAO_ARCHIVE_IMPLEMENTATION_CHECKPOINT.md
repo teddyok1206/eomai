@@ -1,5 +1,41 @@
 # KakaoTalk 구현 체크포인트
 
+## 운영 부분 배포 결과 — 2026-11-16 10:55 UTC
+
+사용자가 요청한 **미완성 기능의 부분 운영 배포**를 완료했다. 전체 KakaoTalk goal은
+계속 진행 중이며, 이번 결과를 카카오 로그인·실제 대화 수집·학생별 PDF 완성으로
+해석하지 않는다.
+
+- API/platform/Catalog/QUERY와 기존 runner의 설치 source는
+  `e355e7de8c7ffa1c3534717d754ed58d08b3e1d6`, Web은
+  `8d8823a6da47c714f82015bb2a64b7dbb835e7df`인 호환 묶음이다. 마지막 source 변경은
+  백엔드 권한 검사이므로 동일 UI를 다시 빌드하지 않았다. 실제 DB head는 `20261116_0084`다.
+- `일반 → KakaoTalk`의 연결 준비·학생/방 화면과 해당 API/BFF를 반영했다. 새 화면 JS의
+  HTTPS 응답 SHA는 source와 일치하고, 비로그인 source-binding 조회는 HTTP 401이다.
+  실제 사용자 세션으로 설정/학생 CRUD를 수행한 live acceptance는 아직 별도 미확인이다.
+- API 직접 ready와 HTTPS BFF ready, HTTPS 로그인 페이지는 정상이다. Catalog·QUERY·
+  채팅 owner/worker·HWPX·네 개 Workflow runner와 creative owner의 active 상태를 확인했다.
+  active/ready는 새 카카오 업무의 전체 성공이나 모델 작업 완료를 뜻하지 않는다.
+- AUTO 수집과 MANUAL 원격 로그인은 비활성이다. 기존 브라우저 인증·비밀번호·채팅 모델을
+  변경하지 않았다. 아직 준비본인 전용 runtime을 활성 release로 표시하거나 게시하지 않았다.
+  질문/packet/export의 영속 owner와 실제 PDF 제공은 다음 구현으로 남는다.
+- 최초 `8d8823a6` 반영 뒤 Catalog 시작이 기존 Identity fence와 충돌했다. 원인은 Kakao
+  권한 확인에 필요한 세션 metadata 5열 읽기와, 이전 fence의 모든 세션 열 읽기 금지가
+  양립하지 않는 것이었다. `e355e7de`에서 Identity가 정확한 5열 목록을 소유하고 Catalog
+  grant와 fence가 함께 사용하도록 수정했다. 전체 세션 조회·추가 열·token/credential 읽기·
+  IAM 쓰기 금지는 유지하며 actor/업무 권한을 넓히지 않았다. 최초 실패 기록은 보존했다.
+- 이 수정은 SQL/설치/grant 집중 검사 60 PASS, 관련 fence 검사 93 PASS와 별도 disposable
+  PostgreSQL 16 PASS를 통과했다. 실제 DB 검사는 허용된 metadata와 추가 열·전체 SELECT·
+  UPDATE 거부를 함께 확인한다. 겹치는 테스트 수를 합산하지 않는다.
+- 최종 배포의 `activated.json`, 설치 member 검사와 변경 전후 설정 hash는 protected release
+  기록에 보존했다. 최초 migration/admission 기록과 수정 release의 기록은 별개다.
+  수정 source 자체의 `ADMIT`와 배포 후 `API_ISOLATION_VERIFY`도 PASS다. 이것을 최초
+  migration을 다시 실행한 증거로 해석하지 않는다. 새 schema에 옛 exact-head API를
+  다시 올리는 rollback은 하지 않는다.
+- INDEX와 자료 학습 owner는 이번 배포 **이전부터 FAILED**였으며 같은 Invocation을
+  보존했다. numerical runtime/INDEX 설정은 바꾸지 않았고 이번 배포로 복구했다고
+  보고하지 않는다. 기존 정본·풀이·벡터·실패 이력도 수정하지 않았다.
+
 ## 운영 부분 배포 요청 — 2026-11-16
 
 사용자가 전체 기능 완성 전에 운영 배포를 요청했다. 소스의 0084와 호환되는
