@@ -1,5 +1,7 @@
 """Always compose packet history; only exact installed pins enable the offline renderer."""
 
+from __future__ import annotations
+
 import os
 import re
 from collections.abc import Mapping

@@ -49,6 +49,15 @@ def packet_view():
     )
 
 
+def test_feature_disabled_composition_imports_without_renderer_identity():
+    from eom_catalog_service.kakao_delivery_composition import build_kakao_delivery_application
+
+    composition = build_kakao_delivery_application(Mock(), Mock(), {})
+    assert composition.coordinator is None
+    with pytest.raises(KakaoArchiveError, match="PDF_RUNTIME_UNAVAILABLE"):
+        composition.application.export_owner()
+
+
 def case(name):
     packet, export = stored_packet(), pending_export()
     if name == "save":
