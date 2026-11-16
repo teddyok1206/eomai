@@ -23,6 +23,20 @@
 - 신규 부정/재조회/동시 읽기39개를 포함한 관련 runtime 회귀 **244 PASS**, Ruff·formatter·
   strict mypy2 source PASS다. 이 reader는 **소스 구현이며 아직 운영 application에 연결하지
   않았다.** source 수집 authority·사진 occurrence 정합과 기존 질문/packet/PDF 연결이 다음이다.
+- source commit `dc3cf8c74d0e7e22b9a9a39ab98bcff90f29672f`는 main에 커밋·푸시했다.
+  clean source에서 만든 platform wheel의 SHA는
+  `0fbb4176b44883008c47ef93dfb04dfa7cfdc3042d63569a6a651c1a84e00c65`다.
+  reader·OS adapter·package init 세 member의 RECORD/hash를 대조하고 별도 root-owned
+  prefix에만 풀었다. 그 code와 기존 browser pure-contract 설치본으로 정상 Catalog UID에서
+  실제 보존 CSV/JPEG3건의 읽기·동일 capture 재조회·다른 fence 거부를 확인했다.
+  receipt는 `/var/lib/eom-kakao-input-canary-dc3cf8c7/manifest.json`, 원문 없는 결과는
+  `staging/kakao-input-wheel-dc3cf8c7.json`이다. 이는 **격리 wheel-member read 검사**이며
+  platform/API의 운영 설치나 정본 publication을 의미하지 않는다. 운영 pin은 바꾸지 않았다.
+- 종료된 browser의 다운로드 metadata만 read-only로 확인했다. CSV는 blob 다운로드이고,
+  사진은 실제 `business.kakao.com`의 방별 이미지 경로에서 `k.kakaocdn.net`으로 redirect했다.
+  사진2건의 profile/room 경로 component는 같았다. URL·서명값·credentials query 값은
+  진단에 출력/저장하지 않았고, 이 경로만으로 CSV 행/사진 occurrence 연결이나 방 identity
+  안정성을 증명하지 않는다. 전체 cookie/profile 내용은 읽거나 변경하지 않았다.
 
 ## 2026-11-16 19:11 UTC 실제 카카오 CSV 수신 PASS
 
