@@ -1,5 +1,30 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 17:36 UTC X11 수정 운영 반영·installed empty canary 완료
+
+- collector `41bbbaa9d4f31971ab1a3ecb4e489494c167f874` wheel
+  `sha256:58bc7286d3723d93f570aba346cce10020abe9ddc5cf15b07c3e42e67578fe23`을
+  stopped profile 경계에서 설치했다. wheel member bytes/RECORD와 전체 prefix fingerprint,
+  기존 installer stage/verify를 통과하고 Catalog를 재기동했다. 설치 receipt는
+  `/var/lib/eom-kakao-x11-release-41bbbaa9/installed.json`이다.
+- 실제 설치본의 `run_manual`·X11 directory 준비·Xvnc argv·readiness·Chromium launch/close를
+  그대로 사용한 네 번째 empty canary가 두 번 모두 PASS다. 배포 이후 launch/readiness를
+  test stub으로 바꾸지 않았다. 새 합성 profile 경로와 전용 canary cgroup/동일 flock 검사만
+  재배정했다. 실제 profile은 mask하고 PrivateNetwork를 켜므로 실제 카카오 인증정보와
+  대화를 읽지 않는다. 이 검증은 production lease/현재 사용자 권한 실증의 대체물이 아니다.
+- canary의 두 반복에서 actual headed Chromium의 정상 시작·정상 close, Xvnc의 정상
+  종료, 죽은 VNC endpoint 정리와 X11 endpoint 부재를 확인했다. 새 설치 unit에도
+  browser/remote `ExecStopPost`가 반영돼 있다. 과거 unit FAILED/lease 이력은 보존한다.
+- 현재 component map은 API/Catalog8e2e11eb, Web636e39fa, browser41bbbaa9,
+  gateway/unit01e04fff, DB0087이다. 전체 component가 같은 SHA라고 보고하지 않는다.
+  Catalog active와 실제 HTTPS `/studio/login`200을 확인했고 기존 INDEX/QUERY 설치 pin을
+  변경하지 않았다. MANUAL/PDF ENABLED·AUTO collection DISABLED 상태는 유지한다.
+- source focused219개 및 관련 후속110개 PASS, strict mypy2개/Ruff PASS다. 중복된
+  테스트 집합을 더해 독립 검증 수라고 보고하지 않는다.
+- 사용자에게 기존 배정 연결에서 새 MANUAL 시작·로그인만 요청했다. **실제 카카오 로그인,
+  한 방 CSV/사진 수집, 실제 학생 PDF, 전체 주기 수집은 아직 NOT_VERIFIED**다.
+  메시지 전송은0이며 비밀번호·프로필·계정·실패 기록을 변경하지 않았다.
+
 ## 2026-11-16 실제 empty headed runtime에서 확인한 X11 시작 실패
 
 - endpoint cleanup `01e04fff`를 두 전용 role에 반영하고 stage/verify·Catalog 재기동을
@@ -19,7 +44,8 @@
   인증된 display 준비를 구별하기 위해서다. 새 Python 의존이나 상시 daemon은 없다.
   짧은 probe의 stdout/stderr는 버리고 취소 시 kill/reap한다.
 - 위 canary는 아직 새 source wheel의 설치 완료나 실제 카카오 로그인 PASS가 아니다.
-  후속 installed wheel로 override 없는 같은 canary를 확인한 뒤 사용자에게 재시도를 요청한다.
+  후속 installed wheel의 launch/readiness를 override하지 않은 같은 canary를 확인한 뒤
+  사용자에게 재시도를 요청한다.
 
 ## 2026-11-16 MANUAL 반복 시작·종료 경계 — 소스 후속
 
