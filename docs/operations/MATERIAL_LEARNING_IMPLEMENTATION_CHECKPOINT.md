@@ -5,6 +5,64 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
 우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
+## 2026-11-16 00:26 UTC — 반점 문항 실제 분석 재개와 INDEX 인계 범위
+
+source990d319c를 공식 build/RECORD 검증 후 기존 private release owner의
+PREPARE·ADMIT·ACTIVATE·POSTDEPLOY로 반영했다. Catalog/Material/네 ROLE만 교체했고
+API/Web/Chat/QUERY·모델·추론·capacity·수치 runtime은 유지했다. 실제12번의 같은 등록
+revision에서 native1.5점/canonical1.1의1.5점·문제/해설 bytes/hash·엑셀 metadata가 일치하며
+Knowledge source eligibility도 PASS다. 같은 task가 ANALYZING으로 재개됐으며 공개 풀이
+완료·Graph 게시·이 문항 vector 저장까지 완료했다는 뜻은 아니다.
+
+INDEX는 아직 실패 invocation7126…/PID0다. 기존 CUDA4개는 성공/등록되어1424/1582이고,
+원래 CPU 수집 요청1개는 네 encoding SUCCEEDED 뒤 unit 관측 timeout으로 저장가 남았다.
+성공 encoding을 실패 처리하는 CPU failure-recovery는 이 경우에 사용하지 않는다.
+이전11월7일과 같은 명시적 retained-CPU 인계로 metadata SDK990 후보를 준비한다.
+이는 새 protocol/schema/queue가 아닌 기존 Identity/정책/Artifact release의 한정된 운영 계획이다.
+
+- 정본은 원 Workflow request/hash·generation2·만료 lease와 네 encoding/Artifact다.
+- 정확한 한 CPU row만 PK 잠금 조회하고, 원 수치 unit의 invocation·exit0·PID0·FD0·빈
+  cgroup을 확인한다. 새 numerical lifetime이 없고 INDEX가 같은 실패 invocation이어야 한다.
+- CUDA 종료가 마지막에 만든 새 standby를 포함해 미시도 CPU 요청6개는 공식
+  `cancel_unstarted_indexing_workflow`로만 정리한다. 시도/lease/step가 있으면 거부한다.
+- activation은 위 CPU1개를 제외한 미완료 요청0을 transaction 안에서 확인한다. 그 CPU의
+  상태/결과/workspace는 보존하고 새 service revision에 claim시키거나 성공으로 표시하지 않는다.
+- 기존 encoding cutoff fingerprint와 API/Web/QUERY/Material/ROLE 상태는 전후 같아야 한다.
+  model/space/recipe/controller0f는 유지하고 metadata SDK/Identity/grant만 successor로 바꾼다.
+- 원 CPU publication의 지원된 저장 복구는 별도 미완료다. 새 GPU 진척과 혼동하지 않는다.
+  인계 실패 시 추가 side effect를 멈추고 실제 파일/Identity 상태부터 확인한다. 옛 수치 환경을
+  삭제하거나 DB 상태를 직접 수정하지 않는다.
+
+activation과 실제 새 vector commit은 아직 확인 전이다. 전체450개 목표는 ACTIVE다.
+
+### 00:36 UTC 후속 — 같은 반점 문항 base ACCEPTED, QUERY/INDEX 호환 활성화
+
+실제12번의 같은 Item Revision에서 base가 ACCEPTED로 전환했다. public report는 아직
+PENDING이므로 공개 풀이·Graph·이 문항 임베딩 PASS로 확대하지 않는다.
+`staging/native-score-half-strict-analysis-progress-20261116.json`은 원문 점수·문서 hash와
+공식 task/source 읽기를 함께 확인한 read-only 기록이다. 모델을 재호출한 검사가 아니다.
+
+QUERY는 기존 typed configuration의 owner_source_commit만990d319c로 변경했다.
+API provider73ea7068·권한·수치 선택·source/model/space는 그대로이며 세 cohost 설정과
+private reference hash를 기존 serializer로 검증했다. 실제 query lease와 native 실행이
+없을 때 QUERY와 idle Catalog만 인계했다. QUERY는 active/PID1836587이며 새 Invocation은
+c528050c…다. API/Web/Chat을 재설치하거나 인증 정보를 바꾸지 않았다.
+운영 기록은 `/var/lib/eom-native-exact-score-query-metadata-20261116`이다.
+
+공식 owner로 미시도 standby6개를 취소했고 성공한 encoding/실패 이력은 보존했다.
+새 INDEX plan은 기존84 후보를 고치지 않고 별도990 plan으로 PREPARE/PUBLISH/ACTIVATE했다.
+exact retained-CPU guard13개 offline 검사가 PASS이며, actual activation에서도 원 CPU
+요청의 만료 generation2·수치 exit0/FD0/PID0와 네 SUCCEEDED job을 확인했다. 단순 count
+예외로 다른 실행을 무시하지 않는다. 기존 encoding cutoff fingerprint·다른 서비스와
+controller0f/model/recipe/space의 불변을 검증했고 migration은0079 그대로다.
+`/var/lib/eom-native-index-exact-score-sdk-release-20261116`에 후보·원본·인계 증거를 보관했다.
+
+INDEX는00:32 UTC active/PID1840317/Invocation aada2a6e…로 재개됐다. 00:36 관측은 같은
+Invocation의 reconciliation과 새 CUDA REQUESTED를 확인했다. 저장 head는 CUDA1424,
+CPU1336/eligible1582이며 서로 다른 space를 합산하지 않는다. 새 수치 완료·새 head commit은
+아직 미확인이고 원 CPU publication은 별도 미완료다. actual READY/ACTIVE를 완료로
+대체하지 않는다. 관련 milestone은 한국어 요약으로 시작해 Slack에 보고했다(HTTP200).
+
 ## 2026-11-16 00:11 UTC — 실제 원본 읽기 통과, canonical1.1의 풀이 소비 경계 수정
 
 회차3의 새11번(고유번호78612)을 실제 installed owner로 읽었다. 원문2점과 canonical1.0의
