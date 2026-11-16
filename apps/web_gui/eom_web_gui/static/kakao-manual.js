@@ -110,6 +110,13 @@ export function createKakaoManual({document, api, explainError = () => "잠시 �
       accept(reply.session, captured.leaseId); intent = null; message = ""; failed = false;
     } catch (error) {
       if (!live(token) || intent !== captured) return;
+      if (captured.kind === "START" && error?.code === "KAKAO_ARCHIVE_REMOTE_PROFILE_UNAVAILABLE") {
+        // This explicit admission refusal creates no lease. Correcting a selection
+        // is different from replaying an uncertain response with the same intent.
+        intent = null; failed = true;
+        message = "선택한 연결과 로그인 프로필 상태를 확인해 주세요. 같은 이름의 연결이 여러 개라면 연결 번호를 구분해 선택해 주세요.";
+        return;
+      }
       failed = true; message = ["KAKAO_ARCHIVE_UNAVAILABLE", "KAKAO_ARCHIVE_REMOTE_RUNTIME_UNAVAILABLE", "KAKAO_ARCHIVE_REMOTE_PROFILE_UNASSIGNED"].includes(error?.code)
         ? "서버의 로그인 연결이 아직 준비되지 않았습니다. 관리자 설정을 확인한 뒤 같은 요청으로 확인할 수 있습니다."
         : `로그인 요청을 확인하지 못했습니다. ${explainError(error)} 같은 요청 확인은 새 로그인 창을 만들지 않습니다.`;

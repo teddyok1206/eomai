@@ -249,11 +249,21 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   async function showMutatedBinding(value, token) {
     if (!live(token)) return;
     bindingRows.set(value.source_binding_id, value);
-    if (![...nodes.bindings.options].some(option => option.value === value.source_binding_id)) {
-      const option = node("option", value.display_name); option.value = value.source_binding_id; nodes.bindings.append(option);
-    }
+    renderBindingOptions(value.source_binding_id);
     nodes.bindingName.value = "";
     await selectBinding(value.source_binding_id);
+  }
+
+  function renderBindingOptions(selected = "") {
+    const counts = new Map(), ordinals = new Map();
+    for (const value of bindingRows.values()) counts.set(value.display_name, (counts.get(value.display_name) || 0) + 1);
+    nodes.bindings.replaceChildren(node("option", "채널 선택")); nodes.bindings.firstChild.value = "";
+    for (const value of bindingRows.values()) {
+      const ordinal = (ordinals.get(value.display_name) || 0) + 1; ordinals.set(value.display_name, ordinal);
+      const label = counts.get(value.display_name) > 1 ? `${value.display_name} · 연결 ${ordinal}` : value.display_name;
+      const option = node("option", label); option.value = value.source_binding_id; nodes.bindings.append(option);
+    }
+    nodes.bindings.value = selected;
   }
 
   async function refresh() {
@@ -271,11 +281,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
         rows.set(value.source_binding_id, value);
       }
       bindingRows = rows;
-      nodes.bindings.replaceChildren(node("option", "채널 선택")); nodes.bindings.firstChild.value = "";
-      for (const value of rows.values()) {
-        const option = node("option", value.display_name); option.value = value.source_binding_id;
-        nodes.bindings.append(option);
-      }
+      renderBindingOptions(binding?.source_binding_id || "");
       if (page.next_cursor) message("연결 목록 일부만 표시했습니다. 현재 운영 범위의 채널을 확인해 주세요.");
       if (binding && rows.has(binding.source_binding_id)) {
         const selected = binding.source_binding_id; nodes.bindings.value = selected;

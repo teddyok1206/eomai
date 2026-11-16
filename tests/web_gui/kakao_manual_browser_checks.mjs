@@ -19,6 +19,7 @@ const api=async(path,options={})=>{
  if(path.endsWith('/remote/configuration')) {const enabled=f.configEnabled;if(f.holdConfig){f.holdConfig=false;await new Promise(r=>f.releaseConfig=r);}return {schema_version:'kakao-remote-presentation/1.0',remote_view_enabled:enabled};}
  if(call.method==='GET') {const result=structuredClone(f.current);if(f.holdRead){f.holdRead=false;await new Promise(r=>f.release=r);}return result;}
  const key=options.headers['Idempotency-Key'];if(f.receipts.has(key))return {...structuredClone(f.receipts.get(key)),replayed:true};
+ if(f.refuseProfile&&path.endsWith('/manual-sessions')) {f.refuseProfile=false;throw Object.assign(Error('admission refused'),{code:'KAKAO_ARCHIVE_REMOTE_PROFILE_UNAVAILABLE'});}
  if(path.endsWith('/manual-sessions')) f.current=prepare();
  else if(options.body.action==='RENEW') {
   assertGrant(options.body.expected_grant_revision);f.current={...f.current,grant_revision:f.current.grant_revision+1,resource_version:f.current.resource_version+1,expires_at:new Date(f.time+30000).toISOString()};
@@ -93,5 +94,14 @@ try {
   await page.waitForTimeout(50);assert.equal(await page.locator('iframe').count(),0);
   assert.equal(await page.evaluate(()=>localStorage.length),0);
   assert.equal(await page.evaluate(()=>sessionStorage.length),0);
+  await page.evaluate(()=>fixture.mount(true));
+  await page.evaluate(()=>{fixture.refuseProfile=true;});
+  await start.click();
+  await page.getByText('선택한 연결과 로그인 프로필 상태를 확인해 주세요. 같은 이름의 연결이 여러 개라면 연결 번호를 구분해 선택해 주세요.',{exact:true}).waitFor();
+  assert.equal(await start.isDisabled(),false,'explicit refusal kept a locked uncertain intent');
+  const refused=await page.evaluate(()=>fixture.calls.at(-1));
+  await start.click();
+  const corrected=await page.evaluate(()=>fixture.calls.at(-1));
+  assert.notEqual(refused.headers['Idempotency-Key'],corrected.headers['Idempotency-Key']);
   assert.deepEqual(errors,[]);console.log('KAKAO_MANUAL_BROWSER=PASS');
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -39,7 +39,7 @@ async function api(path, options = {}) {
   if (fixture.held === path || (url.pathname.includes('/questions/') && fixture.held===url.pathname)) {fixture.held = null; await new Promise(resolve => fixture.release = resolve);}
   if (url.pathname === '/kakao-archive/source-bindings') {
     if (fixture.failBindings) throw new Error('SYNTHETIC_UNAVAILABLE');
-    return page([binding]);
+    return page([binding,...(fixture.duplicateBindings?[{...binding,source_binding_id:id('kakaobinding','9')}]:[])]);
   }
   if (url.pathname.startsWith('/kakao-archive/source-bindings/')) return binding;
   if (url.pathname === '/kakao-archive/rooms') return page([room(),...(fixture.secondRoom?[room('2')]:[])]);
@@ -278,6 +278,10 @@ try {
   await page.getByRole('button',{name:'학생별 PDF 보기',exact:true}).last().click();
   await page.getByRole('heading',{name:'새 질문 자료',exact:true}).waitFor();
   assert.equal(await page.getByRole('link',{name:'PDF 내려받기',exact:true}).count(),1,'saved output history was lost');
+  await page.evaluate(()=>{fixture.duplicateBindings=true;return fixture.controller.refresh();});
+  const channel=page.getByRole('combobox',{name:'카카오 채널'});
+  assert.equal(await channel.getByRole('option',{name:'합성 채널 · 연결 1',exact:true}).getAttribute('value'),await page.evaluate(()=>fixture.ids.bindingId));
+  assert.notEqual(await channel.getByRole('option',{name:'합성 채널 · 연결 2',exact:true}).getAttribute('value'),await page.evaluate(()=>fixture.ids.bindingId));
   const before = await page.evaluate(()=>fixture.calls.length);
   await page.evaluate(()=>{fixture.controller.setPermissions([]);fixture.controller.close();});
   await page.waitForTimeout(20);

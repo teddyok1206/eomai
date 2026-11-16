@@ -228,6 +228,25 @@ group을 추가할 뿐 renderer를 Catalog/NAS/eom group에 추가하지 않는�
 
 ## 10. 실패·재시도·멱등·출력 수명
 
+### 채널 선택은 데이터이며 특정 채널을 코드에 고정하지 않는다
+
+사용자가 다른 채널로 바꿀 수 있어야 하므로 채널 이름/ID를 조건문·기본값·수집 selector에
+하드코딩하지 않는다. UI의 이름은 identity가 아니다. 동명 연결은 같은 목록 안의 번호로
+구분하지만 실제 요청은 기존 exact source-binding ID를 그대로 사용한다. 표시 번호는
+권한이나 영구 identity가 아니며 전체 row를 map으로 한 번 집계한다.
+
+현재 primary profile의 owner/binding fence는 서버 저장 설정이다. 이를 현재 채널명으로
+대체하거나 DB row를 수동 변경해 우회하지 않는다. 향후 다른 채널로 전환하는 use case는
+현재 연결이 실제 STOPPED이고 유효 lease·process·lock이 없을 때 같은 owner의 명시적
+선택으로만 수행한다. 과거 lease/수집/질문의 binding과 실패 기록은 보존한다. 현재
+profile/lease 복합 FK는 assignment history successor와 대조해야 하므로 단순 UPDATE를
+새 채널 전환 기능이라고 간주하지 않는다. 이 확장 경계는 실제 첫 방 수집 뒤의 후속이며
+아직 구현 완료/활성화로 선언하지 않는다.
+
+START의 명시적 PROFILE_UNAVAILABLE 거절은 lease를 만들기 전의 거절이다. UI는 선택을
+수정할 수 있게 하되 응답 유실·timeout은 기존 key/body를 유지한다. 어느 경우에도
+다른 owner로 재요청하거나 서버 배정을 자동 변경하지 않는다.
+
 - 같은 intent+같은 request는 원래 결과/진행을 반환한다. 다른 내용은 409이며 새 ID로 우회하지 않는다.
 - Artifact 발행 뒤 DB 채택 전 중단은 publication key/receipt를 재검증하여 **같은 결과를 채택**한다.
   기존 `CatalogArtifactService.commit_file_set`의 COMMITTING 복구를 재사용한다.
