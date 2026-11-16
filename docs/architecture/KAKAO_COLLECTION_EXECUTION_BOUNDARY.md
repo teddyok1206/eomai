@@ -346,3 +346,43 @@ page instance만으로 메시지 occurrence를 알 수 없으므로, 기존 MANU
 11. 단순 대안: boolean callback 허용이나 이름/filename 매칭은 근거가 없다. 별도 intake queue와
     다중 command 테이블은 기존 admission/publication receipt와 중복이다. 작은 channel pin만
     새로 두고 나머지는 현재 owner를 재사용한다. 이 절은 source 구현 설계이며 운영 승인 증거가 아니다.
+
+## MANUAL 방 근거에서 수집 capability를 고정하는 최소 owner
+
+1. 책임은 Catalog의 `KakaoCapabilityService`다. 이미 수락된 MANUAL room observation과
+   그 source proof를 검증해 기존 worker `CaptureCapability`를 발행한다. 임의 capability JSON,
+   worker bool, 사용자 path·adapter hash를 받지 않는다. 현재 actor/ADMIN/COLLECT 검사는 필수다.
+2. 정본은 기존 Artifact의 방 관측·원래 수신 proof와 새 capability JSON/verification이다.
+   DB에는 불변 수락 한 row만 두고 본문·사진·전체 관측 JSON은 넣지 않는다.
+3. capability revision은 owner/binding/idempotency key에 대한 독립 UUID다. 파일 SHA와 다르며,
+   Artifact/revision도 별개다. 동일 명령의 발행 중단을 이어가기 위해 UUID5로 예약 identity를
+   결정하되 request hash 충돌은 기존 publication과 DB unique로 거부한다.
+4. 원래 방 관측·proof의 schema/media/hash와 방·채널 pin·MANUAL lease/fence·시각·현재 권한을
+   재검사한다. completed replay는 채택한 Artifact만 읽고 temporary download 파일을 요구하지 않는다.
+   바뀐 정책/version은 새 수락 전에 확인하고 과거 완료 receipt를 최신 값으로 바꾸지 않는다.
+5. access는 owner/binding/key와 exact capability revision의 indexed lookup, bounded JSON 읽기다.
+   `kakao_capability_acceptances` 한 테이블만 추가한다. mutable current/activation head나 새 큐는
+   아직 필요 없으며 이후 collection run이 사용할 exact revision을 명시적으로 pin한다.
+6. 첫 관측의 검증 비용은 작은 JSON bytes에 선형, metadata lookup은 indexed O(log n)이다.
+   동일 수신 JPEG를 다시 복사·decode·hash하지 않고 원래 proof pointer를 worker input 경계에서 해석한다.
+   초기 수백 binding·수만 capability revision을 가정하며, 이는 설계 규모이고 현재 운영 수치가 아니다.
+7. 파일 발행 동안 DB lock을 잡지 않는다. 현재 scope 확인 → 기존 idempotent publication →
+   짧은 owner/key 잠금과 늦은 재인가 → 불변 수락 row 순이다. 같은 key의 동시 요청은 같은 revision이다.
+8. worker에는 기존 `capability.json`과 `inputs/manual-room-proof.json` local member만 전달할 수
+   있게 한다. 이 절의 owner는 아직 worker를 실행하거나 NAS 경로/권한을 worker에게 주지 않는다.
+9. MANUAL proof가 확인하는 것은 채널과 그 방뿐이다. 내부 scope `MANUAL_SELECTED_ROOM`은
+   사용자가 확인한 단일 방을 뜻하며 카카오 UI 필터명이나 전체 방 목록이 아니다. CSV 범위·순서·
+   시간대·발신 방향·메시지 identity·album·원본 화질·읽음 여부는 UNKNOWN으로 고정한다.
+   더 강한 관측은 실제 adapter 실증에 따른 successor이며 임의 request로 상향하지 않는다.
+10. 실패/중단은 원래 Artifact와 기록을 보존한다. 첫 수락 중 binding version/권한 변경은
+    채택하지 않으며 재발행/새 작업으로 우회하지 않는다. 조회는 실행·activation·로그인을 하지 않는다.
+11. 수락된 capability는 **자동 수집 활성화가 아니다**. 기존 DRAFT/NOT_VERIFIED DTO를 고쳐
+    ACTIVE로 위장하지 않는다. 완전한 collection owner/원격 실행/실제 UI capability 검증과 guarded
+    activation이 남아 있다. 별도 registry framework나 boolean 승인 callback보다 이 작은 owner와
+    기존 Artifact/Room/Identity 경계를 재사용하는 방식이 단순하다.
+
+2026-11-16에 열람한 [카카오 공식 채팅 가이드](https://kakaobusiness.gitbook.io/main/channel/run/chat)의
+목록 필터 설명은 기간 조건을 최근 대화 시점 기준으로 안내한다. 이를 질문 기간으로 그대로
+적용하면 필요한 방을 누락할 수 있다는 것은 설계상 추론이다. 따라서 전체 방 수집과 질문 단위
+구성 뒤의 출력 기간 선택을 분리한다. 열람한 가이드에서는 CSV `USER` 열의 발신 방향 의미나
+실제 export 범위의 검증 근거를 확인하지 못했으므로, 문서만으로 capability를 상향하지 않는다.

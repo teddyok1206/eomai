@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 확인된 MANUAL 방의 capability 수락 owner
+
+- 먼저 `capability-verification-v1` schema/mirror와 frozen DTO를 정의했다. 요청은 이미 확인한
+  binding/room/version만 받으며, caller가 capability bool·path·adapter hash를 주장하지 못한다.
+  현재 operator/ADMIN/COLLECT·room·channel pin·원래 MANUAL proof의 owner/fence/시각을
+  재검증하고 기존 Artifact publisher로 capability와 작은 verification만 발행한다.
+- 새 DB0090에는 `kakao_capability_acceptances` 불변 한 테이블만 추가했다. 본문/사진이나
+  mutable activation head·새 큐·command framework는 없다. 정확한 receipt의 PK/unique/FK와
+  기존 immutable trigger를 사용한다. 조회·재전송은 원래 capability/Artifact revision을 유지한다.
+- 확인된 단일 방은 내부 `MANUAL_SELECTED_ROOM` scope다. 카카오 UI 필터명·전체 방 목록
+  또는 안정적인 메시지 ID를 확인했다고 주장하지 않는다. CSV 범위·순서·시간대·발신 방향·
+  album·원본 화질·읽음 여부는 UNKNOWN이며 **DRAFT/NOT_VERIFIED·AUTO 비활성은 그대로**다.
+  이후 더 많은 metadata를 인식해도 옛 UNKNOWN을 새 확정값으로 바꾸지 않고, 근거보다
+  강한 주장은 거부한다. 실제 설치 adapter pin의 주입은 후속 composition gate다.
+- 실제 guarded 임시 PostgreSQL에서 0090 적용→되돌림→재적용, ORM metadata 일치를 확인했다.
+  source/DB 검증은 현재 합성 입력이며 실제 카카오 계정/원본·운영 DB에는 쓰지 않았다.
+  동시 same-key/서로 다른 room 경합, 발행 직후 중단·정본 재사용, 늦은 권한/정책 변경,
+  다른 owner, 근거 없는 approved room, 원래 파일 없음의 no-latest fallback과 불변 row를 검사했다.
+- 첫 DB suite의192 PASS/5 FAIL은 다른 테스트의 receipt까지 전역 count한 fixture 오류였다.
+  owner/binding으로 수를 한정하고 발행된 exact Artifact를 확인하도록 고쳤다. DB/원본 이력을
+  지우거나 trigger를 풀지 않았다. 후속200 PASS와 pure/경계/문맥68 PASS, strict mypy3 source·
+  Ruff/format·schema audit1470/mirror1116 PASS를 확인했다. 기존 TestClient warning1건은 남는다.
+  최종 파일의200 PASS는 `staging/kakao-capability-0090-checked.log`, migration 왕복은
+  `staging/kakao-capability-0090-migration.log`다. 별도 원격 browser/remote의 MainPID0·정상 종료와
+  실제 HTTPS login GET200도 재확인했으며, 이를 카카오 로그인/수집 성공으로 해석하지 않는다.
+- **소스 구현이며 운영 미반영**이다. API/Catalog/Web·운영 DB0087·GPU INDEX/QUERY와
+  실제 CSV/JPEG·FAILED 기록은 보존했다. 이 owner는 실제 worker를 실행하거나 source 수락을
+  허가하지 않는다. 다음은 exact capability를 pin한 collection intent/claim/fence와 현재 owner
+  권한을 연결하여 실제 capture→source→질문→학생 PDF로 이어가는 단계다. 전체 목표는 미완료다.
+
 ## 2026-11-16 질문 나누기·합치기 GUI 연결 소스 검증
 
 - 기존 compose RPC/API/BFF·원자적 저장 owner를 그대로 사용하도록 Studio에 질문 나누기와

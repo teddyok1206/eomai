@@ -31,6 +31,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "kakao_room_mapping_revisions",
     "kakao_room_admissions",
     "kakao_manual_channel_pins",
+    "kakao_capability_acceptances",
     "kakao_students",
     "kakao_student_display_revisions",
     "kakao_student_commands",
@@ -186,6 +187,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_capability_acceptances",
     "kakao_manual_channel_pins",
     "kakao_exports",
     "kakao_export_requests",

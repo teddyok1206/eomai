@@ -130,6 +130,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:d16ba6932eb0943c209e19486bae3913a829a8edd5d842f15ed9453efcae3600",
         ),
+        "kakao-capability-verification-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/capability-verification-v1.schema.json",
+            "resources/kakao-archive/capability-verification-v1.schema.json",
+            "1.0",
+            "sha256:41af0786f103cbf0735ca808df3448d5b5743959272a7902e1bf1d57c0b42dda",
+        ),
         "kakao-room-directory-v1": CatalogSchemaResource(
             "schemas/kakao-archive/room-directory-v1.schema.json",
             "resources/kakao-archive/room-directory-v1.schema.json",

@@ -125,6 +125,16 @@ binding·owner 범위에서 수행하며 이전 mapping과 정확한 학생 표�
 관측된 사진 download path와 document channel이 맞아야 하며 이름·filename은 identity가 아니다.
 이는 source 구현/임시 DB 검증 경계다. 공개 API/화면·source 수락·AUTO 활성화와 구분한다.
 
+`kakao_capability_service.py`는 이 수락된 방 관측과 canonical MANUAL proof만 사용해 기존
+worker `CaptureCapability`와 verification을 발행·채택한다. public 입력은 방/version만 받고
+임의 capability bool/path/adapter pin을 받지 않는다. pin은 설치 composition의 책임이다.
+DB에는 작은 immutable acceptance row 하나, 파일은 기존 Artifact owner에 둔다. 완료
+replay는 같은 revision/Artifact를 읽고 adapter 변경·정책 수정으로 재해석하지 않는다.
+`MANUAL_SELECTED_ROOM`은 확인된 단일 방의 내부 scope이며 전체 UI 목록/필터가 아니다.
+CSV 범위/방향/시간대·메시지/album identity·화질·읽음 여부는 UNKNOWN으로 남긴다.
+이 수락을 DRAFT binding의 ACTIVE 승격이나 실제 worker 실행 권한으로 사용하지 않는다.
+collection intent/claim/actual runtime/source admission의 연결은 별도 다음 단계다.
+
 `kakao_question_editing.py`는 질문의 exact source span/사진·분할/병합·검토와 packet
 선택을 담당한다. `kakao_question_publication.py`는 결과 manifest만 기존 Artifact owner로
 발행하고 CSV/사진은 다시 복사하지 않는다. 발행 후 DB 수락·현재 mapping/source 권한은
