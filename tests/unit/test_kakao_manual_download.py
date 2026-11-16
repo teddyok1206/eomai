@@ -126,6 +126,9 @@ def test_same_download_event_is_once_but_same_filename_does_not_deduplicate():
             content = (directory / "payload.bin").read_bytes()
             assert sha256(content) == result.member.sha256
             assert (directory / "payload.bin").stat().st_mode & 0o777 == 0o640
+            assert directory.stat().st_mode & 0o7777 == 0o750
+            assert directory.stat().st_gid == root.stat().st_gid
+            assert (directory / "payload.bin").stat().st_gid == root.stat().st_gid
         await manager.close()
         restarted = adapter.ManualDownloads(fence(), root=root)
         assert restarted._count == 2 and restarted._bytes == len(b"firstsecond")

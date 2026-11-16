@@ -49,6 +49,7 @@ class Page(Protocol):
 def _write_once(path: Path, raw: bytes) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
     with os.fdopen(fd, "wb") as stream:
+        os.fchown(stream.fileno(), -1, path.parent.stat().st_gid)
         os.fchmod(stream.fileno(), 0o640)
         stream.write(raw)
         stream.flush()
@@ -62,14 +63,19 @@ def _write_once(path: Path, raw: bytes) -> None:
 
 def _directory(path: Path, *, private: bool = False) -> None:
     try:
-        path.mkdir(mode=0o700 if private else 0o2750)
-        path.chmod(0o700 if private else 0o2750)
+        path.mkdir(mode=0o700 if private else 0o750)
+        # RestrictSUIDSGID forbids requesting setgid in worker syscalls. The
+        # existing control-group membership permits an explicit read-only group
+        # on each local directory/file without weakening the systemd sandbox.
+        with protected_directory(path, allowed_uids=frozenset({0, os.geteuid()})) as fd:
+            os.fchown(fd, -1, path.parent.stat().st_gid)
+            os.fchmod(fd, 0o700 if private else 0o750)
     except FileExistsError:
         pass
     with protected_directory(path, allowed_uids=frozenset({0, os.geteuid()})) as fd:
         info = os.fstat(fd)
         if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != (
-            0o700 if private else 0o2750
+            0o700 if private else 0o750
         ):
             raise BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_STAGING_UNSAFE")
 
@@ -95,6 +101,7 @@ def _copy_payload(source: Path, directory: Path, incoming: Path) -> ManualDownlo
         target = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
         digest, count = hashlib.sha256(), 0
         with os.fdopen(target, "wb") as output:
+            os.fchown(output.fileno(), -1, directory.stat().st_gid)
             os.fchmod(output.fileno(), 0o640)
             while chunk := original.read(256 * 1024):
                 count += len(chunk)

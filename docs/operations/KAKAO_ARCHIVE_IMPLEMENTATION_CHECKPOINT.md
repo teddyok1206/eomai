@@ -1,5 +1,21 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 MANUAL 다운로드 배포·sandbox 후속
+
+- `3fbece8c` collector/pure-contract wheel을 stopped profile에서 전용 browser 환경에만
+  설치했다. wheel bytes·전체 환경 fingerprint·pip check, 공식 installer stage/verify와
+  HTTPS Studio login200을 확인했다. API/Web/DB0087·INDEX/QUERY와 인증/profile은 유지했다.
+  설치 receipt는 `/var/lib/eom-kakao-download-release-3fbece8c/installed.json`이다.
+- 실제 profile/network를 가린 전용 UID headed 검사에서 두 실패를 보존했다. 첫 검사에선
+  검증 스크립트의 root 전용 부모 때문에 Python 시작 전에 거부됐다. 두 번째는 설치된
+  driver까지 도달했으나 `RestrictSUIDSGID=yes`가 worker의 mkdir2750 요청을 거부했다.
+  이는 source/same-user 시험만으로 설치 sandbox 성공을 주장하면 안 되는 실제 사례다.
+- 후속 source는 worker mkdir/chmod에 setgid를 요청하지 않고0750 directory와 기존
+  control group의 명시적 chown,0640 파일을 사용한다. root가 설치하는 부모만2750이다.
+  worker의 기존 그룹 membership을 재사용하며 systemd 보안 정책·NAS/DB 금지·계정 권한을
+  풀지 않는다. 같은 환경 회귀와 새 설치 검증 전 사용자 재로그인을 요청하지 않는다.
+  실제 카카오 CSV 수신은 아직 PENDING이다.
+
 ## 2026-11-16 18:50 UTC MANUAL 다운로드 수신 source·실제 Chromium 합성 검증
 
 - 다운로드 차단 원인을 기존 MANUAL driver에서 수정했다. JSON Schema 2020-12/frozen
