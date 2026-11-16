@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-page-observation-v1/1.0",
+  "title": "Untrusted bounded document observation at a manual download; no browser control or source authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capture_id", "profile_id", "browser_run_id", "fence_epoch", "page_instance_id", "observed_at", "status", "target", "document", "error_code"],
+  "properties": {
+    "schema_version": {"const": "kakao-manual-page-observation/1.0"},
+    "capture_id": {"type": "string", "pattern": "^kakaodownload_[0-9a-f]{32}$"},
+    "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+    "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+    "fence_epoch": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "page_instance_id": {"type": "string", "pattern": "^kakaopage_[0-9a-f]{32}$"},
+    "observed_at": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+    "status": {"enum": ["OBSERVED", "UNAVAILABLE"]},
+    "target": {"$ref": "#/$defs/Target"},
+    "document": {"oneOf": [{"$ref": "#/$defs/Document"}, {"type": "null"}]},
+    "error_code": {"enum": [null, "UNSUPPORTED_ORIGIN", "OBSERVATION_TIMEOUT", "OBSERVATION_FAILED", "OBSERVATION_INVALID"]}
+  },
+  "if": {"properties": {"status": {"const": "OBSERVED"}}},
+  "then": {"properties": {"document": {"$ref": "#/$defs/Document"}, "error_code": {"type": "null"}}},
+  "else": {"properties": {"document": {"type": "null"}, "error_code": {"type": "string"}}},
+  "$defs": {
+    "Path": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "^/[^?#\\u0000-\\u0020\\u007f]*$"},
+    "Target": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": {"enum": ["SAME_ORIGIN_PATH", "BLOB", "UNAVAILABLE"]},
+        "path": {"oneOf": [{"$ref": "#/$defs/Path"}, {"type": "null"}]}
+      },
+      "if": {"properties": {"kind": {"const": "SAME_ORIGIN_PATH"}}},
+      "then": {"properties": {"path": {"$ref": "#/$defs/Path"}}},
+      "else": {"properties": {"path": {"type": "null"}}}
+    },
+    "IdentityAttributes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["data-id", "data-chat-id", "data-message-id", "data-log-id"],
+      "properties": {
+        "data-id": {"$ref": "#/$defs/NullableOpaqueId"},
+        "data-chat-id": {"$ref": "#/$defs/NullableOpaqueId"},
+        "data-message-id": {"$ref": "#/$defs/NullableOpaqueId"},
+        "data-log-id": {"$ref": "#/$defs/NullableOpaqueId"}
+      }
+    },
+    "NullableOpaqueId": {"oneOf": [{"$ref": "#/$defs/OpaqueId"}, {"type": "null"}]},
+    "OpaqueId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "Node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["index", "parent_index", "tag", "classes", "role", "label", "text", "identities", "link_path", "is_image"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0, "maximum": 2047},
+        "parent_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 2047},
+        "tag": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$"},
+        "classes": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+        "role": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "label": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "text": {"type": ["string", "null"], "minLength": 1, "maxLength": 8192},
+        "identities": {"$ref": "#/$defs/IdentityAttributes"},
+        "link_path": {"oneOf": [{"$ref": "#/$defs/Path"}, {"type": "null"}]},
+        "is_image": {"type": "boolean"}
+      }
+    },
+    "Document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["origin", "path", "truncated", "nodes"],
+      "properties": {
+        "origin": {"const": "https://business.kakao.com"},
+        "path": {"$ref": "#/$defs/Path"},
+        "truncated": {"type": "boolean"},
+        "nodes": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/Node"}}
+      }
+    }
+  }
+}

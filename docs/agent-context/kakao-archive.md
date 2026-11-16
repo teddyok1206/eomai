@@ -198,6 +198,13 @@ owner 입력 adapter다. 기존 `kakao_runtime_os`의 FD 검사를 재사용해 
 STARTED/완료 receipt, UID/GID/mode·크기/hash를 검사하고 bounded bytes를 한 번 읽는다.
 읽기 성공은 채널/방/학생 권한이나 사진 occurrence 정합을 뜻하지 않는다. source/media
 application의 정본 수락과 권한 검사는 별도이며, reader는 재다운로드·NAS/DB 쓰기를 하지 않는다.
+collector `manual_observation.py`는 download event의 실제 page에서 고정된 read-only DOM
+projection만 읽는다. 별도 `manual-page-observation-v1`은 exact capture/run/fence/page와
+query 없는 path·제한된 node metadata를 담는다. 입력·편집·로그인 subtree와 image src·서명
+URL·cookie/storage는 제외한다. 기존 수신 receiver와 로컬 metadata writer를 재사용하며
+click/key/network tool을 노출하지 않는다. `kakao_download_inputs`는 이 선택적 관측이 있으면
+동일 capture·시각·권한/hash 경계에서 검증하고, 과거 관측 없음은 UNKNOWN으로 유지한다.
+DOM excerpt는 원본 CSV 본문이나 메시지 logical ID가 아니며, 미검증 selector를 활성화하지 않는다.
 반복 수집의 실행 방식은 [수집 실행 계약](../architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)의
 실증 후 결정 절을 따른다. 전용 Codex 슬롯이나 임의 클릭 도구를 운영 수집에 추가하지 않는다.
 

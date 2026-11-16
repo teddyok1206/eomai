@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 제한된 다운로드 DOM 관측 소스·실제 Chromium 합성 검증
+
+- 수신 파일의 방/메시지 연결에 필요한 실제 DOM 근거를 수집하도록, 새 closed JSON Schema
+  `manual-page-observation-v1`을 먼저 정의했다. 기존 download-v1 bytes·실패 receipt는 유지한다.
+  collector는 download event의 실제 page에서 코드 소유 read-only expression 하나만 실행한다.
+  click/key/message/network 도구나 공개 JS 실행 API를 추가하지 않았다.
+- query/fragment 없는 실제 business origin path, 소수 identity attribute, node의 class/role/
+  label·leaf text·같은 origin link path·image 존재 여부만 bounded receipt로 남긴다.
+  form/input/textarea/contenteditable/iframe/script(HTML·SVG)는 제외한다. cookie/storage,
+  event handler·image src·signed CDN URL은 읽어 저장하지 않는다. CSV 본문과 사진 bytes는
+  이 제한된 DOM excerpt로 대체하지 않는다. 임시 node index를 logical message ID로 쓰지 않는다.
+- 최대8,192 node 검사/2,048 node 출력/65,536 text code point/1MiB JSON·1.5초 한도를
+  적용한다. clip은 truncated, timeout/다른 origin/페이지 종료는 UNAVAILABLE이며 정상 다운로드
+  bytes를 버리지 않는다. 종료 시 실제 관측 coroutine을 취소·회수하고 원래 수신 실패를 보존한다.
+- 로컬 metadata writer만 별도 책임으로 분리해 receiver와 관측에서 재사용했다. Orchestrator
+  reader는 선택적 관측을 exact capture/profile/run/fence/page와 STARTED~완료 시각에 대조한다.
+  과거 관측 없음은 UNKNOWN이며 새 관측/현재 방을 과거 파일에 자동으로 끼워 넣지 않는다.
+- source/runtime/installer/순수 계약/문맥 및 opt-in 실제 Chromium 합성 입력 **416 PASS**,
+  Ruff·formatter·strict mypy5 source PASS, schema audit1468/mirror1114 PASS다. 실제 Chromium
+  두 검사는 빈 profile·로컬 fulfilled HTML/data/blob만 사용하며 외부 전송0이다. 반복 문자열의
+  서로 다른 occurrence2개, 필드 제외, 위험 버튼 클릭0, hidden9,000개/출력 수/Unicode bound,
+  context 종료 뒤 원래 bytes/관측 receipt 보존을 확인했다.
+- 첫 실제 엔진 검사는 blob link의 URL origin만 맞아 full blob path가 반환되는 소스 오류를
+  잡았다. same-origin HTTPS path만 허용하도록 고쳐 재검증했다. 합성 HTML charset 미선언도
+  UTF-8로 바로잡았다. 운영 원본·실패 기록을 바꿔 검사를 통과시키지 않았다.
+- **현재 소스 검증 단계이며 운영 미반영**이다. API/Catalog/Web·DB0087과 INDEX/QUERY pin,
+  사용자 profile/인증정보는 유지한다. 다음은 stopped-profile 경계의 collector+pure-contract
+  wheel 배포·격리 설치본 검사다. 실제 카카오 DOM·selector/사진 정합·source 수락·학생 PDF와
+  전체 방 주기 수집은 아직 미완료이고 AUTO는 비활성이다. 사용자는 취침 중이며 로그인 요청은 없다.
+
 ## 2026-11-16 실제 사진2건 수신·보존 및 입력 검증 소스
 
 - 같은 실제 방에서 표시된 사진 각각의 내려받기 아이콘을 확인한 뒤, 사진2건을 받았다.

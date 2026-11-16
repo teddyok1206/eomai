@@ -14,6 +14,10 @@ from pathlib import Path
 
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult, ManualDownloadStart
+from eom_kakao_archive_contracts.manual_observation import (
+    MAX_OBSERVATION_BYTES,
+    ManualPageObservation,
+)
 from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 
 from .kakao_runtime_os import KakaoRuntimeOsError, protected_directory, read_protected
@@ -29,6 +33,7 @@ class KakaoDownloadInputError(ValueError):
 class ReceivedKakaoDownload:
     receipt: ManualDownloadResult = field(repr=False)
     payload: bytes = field(repr=False)
+    observation: ManualPageObservation | None = field(default=None, repr=False)
 
 
 def read_received_kakao_download(
@@ -112,7 +117,32 @@ def read_received_kakao_download(
         raw = read(capture / result.member.relative_path, result.member.size_bytes)
         if len(raw) != result.member.size_bytes or sha256(raw) != result.member.sha256:
             raise KakaoDownloadInputError("KAKAO_DOWNLOAD_MEMBER_HASH_MISMATCH")
-        return ReceivedKakaoDownload(result, raw)
+        try:
+            observed_raw = read(capture / "page-observation.json", MAX_OBSERVATION_BYTES)
+        except FileNotFoundError:
+            # Historical captures have no document evidence. This is UNKNOWN,
+            # not proof of a room identity or a missing/absent photo attachment.
+            observation = None
+        else:
+            try:
+                observation = ManualPageObservation.model_validate_json(observed_raw)
+            except ValueError as error:
+                if isinstance(error, KakaoRuntimeOsError):
+                    raise
+                raise KakaoDownloadInputError("KAKAO_DOWNLOAD_OBSERVATION_INVALID") from None
+            shared = (
+                "capture_id",
+                "profile_id",
+                "browser_run_id",
+                "fence_epoch",
+                "page_instance_id",
+            )
+            if (
+                any(getattr(observation, name) != getattr(started, name) for name in shared)
+                or not started.started_at <= observation.observed_at <= result.completed_at
+            ):
+                raise KakaoDownloadInputError("KAKAO_DOWNLOAD_OBSERVATION_STALE")
+        return ReceivedKakaoDownload(result, raw, observation)
     except FileNotFoundError:
         raise KakaoDownloadInputError("KAKAO_DOWNLOAD_INPUT_MISSING") from None
     except (KakaoRuntimeOsError, OSError):

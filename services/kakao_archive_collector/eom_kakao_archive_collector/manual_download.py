@@ -25,6 +25,9 @@ from eom_kakao_archive_contracts.manual_download import (
 )
 from eom_kakao_archive_contracts.render import canonical_bytes
 
+from .manual_capture_files import create_capture_directory as _directory
+from .manual_capture_files import write_capture_receipt as _write_once
+from .manual_observation import ReadOnlyPage, observe_download_page
 from .profile import BrowserRuntimeError, protected_directory, read_protected
 
 ROOT = Path("/var/lib/eom-kakao/downloads")
@@ -37,47 +40,15 @@ STOP_SECONDS = 3.0
 
 class Download(Protocol):
     @property
+    def url(self) -> str: ...
+    @property
     def suggested_filename(self) -> str: ...
     async def path(self) -> Path | None: ...
     async def cancel(self) -> None: ...
 
 
-class Page(Protocol):
+class Page(ReadOnlyPage, Protocol):
     def on(self, event: str, callback: Callable[..., None]) -> None: ...
-
-
-def _write_once(path: Path, raw: bytes) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
-    with os.fdopen(fd, "wb") as stream:
-        os.fchown(stream.fileno(), -1, path.parent.stat().st_gid)
-        os.fchmod(stream.fileno(), 0o640)
-        stream.write(raw)
-        stream.flush()
-        os.fsync(stream.fileno())
-    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
-
-
-def _directory(path: Path, *, private: bool = False) -> None:
-    try:
-        path.mkdir(mode=0o700 if private else 0o750)
-        # RestrictSUIDSGID forbids requesting setgid in worker syscalls. The
-        # existing control-group membership permits an explicit read-only group
-        # on each local directory/file without weakening the systemd sandbox.
-        with protected_directory(path, allowed_uids=frozenset({0, os.geteuid()})) as fd:
-            os.fchown(fd, -1, path.parent.stat().st_gid)
-            os.fchmod(fd, 0o700 if private else 0o750)
-    except FileExistsError:
-        pass
-    with protected_directory(path, allowed_uids=frozenset({0, os.geteuid()})) as fd:
-        info = os.fstat(fd)
-        if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != (
-            0o700 if private else 0o750
-        ):
-            raise BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_STAGING_UNSAFE")
 
 
 def _copy_payload(source: Path, directory: Path, incoming: Path) -> ManualDownloadMember:
@@ -194,9 +165,9 @@ class ManualDownloads:
             return
         self._pages[id(page)] = page
         page_id = "kakaopage_" + uuid4().hex
-        page.on("download", lambda download: self.receive(download, page_id))
+        page.on("download", lambda download: self.receive(download, page_id, page=page))
 
-    def receive(self, download: Download, page_id: str) -> None:
+    def receive(self, download: Download, page_id: str, *, page: Page | None = None) -> None:
         if id(download) in self._events:
             return
         if self._closing or self._count >= MAX_FILES:
@@ -221,7 +192,7 @@ class ManualDownloads:
         except Exception:
             self.failure = BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_RECEIPT_FAILED")
             return
-        task = asyncio.create_task(self._receive(download, started, directory))
+        task = asyncio.create_task(self._receive(download, started, directory, page=page))
         self._tasks.add(task)
         task.add_done_callback(self._done)
 
@@ -231,10 +202,21 @@ class ManualDownloads:
             self.failure = BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_RECEIPT_FAILED")
 
     async def _receive(
-        self, download: Download, started: ManualDownloadStart, directory: Path
+        self,
+        download: Download,
+        started: ManualDownloadStart,
+        directory: Path,
+        *,
+        page: Page | None,
     ) -> None:
         member, error, name = None, None, None
         try:
+            if page is not None:
+                observation = await observe_download_page(page, started, download_url=download.url)
+                _write_once(
+                    directory / "page-observation.json",
+                    canonical_bytes(observation.model_dump(mode="json", by_alias=True)),
+                )
             raw_name = download.suggested_filename
             if not isinstance(raw_name, str) or not 1 <= len(raw_name) <= 1024:
                 raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")

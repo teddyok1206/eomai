@@ -269,3 +269,34 @@ Codex는 개발·장애 원인 분석에만 사용한다. 실제 UI에서 검증
 MANUAL 세션이 종료되어도 이미 RECEIVED인 수신물은 검증할 수 있다. 이것은 세션 만료 뒤
 자동 수집을 허용하거나 현재 owner/source 권한 확인을 생략하라는 뜻이 아니다. 실제 사진은
 메시지별 관측과 연결하고, 남은 사진을 확보하지 못하면 incomplete로 보존한다.
+
+### 다운로드 순간의 제한된 DOM 관측
+
+실제 CSV는 blob 다운로드이고 사진은 방별 읽기 URL에서 CDN으로 redirect한다. 파일명과
+page instance만으로 메시지 occurrence를 알 수 없으므로, 기존 MANUAL download receiver가
+같은 download event의 page를 읽어 별도 `page-observation.json`을 남긴다. schema를 먼저
+정의하며 이것은 untrusted local evidence다. 단순히 저장됐다고 provider identity나 source
+권한이 확인된 것은 아니다. 이 관측은 새 명령 queue, 외부 디버그 포트나 범용 JS 실행 API가 아니다.
+
+- exact capture/profile/run/fence/page instance를 기존 STARTED receipt와 연결한다. page URL은
+  실제 관측된 `https://business.kakao.com` origin과 query/fragment를 뺀 path만 허용한다.
+  download target은 같은 origin path 또는 blob 여부만 남긴다. CDN 서명 URL은 남기지 않는다.
+- DOM은 고정된 read-only expression 하나로 한 번 읽는다. 값·cookie/storage·script·HTML·
+  event handler·임의 attribute는 읽지 않는다. form/input/textarea/contenteditable/iframe
+  subtree는 제외한다. tag/class/role/명시적 label, bounded leaf text, 소수 data identity,
+  같은 origin의 link path와 image 존재 여부만 기록한다. image src·CDN URL은 저장하지 않으며
+  이 관측은 사진 bytes의 대체물이 아니다.
+- 시간은1.5초, 최대2,048개 element·65,536 text code point·최대1MiB JSON이다. 초과/clip은
+  `truncated`로 표시하며 완전한 관측으로 사용하지 않는다. 페이지 종료·다른 origin·timeout은
+  명시적인 UNAVAILABLE이다. DOM 관측 실패 자체로 정상 다운로드 bytes를 버리지 않는다.
+  이 제한된 DOM text로 질문 본문을 만들지 않고, 원본 CSV 전체를 기존 parser로 읽는다.
+  node index/parent index는 해당 snapshot의 임시 배치 값이며 메시지의 logical identity가 아니다.
+- 실제 SDK page가 전달한 결과라도 schema/한계/identity를 확인한다. raw DOM 예외·URL·
+  대화 원문은 log로 출력하지 않는다. 파일은 기존 수신 directory의 write-once0640이다.
+  기존 file 수신 상태와 FAILED 기록은 바꾸지 않고, disk/receipt 쓰기 실패는 기존 수신 경계에서
+  오류로 처리한다. worker는 NAS/DB에 쓰지 않는다.
+- 주 access는 download event별 한 번의 bounded DOM 순회와 capture ID lookup이다.
+  관측은 O(scanned DOM nodes + emitted text), 최대8,192 node를 검사한다. parent 관계는
+  map으로 만들고 전체 DOM 복제·재파싱·주기적인 전체 화면 dump는 하지 않는다.
+- 별도 control service나 전용 Codex 슬롯을 여는 대안은 과하다. 기존 receiver의 page callback과
+  보호된 로컬 receipt helper를 재사용한다. 실제 DOM/selector 실증 전 자동 클릭·수집은 켜지 않는다.
