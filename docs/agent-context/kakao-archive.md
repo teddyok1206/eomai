@@ -150,6 +150,11 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 방 version·mapping parent·학생 표시 revision을 함께 확인한다. hard reload는 확정된 DB
 상태를 다시 읽으며, 아직 응답이 확정되지 않은 변경 intent는 같은 화면 세션에서만 보존한다.
 학생·채널 이름과 변경 이유의 길이는 브라우저에서도 schema와 같은 Unicode code point 기준이다.
+동명 channel binding은 화면에서만 목록 내 연결 번호로 구분하고 실제 요청은 exact ID를
+유지한다. 이름으로 합치거나 특정 채널명을 코드에 고정하지 않는다. MANUAL START의 확정된
+PROFILE_UNAVAILABLE 거절은 선택 수정이 가능하지만 timeout/응답 유실은 같은 intent를 유지한다.
+서버의 profile owner/binding fence를 UI 편의상 풀지 않는다. 다른 채널의 명시적 전환 경계와
+현재 복합 FK의 후속 검토는 durable-content 설계에 기록하며 아직 활성화로 주장하지 않는다.
 
 `kakao_manual_service.py`는 고정 프로필의 owner/binding 배정, MANUAL 의도와 짧은 접근
 허가를 저장한다. 새 DB 큐가 아니라 프로필 하나의 indexed gate이며, AUTO도 나중에 같은

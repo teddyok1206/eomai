@@ -1,5 +1,25 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 동명 연결 선택·확정 거절 UI 후속
+
+사용자 문의 `webreq_a87c42c7e6651f6705653995`의 PROFILE_UNAVAILABLE를 확인했다.
+read-only 기술 metadata에서 같은 owner·같은 표시 이름의 DRAFT binding 두 개와,
+primary profile이 그중 하나에만 배정된 것을 확인했다. 원래 profile은 STOPPED,
+current lease는 NULL, flock은 해제됐고 이전 실패 lease 두 개는 ENDED 이력을 보존한다.
+사용자가 알려준 로그인 ID/채널 이름은 배정된 표시 이름과 같았지만 이름 자체는 ID가 아니다.
+
+- `636e39fa`에서 동명 표시만 `연결 1/2`로 구분했다. 실제 API 요청은 기존 binding ID를
+  그대로 사용하며 name/ID를 hardcode하거나 원본/배정을 합치지 않는다. map 집계 O(n)이다.
+- START의 명시적 PROFILE_UNAVAILABLE 거절에서만 UI 선택을 다시 열었다. 응답 유실,
+  timeout·불확실한 처리 여부는 기존 key/body를 유지한다. 서버의 ownership/fence와
+  프로필 배정, 실패 이력은 변경하지 않았다. 다른 채널로의 명시적 전환은 별도 후속이다.
+- UI/API presentation·실제 Chromium 검증33개 PASS와 공식 Web offline closure/실제
+  설치100 member 검사를 통과했다. Web636e39fa를 설치·재기동했고 HTTPS login200이다.
+  API/Catalog8e, gateway codec352, remote unit692b는 이번 Web 배포에서 변경하지 않았다.
+- 사용자에게 현재 서버 profile이 배정된 구분 항목으로 다시 시도하도록 요청했다.
+  **실제 카카오 로그인·수집·학생 PDF는 아직 검증 대기**다. 특정 채널로 고정한 해결이 아니다.
+
+
 ## 실제 첫 MANUAL 시작에서 확인한 후속 수정 — 진행 중
 
 사용자가 `카카오 로그인 준비`를 눌렀으나 원격 화면의 최초 시작이 ERROR로 끝났다.
