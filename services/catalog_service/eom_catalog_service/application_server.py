@@ -127,6 +127,7 @@ from eom_catalog_contracts.curated_document_delivery_application import (
 from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
 from eom_catalog_contracts.kakao_delivery_rpc import KAKAO_DELIVERY_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
+from eom_catalog_contracts.kakao_question_compose_rpc import COMPOSE_KAKAO_QUESTIONS
 from eom_catalog_contracts.kakao_question_rpc import KAKAO_QUESTION_OPERATIONS
 from eom_catalog_contracts.kakao_room_rpc import KAKAO_ROOM_OPERATIONS
 from eom_catalog_contracts.kakao_student_rpc import KAKAO_STUDENT_OPERATIONS
@@ -244,6 +245,7 @@ from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_delivery_application import KakaoDeliveryApplication
 from eom_catalog_service.kakao_delivery_dispatch import dispatch_kakao_delivery
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
+from eom_catalog_service.kakao_question_compose_dispatch import dispatch_kakao_compose
 from eom_catalog_service.kakao_question_composition import KakaoQuestionApplication
 from eom_catalog_service.kakao_question_dispatch import dispatch_kakao_question
 from eom_catalog_service.kakao_room_dispatch import dispatch_kakao_room
@@ -361,6 +363,13 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 dispatch_kakao_delivery(
                     self.server.kakao_delivery, value, cast(BinaryIO, self.wfile)
                 )
+                return
+            if raw_operation == COMPOSE_KAKAO_QUESTIONS:
+                questions = self.server.kakao_questions
+                self.wfile.write(
+                    dispatch_kakao_compose(None if questions is None else questions.composer, value)
+                )
+                self.wfile.flush()
                 return
             if isinstance(raw_operation, str) and raw_operation in KAKAO_QUESTION_OPERATIONS:
                 questions = self.server.kakao_questions

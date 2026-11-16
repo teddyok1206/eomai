@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .contracts import UtcDatetime, WebModel
 from .kakao_archive_contracts import Label, ResourceVersion
@@ -118,3 +118,64 @@ class QuestionView(WebModel):
     ] = Field(min_length=1, max_length=230)
     review_reasons: tuple[str, ...] = Field(max_length=8)
     boundary_uncertain: bool = Field(strict=True)
+
+
+class CompositionInput(WebModel):
+    question_id: QuestionId
+    question_revision_id: RevisionId
+    resource_version: int = Field(strict=True, ge=1, le=2147483646)
+
+
+class WholeBlockSelection(WebModel):
+    kind: Literal["BLOCK"]
+    block_id: str = Field(min_length=1, max_length=128)
+
+
+class TextSpanSelection(WebModel):
+    kind: Literal["TEXT_SPAN"]
+    block_id: str = Field(min_length=1, max_length=128)
+    start_codepoint: int = Field(strict=True, ge=0, le=65535)
+    end_codepoint: int = Field(strict=True, ge=1, le=65536)
+
+    @model_validator(mode="after")
+    def nonempty(self) -> "TextSpanSelection":
+        if self.start_codepoint >= self.end_codepoint:
+            raise ValueError("invalid text span")
+        return self
+
+
+CompositionPartition = Annotated[
+    tuple[Annotated[WholeBlockSelection | TextSpanSelection, Field(discriminator="kind")], ...],
+    Field(min_length=1, max_length=230),
+]
+
+
+class QuestionSplit(WebModel):
+    schema_version: Literal["kakao-question-compose/1.0"]
+    operation: Literal["SPLIT"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    input: CompositionInput
+    partitions: tuple[CompositionPartition, ...] = Field(min_length=2, max_length=100)
+
+
+class QuestionMerge(WebModel):
+    schema_version: Literal["kakao-question-compose/1.0"]
+    operation: Literal["MERGE"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    inputs: tuple[CompositionInput, ...] = Field(min_length=2, max_length=100)
+
+
+QuestionComposition = Annotated[QuestionSplit | QuestionMerge, Field(discriminator="operation")]
+
+
+class QuestionCompositionResult(WebModel):
+    schema_version: Literal["kakao-question-composition-result/1.0"]
+    composition_id: str = Field(pattern=r"^kakaocomposition_[0-9a-f]{32}$")
+    operation: Literal["SPLIT", "MERGE"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    inputs: tuple[CompositionInput, ...] = Field(min_length=1, max_length=100)
+    outputs: tuple[StoredQuestion, ...] = Field(min_length=1, max_length=100)
+    replayed: bool = Field(strict=True)

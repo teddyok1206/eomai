@@ -233,6 +233,15 @@ from eom_catalog_contracts.kakao_manual_rpc import (
     parse_kakao_manual_reply,
     parse_kakao_manual_request,
 )
+from eom_catalog_contracts.kakao_question_compose_rpc import (
+    ComposeKakaoQuestionsRequest,
+    KakaoComposeFailure,
+    check_kakao_compose_reply,
+    parse_kakao_compose_reply,
+    parse_kakao_compose_request,
+)
+from eom_catalog_contracts.kakao_question_composition import KakaoQuestionComposition
+from eom_catalog_contracts.kakao_question_composition_result import KakaoQuestionCompositionResult
 from eom_catalog_contracts.kakao_question_rpc import (
     ChangeKakaoQuestionRequest,
     CreateKakaoQuestionRequest,
@@ -672,6 +681,38 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 "KAKAO_ARCHIVE_UNAVAILABLE", "Private PDF boundary unavailable"
             ) from error
+
+    def compose_kakao_questions(
+        self,
+        command: KakaoQuestionComposition,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoQuestionCompositionResult:
+        try:
+            request = parse_kakao_compose_request(
+                ComposeKakaoQuestionsRequest.model_validate(
+                    {
+                        **self._kakao_identity(actor),
+                        "command": command,
+                        "idempotency_key": idempotency_key,
+                    }
+                ).model_dump(mode="json")
+            )
+            reply = parse_kakao_compose_reply(
+                self._raw_request(
+                    request.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_kakao_compose_reply(request, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private composition response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoComposeFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private composition failed")
+        return reply.result
 
     def create_kakao_question(
         self,

@@ -6,6 +6,8 @@ from typing import Annotated
 
 from eom_api_contracts import SingleResponse
 from eom_api_contracts.kakao_questions import (
+    KakaoQuestionComposition,
+    KakaoQuestionCompositionResult,
     KakaoQuestionCreate,
     KakaoQuestionMutation,
     KakaoQuestionPage,
@@ -41,6 +43,9 @@ _ERROR_STATUS = {
     "KAKAO_ARCHIVE_CANDIDATE_NOT_FOUND": 404,
     "KAKAO_ARCHIVE_REQUEST_INVALID": 422,
     "KAKAO_ARCHIVE_IMAGE_UNAVAILABLE": 409,
+    "KAKAO_ARCHIVE_COMPOSITION_SCOPE_INVALID": 422,
+    "KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID": 422,
+    "KAKAO_ARCHIVE_QUESTION_EDIT_INVALID": 422,
 }
 
 
@@ -56,6 +61,29 @@ def _boundary() -> Iterator[None]:
             "KakaoTalk request failed",
             "The private question operation could not be completed.",
         ) from error
+
+
+@router.post(
+    "/compose",
+    operation_id="kakao_question_compose",
+    response_model=SingleResponse[KakaoQuestionCompositionResult],
+    dependencies=[Depends(EDIT)],
+)
+def compose_questions(
+    request: Request,
+    response: Response,
+    body: KakaoQuestionComposition,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[KakaoQuestionCompositionResult]:
+    # Each input carries its own expected revision/version; a single If-Match cannot
+    # describe a merge. The owner applies their CAS together in one transaction.
+    with _boundary():
+        result = request.app.state.services.catalog_application.compose_kakao_questions(
+            body, actor=request.state.request_context.actor(), idempotency_key=idempotency_key
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, result)
 
 
 @router.get(

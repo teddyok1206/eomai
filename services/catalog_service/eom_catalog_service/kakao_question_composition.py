@@ -6,6 +6,7 @@ from sqlalchemy import Engine
 
 from .artifacts import CatalogArtifactService
 from .kakao_archive_authorization import KakaoArchiveError
+from .kakao_question_compose_service import KakaoQuestionComposeService
 from .kakao_question_reads import KakaoQuestionReads
 from .kakao_question_service import KakaoQuestionService
 from .kakao_source_service import KakaoSourceService
@@ -15,6 +16,7 @@ from .kakao_source_service import KakaoSourceService
 class KakaoQuestionApplication:
     questions: KakaoQuestionService
     reads: KakaoQuestionReads
+    composer: KakaoQuestionComposeService | None = None
 
 
 def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication:
@@ -32,4 +34,7 @@ def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication
     return KakaoQuestionApplication(
         questions,
         KakaoQuestionReads(engine, questions=questions, sources=sources, artifacts=artifacts),
+        KakaoQuestionComposeService(
+            engine, questions=questions, sources=sources, artifacts=artifacts
+        ),
     )

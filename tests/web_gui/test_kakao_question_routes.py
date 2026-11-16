@@ -2,6 +2,7 @@
 
 import httpx
 import pytest
+from eom_catalog_contracts.kakao_question_composition_result import KakaoQuestionCompositionResult
 from eom_catalog_contracts.kakao_question_store import KakaoQuestionMutation, KakaoQuestionPage
 from eom_identifiers import sha256_bytes
 from eom_web_gui.gateways import GatewayError
@@ -9,6 +10,7 @@ from eom_web_gui.kakao_question_contracts import (
     QuestionConfirm,
     QuestionMutation,
     QuestionPage,
+    QuestionSplit,
     QuestionView,
 )
 
@@ -22,6 +24,8 @@ from tests.api.test_kakao_question_routes import (
     question_client as question_client,
 )
 from tests.unit.kakao_binding_fixtures import KEY
+from tests.unit.test_kakao_question_compose_rpc import request as composition_request
+from tests.unit.test_kakao_question_composition_result import payload as composition_payload
 from tests.unit.test_kakao_question_rpc import view
 from tests.web_gui.helpers import FakeGateway, login, make_client
 from tests.web_gui.test_gateway import _session, _single
@@ -30,6 +34,47 @@ from tests.web_gui.test_kakao_archive_routes import http_gateway
 BASE = "/studio/api/v1/kakao-archive/questions"
 READ_PATH = BASE + "/" + QUESTION.question_id + "/revisions/" + QUESTION.question_revision_id
 REVIEW_PATH = BASE + "/" + QUESTION.question_id + "/review"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "fault", [None, "binding", "input", "duplicate", "lifecycle", "student", "time"]
+)
+async def test_compose_gateway_checks_exact_scope_selection_and_output(fault):
+    body = KakaoQuestionCompositionResult.model_validate(composition_payload()).model_dump(
+        mode="json"
+    )
+    command = QuestionSplit.model_validate(composition_request().command.model_dump(mode="json"))
+    calls = []
+    if fault == "binding":
+        body["source_binding_id"] = "kakaobinding_" + "9" * 32
+    elif fault == "input":
+        body["inputs"][0]["resource_version"] = 2
+    elif fault == "duplicate":
+        body["outputs"][1] = body["outputs"][0]
+    elif fault == "lifecycle":
+        body["outputs"][1]["review_state"] = "CONFIRMED"
+    elif fault == "student":
+        body["outputs"][1]["student"] = None
+    elif fault == "time":
+        body["outputs"][1]["created_at"] = "2026-11-16T00:00:01Z"
+
+    def transport(request):
+        calls.append(request)
+        return httpx.Response(200, json=_single(body))
+
+    gateway = http_gateway(transport)
+    try:
+        if fault is None:
+            result = await gateway.kakao_question_compose(_session(), command, KEY)
+            assert result.model_dump(mode="json") == body
+        else:
+            with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID"):
+                await gateway.kakao_question_compose(_session(), command, KEY)
+        assert calls[0].headers["Idempotency-Key"] == KEY
+        assert calls[0].url.path == "/api/v1/kakao-archive/questions/compose"
+    finally:
+        await gateway.close()
 
 
 @pytest.fixture

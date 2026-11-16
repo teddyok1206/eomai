@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, Header, Path, Query, Response
 from .contracts import StudioIdempotencyKey
 from .downloads import download_response
 from .gateways import ApplicationGateway
-from .kakao_question_contracts import QuestionCreate, QuestionReview
+from .kakao_question_contracts import QuestionComposition, QuestionCreate, QuestionReview
 from .sessions import WebSession
 
 BindingId = Annotated[str, Query(pattern=r"^kakaobinding_[0-9a-f]{32}$")]
@@ -24,6 +24,17 @@ def install_kakao_question_routes(
     require_csrf: Callable[..., WebSession],
 ) -> None:
     prefix = "/studio/api/v1/kakao-archive/questions"
+
+    @app.post(prefix + "/compose")
+    async def compose_questions(
+        response: Response,
+        body: QuestionComposition,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+    ) -> dict[str, object]:
+        result = await gateway.kakao_question_compose(session, body, idempotency_key)
+        response.headers["Cache-Control"] = "no-store"
+        return result.model_dump(mode="json")
 
     @app.get(prefix)
     async def list_questions(

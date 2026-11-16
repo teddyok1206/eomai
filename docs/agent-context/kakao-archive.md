@@ -131,6 +131,11 @@ DB0088의 deferred adoption guard가 일부 질문만 저장되는 것을 막으
 unique는 재수집 중복을 계속 막는다. source 구현/임시 DB 검증과 공개 API·GUI/운영 배포는
 구분한다. 기존 `kakao_question_composition.py`는 다른 책임인
 application 조립 지점이며 이 선택 규칙과 구분한다.
+공개 조합은 additive `kakao_question_compose_rpc.py`와 같은 API-peer socket의
+`kakao_question_compose_dispatch.py`를 사용한다. API/BFF `/questions/compose`는 사용자
+권한·CSRF·같은 요청 key와 모든 input revision/version을 전달하며 exact output을 대조한다.
+released 질문 v1 wire bytes는 바꾸지 않는다. 공개 source 연결은 GUI 버튼·운영 활성화
+증거가 아니며 실제 수집/다운로드 owner와 구분한다.
 `kakao_render_projection.py`는 packet 안의 요청한 학생 subset만 골라 exact source를
 로컬 렌더 manifest로 바꾼다. source binding·질문 revision·학생 표시·사진 포인터를
 대조하며 다른 학생의 입력을 함께 넘기지 않는다.

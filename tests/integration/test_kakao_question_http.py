@@ -20,6 +20,7 @@ from eom_api.app import create_app
 from eom_api.dependencies import get_authentication
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.kakao_question_compose_service import KakaoQuestionComposeService
 from eom_catalog_service.kakao_question_composition import KakaoQuestionApplication
 from eom_catalog_service.kakao_question_reads import KakaoQuestionReads
 from eom_catalog_service.kakao_question_service import KakaoQuestionService
@@ -56,7 +57,13 @@ def question_api(store, tmp_path, *, actor=None, delivery=None):
     reads = KakaoQuestionReads(engine, questions=questions, sources=sources, artifacts=artifacts)
     server = CatalogApplicationServer(
         *(SimpleNamespace() for _ in range(5)),
-        kakao_questions=KakaoQuestionApplication(questions, reads),
+        kakao_questions=KakaoQuestionApplication(
+            questions,
+            reads,
+            KakaoQuestionComposeService(
+                engine, questions=questions, sources=sources, artifacts=artifacts
+            ),
+        ),
         kakao_delivery=delivery,
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid(),
@@ -111,6 +118,76 @@ def paths(question):
     params = {key: question[key] for key in ("source_binding_id", "room_id")}
     path = BASE + "/" + question["question_id"] + "/revisions/" + question["question_revision_id"]
     return params, path
+
+
+def test_studio_compose_split_merge_replay_restart_and_csrf(question_store, tmp_path):
+    command = question_store[3]
+    with (
+        question_api(question_store, tmp_path) as (api, state, _reads),
+        studio_api(api, state.authentication.operator.operator_id) as (web, csrf),
+    ):
+        original, _ = create(api, command)
+        params, path = paths(original)
+        blocks = api.get(path, params=params).json()["data"]["ordered_blocks"]
+        body = dict(
+            schema_version="kakao-question-compose/1.0",
+            operation="SPLIT",
+            source_binding_id=original["source_binding_id"],
+            room_id=original["room_id"],
+            input={
+                key: original[key]
+                for key in ("question_id", "question_revision_id", "resource_version")
+            },
+            partitions=[[dict(kind="BLOCK", block_id=block["block_id"])] for block in blocks],
+        )
+        url = "/studio" + BASE + "/compose"
+        headers = {"Idempotency-Key": "studio-split-" + uuid4().hex}
+        assert web.post(url, json=body, headers=headers).status_code == 403
+        headers["X-CSRF-Token"] = csrf
+        response = web.post(url, json=body, headers=headers)
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert not result["replayed"] and len(result["outputs"]) == 2
+        assert response.headers["cache-control"] == "no-store"
+        again = web.post(url, json=body, headers=headers)
+        assert again.status_code == 200 and again.json()["replayed"]
+        assert again.json()["outputs"] == result["outputs"]
+        assert web.get("/studio" + BASE, params=params).json()["items"] == sorted(
+            result["outputs"], key=lambda row: row["question_id"]
+        )
+        assert api.get(path, params=params).json()["data"]["question"] == original
+        conflicting = web.post(
+            url, json={**body, "partitions": list(reversed(body["partitions"]))}, headers=headers
+        )
+        assert conflicting.status_code == 409
+        stale = web.post(
+            url, json=body, headers={**headers, "Idempotency-Key": "stale-split-" + uuid4().hex}
+        )
+        assert stale.status_code == 412
+        merge = dict(
+            schema_version="kakao-question-compose/1.0",
+            operation="MERGE",
+            source_binding_id=original["source_binding_id"],
+            room_id=original["room_id"],
+            inputs=[
+                {
+                    key: row[key]
+                    for key in ("question_id", "question_revision_id", "resource_version")
+                }
+                for row in result["outputs"]
+            ],
+        )
+        merged = web.post(
+            url, json=merge, headers={**headers, "Idempotency-Key": "studio-merge-" + uuid4().hex}
+        )
+        assert merged.status_code == 200, merged.text
+        output = merged.json()["outputs"][0]
+    # New socket server/API reads the committed selection, not a browser cache.
+    with question_api(question_store, tmp_path) as (restarted, _, _):
+        assert restarted.get(BASE, params=params).json()["data"]["items"] == [output]
+        qparams, qpath = paths(output)
+        displayed = restarted.get(qpath, params=qparams)
+        assert displayed.status_code == 200 and len(displayed.json()["data"]["ordered_blocks"]) == 2
 
 
 def test_actual_http_create_exact_read_review_replay_and_restart(question_store, tmp_path):

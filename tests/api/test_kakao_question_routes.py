@@ -137,7 +137,9 @@ def test_bad_review_never_reaches_owner(question_client, case, status):
     catalog.change_kakao_question.assert_not_called()
 
 
-@pytest.mark.parametrize("operation", sorted(KAKAO_QUESTION_OPERATIONS))
+@pytest.mark.parametrize(
+    "operation", sorted(KAKAO_QUESTION_OPERATIONS | {"COMPOSE_KAKAO_QUESTIONS"})
+)
 def test_chat_peer_cannot_read_or_mutate_private_questions(tmp_path, operation):
     with room_socket(tmp_path, api_peer=False) as (server, _room_owner):
         owner, reads = Mock(), Mock()

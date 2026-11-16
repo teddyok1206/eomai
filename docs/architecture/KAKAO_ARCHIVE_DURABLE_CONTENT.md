@@ -207,6 +207,19 @@ output 예약 UNIQUE와 immutable trigger를 사용한다. migration rollback은
 이력이 하나라도 있으면 거부한다. 이 변경은 isolated DB에서 먼저 검증하며 현재 MANUAL
 운영 연결과 별개다.
 
+공개 조합 명령은 기존 API-peer socket에 추가하는
+`catalog-kakao-question-compose-v1`의 한 operation으로 전달한다. released
+`catalog-kakao-question-v1` bytes/읽기·사진 의미는 바꾸지 않는다. API/BFF의
+`POST /kakao-archive/questions/compose`는 실제 session·EDIT 권한과 같은 idempotency key를
+전달한다. 각 입력의 exact revision/version 전체가 하나의 CAS이므로 하나의 HTTP ETag로
+병합의 모든 부모를 대신하지 않는다. owner가 요청한 입력·출력 수·소속을 대조하고,
+응답 transport도 그 상관관계만 검사한다. 새 DB/queue/worker authority는 없다.
+공개 요청의 byte 상한은 기존 Catalog frame, 질문 수/분할 수는 기존 bounded DTO를 사용한다.
+비용은 기존 조합 owner와 source batch 해석에 선형이며 공개 adapter에서 원문을 재구성하지
+않는다. 기존 application construction에 같은 Artifact/source owner를 주입한다.
+raw Artifact 쓰기나 독립 CREATE를 Web에 노출하는 단순 대안은 권한·원자적 대체와 중복 방지
+경계를 깨므로 사용하지 않는다. RPC/API/BFF의 소스 연결과 운영 활성화는 구별한다.
+
 순서는 **JSON Schema → frozen DTO → owner/ORM → Catalog RPC → API/BFF → GUI**이다.
 기존 `question-manifest-v1`, `question-edit-v1`, `question-packet-v1`, worker render 계약은 재사용한다.
 source-resolution/source-admission, 콘텐츠 command/page, export request/status/output receipt에 필요한

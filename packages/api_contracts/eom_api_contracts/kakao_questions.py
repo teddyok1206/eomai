@@ -3,6 +3,8 @@
 from typing import Annotated
 
 from eom_catalog_contracts.kakao_question import KakaoQuestionConfirm, KakaoQuestionExclude
+from eom_catalog_contracts.kakao_question_composition import KakaoQuestionComposition
+from eom_catalog_contracts.kakao_question_composition_result import KakaoQuestionCompositionResult
 from eom_catalog_contracts.kakao_question_rpc import KakaoQuestionView
 from eom_catalog_contracts.kakao_question_store import (
     KakaoQuestionCreate,
@@ -16,6 +18,8 @@ KakaoQuestionReview = Annotated[
 ]
 
 __all__ = [
+    "KakaoQuestionComposition",
+    "KakaoQuestionCompositionResult",
     "KakaoQuestionCreate",
     "KakaoQuestionMutation",
     "KakaoQuestionPage",

@@ -1,5 +1,36 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 18:36 UTC 실제 내보내기 시도·공개 질문 조합 연결
+
+- 사용자가 번역 팝업을 직접 닫았고, 방 우측 위 메뉴 열기→스크롤과 내보내기 버튼 실행을
+  순서대로 추가 허용했다. 화면 확인 후 해당 메뉴만 열고 세로 wheel 3회, `내 PC 저장`
+  hover를 실제 cursor 포함 screenshot으로 검증한 뒤, 사용자 승인 아래 내보내기를 1회 눌렀다.
+  메시지/키 입력·상담 완료·채팅방 나가기는 0이다. 좌표는 일회성 실증에만 사용했고 실제
+  collector selector나 다른 채널/방 identity로 하드코딩하지 않는다.
+- **이번 실제 내보내기는 성공하지 않았다.** 정지한 browser의 History 다운로드 metadata를
+  read-only로 확인했다. 시도 시각18:31:14 UTC, total5723byte, received0byte, state2,
+  interrupt_reason40이다. URI·대화·이름·파일명·인증정보는 진단 출력에서 제외했다.
+  설치 MANUAL driver가 `accept_downloads=False`인 것을 확인했다. 다음 우선 작업은
+  명시적 다운로드 수락·bounded local staging·hash/receipt 보존 연결이며, 단순 버튼 성공을
+  source 수집 성공으로 보고하지 않는다. 파일 수신 전 재접속/반복 클릭은 요청하지 않았다.
+- browser/remote는 이후 MainPID0/Result success·종료 code0, profile STOPPED·lease NULL로
+  관측됐다. 이전 STOP_UNCONFIRMED 이력은 ENDED 상태로 보존했다. 최대20분 정책은 source에
+  있지만 실제 종료 원인이 시간 만료였다고 단정하지 않는다. 실패를 성공으로 바꾸지 않았다.
+- 사용자 제안에 따라 다음 display release는 기본80% 축소와 창 크기/창 장식을 함께
+  검증할 예정이다. **아직 적용하지 않았고** 기존 profile/비밀번호·배율을 수정하지 않았다.
+- source는 atomic composition owner를 실제 Catalog API-peer socket→API→Web BFF에 연결했다.
+  새 closed RPC/JSON Schema를 추가했으며 released question-v1 wire bytes는 유지한다.
+  사용자/session 권한·CSRF·input별 revision/version CAS·동일 key replay·정확한 출력 연결을
+  검사한다. 공개 API의 현재 operation과 OpenAPI snapshot/hash를 함께 갱신했다.
+- 새 disposable PostgreSQL의 실제 BFF→HTTP→socket→owner 경로에서 분할→재전송→목록→
+  병합→server 재생성→저장 결과 재조회가 통과했다. CSRF 거부·이전 parent412·같은 key의
+  다른 body409도 확인했다. 전체 Kakao integration **168 PASS**, RPC/API/BFF·경계 source
+  **70 PASS**, 추가 gateway/OpenAPI **29 PASS**, strict mypy6 source PASS다. 테스트 집합은
+  중복되므로 합산하지 않는다. schema1466/mirror1112 audit도 통과했다.
+- **이번 변경은 소스만이며 운영 미배포다.** DB0087·기존 compatible set·AUTO 비활성 상태는
+  유지한다. 질문 조합 GUI·표시 교정 연결, 다운로드 수신, 실제 source/사진 occurrence·학생 PDF,
+  전체 방/주기 수집은 여전히 남아 있다. 다음 행동은 로그인 반복이 아니라 다운로드 수신 구현이다.
+
 ## 2026-11-16 18:17 UTC 클릭 없는 스크롤 확인·질문 조합 저장
 
 - 사용자는 실제 카카오 화면에 **마우스 이동·스크롤만 허용하고 클릭은 금지**했다.

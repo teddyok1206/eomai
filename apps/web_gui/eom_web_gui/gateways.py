@@ -185,7 +185,10 @@ from eom_web_gui.kakao_manual_contracts import (
     ManualStart,
 )
 from eom_web_gui.kakao_question_contracts import (
+    QuestionComposition,
+    QuestionCompositionResult,
     QuestionCreate,
+    QuestionMerge,
     QuestionMutation,
     QuestionPage,
     QuestionReview,
@@ -582,6 +585,10 @@ class ApplicationGateway(Protocol):
         idempotency_key: str,
         if_match: str,
     ) -> RoomMutation: ...
+
+    async def kakao_question_compose(
+        self, session: WebSession, value: QuestionComposition, idempotency_key: str
+    ) -> QuestionCompositionResult: ...
 
     async def kakao_question_list(
         self,
@@ -1909,6 +1916,48 @@ class HttpApplicationGateway:
                 prefixes=(b"%PDF-",),
             )
             return KakaoPdfDownload(content, etag)
+
+    async def kakao_question_compose(
+        self, session: WebSession, value: QuestionComposition, idempotency_key: str
+    ) -> QuestionCompositionResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/questions/compose",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionCompositionResult.model_validate(self._data(response))
+            inputs = value.inputs if isinstance(value, QuestionMerge) else (value.input,)
+            output_ids = {q.question_id for q in result.outputs}
+            if (
+                result.operation != value.operation
+                or result.source_binding_id != value.source_binding_id
+                or result.room_id != value.room_id
+                or result.inputs != inputs
+                or len(result.outputs)
+                != (1 if isinstance(value, QuestionMerge) else len(value.partitions))
+                or len(output_ids) != len(result.outputs)
+                or len({q.question_revision_id for q in result.outputs}) != len(result.outputs)
+                or output_ids.intersection(q.question_id for q in inputs)
+                or any(
+                    q.source_binding_id != value.source_binding_id
+                    or q.room_id != value.room_id
+                    or q.resource_version != 1
+                    or q.previous_revision_id is not None
+                    or q.review_state != "UNREVIEWED"
+                    or q.student is None
+                    or q.student != result.outputs[0].student
+                    or q.created_at != result.outputs[0].created_at
+                    for q in result.outputs
+                )
+            ):
+                raise ValueError("different composition result")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
 
     async def kakao_question_list(
         self,
