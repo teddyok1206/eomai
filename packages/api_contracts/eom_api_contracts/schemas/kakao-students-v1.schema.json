@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/kakao-students/1.0",
+  "title": "Owner-private KakaoTalk student directory payloads",
+  "description": "Payloads inside the existing API envelope. Names never identify or automatically map students to rooms; retirement preserves immutable display revisions.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Create"
+    },
+    {
+      "$ref": "#/$defs/Command"
+    },
+    {
+      "$ref": "#/$defs/Student"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    }
+  ],
+  "$defs": {
+    "Create": {
+      "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Create"
+    },
+    "Command": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Rename"
+        },
+        {
+          "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Retire"
+        }
+      ]
+    },
+    "Student": {
+      "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Student"
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/Student"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^kakaostudent_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "student",
+        "replayed"
+      ],
+      "properties": {
+        "student": {
+          "$ref": "#/$defs/Student"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

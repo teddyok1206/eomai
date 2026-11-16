@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/student-directory-v1/1.0",
+  "title": "Owner-private student commands and immutable display revision",
+  "$defs": {
+    "StudentId": {
+      "type": "string",
+      "pattern": "^kakaostudent_[0-9a-f]{32}$"
+    },
+    "RevisionId": {
+      "type": "string",
+      "pattern": "^kakaostudentrev_[0-9a-f]{32}$"
+    },
+    "Name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "Version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "Create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "display_name"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-student-command/1.0"
+        },
+        "action": {
+          "const": "CREATE"
+        },
+        "display_name": {
+          "$ref": "#/$defs/Name"
+        }
+      }
+    },
+    "Rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "parent_revision_id",
+        "expected_resource_version",
+        "display_name"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-student-command/1.0"
+        },
+        "action": {
+          "const": "RENAME"
+        },
+        "parent_revision_id": {
+          "$ref": "#/$defs/RevisionId"
+        },
+        "expected_resource_version": {
+          "$ref": "#/$defs/Version"
+        },
+        "display_name": {
+          "$ref": "#/$defs/Name"
+        }
+      }
+    },
+    "Retire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "parent_revision_id",
+        "expected_resource_version"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-student-command/1.0"
+        },
+        "action": {
+          "const": "RETIRE"
+        },
+        "parent_revision_id": {
+          "$ref": "#/$defs/RevisionId"
+        },
+        "expected_resource_version": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "Student": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "student_id",
+        "display_revision_id",
+        "previous_revision_id",
+        "resource_version",
+        "display_name",
+        "state",
+        "sha256",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-student/1.0"
+        },
+        "student_id": {
+          "$ref": "#/$defs/StudentId"
+        },
+        "display_revision_id": {
+          "$ref": "#/$defs/RevisionId"
+        },
+        "previous_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource_version": {
+          "$ref": "#/$defs/Version"
+        },
+        "display_name": {
+          "$ref": "#/$defs/Name"
+        },
+        "state": {
+          "enum": [
+            "ACTIVE",
+            "RETIRED"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Create"
+    },
+    {
+      "$ref": "#/$defs/Rename"
+    },
+    {
+      "$ref": "#/$defs/Retire"
+    },
+    {
+      "$ref": "#/$defs/Student"
+    }
+  ]
+}

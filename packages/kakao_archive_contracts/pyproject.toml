@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-kakao-archive-contracts"
+version = "0.1.0"
+description = "Pure versioned contracts for isolated EOM Kakao archive workers"
+requires-python = ">=3.12,<3.13"
+dependencies = ["jsonschema==4.25.1", "pydantic==2.13.4"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_kakao_archive_contracts*"]
+
+[tool.setuptools.package-data]
+eom_kakao_archive_contracts = ["schemas/*.json", "py.typed"]

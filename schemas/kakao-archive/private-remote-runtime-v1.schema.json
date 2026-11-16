@@ -1,0 +1,575 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/private-remote-runtime-v1/1.0",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/lease"
+    },
+    {
+      "$ref": "#/$defs/authority"
+    },
+    {
+      "$ref": "#/$defs/runtime"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/grant"
+    },
+    {
+      "$ref": "#/$defs/revocation"
+    },
+    {
+      "$ref": "#/$defs/profile"
+    },
+    {
+      "$ref": "#/$defs/stop"
+    }
+  ],
+  "$defs": {
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "source_binding_id",
+        "profile_id",
+        "fence_epoch",
+        "gateway_epoch",
+        "grant_revision",
+        "issued_at",
+        "authorized_at",
+        "expires_at",
+        "absolute_expires_at",
+        "operator_id",
+        "identity_session_id",
+        "state",
+        "ended_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-lease/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "grant_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "authorized_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "absolute_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operator_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "identity_session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "state": {
+          "enum": [
+            "ACTIVE",
+            "REVOKED",
+            "EXPIRED"
+          ]
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operator_id",
+        "identity_session_id",
+        "source_binding_id",
+        "binding_owner_operator_id",
+        "operator_active",
+        "session_active",
+        "is_admin",
+        "remote_permission",
+        "source_active",
+        "source_access",
+        "checked_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-authority/1.0"
+        },
+        "operator_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "identity_session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "binding_owner_operator_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "operator_active": {
+          "type": "boolean"
+        },
+        "session_active": {
+          "type": "boolean"
+        },
+        "is_admin": {
+          "type": "boolean"
+        },
+        "remote_permission": {
+          "type": "boolean"
+        },
+        "source_active": {
+          "type": "boolean"
+        },
+        "source_access": {
+          "type": "boolean"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "profile_id",
+        "mode",
+        "fence_epoch",
+        "gateway_epoch",
+        "browser_run_id",
+        "process_state",
+        "profile_locked",
+        "available"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-runtime/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "mode": {
+          "enum": [
+            "STOPPED",
+            "AUTO",
+            "PAUSING",
+            "MANUAL",
+            "AUTH_REQUIRED",
+            "ERROR"
+          ]
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "process_state": {
+          "enum": [
+            "RUNNING",
+            "STOPPED",
+            "UNKNOWN"
+          ]
+        },
+        "profile_locked": {
+          "type": "boolean"
+        },
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "method",
+        "path",
+        "protocol",
+        "origin",
+        "upgrade",
+        "connection",
+        "websocket_version",
+        "websocket_key"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-request/1.0"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "protocol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upgrade": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "websocket_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 16
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "websocket_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "source_binding_id",
+        "profile_id",
+        "fence_epoch",
+        "gateway_epoch",
+        "grant_revision",
+        "issued_at",
+        "authorized_at",
+        "expires_at",
+        "absolute_expires_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-gateway-grant/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "grant_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "authorized_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "absolute_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "lease_id",
+        "fence_epoch",
+        "gateway_epoch",
+        "grant_revision",
+        "reason"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-remote-gateway-revocation/1.0"
+        },
+        "lease_id": {
+          "type": "string",
+          "pattern": "^kakaoremotelease_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "gateway_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "grant_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "reason": {
+          "enum": [
+            "USER_ENDED",
+            "LOGOUT",
+            "SESSION_REVOKED",
+            "ROLE_REVOKED",
+            "SOURCE_REVOKED",
+            "OWNER_UNAVAILABLE",
+            "RUNTIME_LOST"
+          ]
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile_id",
+        "browser_run_id",
+        "fence_epoch",
+        "mode"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-profile-fence/1.0"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "mode": {
+          "enum": [
+            "AUTO",
+            "PAUSING",
+            "MANUAL",
+            "AUTH_REQUIRED",
+            "ERROR"
+          ]
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile_id",
+        "browser_run_id",
+        "fence_epoch",
+        "process_stopped",
+        "profile_lock_released",
+        "gateway_stopped",
+        "checkpoint_committed",
+        "observed_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-profile-stop-receipt/1.0"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^kakaoprofile_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "browser_run_id": {
+          "type": "string",
+          "pattern": "^kakaobrowserrun_[0-9a-f]{32}$",
+          "maxLength": 80
+        },
+        "fence_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "process_stopped": {
+          "type": "boolean"
+        },
+        "profile_lock_released": {
+          "type": "boolean"
+        },
+        "gateway_stopped": {
+          "type": "boolean"
+        },
+        "checkpoint_committed": {
+          "type": "boolean"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        }
+      }
+    }
+  }
+}

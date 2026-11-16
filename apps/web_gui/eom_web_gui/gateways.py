@@ -157,6 +157,24 @@ from eom_web_gui.item_preview_projection import (
     project_item_content,
     resolve_content_capability,
 )
+from eom_web_gui.kakao_archive_contracts import (
+    BindingCommand,
+    BindingCreate,
+    BindingMutation,
+    BindingPage,
+    BindingRetire,
+    BindingUpdatePolicy,
+    SourceBinding,
+)
+from eom_web_gui.kakao_student_contracts import (
+    Student,
+    StudentCommand,
+    StudentCreate,
+    StudentMutation,
+    StudentPage,
+    StudentRename,
+    StudentRetire,
+)
 from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
 from eom_web_gui.material_learning_contracts import (
     MaterialItemDbEntry,
@@ -481,6 +499,48 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def kakao_student_list(
+        self, session: WebSession, *, limit: int = 50, cursor: str | None = None
+    ) -> StudentPage: ...
+
+    async def kakao_student_create(
+        self, session: WebSession, value: StudentCreate, idempotency_key: str
+    ) -> StudentMutation: ...
+
+    async def kakao_student_read(
+        self, session: WebSession, student_id: str, *, display_revision_id: str | None = None
+    ) -> Student: ...
+
+    async def kakao_student_command(
+        self,
+        session: WebSession,
+        student_id: str,
+        value: StudentCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> StudentMutation: ...
+
+    async def kakao_binding_list(
+        self, session: WebSession, *, limit: int = 50, cursor: str | None = None
+    ) -> BindingPage: ...
+
+    async def kakao_binding_create(
+        self, session: WebSession, value: BindingCreate, idempotency_key: str
+    ) -> BindingMutation: ...
+
+    async def kakao_binding_read(
+        self, session: WebSession, source_binding_id: str
+    ) -> SourceBinding: ...
+
+    async def kakao_binding_command(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        value: BindingCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> BindingMutation: ...
+
     async def content_workbook_template(self, session: WebSession) -> bytes: ...
 
     async def content_workbook_upload(
@@ -1271,6 +1331,210 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def kakao_student_list(
+        self, session: WebSession, *, limit: int = 50, cursor: str | None = None
+    ) -> StudentPage:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/students",
+            params={"limit": limit, **({"cursor": cursor} if cursor else {})},
+        )
+        try:
+            result = StudentPage.model_validate(self._data(response))
+            ids = [entry.student_id for entry in result.items]
+            if (
+                len(ids) > limit
+                or ids != sorted(set(ids))
+                or any(cursor is not None and identity <= cursor for identity in ids)
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different student page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_student_create(
+        self, session: WebSession, value: StudentCreate, idempotency_key: str
+    ) -> StudentMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/students",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            result = StudentMutation.model_validate(self._data(response))
+            if (
+                result.student.display_name != value.display_name
+                or result.student.resource_version != 1
+                or result.student.previous_revision_id is not None
+                or result.student.state != "ACTIVE"
+            ):
+                raise ValueError("different student creation")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_student_read(
+        self, session: WebSession, student_id: str, *, display_revision_id: str | None = None
+    ) -> Student:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/students/{quote(student_id, safe='')}",
+            params={"display_revision_id": display_revision_id}
+            if display_revision_id is not None
+            else {},
+        )
+        try:
+            result = Student.model_validate(self._data(response))
+            if result.student_id != student_id or (
+                display_revision_id is not None
+                and result.display_revision_id != display_revision_id
+            ):
+                raise ValueError("different student revision")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_student_command(
+        self,
+        session: WebSession,
+        student_id: str,
+        value: StudentCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> StudentMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/students/{quote(student_id, safe='')}/commands",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+        )
+        try:
+            result = StudentMutation.model_validate(self._data(response))
+            student = result.student
+            if (
+                student.student_id != student_id
+                or student.resource_version != value.expected_resource_version + 1
+                or student.previous_revision_id != value.parent_revision_id
+                or (isinstance(value, StudentRetire) and student.state != "RETIRED")
+                or (
+                    isinstance(value, StudentRename)
+                    and (student.state != "ACTIVE" or student.display_name != value.display_name)
+                )
+            ):
+                raise ValueError("different student successor")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_binding_list(
+        self, session: WebSession, *, limit: int = 50, cursor: str | None = None
+    ) -> BindingPage:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/source-bindings",
+            params={"limit": limit, **({"cursor": cursor} if cursor else {})},
+        )
+        try:
+            result = BindingPage.model_validate(self._data(response))
+            ids = [entry.source_binding_id for entry in result.items]
+            if (
+                len(ids) > limit
+                or ids != sorted(set(ids))
+                or any(cursor and identity <= cursor for identity in ids)
+                or (result.next_cursor is not None and (not ids or result.next_cursor != ids[-1]))
+            ):
+                raise ValueError("different binding page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_binding_create(
+        self, session: WebSession, value: BindingCreate, idempotency_key: str
+    ) -> BindingMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/source-bindings",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            result = BindingMutation.model_validate(self._data(response))
+            if (
+                result.binding.display_name != value.display_name
+                or result.binding.policy_revision.policy != value.policy
+                or result.binding.resource_version != 1
+                or result.binding.state != "DRAFT"
+            ):
+                raise ValueError("different binding creation")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_binding_read(
+        self, session: WebSession, source_binding_id: str
+    ) -> SourceBinding:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/source-bindings/{quote(source_binding_id, safe='')}",
+        )
+        try:
+            result = SourceBinding.model_validate(self._data(response))
+            if result.source_binding_id != source_binding_id:
+                raise ValueError("different binding")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_binding_command(
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        value: BindingCommand,
+        idempotency_key: str,
+        if_match: str,
+    ) -> BindingMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/source-bindings/{quote(source_binding_id, safe='')}/commands",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+        )
+        try:
+            result = BindingMutation.model_validate(self._data(response))
+            if (
+                result.binding.source_binding_id != source_binding_id
+                or result.binding.resource_version != value.expected_resource_version + 1
+            ):
+                raise ValueError("different binding command")
+            policy = result.binding.policy_revision
+            if isinstance(value, BindingRetire) and (
+                result.binding.state != "RETIRED"
+                or policy.policy_revision_id != value.parent_policy_revision_id
+            ):
+                raise ValueError("different retirement result")
+            if isinstance(value, BindingUpdatePolicy) and (
+                result.binding.state != "DRAFT"
+                or policy.previous_revision_id != value.parent_policy_revision_id
+                or policy.policy != value.policy
+            ):
+                raise ValueError("different policy successor")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def content_workbook_template(self, session: WebSession) -> bytes:
         response = await self._authorized(
             session, "GET", "/api/v1/content-planning/imports/template"

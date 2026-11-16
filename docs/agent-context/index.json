@@ -4,6 +4,58 @@
   "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
   "topics": [
     {
+      "id": "kakao-archive",
+      "note": "kakao-archive.md",
+      "keywords": ["KakaoTalk", "카카오", "학생 질문", "CSV", "질문집 PDF", "비공개 대화"],
+      "source_paths": [
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_archive.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_snapshot.py",
+        "services/catalog_service/eom_catalog_service/kakao_archive_intake.py",
+        "services/catalog_service/eom_catalog_service/kakao_archive_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_student_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_question_editing.py",
+        "services/catalog_service/eom_catalog_service/kakao_question_publication.py",
+        "services/catalog_service/eom_catalog_service/kakao_render_projection.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_students.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_question.py",
+        "services/catalog_service/eom_catalog_service/kakao_archive_authorization.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_archive_rpc.py",
+        "apps/application_api/eom_api/routers/kakao_archive.py",
+        "apps/application_api/eom_api/routers/kakao_students.py",
+        "apps/web_gui/eom_web_gui/kakao_archive_routes.py",
+        "apps/web_gui/eom_web_gui/kakao_student_routes.py",
+        "services/catalog_service/eom_catalog_service/kakao_csv_parser.py",
+        "services/catalog_service/eom_catalog_service/kakao_message_alignment.py",
+        "services/catalog_service/eom_catalog_service/kakao_question_rules.py",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts",
+        "services/kakao_archive_worker/eom_kakao_archive_worker",
+        "services/orchestrator/eom_orchestrator/kakao_pdf_execution.py",
+        "apps/web_gui/eom_web_gui/static/kakao-archive.js",
+        "apps/web_gui/eom_web_gui/static/kakao-students.js"
+      ],
+      "test_paths": [
+        "tests/unit/test_kakao_archive_rules.py",
+        "tests/unit/test_kakao_archive_intake.py",
+        "tests/integration/test_kakao_archive_storage.py",
+        "tests/unit/test_kakao_students.py",
+        "tests/unit/test_kakao_question_editing.py",
+        "tests/unit/test_kakao_question_publication.py",
+        "tests/unit/test_kakao_render_projection.py",
+        "tests/unit/test_kakao_pdf_execution.py",
+        "tests/unit/test_kakao_remote_runtime.py",
+        "tests/unit/test_kakao_question_render.py",
+        "tests/web_gui/test_kakao_archive_browser.py"
+      ],
+      "reference_paths": [
+        "docs/architecture/KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md",
+        "docs/architecture/KAKAO_STUDENT_QUESTION_BOUNDARY.md",
+        "docs/architecture/KAKAO_PDF_EXECUTION_BOUNDARY.md",
+        "docs/architecture/KAKAO_PRIVATE_RUNTIME_BOUNDARIES.md",
+        "docs/architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md",
+        "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
+      ]
+    },
+    {
       "id": "system-map",
       "note": "system-map.md",
       "keywords": ["구조", "모듈", "책임", "architecture", "dependency", "Catalog", "Orchestrator", "Runner"],

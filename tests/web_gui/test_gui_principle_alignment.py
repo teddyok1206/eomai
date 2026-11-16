@@ -38,7 +38,7 @@ def test_navigation_uses_one_local_line_icon_system_without_losing_labels() -> N
         html,
         re.DOTALL,
     )
-    assert len(buttons) == 17
+    assert len(buttons) == 18
     for button in buttons:
         icons = re.findall(r"<svg\b.*?</svg>", button, re.DOTALL)
         assert len(icons) == 1

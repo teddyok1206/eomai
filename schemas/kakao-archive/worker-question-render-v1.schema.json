@@ -1,0 +1,517 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/worker-question-render/1.0",
+  "$defs": {
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "task_id",
+        "attempt_id",
+        "attempt_number",
+        "fence"
+      ],
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "pattern": "^kakaocommand_[0-9a-f]{32}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaotask_[0-9a-f]{32}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^kakaoattempt_[0-9a-f]{32}$"
+        },
+        "attempt_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+(?:[/.][A-Za-z0-9_-]+)*$",
+          "maxLength": 240
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "media_type": {
+          "enum": [
+            "application/json",
+            "application/pdf",
+            "font/otf",
+            "font/ttf",
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        }
+      }
+    },
+    "text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span_id",
+        "text"
+      ],
+      "properties": {
+        "span_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment_occurrence_id",
+        "attachment_revision_id",
+        "member",
+        "availability",
+        "quality_accepted"
+      ],
+      "properties": {
+        "attachment_occurrence_id": {
+          "$ref": "#/$defs/attachment"
+        },
+        "attachment_revision_id": {
+          "$ref": "#/$defs/attachmentrev"
+        },
+        "member": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/member"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "availability": {
+          "enum": [
+            "AVAILABLE",
+            "MISSING",
+            "UNRESOLVED",
+            "EXPIRED"
+          ]
+        },
+        "quality_accepted": {
+          "type": "boolean"
+        },
+        "transform": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/transform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_revision_id",
+        "header_date",
+        "text_blocks",
+        "images",
+        "ordered_blocks"
+      ],
+      "properties": {
+        "question_revision_id": {
+          "$ref": "#/$defs/questionrev"
+        },
+        "header_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "text_blocks": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        },
+        "images": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "$ref": "#/$defs/image"
+          }
+        },
+        "ordered_blocks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 230,
+          "items": {
+            "$ref": "#/$defs/block_ref"
+          }
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "packet_revision_id",
+        "student_id",
+        "student_display_name",
+        "subset_sha256",
+        "mode",
+        "questions"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-render-manifest/1.0"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "packet_revision_id": {
+          "$ref": "#/$defs/packetrev"
+        },
+        "student_id": {
+          "$ref": "#/$defs/student"
+        },
+        "student_display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "subset_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution",
+        "schema_version",
+        "export_id",
+        "source_binding_id",
+        "packet_revision_id",
+        "student_id",
+        "subset_sha256",
+        "mode",
+        "renderer_release_sha256",
+        "layout_policy",
+        "manifest",
+        "font"
+      ],
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "schema_version": {
+          "const": "kakao-question-render/1.0"
+        },
+        "export_id": {
+          "$ref": "#/$defs/export"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "packet_revision_id": {
+          "$ref": "#/$defs/packetrev"
+        },
+        "student_id": {
+          "$ref": "#/$defs/student"
+        },
+        "subset_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "renderer_release_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "layout_policy": {
+          "const": "student-question-a4/1.0"
+        },
+        "manifest": {
+          "$ref": "#/$defs/member"
+        },
+        "font": {
+          "$ref": "#/$defs/member"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution",
+        "schema_version",
+        "export_id",
+        "command_sha256",
+        "manifest_sha256",
+        "status",
+        "page_count",
+        "outputs",
+        "error_code",
+        "question_revision_id"
+      ],
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/execution"
+        },
+        "schema_version": {
+          "const": "kakao-question-render-result/1.0"
+        },
+        "export_id": {
+          "$ref": "#/$defs/export"
+        },
+        "command_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "enum": [
+            "COMPLETED",
+            "NEEDS_LAYOUT_REVIEW",
+            "INVALID_INPUT"
+          ]
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "outputs": {
+          "type": "array",
+          "maxItems": 202,
+          "items": {
+            "$ref": "#/$defs/member"
+          }
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "question_revision_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/questionrev"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "binding": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "packetrev": {
+      "type": "string",
+      "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+    },
+    "student": {
+      "type": "string",
+      "pattern": "^kakaostudent_[0-9a-f]{32}$"
+    },
+    "questionrev": {
+      "type": "string",
+      "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+    },
+    "attachment": {
+      "type": "string",
+      "pattern": "^kakaoattachment_[0-9a-f]{32}$"
+    },
+    "attachmentrev": {
+      "type": "string",
+      "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+    },
+    "export": {
+      "type": "string",
+      "pattern": "^kakaoexport_[0-9a-f]{32}$"
+    },
+    "crop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left_ppm",
+        "top_ppm",
+        "right_ppm",
+        "bottom_ppm"
+      ],
+      "properties": {
+        "left_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "top_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "right_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "bottom_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transform_revision_id",
+        "operation_order",
+        "rotate_clockwise",
+        "crop"
+      ],
+      "properties": {
+        "transform_revision_id": {
+          "type": "string",
+          "pattern": "^kakaotransformrev_[0-9a-f]{32}$"
+        },
+        "operation_order": {
+          "const": "EXIF_THEN_ROTATE_THEN_CROP"
+        },
+        "rotate_clockwise": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "crop": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/crop"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "block_ref": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "TEXT"
+            },
+            "span_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "attachment_occurrence_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "IMAGE"
+            },
+            "attachment_occurrence_id": {
+              "$ref": "#/$defs/attachment"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/manifest"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ]
+}

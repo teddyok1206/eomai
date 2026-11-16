@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-binding-response-v1/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CREATE_KAKAO_BINDING"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "replayed"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "eom://schemas/kakao-archive/source-binding-v1/1.0"
+            },
+            "replayed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "COMMAND_KAKAO_BINDING"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "replayed"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "eom://schemas/kakao-archive/source-binding-v1/1.0"
+            },
+            "replayed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_BINDING"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/source-binding-v1/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "LIST_KAKAO_BINDINGS"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "items",
+            "next_cursor"
+          ],
+          "properties": {
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "$ref": "eom://schemas/kakao-archive/source-binding-v1/1.0"
+              }
+            },
+            "next_cursor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^kakaobinding_[0-9a-f]{32}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "CREATE_KAKAO_BINDING",
+            "COMMAND_KAKAO_BINDING",
+            "READ_KAKAO_BINDING",
+            "LIST_KAKAO_BINDINGS"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "enum": [
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "KAKAO_ARCHIVE_PERMISSION_DENIED",
+            "KAKAO_ARCHIVE_RESOURCE_NOT_FOUND",
+            "KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT",
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "KAKAO_ARCHIVE_BINDING_RETIRED",
+            "KAKAO_ARCHIVE_POLICY_REFERENCE_INVALID",
+            "KAKAO_ARCHIVE_STORED_POLICY_INVALID",
+            "KAKAO_ARCHIVE_STORED_BINDING_INVALID",
+            "KAKAO_ARCHIVE_RESULT_INVALID",
+            "KAKAO_ARCHIVE_RESULT_TOO_LARGE",
+            "CATALOG_APPLICATION_UNAVAILABLE",
+            "CATALOG_APPLICATION_INTERNAL_ERROR"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/kakao-archive/1.0",
+  "title": "Private KakaoTalk binding bootstrap public payloads",
+  "description": "Payloads inside the existing API envelope. DRAFT settings do not verify a channel, enable a schedule, or grant remote access.",
+  "oneOf": [
+    {"$ref": "#/$defs/Create"},
+    {"$ref": "#/$defs/Command"},
+    {"$ref": "#/$defs/Binding"},
+    {"$ref": "#/$defs/Page"},
+    {"$ref": "#/$defs/Mutation"}
+  ],
+  "$defs": {
+    "Create": {"$ref": "eom://schemas/kakao-archive/source-binding-create-v1/1.0"},
+    "Command": {"$ref": "eom://schemas/kakao-archive/source-binding-command-v1/1.0"},
+    "Binding": {"$ref": "eom://schemas/kakao-archive/source-binding-v1/1.0"},
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "next_cursor"],
+      "properties": {
+        "items": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/Binding"}},
+        "next_cursor": {"type": ["string", "null"], "pattern": "^kakaobinding_[0-9a-f]{32}$"}
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "replayed"],
+      "properties": {
+        "binding": {"$ref": "#/$defs/Binding"},
+        "replayed": {"type": "boolean"}
+      }
+    }
+  }
+}

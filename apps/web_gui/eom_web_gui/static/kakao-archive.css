@@ -1,0 +1,48 @@
+.kakao-archive { min-width: 0; color: var(--eom-ink); }
+.kakao-toolbar, .kakao-connection, .kakao-packet { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.kakao-toolbar { justify-content: space-between; }
+.kakao-toolbar h1 { margin: 0; }
+.kakao-bootstrap { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 20px 0; padding: 16px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
+.kakao-bootstrap label { display: grid; gap: 8px; min-width: 0; flex: 1 1 220px; max-width: 420px; }
+.kakao-bootstrap input { width: 100%; min-height: 40px; }
+.kakao-bootstrap p { flex-basis: 100%; margin: 0; }
+.kakao-retire-confirm { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.kakao-binding { display: grid; gap: 8px; max-width: 420px; margin: 20px 0; }
+.kakao-connection { padding-bottom: 16px; }
+.kakao-connection p { flex-basis: 100%; margin: 0; }
+.kakao-run:empty { display: none; }
+.kakao-run { padding: 16px; margin-bottom: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
+.kakao-workspace { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(220px, 1fr) minmax(320px, 1.8fr); border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); overflow: hidden; }
+.kakao-workspace > section { padding: 20px; min-width: 0; }
+.kakao-workspace > section + section { border-left: 1px solid var(--eom-border); }
+.kakao-workspace h3 { margin: 0 0 16px; }
+.kakao-list-row { display: grid; justify-items: start; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--eom-border); }
+.kakao-list-row .button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+.kakao-list-row small { font-size: var(--eom-type-caption, 13px); color: var(--eom-text-muted); }
+.kakao-detail { background: var(--eom-surface); }
+.kakao-detail img, .kakao-export img { display: block; max-width: 100%; height: auto; object-fit: contain; margin: 16px 0; background: var(--eom-surface); }
+.kakao-message-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.kakao-technical { font-size: var(--eom-type-caption, 13px); color: var(--eom-text-muted); }
+.kakao-technical dd { margin: 0 0 12px; overflow-wrap: anywhere; }
+.kakao-publications { margin-top: 24px; }
+.kakao-students { margin: 20px 0; padding: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
+.kakao-students h2, .kakao-student-detail h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
+.kakao-student-edit { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.kakao-student-edit label, .kakao-student-picker { display: grid; gap: 8px; min-width: 0; max-width: 420px; }
+.kakao-student-edit label { flex: 1 1 220px; }
+.kakao-student-edit input, .kakao-student-picker select { width: 100%; min-width: 0; min-height: 40px; }
+.kakao-student-detail { padding-top: 16px; }
+.kakao-packet { padding: 16px 0; border-top: 1px solid var(--eom-border); }
+.kakao-exports { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; }
+.kakao-export { padding: 16px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
+.kakao-export > span { margin-left: 8px; }
+.kakao-archive .button { min-height: 40px; border-radius: var(--eom-radius-control); }
+@media (max-width: 1050px) {
+  .kakao-workspace { grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.5fr); }
+  .kakao-workspace > .kakao-detail { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--eom-border); }
+}
+@media (max-width: 640px) {
+  .kakao-workspace { grid-template-columns: minmax(0, 1fr); }
+  .kakao-workspace > section + section { border-left: 0; border-top: 1px solid var(--eom-border); }
+  .kakao-workspace > section { padding: 16px; }
+}

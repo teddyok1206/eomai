@@ -165,6 +165,31 @@ def test_services_never_depend_on_application_entrypoints() -> None:
             _assert_prefixes_absent(_imports(path), application_roots)
 
 
+def test_kakao_offline_worker_has_no_core_storage_browser_or_network_dependency() -> None:
+    roots = _first_party_roots()
+    worker = roots["eom_kakao_archive_worker"][1]
+    first_party_forbidden = tuple(
+        name
+        for name in roots
+        if name not in {"eom_kakao_archive_worker", "eom_kakao_archive_contracts"}
+    )
+    _assert_prefixes_absent(
+        _imports(worker),
+        (
+            *first_party_forbidden,
+            "sqlalchemy",
+            "psycopg",
+            "httpx",
+            "requests",
+            "socket",
+            "urllib.request",
+            "playwright",
+            "selenium",
+            "subprocess",
+        ),
+    )
+
+
 def test_first_party_cycles_cannot_expand_beyond_the_reviewed_composition_cluster() -> None:
     _assert_reviewed_cycles(_first_party_roots())
 

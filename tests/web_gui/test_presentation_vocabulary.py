@@ -44,6 +44,16 @@ def test_material_learning_uses_one_vocabulary_and_covers_typed_states() -> None
     assert states["WAITING_FOR_CAPACITY"]["tone"] != "danger"
 
 
+def test_kakao_bootstrap_states_do_not_claim_collection_is_ready() -> None:
+    states = _vocabulary()["domains"]["kakao_archive"]["states"]
+    assert set(states) == {"DRAFT", "RETIRED", "NOT_VERIFIED"}
+    assert states["DRAFT"]["tone"] == "neutral"
+    assert states["NOT_VERIFIED"]["tone"] == "warning"
+    assert "준비" in states["DRAFT"]["label"]
+    assert "완료" not in states["DRAFT"]["label"]
+    assert _vocabulary()["errors"]["KAKAO_ARCHIVE_PRECONDITION_FAILED"]["action"]
+
+
 def test_domain_specific_states_are_human_readable() -> None:
     domains = _vocabulary()["domains"]
     expected = {

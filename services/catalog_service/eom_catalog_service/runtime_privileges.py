@@ -11,6 +11,12 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "kakao_students",
+    "kakao_student_display_revisions",
+    "kakao_student_commands",
+    "kakao_channel_bindings",
+    "kakao_collection_policy_revisions",
+    "kakao_binding_commands",
     "content_editions",
     "content_edition_revisions",
     "content_form_memberships",
@@ -160,6 +166,12 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_students",
+    "kakao_student_display_revisions",
+    "kakao_student_commands",
+    "kakao_channel_bindings",
+    "kakao_collection_policy_revisions",
+    "kakao_binding_commands",
     "content_editions",
     "content_edition_revisions",
     "content_form_memberships",
@@ -279,6 +291,8 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
 )
 
 UPDATE_TABLES: Final[tuple[str, ...]] = (
+    "kakao_students",
+    "kakao_channel_bindings",
     "content_editions",
     "deliverables",
     "learning_materials",
@@ -319,6 +333,15 @@ TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
     ("UPDATE", UPDATE_TABLES),
 )
 
+# Current API-session lifetime check only: no tokens, credentials or session mutations.
+COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    (
+        "SELECT",
+        "api_sessions",
+        ("api_session_id", "operator_id", "revoked_at", "absolute_expires_at", "idle_expires_at"),
+    ),
+)
+
 EXTRA_SEQUENCES: Final[tuple[str, ...]] = ("content_product_revision_number_seq",)
 
 _REQUIRED_PRIVILEGES_JSON: Final[str] = json.dumps(
@@ -326,6 +349,16 @@ _REQUIRED_PRIVILEGES_JSON: Final[str] = json.dumps(
         {"table_name": table_name, "privilege": privilege}
         for privilege, table_names in TABLE_PRIVILEGES
         for table_name in table_names
+    ],
+    separators=(",", ":"),
+    sort_keys=True,
+)
+
+_REQUIRED_COLUMN_PRIVILEGES_JSON: Final[str] = json.dumps(
+    [
+        {"table_name": table, "column_name": column, "privilege": privilege}
+        for privilege, table, columns in COLUMN_PRIVILEGES
+        for column in columns
     ],
     separators=(",", ":"),
     sort_keys=True,
@@ -342,9 +375,18 @@ def catalog_runtime_privileges_ready(connection: Connection) -> bool:
             ")), false) AND (SELECT COALESCE(bool_and(has_sequence_privilege("
             "current_user, format('app.%I', sequence_name), 'USAGE')), false) "
             "FROM jsonb_array_elements_text(CAST(:sequences AS jsonb)) AS names(sequence_name)) "
+            "AND (SELECT COALESCE(bool_and(has_column_privilege(current_user, "
+            "format('app.%I', required_column.table_name), required_column.column_name, "
+            "required_column.privilege)), false) FROM jsonb_to_recordset("
+            "CAST(:columns AS jsonb)) AS required_column("
+            "table_name text, column_name text, privilege text)) "
             "FROM jsonb_to_recordset(CAST(:requirements AS jsonb)) "
             "AS required(table_name text, privilege text)"
         ),
-        {"requirements": _REQUIRED_PRIVILEGES_JSON, "sequences": json.dumps(EXTRA_SEQUENCES)},
+        {
+            "requirements": _REQUIRED_PRIVILEGES_JSON,
+            "sequences": json.dumps(EXTRA_SEQUENCES),
+            "columns": _REQUIRED_COLUMN_PRIVILEGES_JSON,
+        },
     )
     return value is True

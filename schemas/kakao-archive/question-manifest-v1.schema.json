@@ -1,0 +1,729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/question-manifest-v1/1.0",
+  "$defs": {
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "student": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "student_id",
+        "student_display_revision_id",
+        "room_mapping_revision_id",
+        "display_name"
+      ],
+      "properties": {
+        "student_id": {
+          "type": "string",
+          "pattern": "^kakaostudent_[0-9a-f]{32}$"
+        },
+        "student_display_revision_id": {
+          "type": "string",
+          "pattern": "^kakaostudentrev_[0-9a-f]{32}$"
+        },
+        "room_mapping_revision_id": {
+          "type": "string",
+          "pattern": "^kakaomappingrev_[0-9a-f]{32}$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalization_revision_id",
+        "snapshot_revision_id",
+        "pointer"
+      ],
+      "properties": {
+        "normalization_revision_id": {
+          "type": "string",
+          "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+        },
+        "snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^kakaosnapshotrev_[0-9a-f]{32}$"
+        },
+        "pointer": {
+          "$ref": "#/$defs/pointer"
+        }
+      }
+    },
+    "override": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "reason"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "crop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left_ppm",
+        "top_ppm",
+        "right_ppm",
+        "bottom_ppm"
+      ],
+      "properties": {
+        "left_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "top_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "right_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "bottom_ppm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transform_revision_id",
+        "operation_order",
+        "rotate_clockwise",
+        "crop",
+        "reason"
+      ],
+      "properties": {
+        "transform_revision_id": {
+          "type": "string",
+          "pattern": "^kakaotransformrev_[0-9a-f]{32}$"
+        },
+        "operation_order": {
+          "const": "EXIF_THEN_ROTATE_THEN_CROP"
+        },
+        "rotate_clockwise": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/crop"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment_revision_id",
+        "source_sha256",
+        "accepted_by",
+        "accepted_at",
+        "reason"
+      ],
+      "properties": {
+        "attachment_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "accepted_by": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "accepted_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "text_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "source_occurrence_id",
+        "normalization_revision_id",
+        "row_ordinal",
+        "role",
+        "sent_at_utc",
+        "kind",
+        "source_text_sha256",
+        "start_codepoint",
+        "end_codepoint",
+        "display_override"
+      ],
+      "properties": {
+        "block_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "source_occurrence_id": {
+          "type": "string",
+          "pattern": "^kakaomessage_[0-9a-f]{32}$"
+        },
+        "normalization_revision_id": {
+          "type": "string",
+          "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+        },
+        "row_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "role": {
+          "enum": [
+            "student",
+            "staff"
+          ]
+        },
+        "sent_at_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "TEXT"
+        },
+        "source_text_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "start_codepoint": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "end_codepoint": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "display_override": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/override"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "image_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "source_occurrence_id",
+        "normalization_revision_id",
+        "row_ordinal",
+        "role",
+        "sent_at_utc",
+        "kind",
+        "attachment_id",
+        "attachment_revision_id",
+        "availability",
+        "association",
+        "source_pointer",
+        "source_quality",
+        "quality_acceptance",
+        "transform"
+      ],
+      "properties": {
+        "block_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "source_occurrence_id": {
+          "type": "string",
+          "pattern": "^kakaomessage_[0-9a-f]{32}$"
+        },
+        "normalization_revision_id": {
+          "type": "string",
+          "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+        },
+        "row_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "role": {
+          "enum": [
+            "student",
+            "staff"
+          ]
+        },
+        "sent_at_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "IMAGE"
+        },
+        "attachment_id": {
+          "type": "string",
+          "pattern": "^kakaoattachment_[0-9a-f]{32}$"
+        },
+        "attachment_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "expired",
+            "denied",
+            "not_found",
+            "pending",
+            "failed"
+          ]
+        },
+        "association": {
+          "enum": [
+            "SOURCE_VERIFIED",
+            "SEQUENCE_INFERRED",
+            "SNAPSHOT_ONLY",
+            "MANUAL_CONFIRMED",
+            "UNRESOLVED"
+          ]
+        },
+        "source_pointer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_quality": {
+          "enum": [
+            "ORIGINAL",
+            "BEST_AVAILABLE",
+            "UNKNOWN"
+          ]
+        },
+        "quality_acceptance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/quality"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/transform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "block": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/text_block"
+        },
+        {
+          "$ref": "#/$defs/image_block"
+        }
+      ]
+    },
+    "reason": {
+      "enum": [
+        "UNKNOWN_SENDER",
+        "TIMEZONE_UNVERIFIED",
+        "SOURCE_SCOPE_UNVERIFIED",
+        "ATTACHMENT_UNAVAILABLE",
+        "ATTACHMENT_ASSOCIATION_UNRESOLVED",
+        "PHOTO_MARKER_UNVERIFIED",
+        "SOURCE_DELETION"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "decided_at",
+        "reason",
+        "boundary_confirmed"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "boundary_confirmed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_id",
+        "question_revision_id"
+      ],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+        },
+        "question_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "reason"
+      ],
+      "properties": {
+        "block_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_id",
+        "question_revision_id",
+        "room_id",
+        "student",
+        "manifest",
+        "first_student_at_utc",
+        "final_blockers"
+      ],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+        },
+        "question_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^kakaoroom_[0-9a-f]{32}$"
+        },
+        "student": {
+          "$ref": "#/$defs/student"
+        },
+        "manifest": {
+          "$ref": "#/$defs/pointer"
+        },
+        "first_student_at_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "final_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "minItems": 0,
+          "maxItems": 20
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "question_id",
+    "question_revision_id",
+    "previous_revision_id",
+    "source_binding_id",
+    "room_id",
+    "student",
+    "sources",
+    "ordered_blocks",
+    "first_student_at_utc",
+    "review_state",
+    "review_decision",
+    "review_reasons",
+    "boundary_uncertain",
+    "source_stale",
+    "provenance",
+    "selection_exclusions",
+    "rule_revision",
+    "created_by",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-question-manifest/1.0"
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+    },
+    "question_revision_id": {
+      "type": "string",
+      "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+    },
+    "previous_revision_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_binding_id": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "student": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/student"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "minItems": 1,
+      "maxItems": 100
+    },
+    "ordered_blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "minItems": 1,
+      "maxItems": 230
+    },
+    "first_student_at_utc": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_state": {
+      "enum": [
+        "UNREVIEWED",
+        "CONFIRMED",
+        "EXCLUDED"
+      ]
+    },
+    "review_decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/decision"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_reasons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reason"
+      },
+      "minItems": 0,
+      "maxItems": 8
+    },
+    "boundary_uncertain": {
+      "type": "boolean"
+    },
+    "source_stale": {
+      "type": "boolean"
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provenance"
+      },
+      "minItems": 0,
+      "maxItems": 100
+    },
+    "selection_exclusions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exclusion"
+      },
+      "minItems": 0,
+      "maxItems": 230
+    },
+    "rule_revision": {
+      "const": "turn_v1"
+    },
+    "created_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    }
+  }
+}

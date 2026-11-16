@@ -34,6 +34,90 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "catalog-kakao-student-request-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-student-request-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-student-request-v1.schema.json",
+            "1.0",
+            "sha256:8795e17941ac9efb2e801b139b70a3a5b54b1a10f2a72b028a1192a536ee02bb",
+        ),
+        "catalog-kakao-student-response-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-student-response-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-student-response-v1.schema.json",
+            "1.0",
+            "sha256:b040e86b94c7097fef8a4d74838ad6ee3bf5c16dd35cfd50885aa8c5834054e2",
+        ),
+        "kakao-question-manifest-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-manifest-v1.schema.json",
+            "resources/kakao-archive/question-manifest-v1.schema.json",
+            "1.0",
+            "sha256:052eb028ec65583d3a3048630af5c29589c5ab2c48f636d703630a510be9f6aa",
+        ),
+        "kakao-question-edit-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-edit-v1.schema.json",
+            "resources/kakao-archive/question-edit-v1.schema.json",
+            "1.0",
+            "sha256:e2d743cdf0edbe73e63ab47e9747ff9cae44456beae7cdaa5a1595e12e39a7c1",
+        ),
+        "kakao-question-packet-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-packet-v1.schema.json",
+            "resources/kakao-archive/question-packet-v1.schema.json",
+            "1.0",
+            "sha256:be9699e9cc007280865d4af6a697d83c7bfa81206b48f3010f39954ece464387",
+        ),
+        "kakao-student-directory-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/student-directory-v1.schema.json",
+            "resources/kakao-archive/student-directory-v1.schema.json",
+            "1.0",
+            "sha256:59ef3b6fda1fdc8c4e495ff7d887bb684caddfb422468e4b85a052d1c90b45ac",
+        ),
+        "catalog-kakao-binding-request-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-binding-request-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-binding-request-v1.schema.json",
+            "1.0",
+            "sha256:12afabd2c79dc7c2eb59aeaca017d74c6ce6765500f543b32fd2f5c45a3485d2",
+        ),
+        "catalog-kakao-binding-response-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-binding-response-v1.schema.json",
+            "resources/kakao-archive/catalog-kakao-binding-response-v1.schema.json",
+            "1.0",
+            "sha256:b7e8dda075ec90ec956fbe16b3fdc333e813d1c7b7b813a8c89a1a93884a6433",
+        ),
+        "kakao-source-binding-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/source-binding-v1.schema.json",
+            "resources/kakao-archive/source-binding-v1.schema.json",
+            "1.0",
+            "sha256:189c6ed074c89db5aa8cd8689e0e35dcfe710e5ca43c92073b64ea4157e27d0a",
+        ),
+        "kakao-source-binding-create-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/source-binding-create-v1.schema.json",
+            "resources/kakao-archive/source-binding-create-v1.schema.json",
+            "1.0",
+            "sha256:c6cab7536dd8faace45261ac511f54dcea9e76cb94dc9f82fe9846e9dff81f6c",
+        ),
+        "kakao-source-binding-command-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/source-binding-command-v1.schema.json",
+            "resources/kakao-archive/source-binding-command-v1.schema.json",
+            "1.0",
+            "sha256:e337c1282267b6ff4299440fb7637bd7614d9c93b4e0ce4d173ef0eb0d94e95e",
+        ),
+        "kakao-room-snapshot-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/room-snapshot-v1.schema.json",
+            "resources/kakao-archive/room-snapshot-v1.schema.json",
+            "1.0",
+            "sha256:7757f7e013832743599d6591585bed63aaff731a175863633bbbb67bff4343dd",
+        ),
+        "kakao-message-normalization-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/message-normalization-v1.schema.json",
+            "resources/kakao-archive/message-normalization-v1.schema.json",
+            "1.0",
+            "sha256:e22806579fabb51a682f49747a8b1eff5e7508b08aa53480134444e01c3da407",
+        ),
+        "kakao-question-candidates-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-candidates-v1.schema.json",
+            "resources/kakao-archive/question-candidates-v1.schema.json",
+            "1.0",
+            "sha256:dee998b3993cf327abf26911835ac278439818a2df97dc859009b051ac51f288",
+        ),
         "source-score-v2": CatalogSchemaResource(
             "schemas/external-item/source-score-v2.schema.json",
             "resources/external-item/source-score-v2.schema.json",

@@ -124,6 +124,8 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryResponseV2,
     delivery_contract_version,
 )
+from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
+from eom_catalog_contracts.kakao_student_rpc import KAKAO_STUDENT_OPERATIONS
 from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -233,6 +235,10 @@ from eom_catalog_service.item_similarity_publication_dispatch import (
 from eom_catalog_service.item_similarity_publication_service import (
     CatalogItemSimilarityPublicationService,
 )
+from eom_catalog_service.kakao_archive_dispatch import dispatch_kakao_binding
+from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_student_dispatch import dispatch_kakao_student
+from eom_catalog_service.kakao_student_service import KakaoStudentService
 from eom_catalog_service.knowledge_analysis_batch_service import (
     KnowledgeAnalysisBatchService,
     KnowledgeAnalysisBatchServiceError,
@@ -323,6 +329,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if isinstance(raw_operation, str) and raw_operation in KAKAO_BINDING_OPERATIONS:
+                self.wfile.write(dispatch_kakao_binding(self.server.kakao_archive, value))
+                self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in KAKAO_STUDENT_OPERATIONS:
+                self.wfile.write(dispatch_kakao_student(self.server.kakao_students, value))
+                self.wfile.flush()
                 return
             if isinstance(raw_operation, str) and raw_operation in CONTENT_PLANNING_OPERATIONS:
                 self.wfile.write(dispatch_content_planning(self.server.content_planning, value))
@@ -2058,6 +2072,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         curated_document_assemblies: CuratedDocumentAssemblyService | None = None,
         content_planning: ContentPlanningService | None = None,
         content_workbook_import: ContentWorkbookImportService | None = None,
+        kakao_archive: KakaoArchiveService | None = None,
+        kakao_students: KakaoStudentService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -2101,6 +2117,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.curated_document_assemblies = curated_document_assemblies
         self.content_planning = content_planning
         self.content_workbook_import = content_workbook_import
+        self.kakao_archive = kakao_archive
+        self.kakao_students = kakao_students
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/source-binding-v1/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_binding_id",
+    "display_name",
+    "state",
+    "resource_version",
+    "policy_revision",
+    "schedule_enabled",
+    "capability_state",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-source-binding/1.0"
+    },
+    "source_binding_id": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+    },
+    "state": {
+      "enum": [
+        "DRAFT",
+        "RETIRED"
+      ]
+    },
+    "resource_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "policy_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_binding_id",
+        "policy_revision_id",
+        "previous_revision_id",
+        "revision_number",
+        "sha256",
+        "policy",
+        "created_at"
+      ],
+      "properties": {
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^kakaopolicyrev_[0-9a-f]{32}$"
+        },
+        "previous_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaopolicyrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "interval_minutes",
+            "include_images",
+            "source_timezone",
+            "question_rule_version"
+          ],
+          "properties": {
+            "interval_minutes": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 10080
+            },
+            "include_images": {
+              "const": true
+            },
+            "source_timezone": {
+              "enum": [
+                "unknown",
+                "Asia/Seoul"
+              ]
+            },
+            "question_rule_version": {
+              "const": "turn_v1"
+            }
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        }
+      }
+    },
+    "schedule_enabled": {
+      "const": false
+    },
+    "capability_state": {
+      "const": "NOT_VERIFIED"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    }
+  }
+}

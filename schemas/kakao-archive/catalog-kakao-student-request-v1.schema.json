@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-student-request-v1/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "CREATE_KAKAO_STUDENT"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "command": {
+          "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Create"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "student_id",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "COMMAND_KAKAO_STUDENT"
+        },
+        "student_id": {
+          "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/StudentId"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "command": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Rename"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/Retire"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "student_id",
+        "display_revision_id"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "READ_KAKAO_STUDENT"
+        },
+        "student_id": {
+          "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/StudentId"
+        },
+        "display_revision_id": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/RevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "limit",
+        "cursor"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "LIST_KAKAO_STUDENTS"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/student-directory-v1/1.0#/$defs/StudentId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

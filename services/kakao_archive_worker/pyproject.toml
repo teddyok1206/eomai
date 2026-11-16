@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-kakao-archive-worker"
+version = "0.1.0"
+description = "Offline local-input student question PDF renderer"
+requires-python = ">=3.12,<3.13"
+# Contracts validate the local handoff; PyMuPDF is the existing EOM PDF engine.
+# Pillow checks dimensions before decode and preserves EXIF display orientation.
+# Reuses the existing image-provider pin; installed only in this isolated worker.
+dependencies = ["eom-kakao-archive-contracts==0.1.0", "PyMuPDF>=1.26.7,<1.27", "Pillow==11.3.0"]
+
+[project.scripts]
+eom-kakao-question-render = "eom_kakao_archive_worker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_kakao_archive_worker*"]

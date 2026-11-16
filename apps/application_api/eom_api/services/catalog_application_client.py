@@ -188,6 +188,42 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryResponseV2,
     delivery_contract_version,
 )
+from eom_catalog_contracts.kakao_archive_binding import (
+    KakaoBindingCommand,
+    KakaoBindingCreate,
+    KakaoBindingMutation,
+    KakaoBindingPage,
+    KakaoSourceBinding,
+)
+from eom_catalog_contracts.kakao_archive_rpc import (
+    CommandKakaoBindingRequest,
+    CreateKakaoBindingRequest,
+    KakaoBindingFailure,
+    KakaoBindingRequest,
+    ListKakaoBindingsRequest,
+    ReadKakaoBindingRequest,
+    check_kakao_binding_reply,
+    parse_kakao_binding_reply,
+    parse_kakao_binding_request,
+)
+from eom_catalog_contracts.kakao_student_rpc import (
+    CommandKakaoStudentRequest,
+    CreateKakaoStudentRequest,
+    KakaoStudentFailure,
+    KakaoStudentRequest,
+    ListKakaoStudentsRequest,
+    ReadKakaoStudentRequest,
+    check_kakao_student_reply,
+    parse_kakao_student_reply,
+    parse_kakao_student_request,
+)
+from eom_catalog_contracts.kakao_students import (
+    KakaoStudent,
+    KakaoStudentCommand,
+    KakaoStudentCreate,
+    KakaoStudentMutation,
+    KakaoStudentPage,
+)
 from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
     GetMaterialLearningRunQuery,
@@ -306,6 +342,143 @@ class CatalogApplicationClient:
         self.socket_path = socket_path
         self.expected_uid = expected_uid
         self.expected_gid = grp.getgrnam("eom-api").gr_gid if expected_gid is None else expected_gid
+
+    @staticmethod
+    def _kakao_identity(actor: ActorContext) -> dict[str, object]:
+        return {
+            "actor_id": actor.operator_id,
+            "session_id": actor.session_id,
+            "request_id": actor.request_id,
+            "authentication_time": actor.authentication_time,
+        }
+
+    def create_kakao_binding(
+        self, command: KakaoBindingCreate, *, actor: ActorContext, idempotency_key: str
+    ) -> KakaoBindingMutation:
+        request = CreateKakaoBindingRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoBindingMutation, self._request_kakao_binding(request))
+
+    def command_kakao_binding(
+        self,
+        source_binding_id: str,
+        command: KakaoBindingCommand,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoBindingMutation:
+        request = CommandKakaoBindingRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": source_binding_id,
+                "command": command,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return cast(KakaoBindingMutation, self._request_kakao_binding(request))
+
+    def read_kakao_binding(
+        self, source_binding_id: str, *, actor: ActorContext
+    ) -> KakaoSourceBinding:
+        request = ReadKakaoBindingRequest.model_validate(
+            {**self._kakao_identity(actor), "source_binding_id": source_binding_id}
+        )
+        return cast(KakaoSourceBinding, self._request_kakao_binding(request))
+
+    def list_kakao_bindings(
+        self, *, actor: ActorContext, limit: int = 50, cursor: str | None = None
+    ) -> KakaoBindingPage:
+        request = ListKakaoBindingsRequest.model_validate(
+            {**self._kakao_identity(actor), "limit": limit, "cursor": cursor}
+        )
+        return cast(KakaoBindingPage, self._request_kakao_binding(request))
+
+    def _request_kakao_binding(
+        self, request: KakaoBindingRequest
+    ) -> KakaoBindingMutation | KakaoBindingPage | KakaoSourceBinding:
+        try:
+            parsed = parse_kakao_binding_request(request.model_dump(mode="json"))
+            reply = parse_kakao_binding_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_kakao_binding_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private binding response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoBindingFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private binding request failed")
+        return reply.result
+
+    def create_kakao_student(
+        self, command: KakaoStudentCreate, *, actor: ActorContext, idempotency_key: str
+    ) -> KakaoStudentMutation:
+        request = CreateKakaoStudentRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoStudentMutation, self._request_kakao_student(request))
+
+    def command_kakao_student(
+        self,
+        student_id: str,
+        command: KakaoStudentCommand,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoStudentMutation:
+        request = CommandKakaoStudentRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "student_id": student_id,
+                "command": command,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return cast(KakaoStudentMutation, self._request_kakao_student(request))
+
+    def read_kakao_student(
+        self, student_id: str, *, actor: ActorContext, display_revision_id: str | None = None
+    ) -> KakaoStudent:
+        request = ReadKakaoStudentRequest.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "student_id": student_id,
+                "display_revision_id": display_revision_id,
+            }
+        )
+        return cast(KakaoStudent, self._request_kakao_student(request))
+
+    def list_kakao_students(
+        self, *, actor: ActorContext, limit: int = 50, cursor: str | None = None
+    ) -> KakaoStudentPage:
+        request = ListKakaoStudentsRequest.model_validate(
+            {**self._kakao_identity(actor), "limit": limit, "cursor": cursor}
+        )
+        return cast(KakaoStudentPage, self._request_kakao_student(request))
+
+    def _request_kakao_student(
+        self, request: KakaoStudentRequest
+    ) -> KakaoStudentMutation | KakaoStudentPage | KakaoStudent:
+        try:
+            parsed = parse_kakao_student_request(request.model_dump(mode="json"))
+            reply = parse_kakao_student_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_kakao_student_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private student response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoStudentFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private student request failed")
+        return reply.result
 
     def content_workbook(
         self, command: ContentWorkbookRequest, *, content: bytes | None = None

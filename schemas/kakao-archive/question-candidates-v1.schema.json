@@ -1,0 +1,174 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_binding_id",
+    "room_id",
+    "normalization_revision_id",
+    "rule_revision",
+    "candidates",
+    "unresolved_rows"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-question-candidates/1.0"
+    },
+    "source_binding_id": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "normalization_revision_id": {
+      "type": "string",
+      "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+    },
+    "rule_revision": {
+      "const": "turn_v1"
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_ordinal",
+          "student_rows",
+          "reply_rows",
+          "attachments",
+          "first_student_at_utc",
+          "boundary_uncertain",
+          "review_reasons",
+          "reviewed"
+        ],
+        "properties": {
+          "candidate_ordinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "student_rows": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "maxItems": 100000,
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "reply_rows": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "maxItems": 100000,
+            "uniqueItems": true
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "attachment_id",
+                "attachment_revision_id",
+                "album_ordinal",
+                "availability",
+                "association"
+              ],
+              "properties": {
+                "attachment_id": {
+                  "type": "string",
+                  "pattern": "^kakaoattachment_[0-9a-f]{32}$"
+                },
+                "attachment_revision_id": {
+                  "type": "string",
+                  "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+                },
+                "album_ordinal": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "availability": {
+                  "enum": [
+                    "available",
+                    "expired",
+                    "denied",
+                    "not_found",
+                    "pending",
+                    "failed"
+                  ]
+                },
+                "association": {
+                  "enum": [
+                    "SOURCE_VERIFIED",
+                    "SEQUENCE_INFERRED",
+                    "SNAPSHOT_ONLY",
+                    "MANUAL_CONFIRMED",
+                    "UNRESOLVED"
+                  ]
+                }
+              }
+            },
+            "maxItems": 1000
+          },
+          "first_student_at_utc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "boundary_uncertain": {
+            "type": "boolean"
+          },
+          "review_reasons": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "UNKNOWN_SENDER",
+                "TIMEZONE_UNVERIFIED",
+                "SOURCE_SCOPE_UNVERIFIED",
+                "ATTACHMENT_UNAVAILABLE",
+                "ATTACHMENT_ASSOCIATION_UNRESOLVED",
+                "PHOTO_MARKER_UNVERIFIED",
+                "SOURCE_DELETION"
+              ]
+            },
+            "maxItems": 7,
+            "uniqueItems": true
+          },
+          "reviewed": {
+            "const": false
+          }
+        }
+      },
+      "maxItems": 100000
+    },
+    "unresolved_rows": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100000
+      },
+      "maxItems": 100000,
+      "uniqueItems": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/question-candidates-v1/1.0"
+}

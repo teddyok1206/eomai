@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/worker-collection-v1/1.0",
+  "oneOf": [
+    {"$ref": "#/$defs/capability"},
+    {"$ref": "#/$defs/command"},
+    {"$ref": "#/$defs/result"},
+    {"$ref": "#/$defs/inventory"},
+    {"$ref": "#/$defs/room-report"}
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "utc": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+    "binding": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "room": {"type": "string", "pattern": "^kakaoroom_[0-9a-f]{32}$"},
+    "run": {"type": "string", "pattern": "^kakaorun_[0-9a-f]{32}$"},
+    "capability-revision": {"type": "string", "pattern": "^kakaocapabilityrev_[0-9a-f]{32}$"},
+    "inventory-revision": {"type": "string", "pattern": "^kakaoinventoryrev_[0-9a-f]{32}$"},
+    "snapshot-revision": {"type": "string", "pattern": "^kakaosnapshotrev_[0-9a-f]{32}$"},
+    "normalization-revision": {"type": "string", "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"},
+    "scope": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,80}$"},
+    "relative-path": {"type": "string", "pattern": "^[A-Za-z0-9_-]+(?:[/.][A-Za-z0-9_-]+)*$", "maxLength": 240},
+    "source-order": {"enum": ["ascending", "descending", "unknown"]},
+    "source-timezone": {"enum": ["Asia/Seoul", "unknown"]},
+    "csv-scope": {"enum": ["full_accessible_history", "loaded_window", "explicit_range", "unknown"]},
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command_id", "task_id", "attempt_id", "attempt_number", "fence"],
+      "properties": {
+        "command_id": {"type": "string", "pattern": "^kakaocommand_[0-9a-f]{32}$"},
+        "task_id": {"type": "string", "pattern": "^kakaotask_[0-9a-f]{32}$"},
+        "attempt_id": {"type": "string", "pattern": "^kakaoattempt_[0-9a-f]{32}$"},
+        "attempt_number": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "fence": {"type": "integer", "minimum": 1, "maximum": 2147483647}
+      }
+    },
+    "member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "media_type"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relative-path"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "media_type": {"enum": ["application/json", "image/png", "image/jpeg", "image/webp"]}
+      }
+    },
+    "csv-member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "media_type"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relative-path"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "media_type": {"const": "text/csv"}
+      }
+    },
+    "capability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "capability_revision_id", "adapter_release_sha256", "observed_at", "channel_verified", "room_identity", "message_identity", "csv_scope", "csv_order", "source_timezone", "direction_evidence", "album_enumeration", "original_download", "opening_marks_read", "visible_scope_ids", "evidence"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-capability/1.0"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "capability_revision_id": {"$ref": "#/$defs/capability-revision"},
+        "adapter_release_sha256": {"$ref": "#/$defs/sha"},
+        "observed_at": {"$ref": "#/$defs/utc"},
+        "channel_verified": {"type": "boolean"},
+        "room_identity": {"enum": ["stable_source_id", "manual_binding", "unknown"]},
+        "message_identity": {"enum": ["stable_source_id", "sequence_only", "unknown"]},
+        "csv_scope": {"$ref": "#/$defs/csv-scope"},
+        "csv_order": {"$ref": "#/$defs/source-order"},
+        "source_timezone": {"$ref": "#/$defs/source-timezone"},
+        "direction_evidence": {"enum": ["dom_verified", "source_metadata_verified", "unknown"]},
+        "album_enumeration": {"enum": ["verified", "unknown"]},
+        "original_download": {"enum": ["verified_ui_download", "best_available", "unavailable", "unknown"]},
+        "opening_marks_read": {"enum": ["yes", "no", "unknown"]},
+        "visible_scope_ids": {"type": "array", "items": {"$ref": "#/$defs/scope"}, "maxItems": 32, "uniqueItems": true},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/member"}, "minItems": 1, "maxItems": 32}
+      }
+    },
+    "command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "execution", "run_id", "source_binding_id", "profile_id", "browser_run_id", "adapter_release_sha256", "capability_revision_id", "capability", "issued_at", "operation", "requested_scope_ids", "inventory_revision_id", "inventory", "room_id", "snapshot_revision_id", "normalization_revision_id"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-command/1.0"},
+        "execution": {"$ref": "#/$defs/execution"},
+        "run_id": {"$ref": "#/$defs/run"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+        "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+        "adapter_release_sha256": {"$ref": "#/$defs/sha"},
+        "capability_revision_id": {"$ref": "#/$defs/capability-revision"},
+        "capability": {"$ref": "#/$defs/member"},
+        "issued_at": {"$ref": "#/$defs/utc"},
+        "operation": {"enum": ["INVENTORY", "CAPTURE_ROOM"]},
+        "requested_scope_ids": {"type": "array", "items": {"$ref": "#/$defs/scope"}, "minItems": 1, "maxItems": 32, "uniqueItems": true},
+        "inventory_revision_id": {"$ref": "#/$defs/inventory-revision"},
+        "inventory": {"anyOf": [{"$ref": "#/$defs/member"}, {"type": "null"}]},
+        "room_id": {"anyOf": [{"$ref": "#/$defs/room"}, {"type": "null"}]},
+        "snapshot_revision_id": {"anyOf": [{"$ref": "#/$defs/snapshot-revision"}, {"type": "null"}]},
+        "normalization_revision_id": {"anyOf": [{"$ref": "#/$defs/normalization-revision"}, {"type": "null"}]}
+      },
+      "allOf": [{
+        "if": {"properties": {"operation": {"const": "INVENTORY"}}},
+        "then": {"properties": {"inventory": {"type": "null"}, "room_id": {"type": "null"}, "snapshot_revision_id": {"type": "null"}, "normalization_revision_id": {"type": "null"}}},
+        "else": {"properties": {"inventory": {"$ref": "#/$defs/member"}, "room_id": {"$ref": "#/$defs/room"}, "snapshot_revision_id": {"$ref": "#/$defs/snapshot-revision"}, "normalization_revision_id": {"$ref": "#/$defs/normalization-revision"}}}
+      }]
+    },
+    "scope-observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope_id", "filters_cleared", "end_reached", "pending_loading", "stabilization_completed", "new_rooms_on_stabilization", "evidence"],
+      "properties": {
+        "scope_id": {"$ref": "#/$defs/scope"},
+        "filters_cleared": {"type": "boolean"},
+        "end_reached": {"type": "boolean"},
+        "pending_loading": {"type": "boolean"},
+        "stabilization_completed": {"type": "boolean"},
+        "new_rooms_on_stabilization": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "evidence": {"$ref": "#/$defs/member"}
+      }
+    },
+    "room-observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["room_id", "scope_ids", "identity_level", "evidence"],
+      "properties": {
+        "room_id": {"$ref": "#/$defs/room"},
+        "scope_ids": {"type": "array", "items": {"$ref": "#/$defs/scope"}, "minItems": 1, "maxItems": 32, "uniqueItems": true},
+        "identity_level": {"enum": ["stable_source_id", "manual_binding"]},
+        "evidence": {"$ref": "#/$defs/member"}
+      }
+    },
+    "unresolved-room": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observation_id", "scope_id", "reason", "evidence"],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,80}$"},
+        "scope_id": {"$ref": "#/$defs/scope"},
+        "reason": {"enum": ["IDENTITY_UNVERIFIED", "ACCESS_DENIED", "ENUMERATION_STALLED", "UI_CHANGED"]},
+        "evidence": {"$ref": "#/$defs/member"}
+      }
+    },
+    "inventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "execution", "run_id", "source_binding_id", "inventory_revision_id", "inventory_started_at", "inventory_finished_at", "reconciliation_pass_at", "scopes", "rooms", "unresolved", "inventory_complete"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-inventory/1.0"},
+        "execution": {"$ref": "#/$defs/execution"},
+        "run_id": {"$ref": "#/$defs/run"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "inventory_revision_id": {"$ref": "#/$defs/inventory-revision"},
+        "inventory_started_at": {"$ref": "#/$defs/utc"},
+        "inventory_finished_at": {"$ref": "#/$defs/utc"},
+        "reconciliation_pass_at": {"anyOf": [{"$ref": "#/$defs/utc"}, {"type": "null"}]},
+        "scopes": {"type": "array", "items": {"$ref": "#/$defs/scope-observation"}, "minItems": 1, "maxItems": 32},
+        "rooms": {"type": "array", "items": {"$ref": "#/$defs/room-observation"}, "maxItems": 10000},
+        "unresolved": {"type": "array", "items": {"$ref": "#/$defs/unresolved-room"}, "maxItems": 10000},
+        "inventory_complete": {"type": "boolean"}
+      }
+    },
+    "attachment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attachment_id", "attachment_revision_id", "row_ordinal", "album_ordinal", "association", "availability", "quality_level", "member", "width_px", "height_px", "failure_reason"],
+      "properties": {
+        "attachment_id": {"type": "string", "pattern": "^kakaoattachment_[0-9a-f]{32}$"},
+        "attachment_revision_id": {"type": "string", "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"},
+        "row_ordinal": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "album_ordinal": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "association": {"enum": ["SOURCE_VERIFIED", "SEQUENCE_INFERRED", "SNAPSHOT_ONLY", "MANUAL_CONFIRMED", "UNRESOLVED"]},
+        "availability": {"enum": ["available", "expired", "denied", "not_found", "pending", "failed"]},
+        "quality_level": {"enum": ["original_verified", "best_available", "thumbnail_only", "unknown"]},
+        "member": {"anyOf": [{"$ref": "#/$defs/member"}, {"type": "null"}]},
+        "width_px": {"anyOf": [{"type": "integer", "minimum": 1, "maximum": 20000}, {"type": "null"}]},
+        "height_px": {"anyOf": [{"type": "integer", "minimum": 1, "maximum": 20000}, {"type": "null"}]},
+        "failure_reason": {"enum": [null, "SOURCE_EXPIRED", "ACCESS_DENIED", "SOURCE_NOT_FOUND", "DOWNLOAD_PENDING", "DOWNLOAD_FAILED", "UNSUPPORTED_MEDIA"]}
+      }
+    },
+    "room-report": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "execution", "run_id", "source_binding_id", "room_id", "inventory_revision_id", "snapshot_revision_id", "normalization_revision_id", "observed_start_at", "observed_end_at", "raw_csv", "normalization", "parser_revision", "csv_scope", "source_order", "source_timezone", "direction_evidence", "csv_rows", "unknown_sender_rows", "first_source_at_utc", "last_source_at_utc", "attachment_bubbles_observed", "attachment_inventory_complete", "unresolved_attachment_bubbles", "attachments", "room_complete"],
+      "properties": {
+        "schema_version": {"const": "kakao-room-capture/1.0"},
+        "execution": {"$ref": "#/$defs/execution"},
+        "run_id": {"$ref": "#/$defs/run"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "room_id": {"$ref": "#/$defs/room"},
+        "inventory_revision_id": {"$ref": "#/$defs/inventory-revision"},
+        "snapshot_revision_id": {"$ref": "#/$defs/snapshot-revision"},
+        "normalization_revision_id": {"$ref": "#/$defs/normalization-revision"},
+        "observed_start_at": {"$ref": "#/$defs/utc"},
+        "observed_end_at": {"$ref": "#/$defs/utc"},
+        "raw_csv": {"$ref": "#/$defs/csv-member"},
+        "normalization": {"$ref": "#/$defs/member"},
+        "parser_revision": {"const": "kakao-csv/1.0"},
+        "csv_scope": {"$ref": "#/$defs/csv-scope"},
+        "source_order": {"$ref": "#/$defs/source-order"},
+        "source_timezone": {"$ref": "#/$defs/source-timezone"},
+        "direction_evidence": {"enum": ["dom_verified", "source_metadata_verified", "unknown"]},
+        "csv_rows": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "unknown_sender_rows": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "first_source_at_utc": {"anyOf": [{"$ref": "#/$defs/utc"}, {"type": "null"}]},
+        "last_source_at_utc": {"anyOf": [{"$ref": "#/$defs/utc"}, {"type": "null"}]},
+        "attachment_bubbles_observed": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "attachment_inventory_complete": {"type": "boolean"},
+        "unresolved_attachment_bubbles": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "attachments": {"type": "array", "items": {"$ref": "#/$defs/attachment"}, "maxItems": 2000},
+        "room_complete": {"type": "boolean"}
+      }
+    },
+    "error": {"enum": ["NETWORK_TRANSIENT", "RATE_LIMITED", "AUTH_REQUIRED", "ACCESS_DENIED", "UI_CHANGED", "ENUMERATION_STALLED", "HASH_MISMATCH", "DISK_FULL", "TIMEOUT", "PUBLICATION_UNAVAILABLE", "INVALID_INPUT"]},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "execution", "run_id", "source_binding_id", "room_id", "command_sha256", "adapter_release_sha256", "capability_revision_id", "status", "report", "error_code"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-result/1.0"},
+        "execution": {"$ref": "#/$defs/execution"},
+        "run_id": {"$ref": "#/$defs/run"},
+        "source_binding_id": {"$ref": "#/$defs/binding"},
+        "room_id": {"anyOf": [{"$ref": "#/$defs/room"}, {"type": "null"}]},
+        "command_sha256": {"$ref": "#/$defs/sha"},
+        "adapter_release_sha256": {"$ref": "#/$defs/sha"},
+        "capability_revision_id": {"$ref": "#/$defs/capability-revision"},
+        "status": {"enum": ["COMPLETED", "PARTIAL", "FAILED", "PAUSED", "CANCELLED"]},
+        "report": {"anyOf": [{"$ref": "#/$defs/member"}, {"type": "null"}]},
+        "error_code": {"anyOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+      }
+    }
+  }
+}

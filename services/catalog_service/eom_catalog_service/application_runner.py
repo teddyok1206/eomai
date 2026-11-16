@@ -52,6 +52,8 @@ from eom_catalog_service.inference_transfer_workflow_read import (
     CatalogInferenceTransferWorkflowReadService,
 )
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_student_service import KakaoStudentService
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
     KnowledgeAnalysisBatchRecord,
@@ -376,6 +378,8 @@ def serve() -> int:
             ),
             content_planning=ContentPlanningService(engine),
             content_workbook_import=ContentWorkbookImportService(engine),
+            kakao_archive=KakaoArchiveService(engine),
+            kakao_students=KakaoStudentService(engine),
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
                 retrieval=knowledge_retrieval,

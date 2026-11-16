@@ -244,6 +244,10 @@ def audit_mirrors() -> int:
             ROOT / "schemas/hwpx",
             ROOT / "packages/hwpx_contracts/eom_hwpx_contracts/schemas",
         ),
+        (
+            ROOT / "schemas/kakao-archive",
+            ROOT / "packages/kakao_archive_contracts/eom_kakao_archive_contracts/schemas",
+        ),
     )
     checked = 0
     for canonical_root, packaged_root in pairs:

@@ -1,4 +1,5 @@
 import {createGeneralChat} from "./general-chat.js";
+import {createKakaoArchive} from "./kakao-archive.js";
 import {installGuideMode} from "./guide-mode.js";
 import {
   curriculumAncestors,
@@ -211,6 +212,10 @@ const materialLearning = createMaterialLearning({document, api, setStateStatus,
   explainError: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });
+const kakaoArchive = createKakaoArchive({document, api, setStateStatus,
+  explainError: (error) => error instanceof StudioApiError
+    ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
+});
 const modelCatalogObservation = createModelCatalogObservation({api, isAdmin: hasAdminRole});
 const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
@@ -220,6 +225,7 @@ const chatModelEditor = createChatModelSettingsEditor({document, api, isAdmin: h
   modelCatalog: modelCatalogObservation.load});
 const UI_MODE_BY_VIEW = Object.freeze({
   chat: "human",
+  "kakao-archive": "human",
   workflow: "engine",
   request: "human",
   item: "human",
@@ -260,6 +266,7 @@ async function api(path, options = {}) {
     presetEditor.reset();
     chatModelEditor.reset();
     modelCatalogObservation.reset();
+    kakaoArchive.setOwner(null);
     window.location.replace("/studio/login");
     throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
   }
@@ -438,6 +445,7 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   if (!UI_MODE_BY_VIEW[name]) name = "dashboard";
   if (state.operator?.password_change_required && name !== "account") name = "account";
   if (ADMIN_VIEW_NAMES.has(name) && state.operator && !hasAdminRole()) name = "dashboard";
+  if (name === "kakao-archive" && !hasPermission(state.operator, "kakao_archive:read")) name = "dashboard";
   let historyRoute = route || (name === "excel" ? contentPlanning.locationRoute() : {view: name});
   if (state.currentView !== "support" && name === "support") {
     state.lastNonSupportRoute = history
@@ -448,6 +456,8 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   state.currentView = name;
   if (name === "chat") generalChat.open();
   else generalChat.close();
+  if (name === "kakao-archive") kakaoArchive.open();
+  else kakaoArchive.close();
   if (name === "item-db") itemDb.open();
   if (name === "knowledge") knowledgeMap.open();
   else knowledgeMap.close();
@@ -553,6 +563,9 @@ async function initializeSession() {
   state.csrf = session.csrf_token;
   state.operator = session.operator;
   generalChat.setOwner(session.operator.operator_id);
+  kakaoArchive.setOwner(session.operator.operator_id);
+  kakaoArchive.setRoles(Array.isArray(session.operator.roles) ? session.operator.roles : []);
+  kakaoArchive.setPermissions(Array.isArray(session.operator.effective_permissions) ? session.operator.effective_permissions : []);
   itemDb.setOwner(session.operator.operator_id);
   knowledgeMap.setOwner(session.operator.operator_id);
   materialLearning.setOwner(session.operator.operator_id);
@@ -633,6 +646,7 @@ async function restoreStudioRoute(route) {
   }
   showView(view, {history: false});
   if (view === "excel") await contentPlanning.restoreLocation(route);
+  if (view === "kakao-archive") await kakaoArchive.restoreLocation(route);
   if (view === "workflow" && route.workflow_id) await loadWorkflow();
   if (view === "item" && route.item_id && route.item_revision_id) await loadItemPreview();
   if (view === "hwpx" && route.hwpx_build_id) await loadHwpxBuild();
@@ -5595,6 +5609,7 @@ async function logout() {
   chatModelEditor.reset();
   modelCatalogObservation.reset();
   generalChat.setOwner(null);
+  kakaoArchive.setOwner(null);
   itemDb.setOwner(null);
   knowledgeMap.setOwner(null);
   materialLearning.setOwner(null);
@@ -5627,6 +5642,7 @@ async function boot() {
   installExplorer();
   installCustomerSupport();
   generalChat.install();
+  kakaoArchive.install();
   installEducationalQualityReview();
   installPdfDocumentReview();
   $("#logout").addEventListener("click", logout);

@@ -26,6 +26,7 @@ LEGACY_ROLE = "eom_api_runtime"
 
 sys.path.insert(0, str(REPOSITORY / "services/catalog_service"))
 from eom_catalog_service.runtime_privileges import (  # noqa: E402
+    COLUMN_PRIVILEGES,
     EXTRA_SEQUENCES,
     INSERT_TABLES,
     TABLE_PRIVILEGES,
@@ -259,6 +260,15 @@ def main() -> None:
                     sql.SQL(", ").join(
                         sql.SQL("app.{}").format(sql.Identifier(table)) for table in tables
                     ),
+                    sql.Identifier(ROLE),
+                )
+            )
+        for privilege, table, columns in COLUMN_PRIVILEGES:
+            cursor.execute(
+                sql.SQL("GRANT {} ({}) ON TABLE app.{} TO {}").format(
+                    sql.SQL(privilege),
+                    sql.SQL(", ").join(sql.Identifier(column) for column in columns),
+                    sql.Identifier(table),
                     sql.Identifier(ROLE),
                 )
             )

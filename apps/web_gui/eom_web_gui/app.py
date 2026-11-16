@@ -80,6 +80,8 @@ from eom_web_gui.item_db_similarity_contracts import (
     ItemDbSimilarityListSubmission,
     ItemDbSimilaritySubmission,
 )
+from eom_web_gui.kakao_archive_routes import install_kakao_archive_routes
+from eom_web_gui.kakao_student_routes import install_kakao_student_routes
 from eom_web_gui.knowledge_map_contracts import EdgeId as MapEdgeId
 from eom_web_gui.knowledge_map_contracts import MapHash, MapLayer
 from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
@@ -276,6 +278,8 @@ def create_app(
         return session
 
     install_content_workbook_routes(app, actual.gateway, require_session, require_csrf)
+    install_kakao_archive_routes(app, actual.gateway, require_session, require_admin_csrf)
+    install_kakao_student_routes(app, actual.gateway, require_session, require_csrf)
 
     @app.get("/studio", include_in_schema=False)
     async def studio_redirect() -> RedirectResponse:

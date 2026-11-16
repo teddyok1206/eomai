@@ -4,6 +4,7 @@ from typing import cast
 from unittest.mock import Mock
 
 from eom_catalog_service.runtime_privileges import (
+    COLUMN_PRIVILEGES,
     INSERT_TABLES,
     READ_TABLES,
     TABLE_PRIVILEGES,
@@ -11,6 +12,38 @@ from eom_catalog_service.runtime_privileges import (
     catalog_runtime_privileges_ready,
 )
 from sqlalchemy.engine import Connection
+
+
+def test_kakao_binding_grants_are_append_only_and_session_read_is_column_bounded() -> None:
+    immutable = {
+        "kakao_collection_policy_revisions",
+        "kakao_binding_commands",
+        "kakao_student_display_revisions",
+        "kakao_student_commands",
+    }
+    assert immutable | {"kakao_channel_bindings"} <= set(READ_TABLES)
+    assert immutable | {"kakao_channel_bindings"} <= set(INSERT_TABLES)
+    assert immutable.isdisjoint(UPDATE_TABLES)
+    assert "kakao_channel_bindings" in UPDATE_TABLES
+    assert "kakao_students" in READ_TABLES
+    assert "kakao_students" in INSERT_TABLES
+    assert "kakao_students" in UPDATE_TABLES
+    assert "api_sessions" not in READ_TABLES
+    assert "api_sessions" not in INSERT_TABLES
+    assert "api_sessions" not in UPDATE_TABLES
+    assert COLUMN_PRIVILEGES == (
+        (
+            "SELECT",
+            "api_sessions",
+            (
+                "api_session_id",
+                "operator_id",
+                "revoked_at",
+                "absolute_expires_at",
+                "idle_expires_at",
+            ),
+        ),
+    )
 
 
 def test_native_index_owner_privileges_are_bounded_and_append_only():
@@ -271,6 +304,8 @@ def test_catalog_runtime_readiness_is_one_read_only_matrix_query() -> None:
     assert "has_table_privilege" in str(statement)
     assert "knowledge_analysis_runs" in parameters["requirements"]
     assert "external_item_edition_documents" in parameters["requirements"]
+    assert "has_column_privilege" in str(statement)
+    assert "api_sessions" in parameters["columns"]
 
 
 def test_catalog_runtime_readiness_fails_on_a_missing_grant() -> None:

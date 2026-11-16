@@ -6,7 +6,7 @@ import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL('../../apps/web_gui/eom_web_gui/static/', import.meta.url);
-const assets = new Map(await Promise.all(['index.html', 'styles.css', 'knowledge-map.css', 'material-learning.js', 'eom-mark.svg'].map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
+const assets = new Map(await Promise.all(['index.html', 'styles.css', 'kakao-archive.css', 'knowledge-map.css', 'material-learning.js', 'eom-mark.svg'].map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
 const presentationApp = await readFile(new URL('app.js', root), 'utf8');
 const vocabulary = await readFile(new URL('presentation-vocabulary.ko-KR.json', root), 'utf8');
 // Run the production presenter, not a second translation table in the test.

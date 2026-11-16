@@ -3,7 +3,7 @@ import {readContentPlanningLocation, writeContentPlanningLocation} from "./conte
 const VIEW_NAMES = new Set([
   "dashboard", "workflow", "request", "item", "item-db", "hwpx",
   "pdf-review", "quality-review", "control", "admin-settings", "learning",
-  "knowledge", "knowledge-quality", "explorer", "support", "account", "chat", "excel",
+  "knowledge", "knowledge-quality", "explorer", "support", "account", "chat", "excel", "kakao-archive",
 ]);
 
 const POINTERS = Object.freeze({
@@ -13,6 +13,8 @@ const POINTERS = Object.freeze({
   hwpx_build_id: /^hwpxbuild_[0-9a-f]{32}$/,
   quality_plan_id: /^qualityplan_[0-9a-f]{32}$/,
 });
+// The current public surface only supports binding bootstrap, not future question URLs.
+const KAKAO_BINDING_PATTERN = /^kakaobinding_[0-9a-f]{32}$/;
 
 export function studioRouteFromLocation(location) {
   const parameters = new URLSearchParams(location.search);
@@ -25,6 +27,9 @@ export function studioRouteFromLocation(location) {
     if (value && pattern.test(value)) route[name] = value;
   }
   if (route.view === "excel") Object.assign(route, readContentPlanningLocation(parameters));
+  if (route.view === "kakao-archive" && KAKAO_BINDING_PATTERN.test(parameters.get("source_binding_id") || "")) {
+    route.source_binding_id = parameters.get("source_binding_id");
+  }
   return Object.freeze(route);
 }
 
@@ -38,6 +43,9 @@ export function studioRouteUrl(route) {
     if (typeof value === "string" && pattern.test(value)) parameters.set(name, value);
   }
   if (view === "excel") writeContentPlanningLocation(parameters, route);
+  if (view === "kakao-archive" && KAKAO_BINDING_PATTERN.test(route?.source_binding_id || "")) {
+    parameters.set("source_binding_id", route.source_binding_id);
+  }
   const query = parameters.toString();
   return `/studio/${query ? `?${query}` : ""}`;
 }

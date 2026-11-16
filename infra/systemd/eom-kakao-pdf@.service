@@ -1,0 +1,52 @@
+[Unit]
+Description=EOM offline Kakao student PDF attempt %i
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=eom-kakao-render
+Group=eom-kakao-render
+EnvironmentFile=/etc/eom/kakao-pdf.env
+RuntimeDirectory=eom-kakao-render/%i
+RuntimeDirectoryMode=0700
+WorkingDirectory=/run/eom-kakao-render/%i
+# Same worker UID must not see another student's concurrent attempt.
+TemporaryFileSystem=/run/eom-kakao-render:ro,mode=0711
+BindReadOnlyPaths=/var/lib/eom-catalog-api/staging/kakao-render/%i/input:/run/eom-kakao-render/%i/input
+BindPaths=/var/lib/eom-catalog-api/staging/kakao-render/%i/output:/run/eom-kakao-render/%i/output
+ExecStart=/srv/eom/conda/envs/eom-kakao-pdf/bin/python -I -B -m eom_kakao_archive_worker.fixed_render %i
+StandardOutput=null
+StandardError=journal
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=1G
+CPUQuota=200%
+TasksMax=32
+LimitNOFILE=128
+LimitCORE=0
+LimitFSIZE=67108864
+TimeoutStartSec=180
+TimeoutStopSec=5
+KillMode=control-group
+SendSIGKILL=yes
+UMask=0027
+InaccessiblePaths=/mnt/nas /home/eom/EOM -/home/eom/EOMIS /etc/eom /root /srv/eom/worker-homes /var/lib/eom-catalog-api
+InaccessiblePaths=-/run/postgresql -/run/eom -/run/eom-catalog-api -/var/run/docker.sock -/usr/local/bin/codex
+InaccessiblePaths=-/run/dbus -/run/systemd/private
+ReadWritePaths=/run/eom-kakao-render/%i/output

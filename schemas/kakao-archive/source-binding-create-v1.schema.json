@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/source-binding-create-v1/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action",
+    "display_name",
+    "policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-binding-create/1.0"
+    },
+    "action": {
+      "const": "CREATE"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interval_minutes",
+        "include_images",
+        "source_timezone",
+        "question_rule_version"
+      ],
+      "properties": {
+        "interval_minutes": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 10080
+        },
+        "include_images": {
+          "const": true
+        },
+        "source_timezone": {
+          "enum": [
+            "unknown",
+            "Asia/Seoul"
+          ]
+        },
+        "question_rule_version": {
+          "const": "turn_v1"
+        }
+      }
+    }
+  }
+}

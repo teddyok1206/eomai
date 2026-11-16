@@ -35,6 +35,14 @@ The optional `hwpx-tests` action runs only the six HWPX persistence integration 
 disposable migration owner. It runs after the migration cycle and before runtime-role reconciliation,
 uses the same guarded owner URL validation, and never falls back to production credentials.
 
+The optional `kakao-tests` action upgrades only the guarded disposable database and runs
+`tests/integration/test_kakao_archive_storage.py` and the composed Alembic/ORM metadata check.
+It checks owner-private DRAFT bindings and student display histories, same-key concurrent replay,
+policy/name CAS, current session/role revocation, immutable receipts, composite pointers and
+bounded indexed lists. It does not start a Kakao browser, collect
+student data, activate a schedule or access production NAS. A source-only skipped run is not
+PostgreSQL acceptance; record the actual disposable identity and cleanup outcome separately.
+
 The optional `embedding-registry-tests` action runs pointer-only registry persistence,
 public-solution associations and native registration/replay/CAS/interruption tests as the
 disposable migration owner after migrations, without requiring runtime-role reconciliation.

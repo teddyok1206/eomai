@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "studio-permissions.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "kakao-archive.css", "knowledge-map.css", "content-planning.css", "studio-permissions.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const source = await readFile(new URL("app.js", root), "utf8");
 function section(start, end) {

@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL('../../apps/web_gui/eom_web_gui/static/', import.meta.url);
-const names = ['index.html', 'login.html', 'styles.css', 'knowledge-map.css', 'content-planning.css', 'guide-content.js', 'guide-mode.js', 'eom-mark.svg'];
+const names = ['index.html', 'login.html', 'styles.css', 'knowledge-map.css', 'content-planning.css', 'kakao-archive.css', 'kakao-archive.js', 'kakao-students.js', 'guide-content.js', 'guide-mode.js', 'eom-mark.svg'];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
 const browser = await chromium.launch({headless: true});
 try {
@@ -15,7 +15,7 @@ try {
   await page.route('https://design.invalid/**', route => {
     const path = new URL(route.request().url()).pathname;
     const name = path === '/studio/' ? 'index.html' : path.split('/').at(-1);
-    if (name === 'app.js') return route.fulfill({contentType: 'text/javascript', body: 'import {installGuideMode} from "./guide-mode.js"; installGuideMode(); window.ready=true;'});
+    if (name === 'app.js') return route.fulfill({contentType: 'text/javascript', body: 'import {installGuideMode} from "./guide-mode.js"; import {createKakaoArchive} from "./kakao-archive.js"; installGuideMode(); createKakaoArchive({document,api:async()=>{throw Error("No live API in design fixture");}}).install(); window.ready=true;'});
     if (name === 'login.js') return route.fulfill({contentType: 'text/javascript', body: ''});
     if (!assets.has(name)) {unexpected.push(path); return route.abort();}
     return route.fulfill({body: assets.get(name), contentType: name.endsWith('.html') ? 'text/html' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'image/svg+xml'});
@@ -23,7 +23,7 @@ try {
   await page.goto('https://design.invalid/studio/');
   await page.waitForFunction(() => window.ready);
   const views = await page.locator('.view').evaluateAll(nodes => nodes.map(node => node.dataset.view));
-  assert.deepEqual([...views].sort(), ['excel', 'chat', 'workflow', 'request', 'item', 'item-db', 'hwpx', 'control', 'admin-settings', 'account', 'learning', 'knowledge', 'knowledge-quality', 'explorer', 'quality-review', 'pdf-review', 'support', 'dashboard'].sort());
+  assert.deepEqual([...views].sort(), ['excel', 'chat', 'kakao-archive', 'workflow', 'request', 'item', 'item-db', 'hwpx', 'control', 'admin-settings', 'account', 'learning', 'knowledge', 'knowledge-quality', 'explorer', 'quality-review', 'pdf-review', 'support', 'dashboard'].sort());
   const icons = await page.locator('.navigation .nav-item').evaluateAll(nodes => nodes.map(node => {
     const icon = node.querySelector('svg.nav-icon');
     const style = icon && getComputedStyle(icon);

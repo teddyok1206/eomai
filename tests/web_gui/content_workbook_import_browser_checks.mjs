@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "content-planning.css", "content-planning-import.js", "knowledge-map.css", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "kakao-archive.css", "content-planning.css", "content-planning-import.js", "knowledge-map.css", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const application = `
 import {createContentWorkbookImport} from './content-planning-import.js';

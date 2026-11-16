@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/studio/assets/styles.css">
     <link rel="stylesheet" href="/studio/assets/knowledge-map.css">
     <link rel="stylesheet" href="/studio/assets/content-planning.css">
+    <link rel="stylesheet" href="/studio/assets/kakao-archive.css">
   </head>
   <body>
     <div class="app-shell">
@@ -25,6 +26,10 @@
               <path d="m12 7.5.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/>
             </svg>
             ChatGPT
+          </button>
+          <button type="button" class="nav-item" data-view-target="kakao-archive" data-required-permission="kakao_archive:read" hidden>
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H8l-4 2v-6A8 8 0 1 1 20 11Z"/><path d="M8 9h8M8 13h5"/></svg>
+            KakaoTalk
           </button>
           <p class="nav-group-label">문항 제작</p>
           <button type="button" class="nav-item" data-view-target="workflow"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h5M8 16h3"/></svg> 문항 제작 진행</button>
@@ -185,6 +190,7 @@
               </div>
             </div>
           </section>
+          <section class="view" data-view="kakao-archive" id="kakao-archive-root" aria-labelledby="kakao-archive-title"></section>
           <section class="view chat-view" data-view="chat" aria-labelledby="chat-title">
             <div class="page-heading"><h1 id="chat-title">ChatGPT</h1><span id="chat-slot" class="status-badge tone-neutral" role="status">전용 슬롯 확인 중</span></div>
             <div class="chat-workspace">

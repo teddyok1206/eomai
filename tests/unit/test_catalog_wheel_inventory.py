@@ -49,6 +49,16 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_student_rpc.py",
+            "eom_catalog_contracts/kakao_question.py",
+            "eom_catalog_contracts/resources/kakao-archive/student-directory-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/question-manifest-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/question-packet-v1.schema.json",
+            "eom_catalog_service/kakao_archive_service.py",
+            "eom_catalog_service/kakao_student_service.py",
+            "eom_catalog_service/kakao_question_publication.py",
+            "eom_catalog_service/kakao_render_projection.py",
+            "eom_orchestrator/kakao_pdf_execution.py",
             "eom_orchestrator/shared_slot_controls.py",
             "eom_orchestrator/shared_worker_units.py",
             "eom_orchestrator/general_chat_model_selection.py",
@@ -173,6 +183,9 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "from eom_orchestrator.shared_slot_controls import prepare_shared_slot_controls; "
                 "from eom_orchestrator.general_chat_model_selection "
                 "import current_chat_model_settings; "
+                "from eom_catalog_contracts.validation import load_schema; "
+                "assert load_schema('kakao-student-directory-v1')['$id'] == "
+                "'eom://schemas/kakao-archive/student-directory-v1/1.0'; "
                 "print(Resolver.__module__)"
             ),
             str(wheel),
@@ -188,6 +201,12 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
     # Each order starts a fresh interpreter. Cached source imports cannot hide a
     # Catalog/runner composition cycle, nor can runtime depend on checkout paths.
     import_orders = (
+        (
+            "eom_catalog_service.kakao_archive_service",
+            "eom_catalog_service.kakao_student_service",
+            "eom_catalog_service.kakao_question_publication",
+            "eom_catalog_contracts.kakao_student_rpc",
+        ),
         (
             "eom_workflow_runner.document_embedding_cpu_execution",
             "eom_workflow_runner.document_embedding_cuda_execution",

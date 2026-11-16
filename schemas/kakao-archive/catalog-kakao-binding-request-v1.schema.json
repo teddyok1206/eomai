@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-binding-request-v1/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "CREATE_KAKAO_BINDING"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$",
+          "minLength": 16,
+          "maxLength": 128
+        },
+        "command": {
+          "$ref": "eom://schemas/kakao-archive/source-binding-create-v1/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "source_binding_id",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "COMMAND_KAKAO_BINDING"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$",
+          "minLength": 16,
+          "maxLength": 128
+        },
+        "command": {
+          "$ref": "eom://schemas/kakao-archive/source-binding-command-v1/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "source_binding_id"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "READ_KAKAO_BINDING"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "limit",
+        "cursor"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "operation": {
+          "const": "LIST_KAKAO_BINDINGS"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaobinding_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

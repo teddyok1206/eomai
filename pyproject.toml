@@ -23,6 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+kakao-runtime = [
+  # Pure staged worker contracts for the optional private Kakao runtime adapter;
+  # browser/PDF dependencies stay in their isolated worker environments.
+  "eom-kakao-archive-contracts==0.1.0",
+]
 gpu-runtime = [
   # Canonical standalone mutex wheel only in explicitly selected native GPU runtimes.
   "eom-gpu-lease==0.1.0",
@@ -87,6 +92,7 @@ eom_workflow = [
   "resources/document-review-presets/*.json",
 ]
 eom_catalog_contracts = [
+  "resources/kakao-archive/*.json",
   "resources/content-planning/*.json",
   "resources/material-learning/*.json",
   "resources/api/*.json",
@@ -167,6 +173,8 @@ mypy_path = [
   "packages/image_contracts",
   "services/catalog_service",
   "services/image_provider",
+  "packages/kakao_archive_contracts",
+  "services/kakao_archive_worker",
   "services/image_candidate_runner",
   "apps/eomctl",
   "tools/dev_reporter",

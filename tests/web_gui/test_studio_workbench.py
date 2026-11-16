@@ -296,6 +296,16 @@ def test_route_and_permission_modules_fail_closed_and_round_trip(tmp_path: Path)
       if (/[?#]/.test(supportContextRoute(route))) process.exit(3);
       const invalid = studioRouteFromLocation({{search: "?view=unknown&workflow_id=../../secret"}});
       if (invalid.view !== "dashboard" || invalid.workflow_id !== undefined) process.exit(4);
+      const binding = "kakaobinding_" + "4".repeat(32);
+      const kakao = studioRouteFromLocation({{
+        search: `?view=kakao-archive&source_binding_id=${{binding}}`}});
+      if (kakao.view !== "kakao-archive" || kakao.source_binding_id !== binding
+        || !studioRouteUrl(kakao).includes(`source_binding_id=${{binding}}`)) process.exit(11);
+      const wrongBinding = studioRouteFromLocation({{
+        search: `?view=kakao-archive&source_binding_id=${{item}}`}});
+      if (wrongBinding.source_binding_id !== undefined) process.exit(12);
+      if (studioRouteUrl({{view:"chat",source_binding_id:binding}})
+        .includes("source_binding_id")) process.exit(13);
       const retired = studioRouteFromLocation({{search: "?view=approval"}});
       if (retired.view !== "dashboard") process.exit(10);
       const context = supportContextRoute(route);

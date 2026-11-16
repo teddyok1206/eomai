@@ -41,6 +41,7 @@
         "workflow": {"$ref": "#/$defs/domain"},
         "knowledge_analysis": {"$ref": "#/$defs/domain"},
         "material_learning": {"$ref": "#/$defs/domain"},
+        "kakao_archive": {"$ref": "#/$defs/domain"},
         "hwpx_build": {"$ref": "#/$defs/domain"},
         "hwpx_capability": {"$ref": "#/$defs/domain"},
         "item_revision": {"$ref": "#/$defs/domain"},

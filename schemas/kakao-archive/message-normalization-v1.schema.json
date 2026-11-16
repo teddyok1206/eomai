@@ -1,0 +1,239 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_binding_id",
+    "room_id",
+    "snapshot_revision_id",
+    "normalization_revision_id",
+    "source_sha256",
+    "source_bytes",
+    "observed_at_utc",
+    "parser_revision",
+    "source_timezone",
+    "source_order",
+    "context_start_verified",
+    "context_end_verified",
+    "columns",
+    "messages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-message-normalization/1.0"
+    },
+    "source_binding_id": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^kakaosnapshotrev_[0-9a-f]{32}$"
+    },
+    "normalization_revision_id": {
+      "type": "string",
+      "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 33554432
+    },
+    "observed_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    },
+    "parser_revision": {
+      "const": "kakao-csv/1.0"
+    },
+    "source_timezone": {
+      "enum": [
+        "Asia/Seoul",
+        "unknown"
+      ]
+    },
+    "source_order": {
+      "enum": [
+        "ascending",
+        "descending",
+        "unknown"
+      ]
+    },
+    "context_start_verified": {
+      "type": "boolean"
+    },
+    "context_end_verified": {
+      "type": "boolean"
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 128,
+        "minLength": 1
+      },
+      "maxItems": 35
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "row_ordinal",
+          "raw_date",
+          "raw_sender",
+          "text",
+          "extra_values",
+          "sent_at_utc",
+          "role",
+          "role_evidence_id",
+          "source_message_id",
+          "kind",
+          "attachments"
+        ],
+        "properties": {
+          "row_ordinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "raw_date": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "raw_sender": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "extra_values": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 65536
+            },
+            "maxItems": 32
+          },
+          "sent_at_utc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "enum": [
+              "student",
+              "staff",
+              "system",
+              "unknown"
+            ]
+          },
+          "role_evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_message_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "attachment",
+              "deleted",
+              "system",
+              "unknown"
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "attachment_id",
+                "attachment_revision_id",
+                "album_ordinal",
+                "availability",
+                "association"
+              ],
+              "properties": {
+                "attachment_id": {
+                  "type": "string",
+                  "pattern": "^kakaoattachment_[0-9a-f]{32}$"
+                },
+                "attachment_revision_id": {
+                  "type": "string",
+                  "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+                },
+                "album_ordinal": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "availability": {
+                  "enum": [
+                    "available",
+                    "expired",
+                    "denied",
+                    "not_found",
+                    "pending",
+                    "failed"
+                  ]
+                },
+                "association": {
+                  "enum": [
+                    "SOURCE_VERIFIED",
+                    "SEQUENCE_INFERRED",
+                    "SNAPSHOT_ONLY",
+                    "MANUAL_CONFIRMED",
+                    "UNRESOLVED"
+                  ]
+                }
+              }
+            },
+            "maxItems": 1000
+          }
+        }
+      },
+      "maxItems": 100000
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/message-normalization-v1/1.0"
+}

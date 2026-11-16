@@ -45,11 +45,11 @@ if (($# != 2)) || \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
     "$1" != "item-db-search-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
-    "$1" != "material-learning-tests" && "$1" != "content-planning-tests" && \
+    "$1" != "material-learning-tests" && "$1" != "content-planning-tests" && "$1" != "kakao-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && "$1" != "shared-slot-tests" && "$1" != "preset-model-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|item-db-search-tests|creative-registration-tests|creative-graph-tests|material-learning-tests|content-planning-tests|quality-review-tests|chat-tests|shared-slot-tests|preset-model-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|item-db-search-tests|creative-registration-tests|creative-graph-tests|material-learning-tests|content-planning-tests|kakao-tests|quality-review-tests|chat-tests|shared-slot-tests|preset-model-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -128,6 +128,14 @@ except TestDatabaseGuardError as exc:
 PY
 
 cd "${REPOSITORY_ROOT}"
+if [[ "${action}" == "kakao-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
+  export EOM_RUN_API_INTEGRATION=1 EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m alembic upgrade head
+  "${PYTHON}" -m pytest -q tests/integration/test_kakao_archive_storage.py \
+    tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
+  exit 0
+fi
 if [[ "${action}" == "shared-slot-tests" ]]; then
   export EOM_RUN_INTEGRATION=1 EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q \
