@@ -33,6 +33,11 @@ API/BFF/GUI 출력 경로와 보호 worker 활성화, 실제 카카오 수집은
   인증 다운로드를 완주하는 것이다. 그 뒤 호환 운영 release/보호 renderer를 적용하고,
   원격 화면에서 사용자 카카오 관리자 로그인 → 실제 한 방 수집/PDF → 전체 주기 수집으로 간다.
 
+소스 변경은 `83203f881f8e6f4cbf27a6bfb109cb717db62dc2`로 커밋·푸시했다. 이 정확한
+commit의 공식 API four-wheel build/RECORD 검증을 통과했고 protected operator source/wheel
+staging도 준비했다. 이 준비는 ADMIT/DDL 적용/서비스 교체가 아니다. 현재 운영 DB 0084와
+API/Web은 변경하지 않았다. 후속 API·Studio 연결 전 준비본을 전체 기능 운영 완료로 보고하지 않는다.
+
 ## 진행 중간 저장 — 저장된 대화·사진에서 학생별 PDF까지
 
 `871e2df3` 뒤에 기존 source/question/packet owner와 renderer/Artifact publisher를 연결했다.
