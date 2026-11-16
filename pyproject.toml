@@ -25,8 +25,11 @@ dependencies = [
 [project.optional-dependencies]
 kakao-runtime = [
   # Pure staged worker contracts for the optional private Kakao runtime adapter;
-  # browser/PDF dependencies stay in their isolated worker environments.
+  # browser/PDF execution dependencies stay in their isolated worker environments.
   "eom-kakao-archive-contracts==0.1.0",
+  # Validate original channel photos before Artifact adoption using the same bounded
+  # decoder as the PDF worker; PyMuPDF 1.26.7 image_profile has a broken bytes binding.
+  "Pillow==11.3.0",
 ]
 gpu-runtime = [
   # Canonical standalone mutex wheel only in explicitly selected native GPU runtimes.

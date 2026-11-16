@@ -108,6 +108,7 @@ def manual(local, monkeypatch):
     monkeypatch.setattr(driver, "_start_xvnc", Mock(return_value=child))
     monkeypatch.setattr(driver, "_wait_xvnc", AsyncMock())
     monkeypatch.setattr(setup, "require_supervisor", Mock())
+    monkeypatch.setattr(setup, "prepare_xauthority", Mock())
     monkeypatch.setattr(setup, "require_chromium", Mock())
     config = setup.ManualSetup(fence(), SHA, SHA)
     try:
@@ -300,7 +301,10 @@ def test_streaming_binary_hash_checks_local_file_identity(local, case):
             setup.hash_executable(binary, uid=os.getuid())
 
 
-def test_protected_setup_requires_exact_snapshot_and_preserves_credentials(local, monkeypatch):
+@pytest.mark.parametrize("existing_authority", [False, True])
+def test_protected_setup_requires_exact_snapshot_and_preserves_credentials(
+    local, monkeypatch, existing_authority
+):
     private = local / "private"
     profile = local / "profile"
     vnc = local / "vnc"
@@ -311,8 +315,9 @@ def test_protected_setup_requires_exact_snapshot_and_preserves_credentials(local
     request.write_text(json.dumps(fence().model_dump(mode="json")))
     request.chmod(0o400)
     xauth = private / "Xauthority"
-    xauth.write_bytes(b"synthetic-not-real-authority")
-    xauth.chmod(0o600)
+    if existing_authority:
+        xauth.write_bytes(b"synthetic-not-real-authority")
+        xauth.chmod(0o600)
     password = local / "vnc.passwd"
     password.write_bytes(b"FAKEONLY")
     password.chmod(0o600)
@@ -348,7 +353,7 @@ def test_protected_setup_requires_exact_snapshot_and_preserves_credentials(local
             required_mode=kw.get("required_mode"),
         ),
     )
-    before = (xauth.read_bytes(), password.read_bytes())
+    before = (xauth.read_bytes() if existing_authority else None, password.read_bytes())
     assert setup.validate_setup(request, profile).fence == fence()
     password.chmod(0o640)
     with pytest.raises(BrowserRuntimeError, match="MEMBER_UNSAFE"):
@@ -358,7 +363,8 @@ def test_protected_setup_requires_exact_snapshot_and_preserves_credentials(local
     endpoint.symlink_to(local / "nonexistent")
     with pytest.raises(BrowserRuntimeError, match="RECONCILE_REQUIRED"):
         setup.validate_setup(request, profile)
-    assert endpoint.is_symlink() and (xauth.read_bytes(), password.read_bytes()) == before
+    assert endpoint.is_symlink()
+    assert (xauth.read_bytes() if xauth.exists() else None, password.read_bytes()) == before
 
 
 @pytest.mark.parametrize(
@@ -428,6 +434,7 @@ p=SimpleNamespace(chromium=SimpleNamespace(executable_path='/opt/pinned/chrome',
     launch_persistent_context=AsyncMock(return_value=ctx)),stop=AsyncMock(side_effect=lambda:record('transport')))
 d._start_playwright=AsyncMock(return_value=p);d._start_xvnc=lambda:child;d._wait_xvnc=AsyncMock()
 s.require_supervisor=lambda:None;s.require_chromium=lambda *args:None
+s.prepare_xauthority=lambda:None
 f=ProfileFence.model_validate({'schema_version':'kakao-profile-fence/1.0','profile_id':'kakaoprofile_'+'a'*32,
     'browser_run_id':'kakaobrowserrun_'+'b'*32,'fence_epoch':1,'mode':'MANUAL'})
 asyncio.run(d._run(s.ManualSetup(f,'sha256:'+'a'*64,'sha256:'+'b'*64)))

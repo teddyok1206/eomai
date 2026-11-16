@@ -49,6 +49,14 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_media.py",
+            "eom_catalog_contracts/kakao_source.py",
+            "eom_catalog_contracts/resources/kakao-archive/media-blob-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/source-admission-v1.schema.json",
+            "eom_catalog_contracts/resources/kakao-archive/source-resolution-v1.schema.json",
+            "eom_catalog_service/kakao_media_publication.py",
+            "eom_catalog_service/kakao_source_service.py",
+            "eom_catalog_service/kakao_source_resolution.py",
             "eom_catalog_contracts/kakao_manual_rpc.py",
             "eom_catalog_contracts/resources/kakao-archive/manual-session-v1.schema.json",
             "eom_catalog_contracts/resources/kakao-archive/manual-execution-v1.schema.json",
@@ -223,6 +231,8 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_service.kakao_archive_service",
             "eom_catalog_service.kakao_student_service",
             "eom_catalog_service.kakao_room_service",
+            "eom_catalog_service.kakao_media_publication",
+            "eom_catalog_service.kakao_source_service",
             "eom_catalog_contracts.kakao_room_rpc",
             "eom_catalog_service.kakao_question_publication",
             "eom_catalog_contracts.kakao_student_rpc",
@@ -266,7 +276,7 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                     "exec('class WithoutKakaoRuntime(importlib.abc.MetaPathFinder):\\n"
                     " def find_spec(self, fullname, path=None, target=None):\\n"
                     '  if fullname.startswith(("eom_kakao_archive_", "playwright", '
-                    '"websockify")): raise ImportError("optional Kakao runtime absent")\'); '
+                    '"websockify", "PIL")): raise ImportError("optional Kakao runtime absent")\'); '
                     "sys.meta_path.insert(0, WithoutKakaoRuntime()); "
                     f"names = {modules!r}; "
                     "loaded = [importlib.import_module(name) for name in names]; "

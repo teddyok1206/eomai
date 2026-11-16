@@ -378,7 +378,12 @@ def _render(
     ] = {}
     total_pixels, total_display_bytes = 0, 0
     for number, question in enumerate(manifest.questions, 1):
-        header = f"{manifest.student_display_name} · 질문 {number} · {question.header_date}"
+        date_label = (
+            question.header_date.isoformat()
+            if question.header_date is not None
+            else "날짜 확인 필요"
+        )
+        header = f"{manifest.student_display_name} · 질문 {number} · {date_label}"
         if manifest.mode == "DRAFT":
             header = "[검토용] " + header
         _check_glyphs(font, header)

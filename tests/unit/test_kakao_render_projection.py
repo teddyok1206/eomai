@@ -169,9 +169,22 @@ def test_explicit_transform_is_forwarded_without_source_hash_change():
 def test_unknown_date_is_not_replaced_by_today():
     resolved = source(timezone="unknown")
     value = question(resolved)
-    with pytest.raises(ValueError, match="DATE_UNVERIFIED"):
+    bundle = packet((value,), mode="DRAFT")
+    result = project_kakao_student_render(
+        packet=bundle,
+        student_id=student().student_id,
+        questions=(published(value),),
+        sources=(resolved,),
+        images=(),
+    )
+    assert result.questions[0].header_date is None
+    assert result.mode == "DRAFT"
+    assert "TIMEZONE_UNVERIFIED" in bundle.questions[0].final_blockers
+    with pytest.raises(ValueError, match="FINAL_BLOCKED"):
+        packet((value,), mode="FINAL")
+    with pytest.raises(ValueError, match="FINAL_BLOCKED"):
         project_kakao_student_render(
-            packet=packet((value,), mode="DRAFT"),
+            packet=bundle.model_copy(update={"mode": "FINAL"}),
             student_id=student().student_id,
             questions=(published(value),),
             sources=(resolved,),
@@ -188,7 +201,8 @@ def test_local_image_materialization_pin_must_match_artifact(field, value):
         KakaoRenderImageInput(given.pointer, given.member.model_copy(update={field: value}))
 
 
-def test_actual_pdf_from_question_packet_and_source_images(tmp_path):
+@pytest.mark.parametrize("unknown_date", [False, True])
+def test_actual_pdf_from_question_packet_and_source_images(tmp_path, unknown_date):
     # No generated fixture is committed: only this test's disposable workspace.
     input_root, output_root = tmp_path / "input", tmp_path / "output"
     input_root.mkdir()
@@ -196,7 +210,9 @@ def test_actual_pdf_from_question_packet_and_source_images(tmp_path):
     pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 300, 180), False)
     pixmap.clear_with(170)
     photo = pixmap.tobytes("png")
-    resolved = source(attachments={1: (image(),)})
+    resolved = source(
+        attachments={1: (image(),)}, timezone="unknown" if unknown_date else "Asia/Seoul"
+    )
     entry = next(iter(resolved.attachments))
     source_pointer = pointer("eom://schemas/kakao-archive/media/1.0", photo, 71, "image/png")
     resolved = replace(
@@ -205,9 +221,11 @@ def test_actual_pdf_from_question_packet_and_source_images(tmp_path):
             entry: KakaoAttachmentSource(image().attachment_revision_id, source_pointer, "ORIGINAL")
         },
     )
-    selected = confirmed(question(resolved), (resolved,))
+    selected = question(resolved)
+    if not unknown_date:
+        selected = confirmed(selected, (resolved,))
     manifest = project_kakao_student_render(
-        packet=packet((selected,), include_replies=True),
+        packet=packet((selected,), include_replies=True, mode="DRAFT" if unknown_date else "FINAL"),
         student_id=student().student_id,
         questions=(published(selected),),
         sources=(resolved,),
@@ -256,7 +274,15 @@ def test_actual_pdf_from_question_packet_and_source_images(tmp_path):
     assert result.status == "COMPLETED", result.error_code
     assert result.page_count == 1
     with pymupdf.open(output_root / "report.pdf") as document:
-        text = document[0].get_text()
+        assert len(document) == 1
+        text = document[0].get_text().replace("\u00a0", " ")
         assert all(value in text for value in ("첫 질문", "추가 질문", "답변", "학생 1"))
         assert len(document[0].get_images()) == 1
+        if unknown_date:
+            assert "검토용" in text and "날짜 확인 필요" in text
+            assert "2026-" not in text and "None" not in text
+        else:
+            assert "2026-10-31" in text and "날짜 확인 필요" not in text
+        raster = document[0].get_pixmap()
+        assert raster.width > 0 and raster.height > 0 and len(set(raster.samples)) > 1
     assert (input_root / "photo.png").read_bytes() == photo

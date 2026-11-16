@@ -695,6 +695,10 @@ def test_policy_and_receipt_are_immutable_and_cross_binding_pointer_fails(
 def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None:
     # Compare this owner and its FK closure, independent of which other
     # application owners happened to be imported by test collection.
+    from eom_catalog_service import kakao_manual_models, kakao_room_models, kakao_source_models
+
+    for module in (kakao_manual_models, kakao_room_models, kakao_source_models):
+        assert module.Base.metadata is Base.metadata
     metadata = MetaData()
     pending = [table for table in Base.metadata.tables.values() if table.name.startswith("kakao_")]
     while pending:

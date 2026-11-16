@@ -26,12 +26,20 @@ PREFIXES = {
 BROWSER = Path("/opt/eom/kakao-browser/playwright-1.65.2")
 NOVNC = Path("/opt/eom/kakao-remote/releases/novnc-1.6.0/noVNC")
 XVNC = Path("/usr/bin/Xtigervnc")
+OWNER_DROPIN = Path(
+    "/etc/systemd/system/eom-catalog-application-runner.service.d/50-eom-kakao-manual.conf"
+)
+PROXY_DROPIN = Path("/etc/systemd/system/caddy.service.d/50-eom-kakao-proxy.conf")
+FRESH_RECEIPT = Path("/var/lib/eom-kakao-runtime/fresh-profile.json")
+DROPIN_DIRECTORIES = frozenset({OWNER_DROPIN.parent, PROXY_DROPIN.parent})
 PAYLOADS = {
     "eom-kakao-browser.service": Path("/etc/systemd/system/eom-kakao-browser.service"),
     "eom-kakao-remote.service": Path("/etc/systemd/system/eom-kakao-remote.service"),
     "eom-kakao-pdf@.service": Path("/etc/systemd/system/eom-kakao-pdf@.service"),
     "46-eom-kakao-runtime.rules": Path("/etc/polkit-1/rules.d/46-eom-kakao-runtime.rules"),
     "eom-kakao-runtime.conf": Path("/etc/tmpfiles.d/eom-kakao-runtime.conf"),
+    "50-eom-kakao-manual.conf.in": OWNER_DROPIN,
+    "50-eom-kakao-proxy.conf": PROXY_DROPIN,
 }
 USERS = ("eom-kakao", "eom-kakao-remote", "eom-kakao-render")
 GROUPS = (*USERS, "eom-kakao-vnc", "eom-kakao-proxy", "eom-kakao-grant", "eom-kakao-control")
@@ -502,7 +510,11 @@ def _exact_layout(entry: Layout, parent: int, *, create: bool, content: bytes | 
                 fail("PAYLOAD_CONFLICT")
 
 
-def preflight(manifest: dict[str, Any], payload: Path) -> dict[Path, bytes]:
+def preflight(
+    manifest: dict[str, Any], payload: Path, *, manifest_sha256: str
+) -> dict[Path, bytes]:
+    if not HASH.fullmatch(manifest_sha256):
+        fail("MANIFEST_HASH_MISMATCH")
     protected(payload, directory=True)
     if {p.name for p in payload.iterdir()} != set(PAYLOADS):
         fail("PAYLOAD_SET_INVALID")
@@ -529,6 +541,9 @@ def preflight(manifest: dict[str, Any], payload: Path) -> dict[Path, bytes]:
             fail("PAYLOAD_HASH_MISMATCH")
         files[target] = (payload / name).read_bytes()
     driver = PREFIXES["browser"] / "bin/eom-kakao-browser-driver"
+    gateway_supervisor = (
+        PREFIXES["remote"] / "lib/python3.12/site-packages/eom_kakao_archive_gateway/supervisor.py"
+    )
     chromium = BROWSER / manifest["chromium_member"]
     for executable in (driver, chromium, XVNC):
         if not protected(executable, directory=False).st_mode & 0o111:
@@ -542,14 +557,30 @@ def preflight(manifest: dict[str, Any], payload: Path) -> dict[Path, bytes]:
     files[Path("/etc/eom/kakao-pdf.env")] = (
         f"EOM_KAKAO_RENDER_RELEASE_SHA256={manifest['renderer_release_sha256']}\n".encode()
     )
+    # The template is independently hash-pinned above. Substitutions are only exact trusted
+    # identities, never operator-supplied paths, arbitrary environment names or shell commands.
+    pins = {
+        "profile_id": manifest["profile_id"],
+        "browser_template_sha256": manifest["payload_sha256"]["eom-kakao-browser.service"],
+        "browser_driver_sha256": digest(driver),
+        "gateway_template_sha256": manifest["payload_sha256"]["eom-kakao-remote.service"],
+        "gateway_supervisor_sha256": digest(gateway_supervisor),
+        "initial_profile_manifest_sha256": (
+            fresh_receipt_manifest(FRESH_RECEIPT, profile_id=manifest["profile_id"])
+            or manifest_sha256
+        ),
+    }
+    try:
+        files[OWNER_DROPIN] = files[OWNER_DROPIN].decode("ascii").format_map(pins).encode("ascii")
+    except (ValueError, KeyError, UnicodeError):
+        fail("OWNER_TEMPLATE_INVALID")
     require_stopped()
     check_identities(required=False)
     return files
 
 
-def fresh_receipt(
-    profile: Path, target: Path, *, profile_id: str, manifest_sha256: str, created: bool
-) -> None:
+def fresh_receipt_manifest(target: Path, *, profile_id: str) -> str | None:
+    """Read the protected original installation fact, never the current release pin."""
     if target.exists() or target.is_symlink():
         digest(target, maximum=4096)
         metadata = target.lstat()
@@ -577,7 +608,16 @@ def fresh_receipt(
         for name in ("profile_device", "profile_inode", "profile_mtime_ns", "profile_ctime_ns"):
             if type(value[name]) is not int or value[name] < (1 if name == "profile_inode" else 0):
                 fail("FRESH_RECEIPT_CONFLICT")
-        return  # Preserve the original fact even after the profile has been used.
+        return str(value["install_manifest_sha256"])
+    return None
+
+
+def fresh_receipt(
+    profile: Path, target: Path, *, profile_id: str, manifest_sha256: str, created: bool
+) -> str:
+    initial_manifest = fresh_receipt_manifest(target, profile_id=profile_id)
+    if initial_manifest is not None:
+        return initial_manifest  # Preserve the original fact after profile use or a new release.
     if not created:
         fail("FRESH_PROFILE_RECONCILE_REQUIRED")
     fd = os.open(profile, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -606,6 +646,7 @@ def fresh_receipt(
         exact_layout(Layout(target, ROOT_UID, ROOT_GID, 0o644), create=True, content=payload)
     finally:
         os.close(fd)
+    return manifest_sha256
 
 
 def apply_layout(
@@ -640,14 +681,22 @@ def apply_layout(
         ),
     ):
         exact_layout(entry, create=create, content=b"")
-    fresh_receipt(
+    initial_manifest = fresh_receipt(
         entries[1].path,
-        Path("/var/lib/eom-kakao-runtime/fresh-profile.json"),
+        FRESH_RECEIPT,
         profile_id=profile_id,
         manifest_sha256=manifest_sha256,
         created=profile_created,
     )
+    # Preflight precedes the install/runtime locks. Recheck the initial pin under those
+    # locks before publishing any config, including a previously missing owner drop-in.
+    prefix = b"Environment=EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256="
+    actual = [line for line in files.get(OWNER_DROPIN, b"").splitlines() if line.startswith(prefix)]
+    if actual != [prefix + initial_manifest.encode("ascii")]:
+        fail("FRESH_RECEIPT_CONFLICT")
     for target, data in files.items():
+        if target.parent in DROPIN_DIRECTORIES:
+            exact_layout(Layout(target.parent, 0, 0, 0o755), create=create)
         protected(target.parent, directory=True)
         exact_layout(Layout(target, 0, 0, 0o644), create=create, content=data)
 
@@ -673,7 +722,7 @@ def main() -> int:
             fail("PROTECTED_OPERATOR_REQUIRED")
         protected(Path(sys.executable).resolve(strict=True), directory=False)
         manifest = load_manifest(args.manifest, args.manifest_sha256)
-        files = preflight(manifest, args.payload)
+        files = preflight(manifest, args.payload, manifest_sha256=args.manifest_sha256)
         if args.action != "preflight":
             lock = Path("/run/eom-kakao-install/install.lock")
             exact_layout(Layout(lock.parent, 0, 0, 0o700), create=args.action == "stage")
@@ -693,7 +742,10 @@ def main() -> int:
             finally:
                 os.close(fd)
         print("KAKAO_RUNTIME_" + args.action.upper() + "_PASS_NOT_ACTIVATED")
-        print("CREDENTIALS=NOT_PROVISIONED_BY_INSTALLER; CADDY=UNCHANGED; DAEMON_RELOAD=NOT_RUN")
+        print(
+            "CREDENTIALS=NOT_PROVISIONED_BY_INSTALLER; MANUAL_MODE=DISABLED; "
+            "CADDY_ROUTES=UNCHANGED; DAEMON_RELOAD=NOT_RUN"
+        )
         return 0
     except Exception as error:
         print(

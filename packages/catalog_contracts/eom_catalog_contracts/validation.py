@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "kakao-media-blob-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/media-blob-v1.schema.json",
+            "resources/kakao-archive/media-blob-v1.schema.json",
+            "1.0",
+            "sha256:afb0665d3562b23294e36561961876b79f578ea7104b33c744d6474afc3bd369",
+        ),
         "catalog-kakao-manual-request-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-manual-request-v1.schema.json",
@@ -57,6 +63,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/kakao-archive/catalog-kakao-room-response-v1.schema.json",
             "1.0",
             "sha256:b8de7dfc59b706d31116415fc560f867b2f66047b864fcad6dd001875ff25139",
+        ),
+        "kakao-source-admission-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/source-admission-v1.schema.json",
+            "resources/kakao-archive/source-admission-v1.schema.json",
+            "1.0",
+            "sha256:b4a7737b89f5d5290bd7876c7c76d679398a30c326a8f9bdaed2c849a15e089c",
+        ),
+        "kakao-source-resolution-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/source-resolution-v1.schema.json",
+            "resources/kakao-archive/source-resolution-v1.schema.json",
+            "1.0",
+            "sha256:d16ba6932eb0943c209e19486bae3913a829a8edd5d842f15ed9453efcae3600",
         ),
         "kakao-room-directory-v1": CatalogSchemaResource(
             "schemas/kakao-archive/room-directory-v1.schema.json",

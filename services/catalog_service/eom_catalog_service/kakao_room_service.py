@@ -25,7 +25,7 @@ from eom_catalog_contracts.kakao_students import student_display_sha256
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_operator_identity.contracts import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, and_, select
 from sqlalchemy.orm import Session
@@ -42,6 +42,7 @@ from eom_catalog_service.kakao_room_models import (
     KakaoRoomMappingRevisionRecord,
     KakaoRoomRecord,
 )
+from eom_catalog_service.kakao_source_pointers import validate_source_pointer_metadata
 from eom_catalog_service.kakao_student_models import (
     KakaoStudentDisplayRevisionRecord,
     KakaoStudentRecord,
@@ -184,57 +185,7 @@ class KakaoRoomService:
     def _evidence_metadata(
         session: Session, evidence: ArtifactMemberPointer
     ) -> tuple[ArtifactRecord, ArtifactRevisionRecord]:
-        # Bytes were resolved by the mandatory owner adapter before this short transaction.
-        # Re-check current lifecycle/manifest here, including on idempotent replay.
-        row = session.execute(
-            select(ArtifactRecord, ArtifactRevisionRecord, JobRecord.status)
-            .join(
-                ArtifactRevisionRecord,
-                ArtifactRevisionRecord.logical_artifact_id == ArtifactRecord.logical_artifact_id,
-            )
-            .join(JobRecord, JobRecord.job_id == ArtifactRevisionRecord.job_id)
-            .where(
-                ArtifactRecord.logical_artifact_id == evidence.artifact_id,
-                ArtifactRevisionRecord.revision_id == evidence.artifact_revision_id,
-            )
-        ).one_or_none()
-        if row is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
-        logical, revision, status = row
-        manifest = revision.manifest
-        if not isinstance(manifest, dict):
-            raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
-        files = manifest.get("files")
-        matching = (
-            [
-                entry
-                for entry in files
-                if isinstance(entry, dict) and entry.get("file_name") == evidence.member_path
-            ]
-            if isinstance(files, list)
-            else []
-        )
-        if (
-            not logical.approved
-            or not revision.approved
-            or status != "SUCCEEDED"
-            or logical.job_id != revision.job_id
-            or revision.manifest_hash != sha256_bytes(canonical_json_bytes(manifest))
-            or manifest.get("job_id") != revision.job_id
-            or manifest.get("logical_artifact_id") != evidence.artifact_id
-            or manifest.get("revision_id") != evidence.artifact_revision_id
-            or manifest.get("artifact_type") != logical.artifact_type
-            or manifest.get("content_hash") != revision.content_hash
-            or manifest.get("content_bytes") != revision.content_bytes
-            or len(matching) != 1
-            or matching[0].get("sha256") != evidence.sha256
-            or matching[0].get("schema_ref") != evidence.schema_ref
-            or matching[0].get("media_type") != evidence.media_type
-            or type(matching[0].get("bytes")) is not int
-            or matching[0]["bytes"] < 0
-        ):
-            raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
-        return logical, revision
+        return validate_source_pointer_metadata(session, evidence)
 
     @classmethod
     def _observation_metadata(

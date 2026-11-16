@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/source-admission-v1/1.0",
+  "$defs": {
+    "Pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "SourceRevisionId": {
+      "type": "string",
+      "pattern": "^kakaosourcerev_[0-9a-f]{32}$"
+    },
+    "Authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "attempt_id",
+        "fence",
+        "command_sha256",
+        "capability_revision_id",
+        "adapter_release_sha256",
+        "command",
+        "capability",
+        "capture_report",
+        "capture_result"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^kakaorun_[0-9a-f]{32}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^kakaoattempt_[0-9a-f]{32}$"
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "command_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "capability_revision_id": {
+          "type": "string",
+          "pattern": "^kakaocapabilityrev_[0-9a-f]{32}$"
+        },
+        "adapter_release_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "command": {
+          "$ref": "#/$defs/Pointer"
+        },
+        "capability": {
+          "$ref": "#/$defs/Pointer"
+        },
+        "capture_report": {
+          "$ref": "#/$defs/Pointer"
+        },
+        "capture_result": {
+          "$ref": "#/$defs/Pointer"
+        }
+      }
+    },
+    "Attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment_id",
+        "attachment_revision_id",
+        "original",
+        "media_receipt",
+        "quality"
+      ],
+      "properties": {
+        "attachment_id": {
+          "type": "string",
+          "pattern": "^kakaoattachment_[0-9a-f]{32}$"
+        },
+        "attachment_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoattachmentrev_[0-9a-f]{32}$"
+        },
+        "original": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality": {
+          "enum": [
+            "ORIGINAL",
+            "BEST_AVAILABLE",
+            "UNKNOWN"
+          ]
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_binding_id",
+    "room_id",
+    "snapshot_revision_id",
+    "normalization_revision_id",
+    "expected_source_revision_id",
+    "expected_resource_version",
+    "source",
+    "snapshot",
+    "normalization",
+    "authority",
+    "attachments"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-source-admission/1.0"
+    },
+    "source_binding_id": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room_id": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^kakaosnapshotrev_[0-9a-f]{32}$"
+    },
+    "normalization_revision_id": {
+      "type": "string",
+      "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+    },
+    "expected_source_revision_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceRevisionId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expected_resource_version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483646
+    },
+    "source": {
+      "$ref": "#/$defs/Pointer"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/Pointer"
+    },
+    "normalization": {
+      "$ref": "#/$defs/Pointer"
+    },
+    "authority": {
+      "$ref": "#/$defs/Authority"
+    },
+    "attachments": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "$ref": "#/$defs/Attachment"
+      }
+    }
+  }
+}

@@ -493,9 +493,18 @@ def test_admission_replay_revalidates_both_artifact_pointers(
         columns = getattr(statement, "column_descriptions", ())
         if len(columns) != 3 or columns[0].get("entity") is not ArtifactRecord:
             return result
-        row = result.one_or_none()
-        if row is None or row[1].revision_id != target.artifact_revision_id:
-            return SimpleNamespace(one_or_none=lambda: row)
+        rows = list(result.all())
+        position = next(
+            (
+                index
+                for index, row in enumerate(rows)
+                if row[1].revision_id == target.artifact_revision_id
+            ),
+            None,
+        )
+        if position is None:
+            return SimpleNamespace(all=lambda: rows)
+        row = rows[position]
         # Inject at the metadata read boundary. Approved Artifact rows stay immutable;
         # this never disables their database protection, even in the disposable fixture.
         logical = SimpleNamespace(
@@ -509,7 +518,8 @@ def test_admission_replay_revalidates_both_artifact_pointers(
         )
         status = row[2]
         if fault == "missing-source":
-            return SimpleNamespace(one_or_none=lambda: None)
+            rows.pop(position)
+            return SimpleNamespace(all=lambda: rows)
         if fault == "outer-header":
             logical.artifact_type = "wrong-kind"
         elif fault == "outer-job":
@@ -527,7 +537,8 @@ def test_admission_replay_revalidates_both_artifact_pointers(
             else:
                 entry["sha256"] = "sha256:" + "0" * 64
             revision.manifest_hash = sha256_bytes(canonical_json_bytes(revision.manifest))
-        return SimpleNamespace(one_or_none=lambda: (logical, revision, status))
+        rows[position] = (logical, revision, status)
+        return SimpleNamespace(all=lambda: rows)
 
     with monkeypatch.context() as scoped:
         scoped.setattr(Session, "execute", faulted_read)

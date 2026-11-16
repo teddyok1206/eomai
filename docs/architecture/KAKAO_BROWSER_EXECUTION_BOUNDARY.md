@@ -132,8 +132,24 @@ paths supplied by the user nor credentials. Ubuntu Noble's
 confirms the executable name; installed help/version/UDS behavior still require validation.
 
 The driver requires preprovisioned browser-owned mode0600
-`/var/lib/eom-kakao/vnc.passwd` and `/run/eom-kakao-private/Xauthority`. It never creates,
-resets, logs or returns either credential. Xvnc runs on fixed display `:94`, with
+`/var/lib/eom-kakao/vnc.passwd`. It never creates, resets, logs or returns that persistent
+operator-managed credential. Xauthority is different: it is ephemeral display state,
+not a Kakao or VNC password. After confirming the actual supervisor/cgroup and held
+profile lock, each new MANUAL launch creates a fresh cryptographic 128-bit
+MIT-MAGIC-COOKIE-1 record for the local hostname and fixed display `:94`. It publishes
+that record mode0600 at `/run/eom-kakao-private/Xauthority` using an exclusive no-follow
+temporary file, fsync and same-directory atomic replacement. The containing directory
+must be browser-owned0700, any prior target must be a safe single-link0600 regular file,
+and pre-existing display/VNC endpoints still block startup. The next launch rotates the
+old cookie; it never requires `/run` state to survive reboot or reuses an old cookie.
+The binary record uses the standard [libXau format](https://www.x.org/releases/individual/lib/libXau-1.0.12.tar.xz)
+and the [X.Org local-display cookie contract](https://xorg.freedesktop.org/archive/X11R6.8.0/doc/Xsecurity.7.html).
+No credential bytes leave this bounded local-file boundary through argv, environment,
+logs, return values, manifests or APIs; only the fixed XAUTHORITY path is passed to children.
+Incomplete temporary output is not usable authority and is never silently accepted.
+This O(1) driver-local operation adds no dependency, schema, DB state or new credential
+service; preprovisioning an ephemeral `/run` cookie would fail after an ordinary reboot.
+Xvnc runs on fixed display `:94`, with
 `-nolisten tcp`, `-rfbport -1`, VncAuth and permissioned
 `/run/eom-kakao-vnc/vnc.sock`. A pre-existing socket, X lock or X socket is an explicit
 reconciliation requirement, never permission to unlink it. The fixed profile remains
@@ -150,8 +166,8 @@ final whole-cgroup owner; a local mock does not prove deployed Chromium sandbox 
 
 Access is O(1) for fixed input/paths and bounded streaming executable hashing at the
 explicit launch-validation boundary. The driver neither polls DB nor stores a second
-collection state machine. No credentials or browser processes are generated in source
-tests; anonymous subprocesses and launcher fakes validate arguments, shutdown and errors.
+collection state machine. Tests use only temporary synthetic credentials, anonymous
+subprocesses and launcher fakes; no live account or operating browser is accessed.
 
 Source verification on 2026-11-16: MANUAL driver and browser runtime focused tests
 passed together (104 cases), including actual SIGTERM handler execution and ordered
@@ -327,6 +343,36 @@ interrupted states are reconcile-required. A failure retains quarantine, builder
 and the phase receipt without automatic retry, deletion or service activation. Actual
 identities, units, credentials and proxy activation remain the existing separate installer
 and owner boundaries. Synthetic copy/closure tests do not certify a live installation.
+
+### Owner and proxy activation inputs
+
+The existing runtime installer additionally owns two fixed service drop-ins, pinned as
+payloads in the unreleased install manifest. The Catalog template materializes its six
+exact profile/unit/entrypoint/fresh-manifest pins from already verified installation
+inputs. Its mode remains `DISABLED`, and it opens write access only to the two owner
+handoff directories (`/var/lib/eom-kakao-runtime/browser` and `/remote`) under the
+existing `ProtectSystem=strict` sandbox. The Caddy drop-in adds only the private proxy
+socket group. It grants no VNC, profile, worker, administrator or sudo membership.
+
+These small immutable configuration bytes use the existing hash check and exact-layout
+publication/replay boundary; they are not a new registry or service launcher. Fixed
+drop-in directories are root-owned, non-writable by services. The dominant operation
+is O(1) pin lookup and exact-byte comparison. A changed or conflicting installed file
+fails without overwrite. No migration or package dependency is added.
+
+The initial-profile manifest pin is taken from the validated, root-protected original
+fresh receipt when one exists, not from the latest installation manifest. Stage and
+verify recheck that same pin under the install/runtime locks before publishing any
+configuration. A changed receipt, different profile, unsafe receipt or mixed pin fails
+explicitly; the receipt is never rewritten. This preserves the installation fact when
+an owner drop-in was previously absent, without introducing an upgrade mechanism.
+
+Staging performs no daemon reload, service restart, Caddy route activation or enabling.
+A later reviewed activation selects `ENABLED` with the same pins, makes the installed
+noVNC inventory available to Web and imports the private Caddy route. Catalog and Caddy
+must pick up their new process groups/sandbox settings at that coordinated restart.
+Without these narrow drop-ins, Catalog cannot write its own handoffs and Caddy cannot
+connect to the private gateway, despite correctly installed standalone workers.
 
 The root-private CLI is `publish_runtime.py prepare|fingerprint|publish|verify
 --installer <root-private-install_runtime.py> --installer-sha256 sha256:<reviewed-hash>`.

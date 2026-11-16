@@ -1,4 +1,4 @@
-"""MANUAL-only headed browser driver. No collection, selectors or credential generation."""
+"""MANUAL-only headed browser. No collection, selectors or persistent credential changes."""
 
 from __future__ import annotations
 
@@ -136,6 +136,7 @@ async def run_manual(config: setup.ManualSetup, stopping: asyncio.Event) -> None
     failure: BaseException | None = None
     try:
         setup.require_supervisor()
+        setup.prepare_xauthority()
         playwright = await _start_playwright()
         setup.require_chromium(Path(playwright.chromium.executable_path), config.chromium_sha256)
         if stopping.is_set():

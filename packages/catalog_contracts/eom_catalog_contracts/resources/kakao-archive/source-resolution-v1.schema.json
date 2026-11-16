@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/source-resolution-v1/1.0",
+  "$defs": {
+    "Pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "SourceRevisionId": {
+      "type": "string",
+      "pattern": "^kakaosourcerev_[0-9a-f]{32}$"
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row_ordinal",
+        "occurrence_id",
+        "previous_row_ordinal",
+        "association",
+        "source_content_changed",
+        "evidence_changed"
+      ],
+      "properties": {
+        "row_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "occurrence_id": {
+          "type": "string",
+          "pattern": "^kakaomessage_[0-9a-f]{32}$"
+        },
+        "previous_row_ordinal": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "association": {
+          "enum": [
+            "SOURCE_VERIFIED",
+            "SEQUENCE_INFERRED",
+            "SNAPSHOT_ONLY",
+            "UNRESOLVED"
+          ]
+        },
+        "source_content_changed": {
+          "type": "boolean"
+        },
+        "evidence_changed": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_revision_id",
+    "command_id",
+    "resource_version",
+    "admission",
+    "created_by",
+    "created_at",
+    "observed_at",
+    "rows",
+    "previous_unmatched_rows"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-source-resolution/1.0"
+    },
+    "source_revision_id": {
+      "$ref": "#/$defs/SourceRevisionId"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^kakaocommand_[0-9a-f]{32}$"
+    },
+    "resource_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "admission": {
+      "$ref": "eom://schemas/kakao-archive/source-admission-v1/1.0"
+    },
+    "created_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    },
+    "rows": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "#/$defs/Row"
+      }
+    },
+    "previous_unmatched_rows": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100000
+      }
+    }
+  }
+}

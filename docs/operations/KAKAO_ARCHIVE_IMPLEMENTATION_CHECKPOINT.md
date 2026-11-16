@@ -1,5 +1,45 @@
 # KakaoTalk 구현 체크포인트
 
+## 최신 후속 — 2026-11-16 원본 수락과 질문 입력 연결
+
+이번 변경은 `4d190c32` 이후의 **소스/임시 DB 검증 단계**다. 실제 카카오 로그인,
+collector activation, 운영 DB migration 및 사용자 PDF 다운로드 성공을 뜻하지 않는다.
+
+- 원본 CSV·정규화·사진과 실제 capture command/result/capability/attempt/fence를 연결하는
+  source 수락 owner를 추가했다. occurrence는 같은 문장이라도 별개로 보존하며, 새 snapshot은
+  이전 revision을 덮지 않는다. 검증되지 않은 발신 역할·provider ID·문맥 완전성의 과대 주장을 거부한다.
+- 사진은 PNG/JPEG/WebP의 실제 decode·크기·정적 이미지 여부를 검사하고 원본 bytes·EXIF·SHA를
+  보존한다. 같은 blob의 여러 첨부 occurrence는 유지하되 해당 요청에서 검증용 원본/receipt를
+  한 번씩만 읽는다. 원본/긴 본문은 Artifact, DB에는 작은 identity·pointer·상태만 저장한다.
+- `resolve_question_source`가 수락된 exact revision을 기존 질문 후보 규칙에 연결한다.
+  현재 owner 권한·원본 lifecycle을 I/O 이후에도 확인한다. 질문/packet의 durable 편집·발행 owner와
+  공개 API/GUI 연결은 아직 후속이며, 이 resolver 자체를 전체 기능 완료로 표시하지 않는다.
+- 초기 설치에는 Catalog의 필요한 sandbox 경로/control group과 Caddy proxy group을 명시한다.
+  최초 profile receipt의 설치 SHA는 후속 manifest로 바꾸지 않고 stage/verify 때 다시 대조한다.
+  MANUAL driver는 실제 supervisor/profile lock 아래에서 매 실행 Xauthority를 준비한다.
+  기존 VNC/Kakao 인증을 복사하거나 수정한 것이 아니다.
+- 미확정 날짜 DRAFT는 실제 한 페이지 PDF에서 `날짜 확인 필요`를 표시하며 사진·본문을 유지한다.
+  FINAL의 미확정 날짜 차단은 유지한다. 이 미출시 render 계약 변경으로 이전 준비본의
+  pure contracts/PDF worker/관련 collector wheel은 활성화 전 새 source로 재빌드해야 한다.
+- 최초 DB 합동 검사는 9 FAIL/69 PASS였다. 새 owner metadata 등록 누락 1개와
+  batch pointer 조회로 변경된 테스트 주입 형식 8개를 수정했다. 다음 실행의 3 FAIL/90 PASS는
+  병렬 개발 중 render schema/hash 교체와 겹친 검사였으며 해당 결과를 최종 PASS로 사용하지 않는다.
+- 최종 0084는 새 disposable DB `/tmp/eom-api-testdb-20261116102051_6b2f2fd4`에서
+  fresh upgrade → downgrade 0083 → upgrade 0084를 통과했다. 앞선 임시 DB 기록은 보존했다.
+  운영 DB·기존 문항·임베딩 결과와 서비스 실행에는 변경이 없다.
+- 동결 후 재검증: Kakao unit/API·설치 wheel·개발 문맥 **1100 PASS**, 공식 disposable
+  PostgreSQL **98 PASS**(신규 source 20개 포함), schema audit 1456 canonical / 1104 mirror /
+  12462 reference PASS. source 6개 모듈과 media 2개 모듈 mypy, 변경 경계 Ruff/format PASS.
+  기존 Starlette/httpx deprecation warning 1개는 남아 있다. 겹치는 집중 검사를 합산하지 않는다.
+- 이 체크포인트의 소스를 현재 release context 1.25/0083로 운영 배포하면 안 된다.
+  source 0084와 후속 owner를 포함한 최종 compatible release/context 및 전용 runtime wheel을
+  확정한 뒤 설치·migration·활성화를 진행한다. 기존 4d190c32 준비본의 fingerprint를 새 소스의
+  검증 결과로 사용하지 않는다.
+
+다음 구현은 기존 질문 생성/편집/publisher를 current/revision/CAS owner에 연결하고,
+그 후 immutable packet과 학생별 export/download를 연결하는 순서다. source command는
+source 전용이며 capture 필드를 nullable로 늘린 범용 질문/출력 큐로 확장하지 않는다.
+
 ## 최신 후속 — 2026-11-16 runtime coordinator·현재 접속 승인
 
 기준 source checkpoint는 `7fe0c345d3b5c95c42c72ae67e371be0988bb92c`다.
@@ -337,3 +377,48 @@ Catalog 설치 권한은 새 테이블 3개 SELECT/INSERT 및 binding만 UPDATE�
 
 추가 비밀번호 요청 없이 가능한 부분을 계속 구현한다. 기존 문항·GPU 완료 데이터·실패
 이력은 보존하며, 이 체크포인트를 전체 goal 완료 또는 운영 활성화로 보고하지 않는다.
+
+## 2026-11-16 06:41 UTC 전용 환경 준비
+
+- source `4d190c32a01de55a4f19fc1c3697ec48762615d4`의 공식 API 4-wheel 빌드와
+  Web offline wheel closure 빌드를 완료했다. 설치·운영 활성화는 아직 수행하지 않았다.
+- browser/remote/pdf 전용 Conda 환경을 각각 최종 prefix에 직접 생성하고, 검증된
+  오프라인 wheel만 설치했다. 세 환경의 `pip check`가 통과했다. 임시 venv를 운영
+  경로로 복사하거나 기존 API/GPU 환경을 업그레이드하지 않았다.
+- 원격 화면용 TigerVNC 1.13.1+dfsg-2build2와 해당 의존 4개 패키지만 설치했다.
+  기존 패키지 업그레이드·삭제는 0이며 unrelated service restart는 하지 않았다.
+- 최초 fingerprint는 Conda archive의 group-writable 파일 때문에 거부됐다. 이번에
+  만든 eom 소유 준비본에 한해서 group/other write 및 set-id bit를 제거했고,
+  5개 runtime/asset tree fingerprint가 통과했다. byte 변경이나 기존 서비스 변경은 없다.
+- 아직 root-protected runtime 게시, 전용 service 활성화, DB migration, 카카오 로그인·
+  수집은 미실행이다. 실제 실행 전에 발견한 Catalog sandbox write-path와 일회성
+  Xauthority 준비 누락을 기존 installer/driver에서 보완한다.
+- 자세한 준비 기록은 `staging/kakao-runtime-4d190c32/preparation-receipt.json`,
+  wheel/RECORD/별도 PDF 출력 검사는 `/tmp/eom-kakao-release-4d190c32.93KcwwE4`다.
+  이 경로들은 개발 증거이며 runtime authority 또는 활성화 선언이 아니다.
+
+### 사진 blob 발행의 짧은 설계
+
+1. 책임은 Catalog의 기존 Artifact 발행 adapter다. 사진 byte 검증·원본 보관만 맡고,
+   방/메시지 연결·권한·DB 채택은 콘텐츠 owner에 남긴다.
+2. 정본은 변경하지 않은 원본 이미지와 byte 고유 속성만 담은 작은 receipt다.
+3. binding 범위 blob 논리 identity는 DB owner가 맡는다. Artifact/revision/hash와
+   attachment occurrence/revision을 분리한다. 같은 사진의 새 관측은 별도 association이다.
+4. SHA·크기·실제 MIME·decode 크기를 대조하고 고정 member명으로 exact pointer를 반환한다.
+   호출 전/발행 직전/반환 전의 현재 source 권한 검사는 필수 callback이다.
+5. 주요 연산은 binding+SHA 중복 확인, 처음 byte hash/decode, exact member 조회다.
+6. 기존 Artifact publication 멱등 key와 후속 owner의 unique(binding,SHA)를 사용한다.
+7. 사진 하나당 O(bytes+pixels), 명시적 byte/pixel 상한, 요청별 한 번의 검증이다.
+   공개 조회마다 다시 decode하지 않는다. 원본 이름을 검색 key로 사용하지 않는다.
+8. 대용량 검증·Artifact 발행 중 DB row lock은 잡지 않는다. 발행 후 owner가 재검증하고
+   짧은 transaction으로 pointer를 채택한다. byte를 DB에 저장하지 않는다.
+9. 순수 receipt 계약은 Catalog contracts, 이미지 decode/발행은 Catalog adapter다.
+   실제 PyMuPDF 1.26.7의 `image_profile(bytes)`가 정상 PNG/JPEG에도 native binding
+   TypeError를 내는 것을 재현했다. private C API 우회나 별도 이미지 파서를 만들지 않고
+   PDF worker와 같은 Pillow 11.3.0을 선택적 `kakao-runtime` 의존으로 재사용한다.
+   운영 활성화 전 이 의존 설치를 검증해야 하며, feature-off import는 요구하지 않는다.
+   worker→NAS, domain→filesystem 의존을 추가하지 않는다.
+10. 같은 binding+SHA의 재전송은 같은 발행을 재사용한다. 손상·형식·크기·권한·hash 오류는
+    명시적으로 실패한다. 실패 이력을 성공으로 바꾸거나 byte를 보정하지 않는다.
+11. 방·시간·파일명을 blob receipt에 넣는 더 단순한 대안은 같은 사진 재수집 때 request
+    hash를 바꾸고 중복 보관을 유발하므로 제외한다. 별도 blob 저장소/framework는 불필요하다.

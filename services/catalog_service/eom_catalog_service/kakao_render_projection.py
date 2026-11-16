@@ -122,8 +122,6 @@ def project_kakao_student_render(
                 source_index[reference.normalization_revision_id] for reference in question.sources
             ),
         )
-        if question.first_student_at_utc is None:
-            raise ValueError("KAKAO_ARCHIVE_RENDER_DATE_UNVERIFIED")
         text: list[RenderText] = []
         pictures: list[RenderImage] = []
         blocks: list[RenderBlockReference] = []
@@ -183,7 +181,11 @@ def project_kakao_student_render(
         rendered.append(
             RenderQuestion(
                 question_revision_id=question.question_revision_id,
-                header_date=question.first_student_at_utc.astimezone(ZoneInfo("Asia/Seoul")).date(),
+                header_date=(
+                    question.first_student_at_utc.astimezone(ZoneInfo("Asia/Seoul")).date()
+                    if question.first_student_at_utc is not None
+                    else None
+                ),
                 text_blocks=tuple(text),
                 images=tuple(pictures),
                 ordered_blocks=tuple(blocks),

@@ -22,6 +22,22 @@ source이며 문항 DB·GraphRAG·자료 학습과 분리한다. AI/OCR/임베�
 Job metadata에는 학생 이름·대화 원문을 넣지 않는다. 호출자의 실제 권한과 fence 재확인
 callback은 필수다. 이 adapter 자체가 공개 권한이나 private 다운로드 경계를 완성하지 않는다.
 
+`kakao_media_publication.py`는 PNG/JPEG/WebP의 크기·정적 이미지 여부·실제 decode를 검사하고
+원본 bytes·EXIF·SHA를 그대로 발행한다. 같은 binding의 같은 bytes는 기존 Artifact publication을
+재사용하며 사진 blob과 메시지별 attachment identity를 구분한다. Pillow는 선택적인
+`kakao-runtime` 의존으로 지연 import하며 이 기능을 켜지 않은 Catalog에는 필요하지 않다.
+
+`kakao_source_service.py`는 수락된 방의 원본·정규화·사진과 실제 capture 증거를 하나의 불변
+source resolution으로 연결한다. 큰 본문/occurrence map은 Artifact에, DB에는 작은 pointer·
+current/version·명령 예약만 둔다. source 수락은 내부 use case이며 실제 수집 권한 callback과
+exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재사용하고 새로운 snapshot은
+이전 source를 덮지 않는다. 실제 collector 연결 없이 fixture를 운영 수집으로 간주하지 않는다.
+`resolve_question_source`는 이 accepted revision을 기존 질문 규칙의 입력으로 해석하며
+실제 I/O 이후에도 현재 권한과 같은 Artifact pointer를 재확인한다. 호출자는 고유 source별
+한 번 해석한 결과를 해당 요청의 질문들에 재사용한다. source 전용 command를 범용 큐로 쓰지 않는다.
+저장 연결의 범위와 후속 질문/출력 책임은
+[저장 설계](../architecture/KAKAO_ARCHIVE_DURABLE_CONTENT.md)에 정리한다.
+
 `kakao_archive_service.py`는 DRAFT 연결과 불변 정책 revision/명령 receipt의 소유자다.
 현재 session·permission·ADMIN 역할은 Identity repository에서 다시 확인하며 다른 owner의
 binding은 존재하지 않는 것과 같은 오류다. `kakao_archive_rpc.py`는 기존 Catalog API-peer
@@ -61,7 +77,9 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 권한별 다운로드는 별도 use case이며 아직 운영 완료로 표시하지 않는다.
 질문 한 개가 한 페이지이며 사진은 자르지 않는다. glyph/배치/필수 사진 조건이 실패하면
 명시적으로 검토 필요이고 성공 PDF로 발행하지 않는다. 검증된 원본과 EXIF 적용 derivative를
-구분하며 원본을 덮지 않는다. 새 의존 Pillow는 이 worker에서만 사용한다.
+구분하며 원본을 덮지 않는다. Pillow는 이 worker와 선택적으로 활성화한 사진 수락에서 사용한다.
+날짜가 확인되지 않은 DRAFT는 `날짜 확인 필요`로 표시한다. 날짜를 추정하지 않으며,
+같은 미확정 입력의 FINAL은 계약과 순수 규칙에서 거부한다.
 
 `static/kakao-archive.js`는 기존 api/session/presenter를 주입받는다. private 파일 URL은
 검증한 논리 ID와 pinned revision으로 만들고 source payload의 임의 URL을 쓰지 않는다.

@@ -164,6 +164,38 @@ def test_real_korean_pdf_and_preview(prepared):
     )
 
 
+def test_unknown_draft_date_preserved_in_schema_dto_and_real_pdf(prepared):
+    def change(value):
+        value["mode"] = "DRAFT"
+        value["questions"][0]["header_date"] = None
+
+    result = render(prepared, change)
+    assert result.status == "COMPLETED" and result.page_count == 1
+    raw = json.loads((prepared[0] / "manifest.json").read_bytes())
+    validate_contract("manifest", raw)
+    assert RenderManifest.model_validate(raw).questions[0].header_date is None
+    with pymupdf.open(prepared[1] / "report.pdf") as pdf:
+        assert len(pdf) == 1
+        text = pdf[0].get_text().replace("\u00a0", " ")
+        assert "검토용" in text and "날짜 확인 필요" in text
+        assert "2026-" not in text and "None" not in text
+        raster = pdf[0].get_pixmap()
+        assert len(set(raster.samples)) > 1
+    with pymupdf.open(prepared[1] / "page-0001.png") as preview:
+        assert preview[0].rect.width > 0 and preview[0].rect.height > 0
+
+
+def test_unknown_final_date_rejected_before_output_in_schema_and_dto(prepared):
+    result = render(prepared, lambda value: value["questions"][0].update(header_date=None))
+    assert result.status == "INVALID_INPUT" and result.error_code == "KAKAO_RENDER_SCHEMA_INVALID"
+    assert not result.outputs and not list(prepared[1].iterdir())
+    raw = json.loads((prepared[0] / "manifest.json").read_bytes())
+    with pytest.raises(ValueError, match="SCHEMA_INVALID"):
+        validate_contract("manifest", raw)
+    with pytest.raises(ValidationError, match="DATE_UNVERIFIED"):
+        RenderManifest.model_validate(raw)
+
+
 def test_question_page_and_picture_occurrence_order(prepared):
     photos = [picture(prepared[0], n) for n in (1, 2)]
 

@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 from .render import sha256
 
-SCHEMA_SHA256 = "sha256:713a7028584a5972bfea3f65ec14823f21717c05e44537452846f1f76bf40855"
+SCHEMA_SHA256 = "sha256:ab665eefbe60d94bcc986310bf8f711013194a7b4556a01b0d5ca2f2e21ae056"
 
 
 LAYOUT_SCHEMA_SHA256 = "sha256:b925381a7f6784c673029d7a3a38ecef3b3648076c7efa6360ac61f0e3e38f5a"

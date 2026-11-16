@@ -31,7 +31,11 @@ def local(monkeypatch):
     monkeypatch.setattr(installer, "ROOT_UID", os.getuid())
     monkeypatch.setattr(installer, "ROOT_GID", os.getgid())
     with tempfile.TemporaryDirectory(prefix="kakao-install-test-", dir=ROOT / "staging") as folder:
-        yield Path(folder)
+        previous_mask = os.umask(0o022)
+        try:
+            yield Path(folder)
+        finally:
+            os.umask(previous_mask)
 
 
 def put(path, data=b"synthetic", mode=0o644):
@@ -234,7 +238,7 @@ def test_preflight_missing_runtime_is_not_ready(local, monkeypatch):
     calls = Mock()
     monkeypatch.setattr(installer, "run", calls)
     with pytest.raises(FileNotFoundError):
-        installer.preflight(manifest(), payload)
+        installer.preflight(manifest(), payload, manifest_sha256=SHA)
     calls.assert_not_called()
 
 
@@ -381,3 +385,207 @@ def test_installer_checks_real_profile_lock_before_any_mutation(local, monkeypat
     ):
         fcntl.flock(competing, fcntl.LOCK_EX | fcntl.LOCK_NB)
     assert lock.read_bytes() == b""
+
+
+def preflight_inputs(local, monkeypatch):
+    monkeypatch.setattr(installer, "FRESH_RECEIPT", local / "fresh-profile.json")
+    prefixes = {role: local / role for role in ("browser", "remote", "pdf")}
+    for prefix in prefixes.values():
+        put(prefix / "bin/python3.12", b"inert interpreter", 0o755)
+    monkeypatch.setattr(installer, "PREFIXES", prefixes)
+    browser, novnc = local / "playwright", local / "novnc"
+    monkeypatch.setattr(installer, "BROWSER", browser)
+    monkeypatch.setattr(installer, "NOVNC", novnc)
+    xvnc = put(local / "Xtigervnc", b"inert Xvnc", 0o755)
+    monkeypatch.setattr(installer, "XVNC", xvnc)
+    value = manifest()
+    value["xvnc_sha256"] = installer.digest(xvnc)
+    put(browser / value["chromium_member"], b"inert Chromium", 0o755)
+    put(prefixes["browser"] / "bin/eom-kakao-browser-driver", b"inert driver", 0o755)
+    put(
+        prefixes["remote"] / "lib/python3.12/site-packages/eom_kakao_archive_gateway/supervisor.py",
+        b"inert supervisor",
+    )
+    for name in ("vnc.html", "app/ui.js", "core/rfb.js", "LICENSE.txt"):
+        put(novnc / name)
+    payload = local / "payload"
+    for name in installer.PAYLOADS:
+        if name == "50-eom-kakao-manual.conf.in":
+            original = ROOT / "infra/systemd/eom-catalog-application-runner.service.d" / name
+        elif name == "50-eom-kakao-proxy.conf":
+            original = ROOT / "infra/systemd/caddy.service.d" / name
+        elif name.endswith(".rules"):
+            original = ROOT / "infra/polkit" / name
+        elif name == "eom-kakao-runtime.conf":
+            original = ROOT / "infra/tmpfiles" / name
+        else:
+            original = ROOT / "infra/systemd" / name
+        path = put(payload / name, original.read_bytes())
+        value["payload_sha256"][name] = installer.digest(path)
+    monkeypatch.setattr(installer, "tree_digest", lambda _: SHA)
+    monkeypatch.setattr(installer, "check_versions", Mock())
+    monkeypatch.setattr(installer, "require_stopped", Mock())
+    monkeypatch.setattr(installer, "check_identities", Mock())
+    return value, payload
+
+
+def test_owner_and_proxy_dropins_are_pinned_narrow_and_nonactivating(local, monkeypatch):
+    value, payload = preflight_inputs(local, monkeypatch)
+    files = installer.preflight(value, payload, manifest_sha256=SHA)
+    text = files[installer.OWNER_DROPIN].decode()
+    environment = dict(
+        line.removeprefix("Environment=").split("=", 1)
+        for line in text.splitlines()
+        if line.startswith("Environment=")
+    )
+    assert environment == {
+        "EOM_KAKAO_MANUAL_MODE": "DISABLED",
+        "EOM_KAKAO_PROFILE_ID": value["profile_id"],
+        "EOM_KAKAO_BROWSER_TEMPLATE_SHA256": value["payload_sha256"]["eom-kakao-browser.service"],
+        "EOM_KAKAO_BROWSER_DRIVER_SHA256": installer.digest(
+            installer.PREFIXES["browser"] / "bin/eom-kakao-browser-driver"
+        ),
+        "EOM_KAKAO_GATEWAY_TEMPLATE_SHA256": value["payload_sha256"]["eom-kakao-remote.service"],
+        "EOM_KAKAO_GATEWAY_SUPERVISOR_SHA256": installer.digest(
+            installer.PREFIXES["remote"]
+            / "lib/python3.12/site-packages/eom_kakao_archive_gateway/supervisor.py"
+        ),
+        "EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256": SHA,
+    }
+    writable = [line for line in text.splitlines() if line.startswith("ReadWritePaths=")]
+    assert writable == [
+        "ReadWritePaths=/var/lib/eom-kakao-runtime/browser /var/lib/eom-kakao-runtime/remote"
+    ]
+    assert [line for line in text.splitlines() if line.startswith("SupplementaryGroups=")] == [
+        "SupplementaryGroups=eom-kakao-control"
+    ]
+    proxy = files[installer.PROXY_DROPIN].decode()
+    assert [line for line in proxy.splitlines() if line and not line.startswith("#")] == [
+        "[Service]",
+        "SupplementaryGroups=eom-kakao-proxy",
+    ]
+    assert "{" not in text and "}" not in text
+    installer.require_stopped.assert_called_once()
+
+
+@pytest.mark.parametrize("name", ["50-eom-kakao-manual.conf.in", "50-eom-kakao-proxy.conf"])
+def test_missing_new_payload_is_rejected_by_schema_and_parser(local, name):
+    value = manifest()
+    del value["payload_sha256"][name]
+    with pytest.raises(installer.InstallError, match="MANIFEST_INVALID"):
+        load(local, value)
+    schema = json.loads(
+        (ROOT / "schemas/kakao-archive/runtime-install-v1.schema.json").read_bytes()
+    )
+    assert not Draft202012Validator(schema).is_valid(value)
+
+
+def test_modified_dropin_template_fails_before_any_layout_change(local, monkeypatch):
+    value, payload = preflight_inputs(local, monkeypatch)
+    put(payload / "50-eom-kakao-manual.conf.in", b"[Service]\nEnvironment=UNAPPROVED=1\n")
+    stage = Mock()
+    monkeypatch.setattr(installer, "exact_layout", stage)
+    with pytest.raises(installer.InstallError, match="PAYLOAD_HASH_MISMATCH"):
+        installer.preflight(value, payload, manifest_sha256=SHA)
+    stage.assert_not_called()
+
+
+def test_owner_template_rejects_unknown_pin(local, monkeypatch):
+    value, payload = preflight_inputs(local, monkeypatch)
+    path = put(payload / "50-eom-kakao-manual.conf.in", b"{unapproved_pin}\n")
+    value["payload_sha256"][path.name] = installer.digest(path)
+    with pytest.raises(installer.InstallError, match="OWNER_TEMPLATE_INVALID"):
+        installer.preflight(value, payload, manifest_sha256=SHA)
+
+
+def test_new_manifest_preserves_original_profile_pin_in_generated_owner_config(local, monkeypatch):
+    value, payload = preflight_inputs(local, monkeypatch)
+    profile = local / "profile"
+    profile.mkdir(mode=0o700)
+    installer.fresh_receipt(
+        profile,
+        installer.FRESH_RECEIPT,
+        profile_id=value["profile_id"],
+        manifest_sha256=SHA,
+        created=True,
+    )
+    original = installer.FRESH_RECEIPT.read_bytes()
+    latest = "sha256:" + "b" * 64
+    files = installer.preflight(value, payload, manifest_sha256=latest)
+    assert (
+        f"EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256={SHA}\n".encode()
+        in files[installer.OWNER_DROPIN]
+    )
+    assert latest.encode() not in files[installer.OWNER_DROPIN]
+    assert installer.FRESH_RECEIPT.read_bytes() == original
+
+
+@pytest.mark.parametrize("create", [True, False], ids=["stage", "verify"])
+def test_stage_and_verify_refuse_mixed_initial_pin_before_config_publication(
+    local, monkeypatch, create
+):
+    value, payload = preflight_inputs(local, monkeypatch)
+    files = installer.preflight(value, payload, manifest_sha256=SHA)
+    profile = local / "profile"
+    profile.mkdir(mode=0o700)
+    # Receipt appears between preflight and the locked stage/verify observation.
+    installer.fresh_receipt(
+        profile,
+        installer.FRESH_RECEIPT,
+        profile_id=value["profile_id"],
+        manifest_sha256="sha256:" + "b" * 64,
+        created=True,
+    )
+    before = installer.FRESH_RECEIPT.read_bytes()
+    uid, gid = os.getuid(), os.getgid()
+    entries = tuple(
+        installer.Layout(path, uid, gid, 0o700)
+        for path in (
+            local,
+            profile,
+            local,
+            local / "browser",
+            local / "remote",
+        )
+    )
+    monkeypatch.setattr(installer, "layout", lambda: entries)
+    monkeypatch.setattr(installer, "prepare_identities", Mock())
+    monkeypatch.setattr(installer.grp, "getgrnam", lambda name: SimpleNamespace(gr_gid=gid))
+    layout = Mock()
+    monkeypatch.setattr(installer, "exact_layout", layout)
+    with pytest.raises(installer.InstallError, match="FRESH_RECEIPT_CONFLICT"):
+        installer.apply_layout(
+            files, create=create, profile_id=value["profile_id"], manifest_sha256=SHA
+        )
+    # Layout boundary is isolated, but the actual receipt parsing and mismatch are real.
+    assert not any(call.args[0].path in files for call in layout.call_args_list)
+    assert installer.FRESH_RECEIPT.read_bytes() == before
+
+
+@pytest.mark.parametrize("defect", ["wrong-profile", "writable", "symlink", "bad-hash"])
+def test_untrusted_initial_receipt_cannot_supply_owner_pin(local, monkeypatch, defect):
+    value, payload = preflight_inputs(local, monkeypatch)
+    profile = local / "profile"
+    profile.mkdir(mode=0o700)
+    installer.fresh_receipt(
+        profile,
+        installer.FRESH_RECEIPT,
+        profile_id=value["profile_id"],
+        manifest_sha256=SHA,
+        created=True,
+    )
+    if defect == "writable":
+        installer.FRESH_RECEIPT.chmod(0o666)
+    elif defect == "symlink":
+        original = installer.FRESH_RECEIPT.with_suffix(".original")
+        installer.FRESH_RECEIPT.rename(original)
+        installer.FRESH_RECEIPT.symlink_to(original)
+    else:
+        receipt = json.loads(installer.FRESH_RECEIPT.read_bytes())
+        if defect == "wrong-profile":
+            receipt["profile_id"] = "kakaoprofile_" + "b" * 32
+        else:
+            receipt["install_manifest_sha256"] = "latest"
+        put(installer.FRESH_RECEIPT, json.dumps(receipt).encode())
+    with pytest.raises(installer.InstallError, match=r"UNTRUSTED|FRESH_RECEIPT_CONFLICT"):
+        installer.preflight(value, payload, manifest_sha256=SHA)

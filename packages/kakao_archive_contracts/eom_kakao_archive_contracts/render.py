@@ -110,7 +110,7 @@ class RenderImage(FrozenModel):
 
 class RenderQuestion(FrozenModel):
     question_revision_id: QuestionRevisionId
-    header_date: date
+    header_date: date | None
     text_blocks: tuple[RenderText, ...] = Field(max_length=200)
     images: tuple[RenderImage, ...] = Field(max_length=30)
     ordered_blocks: tuple[RenderBlockReference, ...] = Field(min_length=1, max_length=230)
@@ -153,6 +153,10 @@ class RenderManifest(FrozenModel):
         revisions = tuple(question.question_revision_id for question in self.questions)
         if len(set(revisions)) != len(revisions) or subset_sha256(revisions) != self.subset_sha256:
             raise ValueError("KAKAO_RENDER_SUBSET_INVALID")
+        if self.mode == "FINAL" and any(
+            question.header_date is None for question in self.questions
+        ):
+            raise ValueError("KAKAO_RENDER_DATE_UNVERIFIED")
         return self
 
 

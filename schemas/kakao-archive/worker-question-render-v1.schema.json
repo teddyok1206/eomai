@@ -162,7 +162,7 @@
           "$ref": "#/$defs/questionrev"
         },
         "header_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "format": "date"
         },
         "text_blocks": {
@@ -237,7 +237,19 @@
             "$ref": "#/$defs/question"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"mode": {"const": "FINAL"}}, "required": ["mode"]},
+          "then": {
+            "properties": {
+              "questions": {
+                "items": {"properties": {"header_date": {"type": "string"}}}
+              }
+            }
+          }
+        }
+      ]
     },
     "command": {
       "type": "object",
