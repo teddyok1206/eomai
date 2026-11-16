@@ -1,5 +1,21 @@
 # Protected release-operator adapter
 
+## 2026-11-16 Kakao durable content successor / source 0087
+
+Context/admission 1.27 pins 0087 and the existing four-wheel closure. The closed
+0084→0087 callback applies question/packet/export migrations through the existing
+transactional Alembic owner; already-0087 replay is read-only. Other predecessors
+are rejected. Historical 1.26/0084 schema and callbacks retain their exact meaning.
+
+This extends the same eleven-point boundary below: immutable Git/wheel/context
+identity, verified source pointers, constant-time callback lookup and existing
+role owners; no new privileged service, queue, dependency or migration mechanism.
+Catalog gains only the new owner tables and mutable head/attempt columns. Runtime
+rollback retains new private history and requires a schema-0087-compatible release.
+Source/disposable tests are not actual deployment, renderer activation, remote login
+or Kakao collection evidence. Actual release and user-path results belong in the
+Kakao implementation checkpoint. Existing numerical pins remain unchanged.
+
 ## 2026-11-16 Kakao partial deployment / source 0084
 
 The user requested deployment before completing collection/question/export integration.

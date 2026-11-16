@@ -141,3 +141,34 @@ NAS 및 staging root 자체를 입력 폴더로 쓰는 것은 거부한다. 기�
 완료한 입력은 기존 `KakaoPdfExecutor` → `publish_kakao_pdf`로 넘어간다. 이 adapter 추가는
 새 큐나 DB schema를 요구하지 않으며 입력 helper 시험을 실제 Studio 다운로드 성공으로
 간주하지 않는다. 단순 임의 경로 전달은 다른 학생/가변 파일/누락 이미지를 구별하지 못해 사용하지 않는다.
+
+## 영속 export와 현재 권한의 다운로드 연결
+
+1. Catalog export owner가 한 학생의 불변 packet subset, 설치 renderer/font/layout pin,
+   접수·실행·완료를 소유한다. 기존 executor/publisher를 호출하는 adapter와 상태 저장은 분리한다.
+2. 원문은 기존 source/question/packet Artifact이며, 출력은 한 canonical PDF Artifact다.
+   DB에는 ID·hash·state·작은 실행 command와 output pointer만 둔다. 본문·사진을 복사하지 않는다.
+3. export ID, 실행 attempt ID, output revision ID와 Artifact revision은 별개다. 같은 build key의
+   새 접수 key는 기존 export를 가리키는 작은 receipt만 만든다. 과거 실패는 성공으로 바꾸지 않는다.
+4. 현재 actor의 binding/학생 subset/source closure와 정확한 packet·출력 schema/hash/lifecycle을
+   확인한다. 결과 조회·다운로드도 매번 현재 권한을 확인하며 임의 Artifact/path 입력은 받지 않는다.
+5. 접수 replay는 owner+key, cache는 owner+build hash, 목록은 owner+binding+export ID,
+   실행은 export PK의 짧은 row lock을 사용한다. 출력 페이지는 한 Artifact manifest의 member map이다.
+6. build hash unique constraint와 command receipt unique key, packet/student/Artifact FK를 사용한다.
+   목록은 keyset pagination, source 확인은 기존 ordered batch resolver다. 별도 범용 큐는 없다.
+7. 접수/선택은 O(선택 질문+고유 source), 저장본 metadata 조회는 indexed lookup,
+   파일 열기는 현재 source 확인 후 O(해당 출력 bytes)다. 200 질문의 기존 상한을 유지한다.
+8. claim은 PENDING→RUNNING 한 번만 허용한다. 긴 파일 I/O/렌더/발행 중 DB lock을 잡지 않는다.
+   bind된 작은 RenderCommand와 exact attempt를 보존하며 재접수·상태 조회는 실행을 시작하지 않는다.
+9. 순수 계약은 Catalog contracts, SQL/파일과 기존 publisher 호출은 Catalog adapter,
+   실제 프로세스 실행·중단 확인은 Orchestrator다. HTTP가 worker argv/UID/font 경로를 고르지 않는다.
+10. 완료 발행 뒤 DB 채택 전 중단이면 원래 attempt의 발행 pointer로 채택을 이어간다.
+    RUNNING 시간이 길다는 이유로 새 attempt를 자동 실행하지 않는다. 중단된 실행의 회수는
+    실제 process 종료 확인과 기존 recover_finished를 먼저 사용한다. FAILED는 terminal이다.
+11. PDF 경로만 저장하는 대안은 학생/버전/재전송을 구별하지 못한다. 기존 공통 Job를 질문
+    내용 저장소나 새 범용 scheduler로 확장하는 대신 작은 export owner와 기존 실행 경계를 연결한다.
+
+실패한 attempt는 terminal 불변 기록으로 남긴다. 명시적 retry는 exact 실패 attempt를
+기대값으로 받고 새 attempt·순번·fence를 만든다. RUNNING 또는 결과 불명인 attempt를 retry로
+우회할 수 없고 완료 build를 다시 실행하지 않는다. 단순 POST replay/GET은 retry 권한이 아니다.
+정기 수집 권한·실제 HTTP/GUI 연결과 보호 runtime 활성화는 별도로 검증한다.

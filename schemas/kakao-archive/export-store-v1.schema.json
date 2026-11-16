@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/export-store-v1/1.0",
+  "title": "Private student PDF export requests and immutable output descriptors",
+  "$defs": {
+    "Create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "packet_id",
+        "packet_revision_id",
+        "student_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export-create/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "packet_id": {
+          "type": "string",
+          "pattern": "^kakaopacket_[0-9a-f]{32}$"
+        },
+        "packet_revision_id": {
+          "type": "string",
+          "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+        },
+        "student_id": {
+          "type": "string",
+          "pattern": "^kakaostudent_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "Profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "renderer_release_sha256",
+        "font_sha256",
+        "font_size_bytes",
+        "layout_policy"
+      ],
+      "properties": {
+        "renderer_release_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "font_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "font_size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 33554432
+        },
+        "layout_policy": {
+          "const": "student-question-a4/1.0"
+        }
+      }
+    },
+    "Export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "packet_id",
+        "packet_revision_id",
+        "student_id",
+        "export_id",
+        "profile",
+        "subset_sha256",
+        "mode",
+        "state",
+        "created_at",
+        "completed_at",
+        "export_revision_id",
+        "page_count",
+        "pdf",
+        "layout",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "packet_id": {
+          "type": "string",
+          "pattern": "^kakaopacket_[0-9a-f]{32}$"
+        },
+        "packet_revision_id": {
+          "type": "string",
+          "pattern": "^kakaopacketrev_[0-9a-f]{32}$"
+        },
+        "student_id": {
+          "type": "string",
+          "pattern": "^kakaostudent_[0-9a-f]{32}$"
+        },
+        "export_id": {
+          "type": "string",
+          "pattern": "^kakaoexport_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "subset_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "mode": {
+          "enum": [
+            "DRAFT",
+            "FINAL"
+          ]
+        },
+        "state": {
+          "enum": [
+            "PENDING",
+            "RUNNING",
+            "COMPLETED",
+            "FAILED",
+            "NEEDS_LAYOUT_REVIEW"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "export_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoexportrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "pdf": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]{2,79}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "export",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export-mutation/1.0"
+        },
+        "export": {
+          "$ref": "#/$defs/Export"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export-page/1.0"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/Export"
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoexport_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Create"
+    },
+    {
+      "$ref": "#/$defs/Export"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    }
+  ]
+}

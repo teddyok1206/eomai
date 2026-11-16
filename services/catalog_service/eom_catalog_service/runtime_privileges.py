@@ -12,6 +12,9 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "kakao_exports",
+    "kakao_export_requests",
+    "kakao_export_attempts",
     "kakao_packets",
     "kakao_packet_commands",
     "kakao_packet_revisions",
@@ -182,6 +185,9 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "kakao_exports",
+    "kakao_export_requests",
+    "kakao_export_attempts",
     "kakao_packets",
     "kakao_packet_commands",
     "kakao_packet_revisions",
@@ -366,6 +372,24 @@ TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
 
 # Mutable room pointer only; session reads exclude tokens and credential material.
 COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    ("UPDATE", "kakao_exports", ("current_attempt_id", "attempt_number")),
+    (
+        "UPDATE",
+        "kakao_export_attempts",
+        (
+            "command",
+            "state",
+            "completed_at",
+            "error_code",
+            "export_revision_id",
+            "artifact_id",
+            "artifact_revision_id",
+            "pdf_sha256",
+            "layout_sha256",
+            "publication_job_id",
+            "page_count",
+        ),
+    ),
     ("UPDATE", "kakao_packets", ("current_revision_id", "resource_version")),
     ("UPDATE", "kakao_packet_commands", ("state", "completed_at")),
     ("UPDATE", "kakao_questions", ("current_revision_id", "resource_version")),

@@ -1,5 +1,38 @@
 # KakaoTalk 구현 체크포인트
 
+## 진행 중간 저장 — 영속 출력 요청·claim·현재 권한 파일 열기
+
+`99f97a65` 뒤에 기존 PDF executor/publisher를 바꾸지 않고 export 저장 owner를 연결했다.
+이번 완료 범위는 **저장 use case와 실제 PDF 파일 adapter의 합성 입력 검증**이다.
+API/BFF/GUI 출력 경로와 보호 worker 활성화, 실제 카카오 수집은 여전히 미연결이다.
+
+- 한 학생의 exact packet revision/subset와 renderer/font/layout pin으로 build를 고정한다.
+  같은 요청은 원래 ID를 재사용하고 같은 build의 다른 key도 작은 receipt만 추가한다.
+  배포 뒤 renderer profile이 달라져도 이전 key는 이전 요청·출력과 연결된다.
+- 실제 동시 접수와 claim에서 한 export·한 실행 승자만 생성된다. 조회/접수 replay는
+  렌더를 시작하지 않는다. 긴 파일 I/O 중에는 DB row lock을 잡지 않는다.
+- 실제 PDF 발행 뒤 새 service instance가 DB 채택만 이어서 수행했다. 완료 목록·상세와
+  같은 PDF 파일을 두 번 다시 열어도 render 호출은 1회였다. 현재 session/source 검사를
+  파일 FD를 열기 전후에 수행하며, 열기 중 권한 철회 시 FD도 닫는 것을 확인했다.
+- 실제 프로세스 정지 callback이 거부하면 RUNNING을 보존한다. 명시적인 exact 실패
+  attempt retry만 새 attempt/fence를 만들며 기존 FAILED 기록을 수정하지 않는다.
+  다른 학생/바뀐 command/다른 hash의 출력은 채택하지 않는다.
+- 최초 query-plan 추가 검사만 143 PASS/1 FAIL이었다. 작은 fixture에서 optimizer가
+  동등하게 유효한 owner index를 고른 것을 잘못 실패로 판정한 경우였다. 실제 indexed
+  lookup과 정확한 unique build B-tree 정의를 함께 검사하도록 고쳤다. 목록용 index는
+  기존 unique(owner,binding,export)가 같은 연산을 지원하므로 중복 생성하지 않는다.
+- 변경된 미출시 migration을 **새로운** 공식 guarded disposable DB에 처음부터 적용했다.
+  최종 PostgreSQL **144 PASS (55.37초)**, 합동 소스/권한/배포 경계 **1186 PASS**, mypy
+  4개 core와 formatter/linter/shell 검사 PASS다. schema audit는 canonical 1461 /
+  mirror 1107 / reference 12525 PASS다. 기존 테스트 결과와 수를 합산하지 않는다.
+- source head는 `20261116_0087`이다. 운영 반영용 context/admission 1.27과 exact
+  0084→0087/0087 read-only callback을 기존 operator에 추가했다. 1.26 bytes/의미는
+  보존했다. **아직 운영 적용하지 않았고** 실제 운영은 앞선 0084 release 그대로다.
+  새 source를 옛 exact-head context로 설치하지 않는다.
+- 다음은 이 owner를 실제 API·Studio와 실행 coordinator에 연결하고 같은 합성 입력의
+  인증 다운로드를 완주하는 것이다. 그 뒤 호환 운영 release/보호 renderer를 적용하고,
+  원격 화면에서 사용자 카카오 관리자 로그인 → 실제 한 방 수집/PDF → 전체 주기 수집으로 간다.
+
 ## 진행 중간 저장 — 저장된 대화·사진에서 학생별 PDF까지
 
 `871e2df3` 뒤에 기존 source/question/packet owner와 renderer/Artifact publisher를 연결했다.
