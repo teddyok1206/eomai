@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/collection-attempt-v1/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "task_id", "attempt_id", "command_id", "attempt_number", "source_binding_id", "room_id", "profile_id", "browser_run_id", "fence", "snapshot_revision_id", "normalization_revision_id", "created_at", "state"],
+  "properties": {
+    "schema_version": {"const": "kakao-collection-attempt/1.0"},
+    "run_id": {"type": "string", "pattern": "^kakaorun_[0-9a-f]{32}$"},
+    "task_id": {"type": "string", "pattern": "^kakaotask_[0-9a-f]{32}$"},
+    "attempt_id": {"type": "string", "pattern": "^kakaoattempt_[0-9a-f]{32}$"},
+    "command_id": {"type": "string", "pattern": "^kakaocommand_[0-9a-f]{32}$"},
+    "attempt_number": {"const": 1},
+    "source_binding_id": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "room_id": {"type": "string", "pattern": "^kakaoroom_[0-9a-f]{32}$"},
+    "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+    "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+    "fence": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "snapshot_revision_id": {"type": "string", "pattern": "^kakaosnapshotrev_[0-9a-f]{32}$"},
+    "normalization_revision_id": {"type": "string", "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"},
+    "created_at": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+    "state": {"enum": ["RESERVED", "COMMAND_READY", "RESULT_ACCEPTED"]}
+  }
+}

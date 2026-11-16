@@ -3,6 +3,31 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 수집 attempt와 source 수락 연결 — 2026-11-16
+
+기존 run/room task와 공유 browser epoch에 최초 attempt를 하나씩 예약한다. 별도 큐나
+실행 framework는 만들지 않는다. command/attempt/snapshot/normalization identity를 DB의
+작은 metadata에 먼저 예약하고, 기존 worker C1 command와 실제 inventory/capability의
+정확한 Artifact를 확인한 뒤 command를 고정한다. 재조회는 원래 attempt를 돌려주며,
+미확인 실행이나 FAILED를 새 identity/성공으로 바꾸지 않는다. successor retry는 별도 명시
+절차이며 이 최초 연결에서 암묵적으로 실행하지 않는다.
+
+정본은 기존 Artifact owner의 command/result/report 파일이다. owner는 파일 I/O를 lock
+밖에서 수행하고 현재 계정·policy·adapter·profile fence를 다시 검사해 작은 pointer만
+채택한다. worker JSON만으로 source 권한을 얻지 못하며, source admission callback은
+실제로 채택된 attempt의 command/capability/result/report와 room/snapshot identity를 대조한다.
+원본 CSV/사진의 byte·관측·attachment coverage 검증은 기존 source owner가 계속 담당한다.
+결과 proof 수락과 원본 검증은 다르다. 기존 source owner의 실제 revision 수락 후에만
+task를 LOCAL_ACCEPTED로 진행하며, 이것도 질문 저장이나 run 전체 완료는 아니다.
+
+접근은 task/attempt PK lookup와 task별 unique claim, run→browser exact FK다. attempt당
+O(1) metadata, member 검증은 bounded O(n)이다. task row lock 후 원래 attempt를 재조회하고,
+browser 관측은 이미 pin된 epoch와 실제 profile gate를 사용한다. command/result 파일이나
+대화 원문·사진은 DB에 넣지 않는다. dependency는 Catalog application→contracts/Artifact
+owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는다. 단순히 caller가
+전달한 fence만 믿는 대안은 실제 접수된 작업·결과의 증거가 없어 source authority에 부족하다.
+실제 AUTO 시작·selector·주기 실행을 이 저장 연결만으로 활성화하지 않는다.
+
 ## 책임과 정본
 
 Catalog는 현재 사용자·binding 권한과 lifecycle, capability revision, 결과 발행의

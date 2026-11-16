@@ -3,14 +3,65 @@
 from eom_catalog_contracts.kakao_capability import CAPABILITY_VERIFICATION_REF
 from eom_operator_identity import PermissionKey
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .kakao_archive_authorization import KakaoArchiveError, authorize_kakao_current_operator
+from .kakao_archive_commands import lock_kakao_intent
 from .kakao_archive_models import KakaoChannelBindingRecord, KakaoCollectionPolicyRevisionRecord
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord
+from .kakao_collection_browser_models import KakaoCollectionBrowserRecord
 from .kakao_collection_models import KakaoCollectionRunRecord
+from .kakao_manual_models import KakaoProfileRuntimeRecord
 from .kakao_room_models import KakaoRoomRecord
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
+
+
+def lock_kakao_collection_profile_gate(session: Session, run: KakaoCollectionRunRecord) -> None:
+    binding = session.scalar(
+        select(KakaoChannelBindingRecord)
+        .where(
+            KakaoChannelBindingRecord.source_binding_id == run.source_binding_id,
+            KakaoChannelBindingRecord.owner_operator_id == run.owner_operator_id,
+        )
+        .with_for_update(read=True)
+    )
+    if binding is None:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+    lock_kakao_intent(session, "installed-profile", "manual-start", "primary")
+
+
+def lock_kakao_collection_browser(
+    session: Session, browser_run_id: str, *, profile_id: str
+) -> tuple[KakaoCollectionBrowserRecord, KakaoProfileRuntimeRecord, KakaoCollectionRunRecord]:
+    """Shared binding→profile→run→browser order; lifecycle checks remain the caller's use case."""
+    seed = session.get(KakaoCollectionBrowserRecord, browser_run_id)
+    run = None if seed is None else session.get(KakaoCollectionRunRecord, seed.run_id)
+    if seed is None or run is None:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+    lock_kakao_collection_profile_gate(session, run)
+    profile = session.scalar(
+        select(KakaoProfileRuntimeRecord)
+        .where(KakaoProfileRuntimeRecord.slot_key == "primary")
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if profile is None or profile.profile_id != profile_id or seed.profile_id != profile_id:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_REMOTE_PROFILE_UNAVAILABLE")
+    run = session.scalar(
+        select(KakaoCollectionRunRecord)
+        .where(KakaoCollectionRunRecord.run_id == run.run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    row = session.scalar(
+        select(KakaoCollectionBrowserRecord)
+        .where(KakaoCollectionBrowserRecord.browser_run_id == browser_run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert row is not None and run is not None
+    return row, profile, run
 
 
 def validate_kakao_collection_pins(

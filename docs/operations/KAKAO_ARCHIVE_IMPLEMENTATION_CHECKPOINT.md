@@ -1,5 +1,44 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-16 collection command/result에서 기존 원본 등록으로 연결
+
+- `collection-attempt-v1` schema/mirror를 먼저 정의하고 기존 room task와 RUNNING browser
+  epoch에 최초 command/attempt/snapshot/normalization identity를 한 번 예약하는 owner를
+  추가했다. DB0093의 한 테이블은 작은 metadata와 exact Artifact pointer만 보관한다.
+  새 queue·scheduler·Codex 슬롯·외부 AI·provider selector는 추가하지 않았다.
+- command/inventory와 기존 canonical capability를 Artifact owner로 읽어 확인한 뒤 현재
+  권한·policy·adapter·profile fence를 다시 검사해 command를 고정한다. 파일 I/O는 DB lock
+  밖이다. Browser owner와 실제 두 번째 use case가 생긴 동일 lock 순서를 application 함수로
+  공유했으며 private module 호출이나 별도 AUTO lock을 만들지 않았다.
+- result/report의 계약·hash·원래 execution/room identity를 검증해 증거를 채택한다. 결과
+  proof 수락만으로 원본·질문·run 완료를 표시하지 않는다. 기존 `KakaoSourceService`의
+  mandatory callback을 실제 accepted attempt에 연결했고, 원본 owner가 CSV 재파싱·동일
+  메시지 발생 수·사진 coverage·Artifact lifecycle을 검증하여 revision을 수락한 뒤에만
+  task가 LOCAL_ACCEPTED다. source owner/worker C1의 기존 계약 bytes는 바꾸지 않았다.
+- 실제 이 callback을 사용한 **익명 합성 CSV→accepted source revision→정확한 재조회**가
+  통과했다. 같은 시각/이름/본문2행은 서로 다른 occurrence로 남고 같은 요청은 원래 revision을
+  반환한다. 다른 계정/위조 fence는 거부한다. 동시 claim/result 수락, 다른 pointer로 실패
+  바꾸기 거부, 정상 종료 후 늦은 결과 수락, I/O 중 권한 철회도 집중 임시 DB에서 검증했다.
+  임의 no-op source authorizer로 이 연결의 성공을 대신하지 않았다.
+- 첫 전체 DB 검사에서 기존244개 PASS/새7개 FAIL은 기존 browser harness가 MANUAL 종료용으로
+  가상 UTC를 전진시킨 뒤 새 실제-clock owner를 즉시 부른 시간 불일치였다. source/DB의
+  관측 시각 guard는 유지하고 이 integration fixture가 실제 시각에 맞도록 최대2초 미만
+  동기화했다. 운영에서는 시계가 관측보다 뒤면 명시적 OBSERVATION_STALE이며 가짜 시각을
+  만들지 않는다. 최종 검사 수와 package 검증은 아래 결과에 기록한다.
+- 이번 실제 카카오 계정에서 새 방/CSV/사진을 수집하거나 PDF까지 검증한 것은 아니다.
+  기존 실제 CSV·JPEG·FAILED 이력·인증정보는 그대로다. source의 현재 capability는 여전히
+  미확인 CSV 순서·시간대·발신 역할을 UNKNOWN으로 보존한다. 이 값으로 질문 후보를 억지로
+  만들어 전체 흐름 PASS로 표시하지 않았다. 실제 관측을 통한 capability 보강이 필요하다.
+- **운영 미반영**이며 source admission은 read-only 기본 composition에 임의 활성화하지
+  않았다. 공개 collection API/Studio 연결·실제 AUTO 시작/selector·권한 있는 현재 방 수집과
+  사진 occurrence 정합→학생 PDF·전체 방/주기 수집은 남는다. source 저장의 성공을 목표
+  완료로 간주하지 않는다. 기존 운영 DB0087·API/Web·GPU runtime pin은 변경하지 않았다.
+- 검증 결과: focused guarded DB10 PASS, 순수 계약/OS adapter/권한/의존성/문맥264 PASS,
+  wire audit/실제 offline wheel inventory4 PASS, strict mypy5 source·Ruff/format·shell syntax
+  PASS, guarded migration0093 적용→되돌림→재적용 PASS. 전체 DB 최종 회귀 **254 PASS**,
+  기존 TestClient deprecation warning1건이다. 실제 browser/remote도 MainPID0·inactive·
+  정상 종료를 확인했으며 새 로그인이나 카카오 조작은 수행하지 않았다.
+
 ## 2026-11-16 공용 profile gate·collection browser lifetime 저장 연결
 
 - 기존 MANUAL과 같은 `kakao_profile_runtime` gate/advisory lock을 사용해 collection browser

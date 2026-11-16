@@ -697,6 +697,7 @@ def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None
     # application owners happened to be imported by test collection.
     from eom_catalog_service import (
         kakao_capability_models,
+        kakao_collection_attempt_models,
         kakao_collection_browser_models,
         kakao_collection_models,
         kakao_manual_models,
@@ -707,6 +708,7 @@ def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None
 
     for module in (
         kakao_capability_models,
+        kakao_collection_attempt_models,
         kakao_collection_browser_models,
         kakao_collection_models,
         kakao_manual_models,

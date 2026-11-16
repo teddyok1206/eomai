@@ -22,6 +22,14 @@ lifetime과 원래 실행 pin을 저장한다. 기존 `kakao_profile_runtime`을
 현재 slice는 원래 epoch를 재사용하며 CLOSED replay도 새 browser로 바꾸지 않는다.
 worker command/task·source admission·상위 run 완료는 별도 경계다.
 
+`kakao_collection_attempt_service.py`는 실제 RUNNING epoch와 기존 room task에 최초
+attempt/command/snapshot identity를 한 번 예약한다. 기존 Artifact의 command/inventory와
+canonical capability를 읽고 late 권한/fence를 재검사해 고정한다. 결과 proof를 수락해도
+원본 성공은 아니며, 기존 source owner가 실제 revision을 채택한 뒤 task가 LOCAL_ACCEPTED다.
+`authorize_source` callback이 실제 수락한 exact command/capability/result/report만 허용하고
+worker가 선언한 attempt/fence만 믿지 않는다. FAILED와 같은 요청의 재조회는 새 실행이 아니다.
+최초 attempt 저장 구현은 실제 AUTO 시작/selector/주기 실행을 활성화하지 않는다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

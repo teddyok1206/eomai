@@ -139,7 +139,8 @@ def h(creative_engine: Engine):
             connection.execute(
                 text(
                     "TRUNCATE kakao_remote_commands, kakao_manual_sessions, kakao_profile_runtime, "
-                    "kakao_collection_browsers, kakao_collection_runs, kakao_collection_tasks"
+                    "kakao_collection_browsers, kakao_collection_runs, kakao_collection_tasks, "
+                    "kakao_collection_attempts"
                 )
             )
 

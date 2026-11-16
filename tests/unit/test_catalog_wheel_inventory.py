@@ -49,6 +49,10 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # result1 stays separate; omitting a successor resource must fail here,
         # before a root-owned service can select that release.
         required_members = {
+            "eom_catalog_contracts/kakao_collection_attempt.py",
+            "eom_catalog_contracts/resources/kakao-archive/collection-attempt-v1.schema.json",
+            "eom_catalog_service/kakao_collection_attempt_models.py",
+            "eom_catalog_service/kakao_collection_attempt_service.py",
             "eom_catalog_contracts/kakao_collection_browser.py",
             "eom_catalog_contracts/resources/kakao-archive/collection-browser-v1.schema.json",
             "eom_catalog_service/kakao_collection_authorization.py",

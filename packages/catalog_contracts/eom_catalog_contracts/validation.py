@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "kakao-collection-attempt-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/collection-attempt-v1.schema.json",
+            "resources/kakao-archive/collection-attempt-v1.schema.json",
+            "1.0",
+            "sha256:556891aa763322c81a9e9dd6cc59ec153e0dc5bbbb434bdcc3a4abf9ca9917bc",
+        ),
         "kakao-collection-browser-v1": CatalogSchemaResource(
             "schemas/kakao-archive/collection-browser-v1.schema.json",
             "resources/kakao-archive/collection-browser-v1.schema.json",

@@ -105,6 +105,7 @@ def test_collection_browser_grants_do_not_allow_rewriting_owner_or_command_pins(
         "current_browser_run_id",
         "resource_version",
         "updated_at",
+        "state",
     }
     assert grants["UPDATE", "kakao_collection_browsers"] == {
         "phase",
@@ -117,6 +118,19 @@ def test_collection_browser_grants_do_not_allow_rewriting_owner_or_command_pins(
         "browser_observed_at",
         "last_error",
     }
+
+
+def test_collection_attempt_grants_cannot_rewrite_claim_or_erase_failed_history() -> None:
+    assert "kakao_collection_attempts" in READ_TABLES
+    assert "kakao_collection_attempts" in INSERT_TABLES
+    assert "kakao_collection_attempts" not in UPDATE_TABLES
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    columns = grants["UPDATE", "kakao_collection_attempts"]
+    assert {"state", "result_sha256", "command_sha256"} <= columns
+    assert {"attempt_id", "command_id", "task_id", "run_id", "fence", "created_at"}.isdisjoint(
+        columns
+    )
+    assert grants["UPDATE", "kakao_collection_tasks"] == {"state"}
 
 
 def test_kakao_question_grants_cannot_rewrite_origin_body_or_history() -> None:

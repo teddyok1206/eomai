@@ -8,6 +8,9 @@
       "note": "kakao-collection.md",
       "keywords": ["KakaoTalk", "수집", "프로필", "AUTO", "MANUAL", "epoch", "수집 재개"],
       "source_paths": [
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_attempt.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_attempt_models.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_attempt_service.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_browser.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_models.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_service.py",
@@ -25,6 +28,8 @@
         "services/orchestrator/eom_orchestrator/kakao_profile_observation.py"
       ],
       "test_paths": [
+        "tests/unit/test_kakao_collection_attempt_contracts.py",
+        "tests/integration/test_kakao_collection_attempt_storage.py",
         "tests/unit/test_kakao_collection_browser_contracts.py",
         "tests/unit/test_kakao_collection_browser_runtime.py",
         "tests/integration/test_kakao_collection_browser_storage.py",

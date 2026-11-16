@@ -25,9 +25,11 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from .kakao_archive_authorization import KakaoArchiveError
-from .kakao_archive_commands import lock_kakao_intent
-from .kakao_archive_models import KakaoChannelBindingRecord as Binding
-from .kakao_collection_authorization import authorize_kakao_collection_preparation
+from .kakao_collection_authorization import (
+    authorize_kakao_collection_preparation,
+    lock_kakao_collection_browser,
+    lock_kakao_collection_profile_gate,
+)
 from .kakao_collection_browser_models import KakaoCollectionBrowserRecord as Browser
 from .kakao_collection_models import KakaoCollectionRunRecord as Run
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
@@ -87,17 +89,7 @@ class KakaoCollectionBrowserService:
 
     @staticmethod
     def _binding_gate(session: Session, run: Run) -> None:
-        binding = session.scalar(
-            select(Binding)
-            .where(
-                Binding.source_binding_id == run.source_binding_id,
-                Binding.owner_operator_id == run.owner_operator_id,
-            )
-            .with_for_update(read=True)
-        )
-        if binding is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-        lock_kakao_intent(session, "installed-profile", "manual-start", "primary")
+        lock_kakao_collection_profile_gate(session, run)
 
     def _profile(self, session: Session) -> Profile:
         row = session.scalar(select(Profile).where(Profile.slot_key == "primary").with_for_update())
@@ -106,30 +98,11 @@ class KakaoCollectionBrowserService:
         return row
 
     def _locked(self, session: Session, browser: str) -> tuple[Browser, Profile, Run]:
-        seed = session.get(Browser, browser)
-        if seed is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-        initial_run = session.get(Run, seed.run_id)
-        if initial_run is None:
-            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-        self._binding_gate(session, initial_run)
-        profile = self._profile(session)
-        run = session.scalar(
-            select(Run)
-            .where(Run.run_id == seed.run_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        row = session.scalar(
-            select(Browser)
-            .where(Browser.browser_run_id == browser)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+        row, profile, run = lock_kakao_collection_browser(
+            session, browser, profile_id=self.profile_id
         )
         if (
-            row is None
-            or run is None
-            or profile.current_lease_id is not None
+            profile.current_lease_id is not None
             or profile.current_collection_browser_run_id != browser
             or profile.fence_epoch != row.fence_epoch
             or profile.owner_operator_id != row.owner_operator_id
