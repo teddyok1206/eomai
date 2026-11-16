@@ -29,6 +29,12 @@
   실제 CSV/JPEG·FAILED 기록은 보존했다. 이 owner는 실제 worker를 실행하거나 source 수락을
   허가하지 않는다. 다음은 exact capability를 pin한 collection intent/claim/fence와 현재 owner
   권한을 연결하여 실제 capture→source→질문→학생 PDF로 이어가는 단계다. 전체 목표는 미완료다.
+- source `9980121fd7d498bdeea295c02b088db0f9932cef`는 main에 커밋·푸시했다. 공식 clean
+  API4-wheel build/RECORD/inspection PASS 후, checkout 밖의 `python -I`에서 새 서비스·모델·
+  계약/schema·source head를 실제 wheel 경로로 import하는 검사를 통과했다. DB/실제 계정
+  접근은0이며 운영 설치나 전용 UID/sandbox 검사를 뜻하지 않는다. platform wheel SHA는
+  `511bf10e0749ea08b0e878a556963cfa395336bec9f651d33dc19a635211cf0c`이고 위치는
+  `/tmp/eom-api-build/9980121fd7d498bdeea295c02b088db0f9932cef.ym3EIU/dist/`다.
 
 ## 2026-11-16 질문 나누기·합치기 GUI 연결 소스 검증
 
