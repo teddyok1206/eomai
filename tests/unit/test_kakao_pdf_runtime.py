@@ -10,12 +10,88 @@ from unittest.mock import Mock
 
 import pytest
 from eom_kakao_archive_contracts import canonical_bytes, sha256
+from eom_kakao_archive_contracts.study import StudyRenderResult
+from eom_kakao_archive_contracts.study_layout import StudyLayoutReceipt, check_study_layout
 from eom_kakao_archive_worker import fixed_render
 from eom_orchestrator import kakao_pdf_runtime as runtime
 from eom_orchestrator.kakao_pdf_files import KakaoPdfExecutionError
 
+from tests.unit import test_kakao_study_pdf as study_fixtures
 from tests.unit.test_kakao_question_render import RELEASE, identity
 from tests.unit.test_kakao_question_render import prepared as prepared
+
+study_prepared = study_fixtures.prepared
+
+
+def fixed_study_workspace(
+    study_prepared, tmp_path, monkeypatch, *, change=None, request_change=None
+):
+    source, output, prepare = study_prepared
+    manifest, command = prepare(change)
+    workspace = tmp_path / command.execution.attempt_id
+    workspace.mkdir()
+    source.rename(workspace / "input")
+    output.rename(workspace / "output")
+    value = command.model_dump(mode="json")
+    if request_change:
+        request_change(value)
+    request = workspace / "input" / "request.json"
+    request.write_bytes(canonical_bytes(value))
+    request.chmod(0o640)
+    monkeypatch.setattr(fixed_render, "RUNTIME_ROOT", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["fixed-render", command.execution.attempt_id])
+    monkeypatch.setenv("EOM_KAKAO_RENDER_RELEASE_SHA256", command.renderer_release_sha256)
+    return manifest, command, workspace
+
+
+def test_fixed_study_entry_renders_reply_and_keeps_same_attempt_immutable(
+    study_prepared, tmp_path, monkeypatch
+):
+    manifest, command, workspace = fixed_study_workspace(study_prepared, tmp_path, monkeypatch)
+    assert fixed_render.main() == 0
+    result = StudyRenderResult.model_validate_json((workspace / "output/result.json").read_bytes())
+    assert result.status == "COMPLETED" and result.page_count == 2
+    layout = StudyLayoutReceipt.model_validate_json((workspace / "output/layout.json").read_bytes())
+    assert [page.section for page in layout.pages] == ["STUDENT", "STAFF"]
+    check_study_layout(command, manifest, layout)
+    before = {p.name: p.read_bytes() for p in (workspace / "output").iterdir()}
+    assert fixed_render.main() == 2
+    assert {p.name: p.read_bytes() for p in (workspace / "output").iterdir()} == before
+
+
+def test_fixed_study_layout_refusal_is_a_terminal_receipt_not_execution_failure(
+    study_prepared, tmp_path, monkeypatch
+):
+    def overflow(value):
+        value["questions"][0]["student"]["text_blocks"][0]["value"]["text"] = "긴 질문\n" * 1000
+
+    _, _, workspace = fixed_study_workspace(study_prepared, tmp_path, monkeypatch, change=overflow)
+    assert fixed_render.main() == 0
+    result = StudyRenderResult.model_validate_json((workspace / "output/result.json").read_bytes())
+    assert result.status == "NEEDS_LAYOUT_REVIEW" and not result.outputs
+    assert not (workspace / "output/report.pdf").exists()
+
+
+@pytest.mark.parametrize("case", ["attempt", "unknown-family", "mixed-family", "unsafe-request"])
+def test_fixed_study_invalid_request_never_renders_or_exposes_input(
+    study_prepared, tmp_path, monkeypatch, capsys, case
+):
+    def invalid(value):
+        if case == "attempt":
+            value["execution"]["attempt_id"] = identity("attempt", 99)
+        elif case == "unknown-family":
+            value["schema_version"] = "kakao-study-render/99.0"
+        elif case == "mixed-family":
+            value["schema_version"] = "kakao-question-render/1.0"
+
+    _, _, workspace = fixed_study_workspace(
+        study_prepared, tmp_path, monkeypatch, request_change=invalid
+    )
+    if case == "unsafe-request":
+        (workspace / "input/request.json").chmod(0o660)
+    assert fixed_render.main() == 2
+    assert not list((workspace / "output").iterdir())
+    assert capsys.readouterr().err == "KAKAO_RENDER_FIXED_EXECUTION_FAILED\n"
 
 
 def test_fixed_entry_uses_exact_attempt_and_terminal_local_result(prepared, tmp_path, monkeypatch):

@@ -5,13 +5,10 @@ import json
 import sys
 from pathlib import Path
 
-from eom_kakao_archive_contracts import RenderCommand, RenderResult, canonical_bytes
-from eom_kakao_archive_contracts.study import StudyRenderCommand, StudyRenderResult
-from eom_kakao_archive_contracts.study_validation import validate_study_contract
-from eom_kakao_archive_contracts.validation import validate_contract
+from eom_kakao_archive_contracts import canonical_bytes
+from eom_kakao_archive_contracts.pdf_contracts import parse_pdf_command
 
-from .question_pdf import render_questions
-from .study_pdf import render_study
+from .rendering import render_pdf
 
 
 def main() -> int:
@@ -24,25 +21,13 @@ def main() -> int:
     try:
         if len(raw) > 32768:
             raise ValueError("command too large")
-        decoded = json.loads(raw)
-        result: RenderResult | StudyRenderResult
-        if decoded.get("schema_version") == "kakao-study-render/1.0":
-            validate_study_contract("command", decoded)
-            result = render_study(
-                StudyRenderCommand.model_validate(decoded),
-                input_root=args.input_root,
-                output_root=args.output_root,
-                renderer_release_sha256=args.renderer_release_sha256,
-            )
-        else:
-            # Exact predecessor schema validation rejects unknown families; never guess latest.
-            validate_contract("command", decoded)
-            result = render_questions(
-                RenderCommand.model_validate(decoded),
-                input_root=args.input_root,
-                output_root=args.output_root,
-                renderer_release_sha256=args.renderer_release_sha256,
-            )
+        command = parse_pdf_command(json.loads(raw))
+        result = render_pdf(
+            command,
+            input_root=args.input_root,
+            output_root=args.output_root,
+            renderer_release_sha256=args.renderer_release_sha256,
+        )
     except Exception:
         # Pydantic/decoder errors can contain source text; return only a stable code.
         sys.stderr.write("KAKAO_RENDER_COMMAND_INVALID\n")

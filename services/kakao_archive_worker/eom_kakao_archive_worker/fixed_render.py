@@ -9,11 +9,11 @@ import stat
 import sys
 from pathlib import Path
 
-from eom_kakao_archive_contracts import RenderCommand, canonical_bytes
-from eom_kakao_archive_contracts.validation import validate_contract
+from eom_kakao_archive_contracts import canonical_bytes
+from eom_kakao_archive_contracts.pdf_contracts import parse_pdf_command
 
 from .local_members import directory_descriptor, write_member
-from .question_pdf import render_questions
+from .rendering import render_pdf
 
 RUNTIME_ROOT = Path("/run/eom-kakao-render")
 
@@ -44,12 +44,10 @@ def main() -> int:
             raw = stream.read(32769)
         if len(raw) > 32768:
             raise ValueError("request too large")
-        value = json.loads(raw)
-        validate_contract("command", value)
-        command = RenderCommand.model_validate(value)
+        command = parse_pdf_command(json.loads(raw))
         if command.execution.attempt_id != sys.argv[1]:
             raise ValueError("attempt mismatch")
-        result = render_questions(
+        result = render_pdf(
             command,
             input_root=workspace / "input",
             output_root=workspace / "output",

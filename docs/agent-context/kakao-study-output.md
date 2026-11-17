@@ -30,7 +30,9 @@ metadata는 선택된 occurrence만 포함하며 role/kind/raw date/timezone/검
 
 worker `study_pages.py`는 학생 사진/질문1쪽과11pt 답변/보강 흐름을 계획한다. `study_pdf.py`가
 기존 `question_pdf`의 이미지 cache·PDF/PNG writer·glyph/readback·로컬 commit을 재사용한다.
-`cli.py`는 exact schema family로 두 입력을 구분하며 모르는 family를 최신으로 추정하지 않는다.
+`cli.py`와 운영 unit의 `fixed_render.py`는 같은 `parse_pdf_command`/`rendering.render_pdf`를
+사용한다. exact schema family로 두 입력을 구분하며 모르는 family를 최신으로 추정하지 않는다.
+고정 실행기는 attempt/로컬 request 검사를 유지하고 검토 거절도 terminal receipt로 남긴다.
 원문 crop/삭제나 질문의 임의 다중 쪽 전환 대신 검토 상태를 반환한다.
 
 `pdf_contracts.py`는 두 family의 작은 exact 해석 함수이며 실행/권한을 부여하지 않는다.

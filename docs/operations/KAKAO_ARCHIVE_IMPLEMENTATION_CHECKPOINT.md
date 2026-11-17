@@ -11,6 +11,16 @@ packet/export/render/파일 발행 코드로 재생한다. 기존 수동 행 선
 
 ## 2026-11-17 study export 저장/공개 API·Studio source 연결 — 운영 활성화 전
 
+### 고정 실행 진입점의 추가 점검
+
+배포 전 대조에서 CLI만 새 family를 받으며 운영 unit의 `fixed_render`는 기존 v1만 받는
+누락을 발견했다. 두 entrypoint가 기존 exact parser와 작은 typed `rendering.render_pdf`
+dispatch를 공유하도록 수정했다. 새 queue/schema/실행 권한은 없으며 고정 attempt·로컬
+파일 검사를 유지한다. fixed study의 실제 PDF·답변/metadata·같은 attempt 덮어쓰기 거부,
+unknown/mixed family·다른 attempt·unsafe request 거부, overflow의 terminal review receipt를
+검사했다. 관련 기존/신규124 PASS, strict mypy3개·Ruff/format PASS다. 운영 설치 전 발견한
+source 결함이며 이전 CLI/합성 검증을 실제 fixed systemd 성공으로 확대하지 않는다.
+
 새 질문/답변 PDF가 기존 export owner와 API/BFF/Studio에 연결됐다. 기존 요청·DB·queue·
 v1 schema bytes는 유지했고 두 additive 응답 schema만 추가했다. 운영의 설치/활성 pin은
 아직 바꾸지 않았으므로 **운영 사용자 새 PDF·실제 카카오 수집 완료로 세지 않는다**.
