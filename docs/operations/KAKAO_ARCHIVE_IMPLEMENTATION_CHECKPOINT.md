@@ -1,5 +1,20 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 운영 설치 전0093 호환 callback 준비
+
+- 기존 protected release operator에 context/admission1.28을 추가했다.1.27 schema bytes/hash는
+  바꾸지 않았다.4개 wheel·source/runtime fingerprint·installed payload 검증을 그대로 사용한다.
+  callback은 정확한0087→0093 upgrade와0093 verify뿐이며 중간/다른 revision을 추측해 이어가지 않는다.
+  이미0093이면 같은 요청의 확인은 no-op다. 배포 shell의 사전 검사도 source head0093과 맞췄다.
+- 전체 release operator·schema audit 회귀 **448 PASS**, strict mypy·Ruff/format·shell syntax
+  PASS다. 임시 DB의 공식 `migrate`는 **0093→0092→0093** 왕복과 composed metadata PASS다.
+  callback predecessor 검사는 fake engine의 명시적 단위 검증이며, 이것을 실제 운영0087→0093
+  migration 성공으로 보고하지 않는다. 이전262개 임시 DB owner/동시성 검증은 별도다.
+- 새 DB migration이나 일반 실행 명령을 추가하지 않았고, 운영 DB/schema·API/Web/collector·
+  GPU INDEX/QUERY·카카오 profile·인증정보에는 변경이 없다. 실제 배포에는 현재 설치 상태와
+  실행 중 작업을 확인하고 기존 protected operator staging/정지/복구 절차를 따라야 한다.
+  새 수집 기능을 배포하더라도 실제 selector/capability가 검증되기 전 AUTO는 비활성이다.
+
 ## 2026-11-17 Studio 수신 자료 목록 → 방 확인 저장
 
 - 최근 MANUAL 세션의 수신 receipt를 `일반 → KakaoTalk`에서 조회하고, 사용자가 채널·방을

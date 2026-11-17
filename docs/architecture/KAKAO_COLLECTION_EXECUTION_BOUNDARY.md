@@ -3,6 +3,24 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 호환 운영 릴리스 준비 — 2026-11-17
+
+1. 책임은 기존 release operator의 exact migration callback·설치 검증이다. 수집/브라우저
+   실행 권한이나 일반 shell 명령을 추가하지 않는다.
+2. 정본은 검토한 source commit/tree/archive와 각 component wheel/RECORD, 실제 DB revision이다.
+3. 기존 context/admission1.27 bytes는 보존하고0093용1.28 successor만 추가한다.
+4. source/runtime fingerprint,4개 wheel의 identity/hash와 installed package parity를 재사용한다.
+5. 주 접근은 고정 callback enum/map lookup와 정확한 predecessor/target revision 조회다.
+6. 기존 immutable mapping과 배포 manifest를 사용하며 새 DB/queue/index는 없다.
+7. metadata 조회는 O(1), package verification은 기존대로 전체 파일 byte 수에 선형이다.
+8. 0087→0093만 명시적으로 허용하고 이미0093이면 no-op 재확인한다. 실제 설치 전 기존
+   MANUAL/AUTO 실행·profile lock·변경 중 claim을 확인하고 기존 배포 절차의 정지/복구 경계를 따른다.
+9. shell presentation → root-protected operator → 기존 migration/role bootstrap 순서를 유지한다.
+10. 알 수 없는 DB revision·source/runtime 불일치는 중단한다. timeout이면 실제 revision과
+    설치 상태부터 확인하며 무조건 재업그레이드/다운그레이드하지 않는다. 실패 이력은 보존한다.
+11. 기존0087 context를 넓히는 대안은 과거 승인 의미를 바꾸므로 제외한다. 별도 배포 framework는
+    필요 없다. 이 source 준비는 운영 migration/서비스 재시작이나 AUTO 활성화가 아니다.
+
 ## Studio 수신 자료 확인 — 2026-11-16
 
 기존 owner의 `KakaoRoomIntakeService.confirm_room`을 공개 경계에 연결한다. GET은 현재

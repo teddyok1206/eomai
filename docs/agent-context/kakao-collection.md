@@ -4,6 +4,13 @@
 [KakaoTalk 보관](kakao-archive.md), 정본 설계는
 [수집 실행 경계](../architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)를 먼저 본다.
 
+## 설치 준비 경계
+
+source head0093의 기존 release operator successor는 context/admission1.28과
+`MIGRATION_UPGRADE_0093_FROM_0087`/`MIGRATION_VERIFY_0093`다.1.27의 의미를 넓히지 않는다.
+source 준비·임시 DB 왕복은 운영 설치 증거가 아니며 현재 설치 기록을 먼저 확인한다.
+학생/질문/PDF와 AUTO 수집의 활성화 범위도 별도로 확인한다.
+
 ## Studio 수신물 확인
 
 `kakao_capture_intake_service.py`는 기존 room intake owner를 최근 수신물 선택에 연결한다.
