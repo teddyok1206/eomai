@@ -165,6 +165,34 @@ def test_unknown_sender_forms_uncertain_barrier_not_silent_merge() -> None:
     assert all(c.boundary_uncertain for c in candidates.candidates)
 
 
+def test_turn_v1_acknowledgement_can_precede_a_later_question_in_one_candidate() -> None:
+    # Historical turn_v1 is not a semantic question detector. Preserve its meaning
+    # and expose this automation gap; a successor must not inherit the wrong date.
+    parsed = normalize(
+        csv_bytes(
+            [
+                ["2026-11-01 09:00:00", "A", "사진"],
+                ["2026-11-01 09:01:00", "A", "첫 질문"],
+                ["2026-11-01 10:00:00", "B", "첫 답변"],
+                ["2026-11-01 11:00:00", "A", "감사합니다"],
+                ["2026-11-06 09:00:00", "A", "사진"],
+                ["2026-11-06 09:01:00", "A", "다른 질문"],
+                ["2026-11-06 10:00:00", "B", "두 번째 답변"],
+            ]
+        ),
+        observations=tuple(
+            role(i, r)
+            for i, r in enumerate(
+                ("student", "student", "staff", "student", "student", "student", "staff"), 1
+            )
+        ),
+    )
+    candidates = build_question_candidates(parsed)
+    assert [candidate.student_rows for candidate in candidates.candidates] == [(1, 2), (4, 5, 6)]
+    assert candidates.candidates[1].first_student_at_utc == parsed.messages[3].sent_at_utc
+    assert select_question_period(candidates, date(2026, 11, 6), date(2026, 11, 6)) == ()
+
+
 def test_missing_and_multiple_images_remain_required_refs() -> None:
     attachments = tuple(
         KakaoAttachmentObservation(

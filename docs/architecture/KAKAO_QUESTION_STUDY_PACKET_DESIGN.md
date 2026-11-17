@@ -147,6 +147,10 @@ Codex 역할 지침의 개발용 초안은
 [개념 보강 프롬프트](KAKAO_QUESTION_CONCEPT_ENRICHMENT_PROMPT_DRAFT.md)에 둔다.
 해당 문서만으로 worker 도구·계약·실행을 활성화하지 않는다.
 
+수동 샘플과 실제 반복 기능을 구분한
+[자동 출력 점검](KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md)을 구현 gate로 함께 사용한다.
+개발자가 사진·질문 행을 골라 완성한 보고서는 공식 API/저장/출력의 자동화 acceptance가 아니다.
+
 ## 6. 구현·검증 순서
 
 1. 현재 PDF 전용 UID/systemd sandbox의 실제 정상 출력·네트워크/인증정보/NAS/형제 작업

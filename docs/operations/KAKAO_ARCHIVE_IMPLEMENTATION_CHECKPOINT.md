@@ -1,5 +1,17 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 반복 자동화 점검 — 샘플의 수작업을 완료로 세지 않음
+
+사용자가 일회성 개발 에이전트 판단을 반복 기능으로 오인하지 않도록 점검을 요청했다.
+[점검 문서](../architecture/KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md)에 실제 source와
+샘플을 대조해 수동 사진 연결·질문 행 선택·답변/metadata 보고 조립·미연결 교재 보강을
+분리했다. 샘플은 실제6쪽 결과지만 공식 Studio export나 완전 자동화 완료가 아니다.
+
+기존 turn_v1에서 답변 뒤 감사 인사와 며칠 뒤 질문이 같은 후보에 들어가 기간 선택이
+달라질 수 있음을 익명 fixture로 재현했다. 현행 released 규칙을 바꾸지 않고 한계 회귀를
+남겼으며 관련47개 검사가 통과했다. 다음은 기존 source owner의 실제 role/사진 정합과
+얇은 successor의 여섯 구성 편집/출력 연결이다. 학생/원본·실패 이력·GPU는 변경하지 않았다.
+
 ## 2026-11-17 보호 PDF 검증 완료·실제 수신 자료 샘플
 
 1. source `76032729af2d80e2457906b7cdee6b78de2b3cd1`의 PDF worker wheel

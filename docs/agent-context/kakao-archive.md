@@ -11,6 +11,9 @@
 Studio에서 편집 후 PDF를 받으며 질문1쪽 뒤에 필요한 개념 쪽을 붙인다. 기존 수집은 비AI,
 새 선택적 개념 추천만 기존 공유 Codex 슬롯/GraphRAG를 사용한다. 아직 구현/활성화하지
 않았으며 기존 packet/render v1 의미를 바꾸지 않는다. HWPX 출력은 이번 추가 범위가 아니다.
+샘플의 수작업과 공식 반복 기능의 차이, turn_v1 경계/기간의 알려진 한계는
+[자동 출력 점검](../architecture/KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md)에 있다.
+샘플 제작용 staging 프로그램을 운영 경로로 복사하지 않는다.
 
 ## 책임과 원문
 
