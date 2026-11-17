@@ -189,6 +189,7 @@ from eom_web_gui.kakao_question_contracts import (
     QuestionComposition,
     QuestionCompositionResult,
     QuestionCreate,
+    QuestionEditContext,
     QuestionMerge,
     QuestionMutation,
     QuestionPage,
@@ -624,6 +625,15 @@ class ApplicationGateway(Protocol):
         value: QuestionCreate,
         idempotency_key: str,
     ) -> QuestionMutation: ...
+
+    async def kakao_question_edit_context(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+    ) -> QuestionEditContext: ...
 
     async def kakao_question_review(
         self,
@@ -2077,6 +2087,41 @@ class HttpApplicationGateway:
                 revision,
             ) or (room is not None and q.room_id != room):
                 raise ValueError("different question version")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_edit_context(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+    ) -> QuestionEditContext:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (room, "kakaoroom_"),
+            (question, "kakaoquestion_"),
+            (revision, "kakaoquestionrev_"),
+        ):
+            if value is not None:
+                _require_id(value, prefix)
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/questions/{question}/revisions/{revision}/edit-context",
+            params={"source_binding_id": binding, **({"room_id": room} if room else {})},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionEditContext.model_validate(self._data(response))
+            if (result.source_binding_id, result.question_id, result.question_revision_id) != (
+                binding,
+                question,
+                revision,
+            ) or (room is not None and result.room_id != room):
+                raise ValueError("different edit context")
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error

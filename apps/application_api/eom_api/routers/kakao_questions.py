@@ -9,6 +9,7 @@ from eom_api_contracts.kakao_questions import (
     KakaoQuestionComposition,
     KakaoQuestionCompositionResult,
     KakaoQuestionCreate,
+    KakaoQuestionEditContext,
     KakaoQuestionMutation,
     KakaoQuestionPage,
     KakaoQuestionReview,
@@ -163,6 +164,34 @@ def read_question(
         )
     response.headers["Cache-Control"] = "no-store"
     response.headers["ETag"] = etag(result.question.resource_version)
+    return one(request, result)
+
+
+@router.get(
+    "/{question_id}/revisions/{revision_id}/edit-context",
+    operation_id="kakao_question_edit_context",
+    response_model=SingleResponse[KakaoQuestionEditContext],
+    dependencies=[Depends(EDIT)],
+)
+def read_edit_context(
+    request: Request,
+    response: Response,
+    question_id: QuestionId,
+    revision_id: RevisionId,
+    source_binding_id: BindingId,
+    authentication: Auth,
+    room_id: str | None = Query(default=None, pattern=r"^kakaoroom_[0-9a-f]{32}$"),
+) -> SingleResponse[KakaoQuestionEditContext]:
+    with _boundary():
+        result = request.app.state.services.catalog_application.read_kakao_question_edit_context(
+            source_binding_id,
+            room_id,
+            question_id,
+            revision_id,
+            actor=request.state.request_context.actor(),
+        )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["ETag"] = etag(result.resource_version)
     return one(request, result)
 
 

@@ -34,6 +34,8 @@
 .kakao-question-composer[hidden] { display: none; }
 .kakao-question-composer h3 { margin-top: 0; }
 .kakao-composition-block { padding-block: 8px; border-bottom: 1px solid var(--eom-border); }
+.kakao-span-picker { display: grid; gap: 6px; }
+.kakao-span-picker textarea { width: 100%; min-width: 0; resize: vertical; }
 .kakao-composition-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .kakao-composition-row > span { flex: 1 1 180px; overflow-wrap: anywhere; }
 .kakao-packet-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 20px; }

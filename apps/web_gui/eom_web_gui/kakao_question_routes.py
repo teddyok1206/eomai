@@ -79,6 +79,22 @@ def install_kakao_question_routes(
         response.headers["ETag"] = f'"v{result.question.resource_version}"'
         return result.model_dump(mode="json")
 
+    @app.get(prefix + "/{question_id}/revisions/{revision_id}/edit-context")
+    async def read_edit_context(
+        response: Response,
+        question_id: QuestionId,
+        revision_id: RevisionId,
+        source_binding_id: BindingId,
+        session: Annotated[WebSession, Depends(require_session)],
+        room_id: str | None = Query(default=None, pattern=r"^kakaoroom_[0-9a-f]{32}$"),
+    ) -> dict[str, object]:
+        result = await gateway.kakao_question_edit_context(
+            session, source_binding_id, room_id, question_id, revision_id
+        )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["ETag"] = f'"v{result.resource_version}"'
+        return result.model_dump(mode="json")
+
     @app.post(prefix + "/{question_id}/review")
     async def review_question(
         response: Response,

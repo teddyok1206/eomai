@@ -6,6 +6,29 @@
 상위 요구사항은 [전체 명세](KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md) §§7–10,
 수집 권한은 [수집 실행 경계](KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)를 따른다.
 
+## 메시지 내부 질문 나누기 — 2026-11-17
+
+- 책임은 기존 question reads와 compose owner다. 기존 v1 열람·분할 계약 bytes는 보존하고
+  읽기 전용 `question-edit-context-v1`을 추가한다. 정본은 exact 질문 manifest/source span이다.
+- 별도 entity/revision/DB/cache/queue는 없다. context에는 binding/room/question/revision/
+  resource version과 text block별 원문 시작·끝만 둔다. 본문·사진·원본 pointer를 다시 복사하지 않는다.
+  표시문 override가 있거나 허용 span 범위를 넘는 block은 내부 분할 불가로 명시한다.
+- 기존 source resolver가 존재·권한·lifecycle·schema/hash를 확인한다. 현재 READ와 EDIT를
+  모두 요구하고 I/O 후 재확인한다. context 조회는 작업 생성이나 편집 승인이 아니다.
+- 접근은 exact question lookup와 최대230 block의 ordered 순회다. 서버/화면은 block ID map과
+  cut set을 사용한다. O(blocks+text length+cuts log cuts), 추가 metadata 공간 O(blocks+cuts)다.
+  기존 PK/index를 재사용하며 새 index·source 전체 순회는 없다.
+- 같은 공개/비공개 API 경계를 사용한다. Web은 읽기 전용 문장 선택의 UTF-16 caret을
+  Unicode code point로 바꾸고 받은 시작점에 더한다. 원문을 편집하거나 정규화하지 않는다.
+  textarea의 CRLF/CR 표시 변환은 별도 caret→원문 위치 map으로 보정하며 원문 양쪽 문자를
+  그대로 보존한다. 사용자가 연 text block에만 caret map/편집 화면을 만든다.
+  최종 grapheme/span/전체 coverage·학생/방·revision/CAS 판정은 기존 서버 규칙이 맡는다.
+- GET은 새 revision을 만들지 않는다. 저장은 기존 compose POST의 같은 key/body와 전체
+  입력 CAS/원자적 채택을 재사용한다. 응답 유실은 원 요청 재조회이며 재분할하지 않는다.
+  stale context/계정 변경/다른 질문 응답은 표시하지 않고 임의 최신값으로 바꾸지 않는다.
+- dependency는 Studio/BFF→API→기존 Catalog reads/compose→contract다. 새 runtime/worker/AI는 없다.
+  v1 표시문을 원문 절대 offset0으로 가정하는 대안은 재분할·override에서 잘못되므로 제외한다.
+
 ## 1. 책임·범위: 두 owner로 사용자 경로 연결
 
 구현할 경로는 `수락한 원본 → 질문 목록/검토 → 선택한 질문 묶음 → 학생별 PDF/페이지 열람`이다.

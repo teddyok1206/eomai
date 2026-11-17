@@ -146,6 +146,7 @@ if [[ "${action}" == "kakao-tests" ]]; then
     tests/integration/test_kakao_question_storage.py \
     tests/integration/test_kakao_question_composition_storage.py \
     tests/integration/test_kakao_question_http.py \
+    tests/integration/test_kakao_question_edit_context.py \
     tests/integration/test_kakao_delivery_http.py \
     tests/integration/test_kakao_packet_storage.py \
     tests/integration/test_kakao_stored_student_pdf.py \

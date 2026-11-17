@@ -1,5 +1,36 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 문장 내부 나누기 공개 연결 — 소스 검증
+
+1. **사용 가능해질 범위:** 기존 질문 편집에서 `문장 안에서 나누기`를 열고 커서 위치를
+   지정해 하나의 메시지를 여러 질문으로 저장한다. 기존 메시지/사진 사이 나누기·병합·확인/
+   제외는 유지한다. 분할은 새 질문 revision이며 원문과 기존 packet은 덮지 않는다.
+2. **구조:** 기존 reads/compose owner와 API-peer·API·BFF를 재사용했다. released 질문 v1
+   bytes를 보존하고 exact revision의 원문 span만 읽는 작은 additive 계약을 먼저 정의했다.
+   현재 READ+EDIT·owner·source lifecycle/hash를 다시 확인한다. DB migration, 새로운 queue/
+   worker/AI/외부 의존성은 없다. 표시문 교정 UI까지 완료했다고 주장하지 않는다.
+3. **검증:** 실제 Chromium 합성 입력에서 이모지·조합 한글·CRLF 원문을 보존하며 나누기,
+   원문 offset이0이 아닌 재분할, 응답 유실의 같은 key/body 재확인, stale version/타 계정
+   늦은 응답 차단과390px 화면을 확인했다. 임시 PostgreSQL의 실제 BFF→API→socket→owner
+   경로에서 저장·서비스 재구성 뒤 읽기·중복 없음·권한 철회를 확인했다. 일반 READ-only 및
+   EDIT-only 계정의 context 거부도 통과했다. 최종 공식 임시 DB suite269 PASS, 앞선 반복268
+   PASS다. API/BFF·계약·실제 Chromium·offline wheel 회귀148 PASS, OpenAPI/schema audit
+   회귀10 PASS, 개발 문맥13 PASS, 핵심11개 strict mypy·Ruff/format·shell syntax PASS다.
+   schema audit1477 canonical/1122 mirror/12720 reference, 기존 OpenAPI 비파괴 비교 PASS다.
+   겹치는 suite 수치는 합산하지 않는다. 기존 Starlette 경고1개는 유지하며 운영 DB에는
+   테스트하지 않았다.
+4. **발견/수정:** 새 OpenAPI의 permission 선언은 기존 프레임워크대로 한 개(EDIT)만 두고
+   READ는 기존 source owner에서 계속 강제했다. 이 선언 중복의 fixture 초기화 오류를
+   운영 장애로 기록하지 않는다. 반복 임시 DB 검사에서 테스트용 custom role이 seed 검사에
+   섞이는 것을 발견해 해당 역할을 finally에서 정확히 정리하고 bootstrap 검사는 built-in
+   grant만 확인하도록 고쳤다. 운영 RBAC를 변경하거나 검사를 끄지 않았다.
+5. **운영/실제 계정:** 이번 확장은 아직 소스 변경이며 운영은 아래01:12 UTC 호환 release다.
+   실제 browser/remote는 inactive임을 확인했다. 카카오 로그인·추가 다운로드·사진 대응·학생
+   PDF 실증은 수행하지 않았고, 옛 수신물의 없는 관측을 소급 생성하지 않았다. AUTO는 비활성이다.
+6. **다음:** 같은 clean source의 설치 wheel 검증과 호환 릴리스 준비를 한다. 실제 한 방
+   CSV/사진 occurrence→학생 PDF와 전체 방/주기 실행은 여전히 미완료다. 사용자 로그인 요청은
+   이미 전달했으며 중복 요청하지 않았다. 코드 중심 수집/Codex 개발·진단 결정을 유지한다.
+
 ## 2026-11-17 01:12 UTC 수신 자료 확인 경로 운영 반영
 
 1. **이번 운영 범위:** API/Catalog/platform/QUERY 공유 owner는

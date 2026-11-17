@@ -5,6 +5,17 @@ from typing import BinaryIO, cast
 
 from eom_catalog_contracts.application import CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 from eom_catalog_contracts.kakao_archive_rpc import RequestId
+from eom_catalog_contracts.kakao_question_edit_context import (
+    EDIT_CONTEXT_ERRORS,
+    READ_KAKAO_QUESTION_EDIT_CONTEXT,
+    EditContextErrorCode,
+    EditContextReply,
+    KakaoQuestionEditContextFailure,
+    KakaoQuestionEditContextReply,
+    check_edit_context_reply,
+    parse_edit_context_reply,
+    parse_edit_context_request,
+)
 from eom_catalog_contracts.kakao_question_rpc import (
     KAKAO_QUESTION_ERROR_CODES,
     KAKAO_QUESTION_OPERATIONS,
@@ -42,6 +53,9 @@ def dispatch_kakao_question(
     output: BinaryIO,
 ) -> None:
     operation = value.get("operation")
+    if operation == READ_KAKAO_QUESTION_EDIT_CONTEXT:
+        _dispatch_edit_context(reads, value, output)
+        return
     if not isinstance(operation, str) or operation not in KAKAO_QUESTION_OPERATIONS:
         raise ValueError("KAKAO_ARCHIVE_REQUEST_INVALID")
     request_id = "invalid-request"
@@ -149,3 +163,60 @@ def dispatch_kakao_question(
     finally:
         if image is not None:
             image.member.stream.close()
+
+
+def _dispatch_edit_context(
+    reads: KakaoQuestionReads | None, value: dict[str, object], output: BinaryIO
+) -> None:
+    request_id = "invalid-request"
+    with suppress(ValueError):
+        request_id = TypeAdapter(RequestId).validate_python(value.get("request_id"))
+
+    def failure(code: str) -> KakaoQuestionEditContextFailure:
+        return KakaoQuestionEditContextFailure(
+            request_id=request_id,
+            error_code=cast(
+                EditContextErrorCode,
+                code if code in EDIT_CONTEXT_ERRORS else "CATALOG_APPLICATION_INTERNAL_ERROR",
+            ),
+        )
+
+    reply: EditContextReply
+    try:
+        request = parse_edit_context_request(value)
+    except (ValueError, SchemaError):
+        reply = failure("KAKAO_ARCHIVE_REQUEST_INVALID")
+    else:
+        if reads is None:
+            reply = failure("CATALOG_APPLICATION_UNAVAILABLE")
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                operator_id=request.actor_id,
+                session_id=request.session_id,
+                request_id=request.request_id,
+                authentication_time=request.authentication_time,
+                permissions=frozenset(),
+                source=ActorSource.APPLICATION_API,
+            )
+            try:
+                reply = KakaoQuestionEditContextReply(
+                    request_id=request_id,
+                    result=reads.read_edit_context(
+                        actor,
+                        request.source_binding_id,
+                        request.room_id,
+                        request.question_id,
+                        request.question_revision_id,
+                    ),
+                )
+                reply = parse_edit_context_reply(reply.model_dump(mode="json"))
+                check_edit_context_reply(request, reply)
+            except KakaoArchiveError as error:
+                reply = failure(error.code)
+            except (ValueError, SchemaError):
+                reply = failure("KAKAO_ARCHIVE_RESULT_INVALID")
+            except Exception:
+                reply = failure("CATALOG_APPLICATION_INTERNAL_ERROR")
+    output.write(canonical_json_bytes(reply.model_dump(mode="json")) + b"\n")
+    output.flush()

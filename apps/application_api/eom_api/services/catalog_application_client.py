@@ -255,6 +255,14 @@ from eom_catalog_contracts.kakao_question_compose_rpc import (
 )
 from eom_catalog_contracts.kakao_question_composition import KakaoQuestionComposition
 from eom_catalog_contracts.kakao_question_composition_result import KakaoQuestionCompositionResult
+from eom_catalog_contracts.kakao_question_edit_context import (
+    KakaoQuestionEditContext,
+    KakaoQuestionEditContextFailure,
+    ReadKakaoQuestionEditContext,
+    check_edit_context_reply,
+    parse_edit_context_reply,
+    parse_edit_context_request,
+)
 from eom_catalog_contracts.kakao_question_rpc import (
     ChangeKakaoQuestionRequest,
     CreateKakaoQuestionRequest,
@@ -805,6 +813,41 @@ class CatalogApplicationClient:
             }
         )
         return cast(KakaoQuestionView, self._request_kakao_question(request))
+
+    def read_kakao_question_edit_context(
+        self,
+        binding: str,
+        room: str | None,
+        question: str,
+        revision: str,
+        *,
+        actor: ActorContext,
+    ) -> KakaoQuestionEditContext:
+        request = ReadKakaoQuestionEditContext.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": binding,
+                "room_id": room,
+                "question_id": question,
+                "question_revision_id": revision,
+            }
+        )
+        try:
+            parsed = parse_edit_context_request(request.model_dump(mode="json"))
+            reply = parse_edit_context_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_edit_context_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private edit context invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoQuestionEditContextFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private edit context failed")
+        return reply.result
 
     def list_kakao_questions(
         self,

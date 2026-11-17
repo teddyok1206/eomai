@@ -120,6 +120,42 @@ class QuestionView(WebModel):
     boundary_uncertain: bool = Field(strict=True)
 
 
+class TextEditRange(WebModel):
+    block_id: str = Field(min_length=1, max_length=128)
+    can_split: bool = Field(strict=True)
+    start_codepoint: int | None = Field(strict=True, ge=0, le=65535)
+    end_codepoint: int | None = Field(strict=True, ge=1, le=65536)
+
+    @model_validator(mode="after")
+    def exact_span(self) -> "TextEditRange":
+        if self.can_split:
+            if (
+                self.start_codepoint is None
+                or self.end_codepoint is None
+                or self.start_codepoint >= self.end_codepoint
+            ):
+                raise ValueError("invalid source range")
+        elif self.start_codepoint is not None or self.end_codepoint is not None:
+            raise ValueError("invalid unavailable range")
+        return self
+
+
+class QuestionEditContext(WebModel):
+    schema_version: Literal["kakao-question-edit-context/1.0"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    question_id: QuestionId
+    question_revision_id: RevisionId
+    resource_version: ResourceVersion
+    text_blocks: tuple[TextEditRange, ...] = Field(max_length=230)
+
+    @model_validator(mode="after")
+    def unique_blocks(self) -> "QuestionEditContext":
+        if len({block.block_id for block in self.text_blocks}) != len(self.text_blocks):
+            raise ValueError("duplicate text block")
+        return self
+
+
 class CompositionInput(WebModel):
     question_id: QuestionId
     question_revision_id: RevisionId

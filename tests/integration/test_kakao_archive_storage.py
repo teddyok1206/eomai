@@ -749,6 +749,8 @@ def test_bootstrap_migration_and_metadata_match(creative_engine: Engine) -> None
                 PermissionRecord.permission_id == RolePermissionRecord.permission_id,
             )
             .where(
+                # Verify seeded grants, not unrelated roles created by another test.
+                RoleRecord.built_in.is_(True),
                 PermissionRecord.permission_key.like("kakao_archive:%"),
             )
         ).all()

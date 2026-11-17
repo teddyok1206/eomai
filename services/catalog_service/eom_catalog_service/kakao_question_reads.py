@@ -7,6 +7,10 @@ from eom_catalog_contracts.kakao_question import (
     KakaoQuestionProvenance,
     KakaoQuestionText,
 )
+from eom_catalog_contracts.kakao_question_edit_context import (
+    KakaoQuestionEditContext,
+    KakaoTextEditRange,
+)
 from eom_catalog_contracts.kakao_question_rpc import (
     KakaoQuestionDisplayImage,
     KakaoQuestionDisplayText,
@@ -19,7 +23,11 @@ from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine
 
 from .artifacts import CatalogArtifactService, VerifiedArtifactMemberStream
-from .kakao_archive_authorization import KakaoArchiveError, authorize_kakao_room_scope
+from .kakao_archive_authorization import (
+    KakaoArchiveError,
+    authorize_kakao_binding_scope,
+    authorize_kakao_room_scope,
+)
 from .kakao_question_editing import resolve_question_text
 from .kakao_question_service import KakaoQuestionService, ResolvedKakaoQuestions
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
@@ -54,7 +62,12 @@ class KakaoQuestionReads:
             room_id=room,
         )
 
-    def _reauthorize(self, actor: ActorContext, selected: ResolvedKakaoQuestions) -> None:
+    def _reauthorize(
+        self,
+        actor: ActorContext,
+        selected: ResolvedKakaoQuestions,
+        permission: PermissionKey = PermissionKey.KAKAO_ARCHIVE_READ,
+    ) -> None:
         stored = selected.questions[0].stored
         with self._sessions.begin() as session:
             authorize_kakao_room_scope(
@@ -62,11 +75,49 @@ class KakaoQuestionReads:
                 actor,
                 stored.source_binding_id,
                 stored.room_id,
-                PermissionKey.KAKAO_ARCHIVE_READ,
+                permission,
                 lock=False,
             )
             self._sources.validate_question_source_metadata(session, actor, selected.sources)
             validate_source_pointer_metadata_batch(session, (stored.manifest,))
+
+    def read_edit_context(
+        self, actor: ActorContext, binding: str, room: str | None, question_id: str, revision: str
+    ) -> KakaoQuestionEditContext:
+        with self._sessions.begin() as session:
+            authorize_kakao_binding_scope(
+                session, actor, binding, PermissionKey.KAKAO_ARCHIVE_EDIT, lock=False
+            )
+        selected = self._resolve(actor, binding, room, question_id, revision)
+        item = selected.questions[0]
+        ranges: list[KakaoTextEditRange] = []
+        for block in item.published.question.ordered_blocks:
+            if not isinstance(block, KakaoQuestionText):
+                continue
+            # An override is display text, not a coordinate system for source spans.
+            available = (
+                block.display_override is None
+                and block.end_codepoint - block.start_codepoint >= 2
+                and 0 <= block.start_codepoint < block.end_codepoint <= 65536
+            )
+            ranges.append(
+                KakaoTextEditRange(
+                    block_id=block.block_id,
+                    can_split=available,
+                    start_codepoint=block.start_codepoint if available else None,
+                    end_codepoint=block.end_codepoint if available else None,
+                )
+            )
+        result = KakaoQuestionEditContext(
+            source_binding_id=binding,
+            room_id=item.stored.room_id,
+            question_id=question_id,
+            question_revision_id=revision,
+            resource_version=item.stored.resource_version,
+            text_blocks=tuple(ranges),
+        )
+        self._reauthorize(actor, selected, PermissionKey.KAKAO_ARCHIVE_EDIT)
+        return result
 
     def read_question(
         self, actor: ActorContext, binding: str, room: str | None, question_id: str, revision: str

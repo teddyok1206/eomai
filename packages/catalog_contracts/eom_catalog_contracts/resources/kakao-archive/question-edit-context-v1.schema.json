@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/question-edit-context-v1/1.0",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    },
+    {
+      "$ref": "#/$defs/failure"
+    },
+    {
+      "$ref": "#/$defs/context"
+    }
+  ],
+  "$defs": {
+    "binding": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "question": {
+      "type": "string",
+      "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+      "minLength": 3,
+      "maxLength": 128
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "can_split",
+        "start_codepoint",
+        "end_codepoint"
+      ],
+      "properties": {
+        "block_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "can_split": {
+          "type": "boolean"
+        },
+        "start_codepoint": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "end_codepoint": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 65536
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "can_split": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "start_codepoint": {
+                "type": "integer"
+              },
+              "end_codepoint": {
+                "type": "integer"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "start_codepoint": {
+                "type": "null"
+              },
+              "end_codepoint": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "question_revision_id",
+        "resource_version",
+        "text_blocks"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-question-edit-context/1.0"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "room_id": {
+          "$ref": "#/$defs/room"
+        },
+        "question_id": {
+          "$ref": "#/$defs/question"
+        },
+        "question_revision_id": {
+          "$ref": "#/$defs/revision"
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "text_blocks": {
+          "type": "array",
+          "maxItems": 230,
+          "items": {
+            "$ref": "#/$defs/block"
+          }
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "actor_id",
+        "session_id",
+        "authentication_time",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "question_revision_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_QUESTION_EDIT_CONTEXT"
+        },
+        "request_id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "room_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/room"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_id": {
+          "$ref": "#/$defs/question"
+        },
+        "question_revision_id": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "error_code",
+        "result"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_QUESTION_EDIT_CONTEXT"
+        },
+        "request_id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "error_code": {
+          "type": "null"
+        },
+        "result": {
+          "$ref": "#/$defs/context"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "error_code",
+        "result"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_QUESTION_EDIT_CONTEXT"
+        },
+        "request_id": {
+          "$ref": "#/$defs/requestId"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "error_code": {
+          "type": "string",
+          "enum": [
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "KAKAO_ARCHIVE_PERMISSION_DENIED",
+            "KAKAO_ARCHIVE_RESOURCE_NOT_FOUND",
+            "KAKAO_ARCHIVE_BINDING_RETIRED",
+            "KAKAO_ARCHIVE_ROOM_RETIRED",
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "KAKAO_ARCHIVE_STORED_QUESTION_INVALID",
+            "KAKAO_ARCHIVE_STORED_SOURCE_INVALID",
+            "KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID",
+            "KAKAO_ARCHIVE_RESULT_INVALID",
+            "CATALOG_APPLICATION_UNAVAILABLE",
+            "CATALOG_APPLICATION_INTERNAL_ERROR",
+            "KAKAO_ARCHIVE_STUDENT_RETIRED",
+            "KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID",
+            "KAKAO_ARCHIVE_SOURCE_BYTES_LIMIT",
+            "KAKAO_ARCHIVE_RESULT_TOO_LARGE"
+          ]
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    }
+  }
+}

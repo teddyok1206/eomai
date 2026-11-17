@@ -31,6 +31,47 @@ function checkResult(body, result) {
   }
 }
 
+function caretMap(text) {
+  // Textarea API values normalize line endings. Map only the displayed caret,
+  // retaining exact source code points (including both halves of CRLF).
+  const points = [...text], map = new Map([[0, 0]]);
+  const displayParts = [];
+  let units = 0;
+  for (let i = 0; i < points.length;) {
+    let value = points[i], step = 1;
+    if (value === "\r") { value = "\n"; if (points[i + 1] === "\n") step = 2; }
+    if (value.length === 1 && value.charCodeAt(0) >= 0xd800 && value.charCodeAt(0) <= 0xdfff) throw new Error("문장의 글자 위치를 확인하지 못했습니다.");
+    displayParts.push(value); units += value.length; i += step; map.set(units, i);
+  }
+  const displayed = displayParts.join("");
+  if (typeof Intl.Segmenter !== "function") throw new Error("이 브라우저에서는 문장 안 나누기를 지원하지 않습니다. 메시지 사이에서 나눠 주세요.");
+  const boundaries = new Set([displayed.length]);
+  for (const segment of new Intl.Segmenter("ko", {granularity:"grapheme"}).segment(displayed)) boundaries.add(segment.index);
+  return {map, boundaries, displayed, length:points.length};
+}
+
+function editRanges(view, value) {
+  const q = view.question;
+  if (value?.schema_version !== "kakao-question-edit-context/1.0" ||
+      value.source_binding_id !== q.source_binding_id || value.room_id !== q.room_id ||
+      value.question_id !== q.question_id || value.question_revision_id !== q.question_revision_id ||
+      value.resource_version !== q.resource_version || !Array.isArray(value.text_blocks) || value.text_blocks.length > 230) throw new Error("질문 버전이 바뀌었습니다. 현재 질문을 다시 열어 주세요.");
+  const texts = new Map(view.ordered_blocks.filter(block => block.kind === "TEXT").map(block => [block.block_id, block]));
+  const result = new Map();
+  for (const item of value.text_blocks) {
+    const block = texts.get(item.block_id);
+    if (!block || result.has(item.block_id) || typeof item.can_split !== "boolean") throw new Error("문장의 위치 정보를 확인하지 못했습니다.");
+    if (!item.can_split) {
+      if (item.start_codepoint !== null || item.end_codepoint !== null) throw new Error("나눌 수 없는 문장의 위치 정보입니다.");
+      result.set(item.block_id, {range:item}); continue;
+    }
+    if (!Number.isInteger(item.start_codepoint) || !Number.isInteger(item.end_codepoint) || item.start_codepoint < 0 || item.end_codepoint > 65536 || item.end_codepoint <= item.start_codepoint) throw new Error("문장의 위치 정보를 확인하지 못했습니다.");
+    result.set(item.block_id, {range:item, cursor:null});
+  }
+  if (result.size !== texts.size) throw new Error("일부 문장의 위치 정보를 확인하지 못했습니다.");
+  return result;
+}
+
 export function createKakaoQuestionComposer({document, api, explainError, onSaved, captureView = () => null}) {
   let root = null, owner = null, binding = null, editable = false, active = false, epoch = 0;
   let draft = null, intent = null, notice = "";
@@ -57,10 +98,11 @@ export function createKakaoQuestionComposer({document, api, explainError, onSave
     root.append(el("h3", draft.operation === "SPLIT" ? "질문 나누기" : "질문 합치기"));
     root.append(el("p", "원문·사진은 바뀌지 않습니다. 새 질문으로 저장하며 기존 자료는 그대로 남습니다.", "muted-label"));
     if (draft.operation === "SPLIT") {
-      root.append(el("p", "새 질문이 시작할 위치를 골라 주세요. 문장 내부가 아니라 메시지·사진 사이에서 나눕니다.", "muted-label"));
+      root.append(el("p", "메시지·사진 사이를 고르거나, ‘문장 안에서 나누기’로 한 메시지 안의 질문을 나눌 수 있습니다.", "muted-label"));
       draft.blocks.forEach((block, i) => {
         const row = el("div", undefined, "kakao-composition-block");
         row.append(el("p", `${i + 1}. ${block.kind === "IMAGE" ? "사진" : block.text}`, "kakao-message-text"));
+        if (block.kind === "TEXT") renderTextSplit(row, block, i);
         if (i < draft.blocks.length - 1) {
           const label = el("label", undefined, "kakao-review-check"), check = el("input"); check.type = "checkbox";
           check.checked = draft.cuts.has(i + 1);
@@ -83,9 +125,56 @@ export function createKakaoQuestionComposer({document, api, explainError, onSave
       });
     }
     const save = button("새 질문으로 저장", () => void submit());
-    save.disabled = draft.operation === "SPLIT" ? draft.blocks.length < 2 : draft.items.size < 2;
+    save.disabled = draft.operation === "SPLIT" ? draft.blocks.length < 2 && ![...draft.spanCuts.values()].some(cuts => cuts.size) : draft.items.size < 2;
     root.append(save, button("선택 비우기", () => { draft = null; render(); }));
     const note = el("p", draft.note || "", "form-message"); note.setAttribute("role", "status"); root.append(note);
+  }
+  function renderTextSplit(row, block, index) {
+    if (!draft.ranges || !draft.openSpanBlocks.has(block.block_id)) {
+      const open = button("문장 안에서 나누기", () => {
+        if (draft.ranges) { draft.openSpanBlocks.add(block.block_id); render(); }
+        else void loadEditRanges(block.block_id);
+      });
+      open.disabled = Boolean(draft.loadingRanges); row.append(open); return;
+    }
+    const metadata = draft.ranges.get(block.block_id);
+    if (!metadata?.range.can_split) { row.append(el("p", "이 내용은 메시지 사이에서 나눠 주세요.", "muted-label")); return; }
+    if (!metadata.cursor) {
+      try {
+        const cursor = caretMap(block.text);
+        if (cursor.length !== metadata.range.end_codepoint - metadata.range.start_codepoint) throw new Error("문장과 원문 위치가 다릅니다. 현재 질문을 다시 열어 주세요.");
+        metadata.cursor = cursor;
+      } catch (error) { row.append(el("p", error.message, "form-message")); return; }
+    }
+    const chosen = draft, cuts = draft.spanCuts.get(block.block_id) || new Set();
+    const label = el("label", `${index + 1}번째 내용에서 나눌 위치`, "kakao-span-picker"), text = el("textarea");
+    text.readOnly = true; text.rows = 3; text.spellcheck = false; text.value = block.text;
+    label.append(text); row.append(label, el("p", "문장에 커서를 놓고 ‘여기서 나누기’를 누르세요. 원문은 바뀌지 않습니다.", "muted-label"));
+    row.append(button("여기서 나누기", () => {
+      if (draft !== chosen || intent) return;
+      const position = metadata.cursor.map.get(text.selectionStart);
+      if (text.value !== metadata.cursor.displayed || !metadata.cursor.boundaries.has(text.selectionStart) || !Number.isInteger(position) || position <= 0 || position >= metadata.cursor.length) {
+        draft.note = "문장의 맨 앞·뒤나 글자 중간이 아닌 곳에 커서를 놓아 주세요."; render(); return;
+      }
+      cuts.add(position); draft.spanCuts.set(block.block_id, cuts); draft.note = "나눌 위치를 추가했습니다. 내용을 확인한 뒤 저장해 주세요."; render();
+    }));
+    if (cuts.size) {
+      row.append(button("문장 안 나누기 지우기", () => { if (draft !== chosen || intent) return; draft.spanCuts.delete(block.block_id); render(); }));
+      const points = [...block.text], positions = [0, ...[...cuts].sort((a,b) => a-b), points.length];
+      for (let i = 0; i < positions.length - 1; i++) row.append(el("p", `부분 ${i + 1}: ${points.slice(positions[i], positions[i + 1]).join("")}`, "kakao-message-text"));
+    }
+  }
+  async function loadEditRanges(blockId) {
+    if (!available() || intent || draft?.operation !== "SPLIT" || draft.loadingRanges) return;
+    const chosen = draft, token = epoch, q = draft.view.question;
+    chosen.loadingRanges = true; chosen.note = "원문에서 나눌 수 있는 위치를 확인하고 있습니다."; render();
+    try {
+      const path = `/kakao-archive/questions/${encodeURIComponent(q.question_id)}/revisions/${encodeURIComponent(q.question_revision_id)}/edit-context?source_binding_id=${encodeURIComponent(q.source_binding_id)}&room_id=${encodeURIComponent(q.room_id)}`;
+      const result = await api(path);
+      if (!available() || token !== epoch || draft !== chosen || intent) return;
+      chosen.ranges = editRanges(chosen.view, result); chosen.openSpanBlocks.add(blockId); chosen.note = "문장에 커서를 놓고 나눌 위치를 선택해 주세요.";
+    } catch (error) { if (available() && token === epoch && draft === chosen && !intent) chosen.note = error.code ? explainError(error) : error.message || "문장 위치를 확인하지 못했습니다."; }
+    finally { chosen.loadingRanges = false; if (available() && token === epoch && draft === chosen && !intent) render(); }
   }
   function body() {
     const scope = {schema_version: "kakao-question-compose/1.0", operation: draft.operation, source_binding_id: binding.source_binding_id, room_id: draft.room};
@@ -94,7 +183,15 @@ export function createKakaoQuestionComposer({document, api, explainError, onSave
     let part = [];
     draft.blocks.forEach((block, index) => {
       if (cuts.has(index)) { partitions.push(part); part = []; }
-      part.push({kind: "BLOCK", block_id: block.block_id});
+      const inner = [...(draft.spanCuts.get(block.block_id) || [])].sort((a,b) => a-b);
+      if (!inner.length) { part.push({kind: "BLOCK", block_id: block.block_id}); return; }
+      const metadata = draft.ranges?.get(block.block_id);
+      if (block.kind !== "TEXT" || !metadata?.range.can_split || inner.some(value => !Number.isInteger(value) || value <= 0 || value >= metadata.cursor.length)) throw new Error("문장 안 나누기 위치를 다시 확인해 주세요.");
+      const positions = [0, ...inner, metadata.cursor.length];
+      for (let i = 0; i < positions.length - 1; i++) {
+        part.push({kind:"TEXT_SPAN", block_id:block.block_id, start_codepoint:metadata.range.start_codepoint + positions[i], end_codepoint:metadata.range.start_codepoint + positions[i + 1]});
+        if (i < positions.length - 2) { partitions.push(part); part = []; }
+      }
     });
     partitions.push(part);
     if (partitions.length < 2 || partitions.length > 100) throw new Error("나눌 위치를 1~99개 선택해 주세요.");
@@ -133,7 +230,7 @@ export function createKakaoQuestionComposer({document, api, explainError, onSave
     const question = view.question, blocks = view.ordered_blocks;
     if (question.source_binding_id !== binding.source_binding_id || !Array.isArray(blocks) || blocks.length < 1 || blocks.length > 230 ||
         new Set(blocks.map(block => block.block_id)).size !== blocks.length || blocks.some(block => !["TEXT", "IMAGE"].includes(block.kind) || typeof block.block_id !== "string")) throw new Error("질문 구성을 확인해 주세요.");
-    draft = {operation: "SPLIT", room: question.room_id, input: inputOf(question), blocks, cuts: new Set(), note: ""}; render(); return true;
+    draft = {operation: "SPLIT", room: question.room_id, input: inputOf(question), view, blocks, cuts: new Set(), spanCuts:new Map(), openSpanBlocks:new Set(), ranges:null, loadingRanges:false, note: ""}; render(); return true;
   }
   function add(question) {
     if (!available() || intent || question.source_binding_id !== binding.source_binding_id) return false;
