@@ -1,5 +1,40 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 역할별 PDF 호환 운영 배포
+
+source `c93f78f7df43ee261566c40e6a1dbf4d3f501ddf`를 커밋·푸시하고 API/platform/contracts,
+Catalog·QUERY·공유 실행 소비자, Web과 PDF worker를 호환 묶음으로 반영했다. migration은
+0093 그대로다. `EOM_KAKAO_PDF_LAYOUT_POLICY=student-study-a4/1.0`을 명시 활성화했으며,
+과거 v1 이력·실패·원본·인증·MANUAL 설정과 AUTO 비활성을 보존했다.
+
+- API·Web 공식 clean-commit build/RECORD 및 Web105개 installed file·offline closure PASS다.
+  source 없는 격리 core/worker 설치본의 실제 `fixed_render` 입력과5쪽/동일 완료본 복구가
+  PASS다. 두 prefix의 `pip check`도 통과했다. 첫 local 설치는 같은 package version 탓에
+  상속 설치본을 건너뛰어, 격리 prefix에 exact wheel을 명시 재설치한 뒤 검사했다. probe의
+  worker import·group-writable 옛 fixture 선택 오류는 실제 dispatch 전 수정했으며 실패 로그를
+  보존했다. 운영 검증을 통과시키려고 파일 권한·hash 검사를 낮추지 않았다.
+- protected stage/admission·정상 producer drain 후 한 번 activate했다. API/Web은 함께 정지한
+  구간에 설치해 새 응답과 옛 Web의 혼합 실행을 피했다. API0093 확인·최소 권한 reconcile·
+  새 QUERY provider/code pin 검증·공유 서비스 재개·HTTPS login route가 PASS다.
+  `staging/kakao-study-{stage,admit,prepare,drain,activate,verify}-c93f78f7.log`와
+  `/var/lib/eom-kakao-capture-release-study-c93f78f7/api/activated.json`이 증거다.
+- 새 PDF worker SHA는
+  `sha256:d18fa035047dbabdcf98782246730308b1ecc9cf11e5a75828d1f71209ef3916`이다.
+  전용 Catalog UID가 실제 fixed systemd/worker UID로 합성5쪽을 실행·정지하고 같은 output만
+  복구했다. `staging/kakao-study-fixed-canary-prepare-2-c93f78f7.log`와
+  `/var/lib/eom-kakao-study-canary-c93f78f7/accepted.json`에 기록했다. 사전 script의 존재하지
+  않는 group 이름은 dispatch 전에 실제 계정의 primary GID를 사용하도록 수정했다.
+  이는 **운영 sandbox 출력 증거**이지 실제 사용자 source 수락·Studio 다운로드 증거가 아니다.
+- 추가 guarded disposable DB14 PASS(278 명시 deselect), dependency12 PASS다. 첫 pytest 선택
+  인자 인용 오류는 test 수집 전 수정하고 로그를 보존했다. production DB를 pytest에 쓰지 않았다.
+- INDEX와 자료 학습 owner는 배포 전부터 FAILED/PID0였고 같은 Invocation/config를 보존했다.
+  이 배포가 GPU/학습을 복구했다는 뜻이 아니다. API/Web/Catalog/QUERY/creative는 새 PID로
+  active이며 `NeedDaemonReload=no`를 확인했다. 별도 Kakao 로그인/수집은 수행하지 않았다.
+
+다음은 보존한 실제 CSV/사진으로 새 출력 경로의 샘플을 만들고, 사용자가 요청한 공유 유휴
+슬롯의 전용 개념 보강 프롬프트·공식 GraphRAG·저장/편집을 연결하는 것이다. 실제 한 방→
+전체 방 주기 수집/사진 occurrence 정합은 여전히 미완료이며 전체 goal을 완료 처리하지 않는다.
+
 ### 최종 사용자 PDF 산출물 — 아직 미완료
 
 사용자가 2026-11-17 재확인했다. 최종 마무리할 때 **보존 중인 실제 CSV·사진·metadata로
