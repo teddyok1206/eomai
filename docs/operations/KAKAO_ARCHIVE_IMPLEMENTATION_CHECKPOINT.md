@@ -1,5 +1,19 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 후속 기능의 호환 운영 빌드 준비
+
+`95a270d5`의 공식 API build-only 검사가 installed-wheel OpenAPI와 새 질문 source refresh
+route의 불일치를 설치 전에 거부했다. 운영 쓰기/설치는0이다. 기존 `export_openapi.sh`로
+현재 명세와 SHA를 생성했으며 추가 경로는 `/questions/{question_id}/refresh-source` 하나다.
+기존 경로 삭제·breaking change0, API 명세/질문 갱신 회귀30건 PASS다. 기존 released worker/
+메시지 schema bytes는 변경하지 않았고 실패 build 로그도 보존한다.
+
+Web의95a270d5 wheel closure·별도 설치 simulation은 통과했다. 수정된 clean commit으로
+API/Web을 다시 빌드한 뒤 기존 protected release operator로 조립한다. 현재 단계는 운영
+배포/사용자 로그인/실제 카카오 검증 증거가 아니다. collection adapter 설정은 미지정 상태를
+유지하며 AUTO를 켜거나 MANUAL 관측을 AUTO 성공으로 재분류하지 않는다. 기존 수치 runtime과
+실행·인증·완료 Artifact는 보존한다. 새 실제 수집/전체 방 주기 실행은 별도 미완료 gate다.
+
 ## 2026-11-17 실제 수락 owner를 질문 runtime에 조립
 
 기준 source는 `132f11d4`다. 운영용 `build_kakao_question_application`이 capture admission을
