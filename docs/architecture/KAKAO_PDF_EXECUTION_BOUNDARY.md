@@ -72,6 +72,13 @@ Catalog 환경 lock에도 같은 pin을 포함한다. `--no-deps` EOM wheel 설�
 검사를 함께 수행한다. feature-off import를 강제 의존으로 바꾸거나 worker의 decoder를
 API에서 임의로 원격 호출하지 않는다.
 
+설치된 Noto CJK는 ASCII hyphen(U+002D)과 nonbreaking hyphen(U+2011)을 동일 glyph로
+매핑하며 MuPDF의 ToUnicode 역매핑은 후자를 선택한다. 날짜의 ASCII hyphen을 실제로
+그렸어도 strict codepoint readback이 거부되는 것을 합성 PDF에서 재현했다. 원문이나 출력
+문자열을 치환하지 않고, readback에 한해 **이 두 문자만**, 사용한 exact font의 glyph ID가
+같고0이 아닐 때 허용한다. 수학 minus·다른 구두점·임의의 비슷한 글자·누락·중복은 여전히
+거부한다. body/header 원문과 manifest hash는 그대로이며 전체 검사를 비활성화하지 않는다.
+
 ## 결과·발행
 
 원래 command와 정확히 맞는 실행 핀·학생 subset, canonical layout receipt, 기대한 PDF·PNG

@@ -1,5 +1,24 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 PDF 설정 반영과 실제 설치 폰트의 readback
+
+- `186a2212f08e8a743ae28a899ef7724cbee844f1`을 커밋·푸시했다. private0755 template와
+  Catalog 기대 hash를 함께 반영했다. systemd reload 응답20초가 만료됐지만 실제 reload는
+  완료돼 있었고, 재설치를 반복하지 않고 파일/hash·NeedDaemonReload=no를 확인한 뒤
+  중지된 Catalog만 다시 시작했다. Catalog active/socket·API READY와 기존 API/Web/QUERY,
+  GPU INDEX Invocation·runtime/config 보존을 확인했다. 별도 관측 receipt는
+  `/var/lib/eom-kakao-pdf-delta-186a2212/activation-observed.json`이다.
+- 원래 worker exit2와 다른 **새 합성 attempt**
+  `kakaoattempt_31d9262cef6d489c9bbda8809460d3c0`은 실제 전용 UID/systemd 실행을 마쳤으나
+  `INVALID_INPUT / KAKAO_RENDER_TEXT_READBACK_MISMATCH`를 반환했다. 이를 성공 PDF로
+  표시하거나 같은 attempt를 재실행하지 않았다. 실제 카카오 원본·DB/export는 사용하지 않았다.
+- 설치 Noto CJK의 날짜 `-`가 같은 glyph인U+2011로 추출되는 것이 원인이다. source renderer의
+  readback만 exact font의 이 두 문자 shared nonzero glyph에 한해 허용하도록 고쳤다.
+  수학 minus·본문 변경·누락·중복 거부 회귀와 관련137개 검증, strict mypy가 통과했다.
+  실제 설치 Noto bytes를 입력한 source PDF2쪽/사진2개도 통과했다. **새 worker wheel의
+  보호 설치·새 합성 attempt·중복 없는 재수락은 아직 다음 단계**다. 합성/source PASS를
+  실제 카카오나 최종 사용자 PDF 완료로 확대하지 않는다.
+
 ## 2026-11-17 재로그인 없는 보호 PDF 검증에서 확인한 실행 경계
 
 - 기존 활성 PDF template와 전용 Catalog/renderer UID로 합성 질문2개·사진2개의 첫 실제

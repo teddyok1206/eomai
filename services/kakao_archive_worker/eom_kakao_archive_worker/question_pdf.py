@@ -245,6 +245,24 @@ def _text_characters(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFC", text) if not c.isspace())
 
 
+def _readback_text_matches(expected: str, extracted: str, font: Any) -> bool:
+    source, output = _text_characters(expected), _text_characters(extracted)
+    if source == output:
+        return True
+    if len(source) != len(output):
+        return False
+    # Noto CJK maps U+002D and U+2011 to one glyph. MuPDF's reverse CMap
+    # chooses U+2011 even when the original text contains an ASCII date hyphen.
+    # Accept only this proven alias AND only if this exact font shares its glyph.
+    # Do not normalize mathematical minus, punctuation or arbitrary lookalikes.
+    hyphen_glyph = font.has_glyph(0x2D, fallback=False)
+    shared_hyphen = bool(hyphen_glyph) and hyphen_glyph == font.has_glyph(0x2011, fallback=False)
+    return all(
+        a == b or (shared_hyphen and {a, b} == {"-", "\u2011"})
+        for a, b in zip(source, output, strict=True)
+    )
+
+
 def _image_bytes(root: Path, image: RenderImage) -> tuple[bytes, tuple[int, int], int]:
     member = image.member
     assert member is not None
@@ -533,7 +551,7 @@ def _render(
                 )
                 + str(number)
             )
-            if _text_characters(page.get_text()) != _text_characters(expected):
+            if not _readback_text_matches(expected, page.get_text(), font):
                 raise ValueError("KAKAO_RENDER_TEXT_READBACK_MISMATCH")
             if len(page.get_image_info()) != sum(raw is not None for raw, _ in images):
                 raise ValueError("KAKAO_RENDER_IMAGE_READBACK_MISMATCH")

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pymupdf
 import pytest
@@ -22,11 +23,39 @@ from eom_kakao_archive_contracts import (
 )
 from eom_kakao_archive_contracts.validation import SCHEMA_SHA256, load_schema, validate_contract
 from eom_kakao_archive_worker.local_members import read_member
-from eom_kakao_archive_worker.question_pdf import render_questions
+from eom_kakao_archive_worker.question_pdf import _readback_text_matches, render_questions
 from PIL import Image
 from pydantic import ValidationError
 
 RELEASE = "sha256:" + "a" * 64
+
+
+@pytest.mark.parametrize(
+    ("expected", "extracted", "shared_glyph", "matches"),
+    [
+        ("2026-11-17", "2026\u201111\u201117", True, True),
+        ("A\u2011B", "A-B", True, True),
+        ("2026-11-17", "2026\u201111\u201117", False, False),
+        ("A-B", "A\u2212B", True, False),
+        ("A+B", "A-B", True, False),
+        ("x=2", "x=3", True, False),
+        ("한글 질문", "한글", True, False),
+        ("A-B", "A--B", True, False),
+        ("질문\n2026-11-17", "질문\u00a02026\u201111\u201117", True, True),
+    ],
+)
+def test_readback_accepts_only_same_font_hyphen_cmap_alias(
+    expected, extracted, shared_glyph, matches
+):
+    font = Mock()
+    font.has_glyph.side_effect = lambda code, **kwargs: 14 if shared_glyph or code == 0x2D else 720
+    assert _readback_text_matches(expected, extracted, font) is matches
+
+
+def test_readback_does_not_accept_shared_missing_glyphs():
+    font = Mock()
+    font.has_glyph.return_value = 0
+    assert not _readback_text_matches("A-B", "A\u2011B", font)
 
 
 def identity(kind: str, n: int = 1) -> str:
