@@ -155,6 +155,7 @@ if [[ "${action}" == "kakao-tests" ]]; then
     tests/integration/test_kakao_pdf_publication.py \
     tests/integration/test_kakao_concept_workflow_storage.py \
     tests/integration/test_kakao_concept_task_storage.py \
+    tests/integration/test_kakao_study_storage.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
   exit 0
 fi

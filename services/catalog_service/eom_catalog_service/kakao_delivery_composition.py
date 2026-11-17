@@ -17,8 +17,10 @@ from .kakao_delivery_application import KakaoDeliveryApplication
 from .kakao_packet_service import KakaoPacketService
 from .kakao_question_service import KakaoQuestionService
 from .kakao_source_service import KakaoSourceService
+from .kakao_study_service import KakaoStudyService
 
 if TYPE_CHECKING:
+    from .kakao_concept_task_service import KakaoConceptTaskService
     from .kakao_pdf_coordinator import KakaoPdfCoordinator
 
 PDF_INPUT_ROOT = Path("/var/lib/eom-catalog-api/staging/kakao-pdf-inputs")
@@ -32,7 +34,11 @@ class KakaoDeliveryComposition:
 
 
 def build_kakao_delivery_application(
-    engine: Engine, questions: KakaoQuestionService, environment: Mapping[str, str]
+    engine: Engine,
+    questions: KakaoQuestionService,
+    environment: Mapping[str, str],
+    *,
+    concepts: KakaoConceptTaskService | None = None,
 ) -> KakaoDeliveryComposition:
     artifacts = CatalogArtifactService(engine)
 
@@ -41,9 +47,12 @@ def build_kakao_delivery_application(
 
     sources = KakaoSourceService(engine, artifacts=artifacts, authorize_capture=no_capture)
     packets = KakaoPacketService(engine, artifacts=artifacts, questions=questions, sources=sources)
+    studies = KakaoStudyService(
+        engine, artifacts=artifacts, packets=packets, sources=sources, concepts=concepts
+    )
     mode = environment.get("EOM_KAKAO_PDF_MODE", "DISABLED")
     if mode == "DISABLED":
-        return KakaoDeliveryComposition(KakaoDeliveryApplication(packets), None)
+        return KakaoDeliveryComposition(KakaoDeliveryApplication(packets, studies=studies), None)
     keys = (
         "EOM_KAKAO_PDF_RELEASE_SHA256",
         "EOM_KAKAO_PDF_TEMPLATE_SHA256",
@@ -99,5 +108,5 @@ def build_kakao_delivery_application(
     )
     coordinator = KakaoPdfCoordinator(delivery)
     return KakaoDeliveryComposition(
-        KakaoDeliveryApplication(packets, exports, coordinator.submit), coordinator
+        KakaoDeliveryApplication(packets, exports, coordinator.submit, studies), coordinator
     )

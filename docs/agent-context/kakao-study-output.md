@@ -46,12 +46,12 @@ P1.7의 일반01–05 support pool·고정 모델/지침을 pin한다. PLAN/COMP
 decode/길이/hash/방향/집합을 검증한다. 질문 manifest/명부는 worker에 복사하지 않는다.
 stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인해 실제 `--image`
 인자로 연결한다. 과거1–5의 해석을 변경하지 않으며 helper의 exact source hash도 pin한다.
-현재 `PlatformRoleJobExecutor`는 이 새 purpose의 **실제 source adapter가 아직 composition에
-연결되지 않았으므로 명시 거부**한다. 다른 support prompt로 fallback하지 않는다.
-이 guard는 실행 source 연결 후에만 교체한다. `KakaoConceptTaskService`의 intent/PLAN 저장과
-현재 source authority·기존 Workflow 제출 source는 [개념 추천 문맥](kakao-concepts.md)에 있다.
-프리셋·운영 실행은 미활성이며, 실제 슬롯·COMPOSE 진행·study 저장/편집·페이지/crop 발행·
-새 PDF 연결은 여전히 후속이다.
+현재 source의 `PlatformRoleJobExecutor`는 Catalog source adapter·Core Artifact reader를 통해
+이 purpose의 실제 입력을 재인가한다. 다른 support prompt로 fallback하지 않는다. 이것을
+운영 activation이나 실제 모델 성공으로 해석하지 않는다. `KakaoConceptTaskService`의 저장·
+현재 source authority·공유 Workflow 제출과 COMPOSE provenance·로컬 보강/PDF 값 변환,
+새 saved-study owner는 [개념 추천 문맥](kakao-concepts.md)에 있다. 프리셋/자동 진행·공개 API·
+실제 슬롯·Studio 편집·저장 revision의 새 공식 PDF 연결은 여전히 후속이다.
 
 ### 역할별 PDF
 

@@ -1,5 +1,47 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 학생별 개념 자료의 영속 저장·편집 revision — source 검증, 운영 미배포
+
+source `840b4d33` 후속이다. 기존 packet/student subset에 개념 block/capture 선택·제목/설명
+수정·직접 쓴 메모를 별도 study manifest로 저장하고, 서비스 재구성·이전 revision 조회·동시
+편집/재전송을 처리하는 Catalog owner를 구현했다. **공개 API/Studio 편집·저장 revision의
+공식 PDF와 실제 교재 보강 샘플은 아직 후속이다.** 운영을 바꾸거나 전체 goal을 완료하지 않았다.
+
+- 먼저 `study-store-v1` Schema2020-12·mirror와 typed DTO를 정의했다. SHA는
+  `sha256:2baa1b8d18839c21367884da9a14999b8748b2f9925cfd520776b3a278eea5ce`다.
+  입력은 선택 index/수정 설명/메모이며 임의 source·경로·인용/slot/권한은 받지 않는다.
+  exact 완료 COMPOSE 결과 pin은 source owner가 채운다. 원 질문·교재·사진·모델 결과 전체를
+  study나 DB에 복제하지 않는다. private 입력을 schema 예외 문자열에 출력하지 않도록 했다.
+- DB0095는 작은 study head/revision/command 세 표다. FK/unique·immutable revision·head CAS,
+  command replay·index-backed owner/binding 목록을 사용한다. row에 JSON/binary 본문은 없다.
+  긴 packet/concept 해석·Artifact 발행은 lock 밖, 이후 짧은 adoption CAS와 현재 source 재조회다.
+  같은 요청/발행 뒤 중단은 원 ID/Artifact이며 경쟁 수정은 기존 편집을 덮지 않는다.
+- packet/student는 한 study에서 고정한다. 질문 subset·다른 학생·없는 block/capture·잘못된
+  concept question/result·현재 source 거절을 검사한다. 일반 메모 저장은 추천 runtime 없이도
+  가능하고 선택적 Codex 기능이 없으면 그 선택만 명시 거부한다. 기존 Delivery composition에
+  같은 packet/source/concept owner로 연결했으나 공개 화면·공식 export는 아직 연결하지 않았다.
+- 새 release context1.30/schema SHA는
+  `sha256:77d0e349c6a2f4bf30fbc70b09534ebfded1b8758a92d9be564304bb4442fdd3`다.
+  동일0095 확인 또는 명시적0093→0095/0094→0095만 허용한다. 기존 context/schema bytes와
+  실패 기록은 유지한다. 이 설치·migration callback은 소스 검증이며 운영 실행하지 않았다.
+- guarded disposable DB 전체 **332 PASS**, 최종 추가/집중 **15 PASS/318 deselected**다.
+  겹치는 검사를 합산하지 않는다. 실제 packet/Artifact 저장·재구성·동시 동일 요청/경쟁 수정·
+  발행 직후 중단/replay·session 철회·immutable SQL 보호·query plan·rollback-only 별도 schema의
+  migration 왕복/이력 존재 시 downgrade 거부를 확인했다. **completed-concept port는 합성**이며
+  실제 슬롯/교재 성공으로 보고하지 않는다. 운영 DB에는 테스트하지 않았다.
+- 최종 소스 **603 PASS**, 독립 설치 wheel **10 PASS**, strict mypy6개·Ruff/format/diff/bash
+  검사를 통과했다. 문맥/wire 회귀 **16 PASS**, audit1494 canonical/1137 mirror/13022 refs다.
+  초기 DB metadata 검사1건은 독립 compose test의 신규 model import 누락, release 검사1건은
+  shell callback 순서 기대 오류였다. 첫 합동 source의1건은 새 schema가 먼저 거부한 오류를
+  안정적 ValueError로 감싸지 못한 부분이며 private 예외 처리와 회귀로 수정했다. 로그는 보존했다.
+
+증거: `staging/kakao-saved-study-{full-db,final-focused-db,final-source,final-wheel,final-types,
+wire,context-wire}-20261117.log`. 실제 모델/GPU·운영 migration/배포 실행은0이다.
+다음은 저장한 선택을 원본 capture·기존 renderer에 붙이는 공식 export와 공개 편집/추천 실행
+경로다. 실제 수신 CSV/사진·메타데이터에 관련 교재 근거를 붙인 반복 가능한 PDF를 열어 보고
+링크를 전달한 뒤, README 정리·호환 배포/실제 검증을 이어간다. 실제 한 방/전체 방 수집 gate도
+전체 목표에 남아 있다. 부분 source 검증을 전체 완료로 간주하지 않는다.
+
 ## 2026-11-17 교재 설명·원본 capture→기존 PDF 보강 block — source 검증, 운영 미활성
 
 source `f6eefe93`의 후속이다. `kakao_concept_study.py`가 완료 COMPOSE와 현재 재인가한

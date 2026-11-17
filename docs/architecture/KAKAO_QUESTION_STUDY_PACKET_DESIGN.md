@@ -511,3 +511,33 @@ capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변
 - 모든 I/O 전후에 accepted task와 현재 교재 권한을 재인가한다. 재조회는 모델을 재실행하지
   않으며 현재 local draft 준비는 canonical 발행/편집 CAS와 다르다. 저장·Studio 편집·공식
   export 연계는 별도 owner에서 이어간다. 근거 없는 경로/이미지를 붙이는 대안은 제외한다.
+
+## 14. 학생별 packet의 개념 자료 저장·수정 owner
+
+1. Catalog의 study application이 기존 exact packet/student subset에 붙는 편집본을 소유한다.
+   수집/질문·Graph/Workflow·Artifact의 소유권을 가져오지 않는다. 일반 PDF는 영향받지 않는다.
+2. 정본은 packet/question·완료 COMPOSE와 교재 provenance다. study manifest에는 원문이나
+   모델 결과 전체를 복사하지 않고 exact result pin·선택 block/capture index·사용자 수정/메모만 둔다.
+3. study logical ID→불변 revision→manifest Artifact/revision/hash와 작은 mutable head를 나눈다.
+   packet/student는 한 study에서 불변이며 다른 packet으로 옮길 때는 새 study를 만든다.
+4. 저장·조회·PDF 입력 준비/다운로드는 현재 사용자의 원 packet/질문/source와 모든 선택 task의
+   정확한 COMPOSE 결과·Graph/교재 권한을 검사한다. 최신 결과나 다른 학생으로 대체하지 않는다.
+5. 연산은 owner/binding/study ID lookup, ordered question/block 순회, command key replay,
+   revision CAS와 bounded keyset history다. 기존 질문·packet·추천 owner를 호출해 source를 해석한다.
+6. head/revision/command의 작은 세 표에 FK·unique(owner,key)·unique(study,version)·B-tree
+   목록 index와 immutable revision/append-only command 보호를 둔다. 본문·사진은 DB에 없다.
+7. 최대200질문·질문당8출력 block을 출발점으로 한다. block/evidence는 map/set/tuple,
+   비용은 선택한 질문/task/source/편집 text에 선형이다. 원 packet 전체를 반복 scan하지 않는다.
+8. 같은 command를 짧은 lock으로 예약하고, 긴 source 해석·manifest 발행은 lock 밖에서 한다.
+   이후 현재 권한/source와 parent CAS를 재확인해 revision/head/command를 원자적으로 채택한다.
+9. Studio→API→Catalog study service→기존 packet/concept/Artifact owner다. worker가 저장하거나
+   다른 worker를 부르지 않는다. 별도 registry·queue·generic editor framework를 만들지 않는다.
+10. 같은 key/body는 같은 ID/원래 revision이다. 발행 뒤 중단은 같은 Artifact를 재사용한다.
+    바뀐 body는 conflict, 경쟁 parent는 precondition failure다. 이전 사용자 편집을 자동 추천으로
+    덮지 않으며 실패/원본/기존 PDF를 수정하지 않는다.
+11. 모델 결과 JSON을 UI에서만 편집하는 대안은 재시작/출처/동시 편집을 잃는다. 기존 packet의
+    예약·발행·짧은 CAS 패턴을 재사용하는 얇은 study owner가 최소의 영속 경계다.
+
+공개 편집 입력은 제목/설명/질문과의 관련성·block/capture 선택·직접 쓴 메모로 제한한다.
+임의 source ID/파일 경로/인용문을 추가하는 입력은 없다. 인용·원본 그림은 저장한 task의 실제
+결과와 교재에서만 파생한다. editable study는 source/모델 결과 자체를 바꾸지 않는다.

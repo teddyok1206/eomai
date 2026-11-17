@@ -16,6 +16,7 @@ from .kakao_packet_service import KakaoPacketService
 
 if TYPE_CHECKING:
     from .kakao_export_service import KakaoExportService
+    from .kakao_study_service import KakaoStudyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class KakaoDeliveryApplication:
     packets: KakaoPacketService
     exports: KakaoExportService | None = None
     submit_export: Callable[[ActorContext, str, str], None] | None = field(default=None, repr=False)
+    studies: KakaoStudyService | None = None
 
     def read_packet(
         self, actor: ActorContext, binding: str, packet: str, revision: str

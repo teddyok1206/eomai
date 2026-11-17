@@ -28,6 +28,7 @@ import eom_catalog_service.kakao_room_intake_models
 import eom_catalog_service.kakao_room_models
 import eom_catalog_service.kakao_source_models
 import eom_catalog_service.kakao_student_models
+import eom_catalog_service.kakao_study_models
 import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.knowledge_graph_models
 import eom_catalog_service.legacy_assessment_models

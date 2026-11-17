@@ -43,7 +43,7 @@ release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context
 
 - 추천 요청의 공개 API·화면 시작/상태/history와 자동 단계 진행 coordinator.
 - 실제 preset/지침 발행·공유 슬롯 model run, PLAN→GraphRAG→COMPOSE 진행 coordinator.
-- 실제 COMPOSE 완료 뒤 원본 capture 발행, saved-study 저장·Studio 편집/새 PDF 연결.
+- 실제 COMPOSE 완료 뒤 원본 capture 발행, saved-study의 공개 API·Studio 편집/새 PDF 연결.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
 
 실제 reader/page/crop/worker input/역할별 PDF는 [자료 출력 문맥](kakao-study-output.md)을 따른다.
@@ -126,3 +126,21 @@ pure projection과 임시 page/crop 준비만 연결됐으며 canonical saved-st
 export를 대신하지 않는다. `test_kakao_concept_study.py`는 합성 개념/교재의 실제 PNG→crop→
 PDF 내장·출처·질문/답변/개념 순서와 layout receipt를 검사한다. 실제 카카오/교재/모델 성공이나
 사용자에게 전달할 최종 샘플이라고 보고하지 않는다.
+
+## 학생별 편집본 저장 owner
+
+`kakao_study_service.py`/`study-store-v1`은 exact packet/student와 선택한 질문별 task 결과에
+사용자 block/capture 선택·제목/설명 수정·직접 쓴 메모를 붙인다. 모델 결과/질문·사진은 복사하지
+않고 manifest Artifact에 결과 pin과 편집 값만 둔다. DB0095의 head/revision/command는 작은
+pointer와 CAS/replay 상태다. 같은 key/body는 원 revision, 새 수정은 immutable revision이다.
+
+기존 packet/concept/Artifact public owner로 현재 권한·exact source/result를 재확인하며 다른
+학생/packet·없는 block/capture·바뀐 source를 거부한다. 긴 I/O/발행은 lock 밖이고 짧은 채택만
+parent CAS다. 같은 발행 뒤 중단·동시 replay/편집·서비스 재구성을 검사한다. 세 표에는 binary/
+JSON body를 두지 않는다. source test의 completed-concept port는 합성이고 actual slot은 아니다.
+
+Delivery composition이 같은 packet/source owner로 study service를 구성한다. 추천 runtime이
+없어도 직접 쓴 메모 저장은 가능하고 모델이 필요한 선택만 명시 거부한다. 공개 RPC/API·Studio
+편집 화면·저장 revision의 공식 export는 아직 후속이다. release context1.30은 target0095와
+정확한0093→0095 또는0094→0095/같은0095만 지원하며 predecessor bytes는 보존한다.
+운영 migration/배포는 아직 수행하지 않았다.

@@ -334,7 +334,9 @@ def serve() -> int:
         )
         manual = build_kakao_manual_runtime(engine, os.environ)
         questions = build_kakao_question_application(engine)
-        delivery = build_kakao_delivery_application(engine, questions.questions, os.environ)
+        delivery = build_kakao_delivery_application(
+            engine, questions.questions, os.environ, concepts=questions.concepts
+        )
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
