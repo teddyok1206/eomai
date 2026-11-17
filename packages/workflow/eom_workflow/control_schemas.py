@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "kakao-concept-work": ControlSchemaResource(
+            "schemas/workflow/control-plane/kakao-concept-work-v1.schema.json",
+            "resources/control-plane/kakao-concept-work-v1.schema.json",
+            "1.0",
+            "sha256:1c65bc31f7ffa82ec7a0bd3230db4744e79981d098867d124cdf9dd7f9c159f4",
+        ),
+        "resolved-execution-plan-v42": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v42.schema.json",
+            "resources/control-plane/resolved-execution-plan-v42.schema.json",
+            "42.0",
+            "sha256:9e210d5f8281ec9c2db6558aabae4fc5e3a6cb769cfb927952bd0e9e28f1a40c",
+        ),
         "resolved-execution-plan-v41": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v41.schema.json",
             "resources/control-plane/resolved-execution-plan-v41.schema.json",

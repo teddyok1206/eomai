@@ -104,6 +104,7 @@ from eom_workflow.inference_transfer import (
     InferenceTransferPairWorkerRequest,
     InferenceTransferPairWorkerRequestV11,
 )
+from eom_workflow.kakao_concept_request import KakaoConceptWorkerRequest
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestV2,
@@ -1151,6 +1152,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.38.0",
         "workflow-role/1.39.0",
         "workflow-role/1.40.0",
+        "workflow-role/1.41.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1165,6 +1167,7 @@ class RoleWorkerInput(FrozenModel):
         | MaterialLearningWorkerRequest
         | MaterialLearningWorkerRequestV2
         | MaterialLearningWorkerRequestV3
+        | KakaoConceptWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1190,6 +1193,7 @@ class RoleWorkerInput(FrozenModel):
         | MaterialLearningWorkerRequest
         | MaterialLearningWorkerRequestV2
         | MaterialLearningWorkerRequestV3
+        | KakaoConceptWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1212,6 +1216,8 @@ class RoleWorkerInput(FrozenModel):
             return ExternalItemLearningWorkerRequest.model_validate(value)
         if value.get("request_name") == "MATERIAL_LEARNING_REQUEST":
             return parse_material_learning_worker_request(value)
+        if value.get("request_name") == "KAKAO_CONCEPT_REQUEST":
+            return KakaoConceptWorkerRequest.model_validate(value)
         if value.get("request_name") == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
             return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
         if value.get("request_name") == "CUSTOMER_SUPPORT_REQUEST":
@@ -1381,6 +1387,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.38.0",
         "workflow-role/1.39.0",
         "workflow-role/1.40.0",
+        "workflow-role/1.41.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1388,6 +1395,13 @@ class RoleResultBase(FrozenModel):
     status: Literal["ok"] = "ok"
     artifact: ArtifactSpec
     completed_at: UtcDatetime
+
+
+class KakaoConceptRoleResultHeader(RoleResultBase):
+    """Core execution metadata; the explicit optional parser supplies the typed payload."""
+
+    protocol_version: Literal["workflow-role/1.41.0"] = "workflow-role/1.41.0"
+    role: Literal["support"] = "support"
 
 
 class AuthoringRoleResult(RoleResultBase):
@@ -3251,4 +3265,5 @@ RoleResult = (
     | PairedDocumentReviewRoleResult
     | PairedDocumentReviewRoleResultV3
     | PairedDocumentReviewRoleResultV4
+    | KakaoConceptRoleResultHeader
 )

@@ -29,7 +29,22 @@ observation/anchor/member와 pixels/hash/크기/방향을 대조한다. `item_te
 Markdown을 바꾸지 않고 typed page observations를 함께 보존한다. alias는 원본을 한 번만
 읽으며 같은 crop도 한 번만 만든다. 권한 전후 검사·NO_MATCH/원문 없음/일부 쪽 미제공과
 분석≠원문 구분을 유지한다. 로컬 crop은 미채택 derivative이지 발행된 Artifact가 아니다.
-공유 슬롯 Workflow·저장/편집·페이지/crop 발행·새 PDF의 최종 연결은 여전히 후속이다.
+
+`kakao_concept_request`의 Work는 question/request Artifact와 필요한 image pointer만 가진다.
+원문은 DB에 복제하지 않고 exact canonical request bytes와 member closure를 검증한다.
+role1.41의 typed payload는 해당 결과를 읽을 때만 optional pure wheel에서 불러오며,
+일반 core import/과거 role read는 Kakao contract/worker를 요구하지 않는다. metadata-only
+`KakaoConceptRoleResultHeader`를 완성 결과로 파싱하지 않고 canonical schema와 실제 typed
+`KakaoConceptRoleResult`를 사용한다.
+
+`kakao_concept_start`/`kakao_concept_admission`은 기존 Workflow/command 저장 owner와 replay/
+transaction을 재사용한다. `kakao_concept_plan_resolution`은 기존 preset lock과 capacity owner로
+P1.7의 일반01–05 support pool·고정 모델/지침을 pin한다. PLAN/COMPOSE는 한 definition의
+각각 독립 child이며 원래 Runner가 one-step을 만든다. 별도 queue/전용 slot은 없다.
+현재 `PlatformRoleJobExecutor`는 이 새 purpose의 **실제 source adapter/입력 materializer가
+아직 연결되지 않았으므로 명시 거부**한다. 다른 support prompt로 fallback하지 않는다.
+이 guard는 실행 source 연결 후에만 교체한다. 프리셋·운영 실행은 미활성이며, 실제 슬롯·
+추천 parent/store·study 저장/편집·페이지/crop 발행·새 PDF 연결은 여전히 후속이다.
 
 ### 역할별 PDF
 
@@ -88,6 +103,11 @@ API/UDS/임시 DB/worker/다운로드와 실제 브라우저 fixture 검증은 *
   보존·바깥쪽 좌표 반올림·alias/crop dedup, decode/방향/hash/권한 철회·경로 경계 거부.
 - `test_kakao_concept_knowledge.py`: actual role/policy와 출제 read owner 재사용, V5/12 provenance,
   공식 materializer의 page observations 보존과 옛 출제 Markdown 불변.
+- `test_kakao_concept_workflow_contracts.py`/`test_kakao_concept_plan_resolution.py`: Work/role/plan
+  pins·closed member·phase/request identity·source-only shared pool·옛 역할 import의 optional 격리.
+- `test_kakao_concept_workflow_storage.py`: guarded 임시 DB의 실제 Workflow/command 저장·동시
+  생성·서비스 재구성 후 replay·늦은 source 거절 rollback·실패 이력 보존. source/plan port는
+  합성이며 실제 슬롯/model/교재 접근 증거가 아니다.
 - `test_kakao_study_render_contract.py`: 원 schema bytes 보존, 역할/시각·source closure,
   보강 revision/citation, member dedup/collision, result family와 no-network schema resolution.
 - `test_kakao_study_projection.py`: 학생/조교 사진 분리, 같은 binary의 독립 use,

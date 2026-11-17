@@ -57,6 +57,7 @@ _ADMISSIONS = (
     WorkflowAdmission("material-learning", "1.0.0", "workflow-role/1.37.0"),
     WorkflowAdmission("material-learning", "2.0.0", "workflow-role/1.39.0"),
     WorkflowAdmission("material-learning", "3.0.0", "workflow-role/1.40.0"),
+    WorkflowAdmission("kakao-concepts", "1.0.0", "workflow-role/1.41.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",
         "1.0.0",

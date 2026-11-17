@@ -81,6 +81,10 @@ from eom_workflow.inference_transfer_workflow import (
     InferenceTransferWorkflowRequest,
     InferenceTransferWorkflowRequestV11,
 )
+from eom_workflow.kakao_concept_request import (
+    KakaoConceptWorkerRequest,
+    load_kakao_concept_work_schema,
+)
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestV2,
@@ -273,6 +277,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "material-learning-result@1.0",
             "material-learning-result@2.0",
             "material-learning-result@3.0",
+            "kakao-concepts-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -357,6 +362,7 @@ RESULT_SCHEMA_FILES = {
     "material-learning-result@1.0": "material-learning-result-v1.schema.json",
     "material-learning-result@2.0": "material-learning-result-v2.schema.json",
     "material-learning-result@3.0": "material-learning-result-v3.schema.json",
+    "kakao-concepts-result@1.0": "kakao-concepts-result-v1.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -416,6 +422,7 @@ INPUT_SCHEMA_FILES_V1_37 = {"support": "material-learning-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_38 = {"support": "knowledge-analysis-input-v12.schema.json"}
 INPUT_SCHEMA_FILES_V1_39 = {"support": "material-learning-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_40 = {"support": "material-learning-input-v3.schema.json"}
+INPUT_SCHEMA_FILES_V1_41 = {"support": "kakao-concepts-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -469,6 +476,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "knowledge-analysis-proposal-result@12.0": "workflow-role/1.38.0",
     "material-learning-result@2.0": "workflow-role/1.39.0",
     "material-learning-result@3.0": "workflow-role/1.40.0",
+    "kakao-concepts-result@1.0": "workflow-role/1.41.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -536,6 +544,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.38.0": INPUT_SCHEMA_FILES_V1_38,
     "workflow-role/1.39.0": INPUT_SCHEMA_FILES_V1_39,
     "workflow-role/1.40.0": INPUT_SCHEMA_FILES_V1_40,
+    "workflow-role/1.41.0": INPUT_SCHEMA_FILES_V1_41,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -579,6 +588,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.38.0",
     "workflow-role/1.39.0",
     "workflow-role/1.40.0",
+    "workflow-role/1.41.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -618,6 +628,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_38.values(),
             *INPUT_SCHEMA_FILES_V1_39.values(),
             *INPUT_SCHEMA_FILES_V1_40.values(),
+            *INPUT_SCHEMA_FILES_V1_41.values(),
         }
     )
 )
@@ -1907,6 +1918,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.38.0",
             "workflow-role/1.39.0",
             "workflow-role/1.40.0",
+            "workflow-role/1.41.0",
         },
     )
 
@@ -1945,6 +1957,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "material-learning-result@1.0",
             "material-learning-result@2.0",
             "material-learning-result@3.0",
+            "kakao-concepts-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -2371,6 +2384,10 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return MaterialLearningRoleResultV2.model_validate(canonical_value)
         if schema_id == "material-learning-result@3.0" and role == "support":
             return MaterialLearningRoleResultV3.model_validate(canonical_value)
+        if schema_id == "kakao-concepts-result@1.0" and role == "support":
+            from eom_workflow.kakao_concept_result import KakaoConceptRoleResult
+
+            return KakaoConceptRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -3317,6 +3334,14 @@ def validate_role_result_for_request(
 ) -> RoleResult:
     """Preserve historical validation and enforce explicitly versioned input-aware rules."""
     result = validate_role_result(value, role, schema_id)
+    if schema_id == "kakao-concepts-result@1.0":
+        if not isinstance(worker_input.request, KakaoConceptWorkerRequest):
+            raise WorkflowSchemaError("concept result requires its pointer-only request")
+        validate_schema_message(
+            constrained_result_schema(schema_id, worker_input),
+            result.model_dump(mode="json"),
+            schema_id,
+        )
     material_successor = schema_id in {
         "material-learning-result@2.0",
         "material-learning-result@3.0",
@@ -3371,6 +3396,16 @@ def constrained_result_schema(
         resolved_evidence_plan=resolved_evidence_plan,
         material_requirement=material_requirement,
     )
+    if schema_id == "kakao-concepts-result@1.0":
+        if not isinstance(worker_input.request, KakaoConceptWorkerRequest):
+            raise WorkflowSchemaError("concept result requires its pointer-only request")
+        concept_work = worker_input.request.work_input
+        name = "KakaoConcept_" + concept_work.phase.lower() + "_result"
+        properties["output"] = {"$ref": "#/$defs/" + name}
+        output = _mapping(_mapping(definitions, name), "properties")
+        output["task_id"] = {"type": "string", "const": concept_work.task_id}
+        output["request_sha256"] = {"type": "string", "const": concept_work.request_member.sha256}
+        _prune_unreferenced_definitions(schema)
     if schema_id in {
         "material-learning-result@1.0",
         "material-learning-result@2.0",
@@ -4816,6 +4851,19 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     schema = copy.deepcopy(_role_result_schema(schema_id))
     schema.pop("$schema", None)
     schema.pop("$id", None)
+    if schema_id == "kakao-concepts-result@1.0":
+        definitions = _mapping(schema, "$defs")
+        for name in ("KakaoConcept_plan", "KakaoConcept_compose"):
+            body = _mapping(definitions, name)
+            guard = body.pop("allOf", None)
+            if not isinstance(guard, list) or len(guard) != 1:
+                raise WorkflowSchemaError("concept status guard is not projectable")
+            _append_projection_instruction(
+                body,
+                "PLANNED requires nonempty queries, NEEDS_INPUT requires no queries; "
+                "DRAFT_READY requires nonempty blocks, NO_MATCH/NEEDS_INPUT requires no blocks. "
+                "Canonical status/content guards are checked again after generation.",
+            )
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
     if schema_id in {
@@ -5620,6 +5668,21 @@ def _inline_catalog_schema(
         bundled = schema
     else:
         bundled = _inline_assessment_item_schema(schema, reference)
+    if "eom://schemas/workflow/kakao-concept-work/1.0" in serialized:
+        work = load_kakao_concept_work_schema()
+        bundled = _inline_contract_sources(
+            bundled,
+            ((str(work["$id"]), "KakaoConceptWork", work),),
+        )
+    if "eom://schemas/kakao-archive/concept-assistance/1.0" in serialized:
+        # The optional pure wheel is required only by this explicit feature's result schema.
+        from eom_kakao_archive_contracts.concept_validation import load_concept_schema
+
+        concepts = load_concept_schema()
+        concepts.pop("oneOf")
+        concepts["$ref"] = "#/$defs/result"
+        _prune_unreferenced_definitions(concepts)
+        bundled = _inline_contract_sources(bundled, ((concepts["$id"], "KakaoConcept", concepts),))
     if "eom://schemas/material-learning/" in serialized:
         from eom_catalog_contracts import load_schema as load_material_schema
 

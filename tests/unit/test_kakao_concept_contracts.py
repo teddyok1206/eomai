@@ -1,6 +1,7 @@
 """Bounded local proposals, not Graph retrieval, worker execution or source authority."""
 
 import copy
+from pathlib import Path
 
 import pytest
 from eom_kakao_archive_contracts import canonical_bytes, sha256
@@ -19,11 +20,56 @@ from eom_kakao_archive_contracts.study_validation import STUDY_SCHEMA_SHA256
 from eom_kakao_archive_contracts.validation import SCHEMA_SHA256
 from jsonschema import Draft202012Validator, ValidationError
 
-from tests.unit.test_kakao_study_render_contract import ROOT, identity, manifest
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def question():
-    original = manifest().model_dump(mode="json")["questions"][0]
+    # A pure local proposal fixture must not import the PDF worker or source owner.
+    original = dict(
+        question_revision_id="kakaoquestionrev_" + "1" * 32,
+        student=dict(
+            text_blocks=[
+                dict(
+                    source_occurrence_id="kakaomessage_" + "1" * 32,
+                    value=dict(
+                        span_id="student-question", text="별의 질량과 광도는 어떤 관계인가요?"
+                    ),
+                )
+            ],
+            images=[
+                dict(
+                    source_occurrence_id="kakaomessage_" + "2" * 32,
+                    value=dict(
+                        attachment_occurrence_id="kakaoattachment_" + "1" * 32,
+                        attachment_revision_id="kakaoattachmentrev_" + "1" * 32,
+                        member=dict(
+                            relative_path="images/question.png",
+                            sha256=sha256(b"photo"),
+                            size_bytes=5,
+                            media_type="image/png",
+                        ),
+                        availability="AVAILABLE",
+                        quality_accepted=True,
+                        transform=None,
+                    ),
+                )
+            ],
+            ordered_blocks=[
+                dict(kind="TEXT", span_id="student-question"),
+                dict(kind="IMAGE", attachment_occurrence_id="kakaoattachment_" + "1" * 32),
+            ],
+        ),
+        staff=dict(
+            text_blocks=[
+                dict(
+                    source_occurrence_id="kakaomessage_" + "3" * 32,
+                    value=dict(span_id="staff-reply", text="주계열성의 관계를 함께 확인해 보세요."),
+                )
+            ],
+            images=[],
+            ordered_blocks=[dict(kind="TEXT", span_id="staff-reply")],
+        ),
+    )
     return {
         "question_revision_id": original["question_revision_id"],
         "question_manifest_sha256": sha256(canonical_bytes(original)),
@@ -205,7 +251,7 @@ def test_old_or_foreign_result_is_not_adopted(case):
     else:
         request = parse_concept_request(
             request.model_dump(mode="json")
-            | dict(base_study_revision_id="kakao" + identity("studyrev", 9))
+            | dict(base_study_revision_id="kakaostudyrev_" + "9".zfill(32))
         )
     with pytest.raises(ValueError, match="INPUT_MISMATCH"):
         validate_concept_result(request, value)

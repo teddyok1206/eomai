@@ -248,6 +248,30 @@ PDF 좌표/쪽수를 추측하지 않는다. page PNG가 없는 과거 text-only
 - 단순 대안인 분석 요약을 원문처럼 캡처하거나 PDF 전체를 매번 복사하기는 출처·pixels·
   비용을 보존하지 못한다. 기존 Artifact reader와 private file materializer를 재사용한다.
 
+### 공유 Workflow 실행 입력의 구체화
+
+실행 목적은 `kakao-concepts`이며 기존 자료 학습/고객 문의의 의미로 위장하지 않는다.
+두 phase는 같은 one-step definition의 독립 child Workflow다. parent 추천 owner가 PLAN 결과를
+공식 GraphRAG로 해석해 COMPOSE 입력을 만들고, worker끼리 통신하지 않는다. 기존 Workflow
+command·Job·plan·claim/lease를 사용하며 새 queue나 전용 슬롯 서비스는 없다.
+
+Work 입력에는 task/phase·binding·question revision/manifest와 **개념 request Artifact pointer +
+필요한 파일 pointer 목록**만 둔다. 질문/교재 본문·사진은 기존 Artifact와 명시적 private workspace
+경계에만 존재한다. 로컬 파일 목록은 request가 실제 참조한 member와 완전히 같아야 하며,
+누락·중복 경로·추가 파일·hash/길이/media 불일치는 실행 전 거부한다. model은 임의 source
+경로·권한·operator·slot을 지정하지 못한다. 같은 task/phase/request의 replay는 같은 child다.
+
+새 role protocol/plan은 predecessor bytes를 보존하는 successor다. 선택적 Kakao contract wheel은
+해당 role의 결과를 실제 읽을 때만 불러온다. 일반 workflow import가 Kakao browser/PDF/contract
+설치를 요구하지 않게 한다. 현재 actor/source 재확인은 admission·materialization·result 채택
+전후의 기존 adapter 경계가 맡고, 순수 DTO는 pointer/phase/hash coherence만 검증한다.
+
+접근은 exact task/workflow/job lookup·작은 member map·ordered phase 이력이다. input 해석은
+파일 수+JSON/실제 staged bytes에 선형이고, 기존 unique command/fingerprint와 CAS를 쓴다.
+기존 plan/model/preset을 실행 도중 최신으로 대체하지 않으며 실패나 timeout에 새 identity로
+자동 우회하지 않는다. 독립 동기 Codex 호출은 간단해 보여도 공유 슬롯·중단 복구·동시성
+기록을 우회하므로 사용하지 않는다. DB/Studio 저장 owner와 실행 canary는 별도 완료 gate다.
+
 ## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
 
 `worker-study-render-v1`은 기존 `worker-question-render-v1`을 변경하지 않는 별도 family다.

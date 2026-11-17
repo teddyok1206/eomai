@@ -78,6 +78,7 @@ from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_WORKFLOW_KEY,
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.kakao_concept_request import KakaoConceptWorkerRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from eom_workflow.material_learning_prompt import material_learning_guidance
@@ -368,6 +369,7 @@ def _prompt_name_for_request(
         | LegacyItemExtractionWorkerRequest
         | ExternalItemLearningWorkerRequest
         | MaterialLearningWorkerRequestFamily
+        | KakaoConceptWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
@@ -379,6 +381,8 @@ def _prompt_name_for_request(
 
     if worker_role == "support" and isinstance(request, LegacyItemExtractionWorkerRequest):
         return "legacy-item-extraction"
+    if worker_role == "support" and isinstance(request, KakaoConceptWorkerRequest):
+        return "kakao-concepts"
     if worker_role == "support" and isinstance(request, ExternalItemLearningWorkerRequest):
         return "external-item-learning"
     if worker_role == "support" and isinstance(
@@ -431,6 +435,7 @@ class RoleJobExecutor(Protocol):
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
             | MaterialLearningWorkerRequestFamily
+            | KakaoConceptWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -486,6 +491,7 @@ class PlatformRoleJobExecutor:
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
             | MaterialLearningWorkerRequestFamily
+            | KakaoConceptWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -497,6 +503,13 @@ class PlatformRoleJobExecutor:
         prompt_text: str | None,
         material_requirement: ContentTeamMaterialRequirement | None = None,
     ) -> RoleExecutionResult:
+        if isinstance(request, KakaoConceptWorkerRequest):
+            # Submission storage is not activation. Replace this gate only with the
+            # original-question/source provider and exact staged-input materializer.
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "concept execution source adapter is not activated",
+            )
         if step.worker_role is None or step.result_schema is None:
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
@@ -3964,6 +3977,7 @@ def _capacity_resume_target(
         "legacy-item-extraction",
         "external-item-learning",
         "material-learning",
+        "kakao-concepts",
         "legacy-item-editorial-compatibility",
     }:
         return WorkflowState.RUNNING, WorkflowStage.KNOWLEDGE_ANALYSIS

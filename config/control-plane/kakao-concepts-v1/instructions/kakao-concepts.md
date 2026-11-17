@@ -7,6 +7,11 @@
 
 ## 읽을 입력과 권한
 
+- Workflow 실행에서는 먼저 `worker-input.json`의 고정 실행 정보를 읽고, 실제 개념 입력은
+  `source/concepts/request.json`에서 읽는다. 입력의 이미지 member `x`는 이번 작업에 제공된
+  `source/concepts/files/x`다. Artifact의 저장 경로·ID는 로컬 파일 경로나 접근 권한이 아니다.
+  결과는 역할 schema의 바깥 실행 envelope를 그대로 따르고, 그 `output` 안에 개념 결과를
+  넣는다. 바깥 job/workflow/step/artifact 정보와 안쪽 task/request hash/phase를 혼동하지 않는다.
 - 입력의 `phase`가 PLAN인지 COMPOSE인지 먼저 확인한다. 두 단계 모두 선택한 한 질문의
   학생 사진·질문과 조교 사진·답변을 구별해 읽는다. 사진은 제공된 로컬 member만 본다.
 - 사진 미확보·연결 미확정·불명확한 조건·읽을 수 없는 수식은 한계로 남긴다. 없는 사진이나

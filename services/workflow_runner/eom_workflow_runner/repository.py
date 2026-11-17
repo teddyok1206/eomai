@@ -36,6 +36,7 @@ from eom_workflow.identifiers import (
 )
 from eom_workflow.inference_transfer import TRANSFER_PAIR_WORKFLOW_KEY
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.kakao_concept_request import KakaoConceptWorkflowRequest
 from eom_workflow.local_embedding_request_v2 import (
     LOCAL_EMBEDDING_REQUEST_TYPES,
     SupportedLocalEmbeddingRequest,
@@ -108,6 +109,13 @@ from eom_workflow_runner.external_item_learning_admission import (
 from eom_workflow_runner.inference_transfer_admission import (
     InferenceTransferSubmissionContext,
     admit_inference_transfer_workflow_request,
+)
+from eom_workflow_runner.kakao_concept_admission import (
+    KAKAO_CONCEPT_WORKFLOW_KEY,
+    KakaoConceptSourceAuthorizer,
+    kakao_concept_fingerprint,
+    reauthorize_kakao_concept_submission,
+    validate_kakao_concept_submission,
 )
 from eom_workflow_runner.local_embedding_admission import (
     LocalEmbeddingOwnerAdmission,
@@ -731,6 +739,7 @@ def workflow_request_storage_document(
     request: (
         WorkflowRequest
         | MaterialLearningWorkflowRequestFamily
+        | KakaoConceptWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -738,6 +747,8 @@ def workflow_request_storage_document(
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
+    if isinstance(request, KakaoConceptWorkflowRequest):
+        return request.model_dump(mode="json")
     if isinstance(request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)):
         return request.model_dump(mode="json")
     if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
@@ -780,9 +791,11 @@ def workflow_request_storage_document(
 
 def load_persisted_workflow_request(
     document: dict[str, Any],
-) -> WorkflowRequest | MaterialLearningWorkflowRequestFamily:
+) -> WorkflowRequest | MaterialLearningWorkflowRequestFamily | KakaoConceptWorkflowRequest:
     """Load persisted requests, repairing only the verified legacy null-omission defect."""
     normalized = dict(document)
+    if normalized.get("request_name") == "KAKAO_CONCEPT_REQUEST":
+        return KakaoConceptWorkflowRequest.model_validate(normalized)
     if normalized.get("request_name") == "MATERIAL_LEARNING_REQUEST":
         return parse_material_learning_workflow_request(normalized)
     analysis = normalized.get("analysis_request")
@@ -1099,6 +1112,7 @@ def create_workflow_instance(
     request: (
         WorkflowRequest
         | MaterialLearningWorkflowRequestFamily
+        | KakaoConceptWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1119,7 +1133,80 @@ def create_workflow_instance(
     private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
     external_item_learning_authorizer: ExternalItemLearningSourceAuthorizer | None = None,
     material_learning_authorizer: MaterialLearningSourceAuthorizer | None = None,
+    kakao_concept_authorizer: KakaoConceptSourceAuthorizer | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    if (
+        isinstance(request, KakaoConceptWorkflowRequest)
+        or definition.definition_key == KAKAO_CONCEPT_WORKFLOW_KEY
+    ):
+        if (
+            not isinstance(request, KakaoConceptWorkflowRequest)
+            or kakao_concept_authorizer is None
+            or any(
+                value is not None
+                for value in (
+                    runtime_context,
+                    completed_preset_revision_id,
+                    inference_transfer_context,
+                    local_embedding_owner,
+                    local_embedding_executor,
+                    reference_query_owner,
+                    reference_query_executor,
+                    private_chat_query_context,
+                    private_chat_query_owner,
+                    private_chat_query_executor,
+                    external_item_learning_authorizer,
+                    material_learning_authorizer,
+                )
+            )
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "concept work requires only its exact purpose and source owner",
+            )
+        checked_concept = validate_kakao_concept_submission(
+            definition, request, actor_type=actor_type, actor_id=actor_id
+        )
+        with session.begin_nested():
+            reauthorize_kakao_concept_submission(
+                session,
+                request=checked_concept,
+                operator_id=actor_id,
+                source_authorizer=kakao_concept_authorizer,
+            )
+            result = _persist_workflow_instance(
+                session,
+                definition=definition,
+                request=checked_concept,
+                idempotency_key=idempotency_key,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            stored, _ = result
+            if (
+                stored.created_actor_type != actor_type
+                or stored.created_actor_id != actor_id
+                or stored.definition_id != definition.definition_id
+                or stored.definition_hash != definition.definition_hash
+                or stored.initial_request != workflow_request_storage_document(checked_concept)
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                    "concept replay differs from its owner or immutable input",
+                )
+            reauthorize_kakao_concept_submission(
+                session,
+                request=checked_concept,
+                operator_id=actor_id,
+                source_authorizer=kakao_concept_authorizer,
+            )
+            return result
+    if kakao_concept_authorizer is not None:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "concept authority cannot admit another purpose",
+        )
+    assert not isinstance(request, KakaoConceptWorkflowRequest)
     is_material = isinstance(
         request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
     )
@@ -1532,6 +1619,7 @@ def _persist_workflow_instance(
     request: (
         WorkflowRequest
         | MaterialLearningWorkflowRequestFamily
+        | KakaoConceptWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1560,7 +1648,9 @@ def _persist_workflow_instance(
         )
     else:
         request_hash = (
-            material_learning_fingerprint(definition, request, operator_id=actor_id)
+            kakao_concept_fingerprint(definition, request, operator_id=actor_id)
+            if isinstance(request, KakaoConceptWorkflowRequest)
+            else material_learning_fingerprint(definition, request, operator_id=actor_id)
             if isinstance(
                 request, (MaterialLearningWorkflowRequest, MaterialLearningWorkflowRequestV2)
             )
@@ -1668,6 +1758,7 @@ def _persist_workflow_instance(
                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
                 "EXTERNAL_ITEM_LEARNING_REQUEST",
                 "MATERIAL_LEARNING_REQUEST",
+                "KAKAO_CONCEPT_REQUEST",
             }
             else WorkflowStage.AUTHORING.value
         ),

@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/kakao-concept-work/1.0",
+  "title": "Pointer-only optional concept assistance through shared Workflow",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/work"
+    },
+    {
+      "$ref": "#/$defs/worker"
+    },
+    {
+      "$ref": "#/$defs/request"
+    }
+  ],
+  "$defs": {
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "source",
+        "size_bytes",
+        "width_pixels",
+        "height_pixels"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+(?:[/.][A-Za-z0-9_-]+)*$",
+          "maxLength": 240
+        },
+        "source": {
+          "$ref": "#/$defs/pointer",
+          "properties": {"media_type": {"enum": ["image/png", "image/jpeg", "image/webp"]}}
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "width_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        },
+        "height_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        }
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "phase",
+        "source_binding_id",
+        "question_revision_id",
+        "question_manifest",
+        "request_member",
+        "request_bytes",
+        "files"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-work/1.0"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "phase": {
+          "enum": [
+            "PLAN",
+            "COMPOSE"
+          ]
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "question_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        },
+        "question_manifest": {
+          "$ref": "#/$defs/pointer",
+          "properties": {"schema_ref": {"const": "eom://schemas/kakao-archive/question-manifest-v1/1.0"}, "media_type": {"const": "application/json"}}
+        },
+        "request_member": {
+          "$ref": "#/$defs/pointer",
+          "properties": {"schema_ref": {"const": "eom://schemas/kakao-archive/concept-assistance/1.0"}, "media_type": {"const": "application/json"}}
+        },
+        "request_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 72,
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_name",
+        "work_input"
+      ],
+      "properties": {
+        "request_name": {
+          "const": "KAKAO_CONCEPT_REQUEST"
+        },
+        "work_input": {
+          "$ref": "#/$defs/work"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_name",
+        "execution_preset_key",
+        "work_input"
+      ],
+      "properties": {
+        "request_name": {
+          "const": "KAKAO_CONCEPT_REQUEST"
+        },
+        "execution_preset_key": {
+          "const": "kakao-concepts"
+        },
+        "work_input": {
+          "$ref": "#/$defs/work"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,47 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 공유 개념 Workflow의 저장·제출 경계 — 실제 실행/운영 미활성
+
+직전 source `4ccb8004` 후속이다. 기존 Workflow/command·preset lock·capacity owner를 사용해
+한 질문의 PLAN/COMPOSE child를 저장·제출하는 source를 추가했다. 실제 모델 실행이나 운영
+기능 활성화를 완료한 것은 아니다. 현재 운영에는 이 변경을 설치하지 않았다.
+
+- behavior 전에 pointer-only `kakao-concept-work/1.0`, role `workflow-role/1.41.0`와 plan42를
+  additive하게 정의했다. Work SHA는
+  `sha256:1c65bc31f7ffa82ec7a0bd3230db4744e79981d098867d124cdf9dd7f9c159f4`,
+  plan schema SHA는
+  `sha256:9e210d5f8281ec9c2db6558aabae4fc5e3a6cb769cfb927952bd0e9e28f1a40c`다.
+  task/phase/binding/question/request pointer·고유 local-file map만 DB/plan에 남기며 실제 질문·
+  그림 bytes는 Artifact/private input 경계에 둔다. canonical request hash와 정확한 참조
+  member 집합, media/길이·page dimensions를 대조한다. 미참조 파일·다른 질문·phase를 거부한다.
+- `kakao-concepts.v1`은 support one-step·attempt1이다. PLAN/COMPOSE 각각 같은 정의의
+  별도 child이며 별도 worker 서비스/queue가 없다. 기존 source owner의 실제 operator 검사를
+  admission 전후에 요구하고, 다른 purpose의 권한이나 arbitrary context를 받을 수 없다.
+- plan owner가 현재 preset을 lock하고 P1.7 shared capacity의 실제 검증 owner를 사용한다.
+  일반01–05의 support pool만 허용하고 예약06/다른 pool·구 정책으로 조용히 대체하지 않는다.
+  실행 이력은 원래 모델/지침/work pin을 유지한다. command는 기존 START owner로 멱등
+  enqueue하며 역할 step을 만드는 별도 factory를 복제하지 않는다.
+- optional typed result decoder는 canonical schema가 요구하는 완전한 payload를 읽으며,
+  ordinary core import/과거 역할 읽기는 Kakao contract/worker 설치를 요구하지 않는다.
+  generation에서 표현할 수 없는 status 조건은 canonical/Pydantic 사후 검증에 유지한다.
+  실제 source adapter/전용 input materializer가 아직 없으므로 executor는 이 purpose를 명시
+  거부한다. 이 barrier 없이 일반 support prompt로 fallback시키지 않는다.
+- source 회귀252 PASS, strict mypy12개·Ruff/format/diff PASS다. 공식 guarded 임시 DB에서
+  Kakao 전체301 PASS(신규 저장9 포함)다. 새9개는 실제 Workflow/command transaction,
+  concurrent duplicate 방지·재구성 후 replay·늦은 권한 거절의 savepoint rollback·기존 FAILED
+  보존을 검증한다. **source/plan port는 합성**이며 실제 모델·권한·plan DB/slot 실증이 아니다.
+  코드 기반 과거41개 role bundle hash를 `4ccb8004`와 대조해 변경0을 확인했다. wire audit는
+  1487 canonical/1132 mirror/12886 refs PASS다. 새 migration/운영 DB 변경은 없다.
+- 초기 검사 선택/fixture의 worker import·UTC 정규화 hash·resource 위치 오류는 source에서
+  수정했다. DB 시험을 통과시키려고 core에 PDF worker 의존성을 추가하거나 hash/권한/
+  resource guard를 완화하지 않았다. 실패/재검증 로그는 staging에 구별해 남겼다.
+
+**다음 핵심:** parent 추천 source owner의 현재 실제 권한·canonical 입력을 기존 Orchestrator에
+연결하고, 사진/교재 PNG를 실제 Codex image inputs로 전달한 뒤 해당 executor barrier를
+교체한다. role/preset/worker/pure 계약의 compatible 설치·실제 공유 슬롯1건·공식 교재 검색·
+study 저장·편집·새 PDF를 연결해야 한다. 실제 슬롯 실행을 했다고 보고하지 않는다. 마지막
+실제 CSV/사진 PDF와 실제 한 방/모든 방 주기 수집도 여전히 전체 goal의 필수 gate다.
+
 ## 2026-11-17 교과서 원본 PNG·캡처 source 연결 — 실행/운영 미활성
 
 직전 `574bcd8b` 후속이다. 사용자 허용에 따라 `KakaoConceptKnowledgeReader.prepare_pages`와
