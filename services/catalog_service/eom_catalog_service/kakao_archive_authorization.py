@@ -38,6 +38,12 @@ def authorize_kakao_binding_scope(
 ) -> tuple[str, KakaoChannelBindingRecord]:
     """Metadata-only accepted-content access; finish the transaction before I/O."""
     owner = authorize_kakao_actor(session, actor, permission, now=datetime.now(UTC))
+    return owner, _owned_binding_scope(session, owner, binding_id, lock=lock)
+
+
+def _owned_binding_scope(
+    session: Session, owner: str, binding_id: str, *, lock: bool
+) -> KakaoChannelBindingRecord:
     binding_query = select(KakaoChannelBindingRecord).where(
         KakaoChannelBindingRecord.source_binding_id == binding_id,
         KakaoChannelBindingRecord.owner_operator_id == owner,
@@ -47,7 +53,7 @@ def authorize_kakao_binding_scope(
         raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
     if binding.state == "RETIRED":
         raise KakaoArchiveError("KAKAO_ARCHIVE_BINDING_RETIRED")
-    return owner, binding
+    return binding
 
 
 def authorize_kakao_room_scope(
@@ -60,7 +66,20 @@ def authorize_kakao_room_scope(
     lock: bool,
 ) -> tuple[str, KakaoRoomRecord]:
     """Same owner/lifecycle and binding→room lock order for source and question work."""
-    owner, _ = authorize_kakao_binding_scope(session, actor, binding_id, permission, lock=lock)
+    owner = authorize_kakao_actor(session, actor, permission, now=datetime.now(UTC))
+    return owner, read_owned_kakao_room_scope(session, owner, binding_id, room_id, lock=lock)
+
+
+def read_owned_kakao_room_scope(
+    session: Session, owner: str, binding_id: str, room_id: str, *, lock: bool
+) -> KakaoRoomRecord:
+    """Shared lifecycle/lock rule after a caller has authenticated its owner.
+
+    This metadata helper grants no authority from an operator ID. API callers
+    first authenticate the real session; accepted-work adapters validate their
+    stored run and current Identity permissions before calling it.
+    """
+    _owned_binding_scope(session, owner, binding_id, lock=lock)
     room_query = select(KakaoRoomRecord).where(
         KakaoRoomRecord.room_id == room_id,
         KakaoRoomRecord.source_binding_id == binding_id,
@@ -71,7 +90,7 @@ def authorize_kakao_room_scope(
         raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
     if room.state != "ACTIVE":
         raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_RETIRED")
-    return owner, room
+    return room
 
 
 def authorize_kakao_room_scopes(

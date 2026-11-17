@@ -33,7 +33,11 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from .artifacts import CatalogArtifactService
-from .kakao_archive_authorization import KakaoArchiveError, authorize_kakao_actor
+from .kakao_archive_authorization import (
+    KakaoArchiveError,
+    authorize_kakao_actor,
+    authorize_kakao_current_operator,
+)
 from .kakao_archive_commands import kakao_command_sha256
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord as Capability
 from .kakao_capture_publication import (
@@ -50,12 +54,14 @@ from .kakao_collection_authorization import (
 from .kakao_collection_browser_models import KakaoCollectionBrowserRecord as Browser
 from .kakao_collection_models import KakaoCollectionRunRecord as Run
 from .kakao_collection_models import KakaoCollectionTaskRecord as Task
+from .kakao_collection_source_access import KakaoCollectionSourceAccess
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
 from .kakao_source_models import KakaoSourceCommandRecord, KakaoSourceRevisionRecord
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
 from .kakao_source_service import AcceptedKakaoSource, KakaoSourceService
 
 _INVALID = "KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID"
+type CaptureSourcePrincipal = ActorContext | KakaoCollectionSourceAccess
 
 
 def _identity(row: Attempt) -> KakaoCollectionAttempt:
@@ -144,6 +150,99 @@ class KakaoCollectionAttemptService:
             if row is None:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
             return _identity(row)
+
+    def accepted_source_access(self, attempt_id: str) -> KakaoCollectionSourceAccess:
+        """Trusted controller only: bind durable source access to one actual accepted row.
+
+        This object is never accepted from an API/worker message. No session,
+        credentials, source bytes or mutable SQLAlchemy session are retained.
+        """
+        with self._sessions.begin() as session:
+            row = session.get(Attempt, attempt_id)
+            run = None if row is None else session.get(Run, row.run_id)
+            if row is None or run is None:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+            access = KakaoCollectionSourceAccess(self, _identity(row), run.owner_operator_id)
+            access.authorize_room(
+                session,
+                row.source_binding_id,
+                row.room_id,
+                PermissionKey.KAKAO_ARCHIVE_COLLECT,
+                lock=False,
+            )
+            return access
+
+    def authorize_accepted_capture(
+        self, session: Session, access: KakaoCollectionSourceAccess, permission: PermissionKey
+    ) -> str:
+        """Current accepted intent/Identity check, not an authenticated HTTP actor."""
+        if access.service is not self or permission not in {
+            PermissionKey.KAKAO_ARCHIVE_READ,
+            PermissionKey.KAKAO_ARCHIVE_COLLECT,
+        }:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
+        row = session.get(Attempt, access.attempt.attempt_id, populate_existing=True)
+        run = None if row is None else session.get(Run, row.run_id, populate_existing=True)
+        if (
+            row is None
+            or run is None
+            or _identity(row) != access.attempt
+            or run.owner_operator_id != access.owner_operator_id
+            or row.profile_id != self.profile_id
+            or row.state != "RESULT_ACCEPTED"
+            or row.result_status not in {"COMPLETED", "PARTIAL"}
+            or row.result_artifact_id is None
+            or row.result_artifact_revision_id is None
+            or row.result_sha256 is None
+            or row.report_sha256 is None
+        ):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
+        for required in (PermissionKey.KAKAO_ARCHIVE_READ, PermissionKey.KAKAO_ARCHIVE_COLLECT):
+            authorize_kakao_current_operator(
+                session, operator_id=run.owner_operator_id, permission=required, admin_only=True
+            )
+        validate_kakao_collection_pins(session, run)
+        validate_source_pointer_metadata_batch(
+            session,
+            (
+                _command_pointer(row),
+                _inventory_pointer(row),
+                _pointer(
+                    row.result_artifact_id,
+                    row.result_artifact_revision_id,
+                    "result.json",
+                    row.result_sha256,
+                ),
+                _pointer(
+                    row.result_artifact_id,
+                    row.result_artifact_revision_id,
+                    "room-report.json",
+                    row.report_sha256,
+                ),
+            ),
+        )
+        return run.owner_operator_id
+
+    def _source_owner(
+        self, session: Session, actor: CaptureSourcePrincipal, attempt_id: str
+    ) -> str:
+        if isinstance(actor, ActorContext):
+            return authorize_kakao_actor(
+                session,
+                actor,
+                PermissionKey.KAKAO_ARCHIVE_COLLECT,
+                now=datetime.now(UTC),
+                admin_only=True,
+            )
+        if actor.service is not self or actor.attempt.attempt_id != attempt_id:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
+        return actor.authorize_room(
+            session,
+            actor.attempt.source_binding_id,
+            actor.attempt.room_id,
+            PermissionKey.KAKAO_ARCHIVE_COLLECT,
+            lock=False,
+        )
 
     @staticmethod
     def _current(browser: Browser, profile: Profile, run: Run) -> None:
@@ -455,6 +554,22 @@ class KakaoCollectionAttemptService:
             now=datetime.now(UTC),
             admin_only=True,
         )
+        self._authorize_source_owner(session, owner, admission)
+
+    def authorize_accepted_source(
+        self, session: Session, access: KakaoCollectionSourceAccess, admission: KakaoSourceAdmission
+    ) -> None:
+        owner = self._source_owner(session, access, admission.authority.attempt_id)
+        if (admission.source_binding_id, admission.room_id) != (
+            access.attempt.source_binding_id,
+            access.attempt.room_id,
+        ):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
+        self._authorize_source_owner(session, owner, admission)
+
+    def _authorize_source_owner(
+        self, session: Session, owner: str, admission: KakaoSourceAdmission
+    ) -> None:
         row = session.get(Attempt, admission.authority.attempt_id)
         if (
             row is None
@@ -537,7 +652,11 @@ class KakaoCollectionAttemptService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
 
     def admit_capture_source(
-        self, actor: ActorContext, admission: KakaoSourceAdmission, *, idempotency_key: str
+        self,
+        actor: CaptureSourcePrincipal,
+        admission: KakaoSourceAdmission,
+        *,
+        idempotency_key: str,
     ) -> AcceptedKakaoSource:
         """Resume the same source commit before marking its original task accepted.
 
@@ -554,16 +673,10 @@ class KakaoCollectionAttemptService:
         return source
 
     def _publication_context(
-        self, actor: ActorContext, attempt_id: str
+        self, actor: CaptureSourcePrincipal, attempt_id: str
     ) -> tuple[_CommandContext, ArtifactMemberPointer, ArtifactMemberPointer]:
         with self._sessions.begin() as session:
-            owner = authorize_kakao_actor(
-                session,
-                actor,
-                PermissionKey.KAKAO_ARCHIVE_COLLECT,
-                now=datetime.now(UTC),
-                admin_only=True,
-            )
+            owner = self._source_owner(session, actor, attempt_id)
             row = session.get(Attempt, attempt_id)
             run = None if row is None else session.get(Run, row.run_id)
             if (
@@ -597,7 +710,7 @@ class KakaoCollectionAttemptService:
 
     def publish_and_admit_capture_source(
         self,
-        actor: ActorContext,
+        actor: CaptureSourcePrincipal,
         attempt_id: str,
         *,
         read_member: CaptureMemberReader,
@@ -661,12 +774,14 @@ class KakaoCollectionAttemptService:
                 expected_source_revision_id=expected_source_revision_id,
                 expected_resource_version=expected_resource_version,
             )
+        except KakaoArchiveError:
+            raise
         except (ValueError, OSError):
             raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID") from None
         return self.admit_capture_source(actor, admission, idempotency_key=idempotency_key)
 
     def accept_source_revision(
-        self, actor: ActorContext, attempt_id: str, source_revision_id: str
+        self, actor: CaptureSourcePrincipal, attempt_id: str, source_revision_id: str
     ) -> KakaoCollectionAttempt:
         """Advance task only after the existing source owner committed its validated revision."""
         with self._sessions.begin() as session:
@@ -676,13 +791,7 @@ class KakaoCollectionAttemptService:
             _, _, run = lock_kakao_collection_browser(
                 session, seed.browser_run_id, profile_id=self.profile_id
             )
-            owner = authorize_kakao_actor(
-                session,
-                actor,
-                PermissionKey.KAKAO_ARCHIVE_COLLECT,
-                now=datetime.now(UTC),
-                admin_only=True,
-            )
+            owner = self._source_owner(session, actor, attempt_id)
             task = session.scalar(
                 select(Task).where(Task.task_id == seed.task_id).with_for_update()
             )

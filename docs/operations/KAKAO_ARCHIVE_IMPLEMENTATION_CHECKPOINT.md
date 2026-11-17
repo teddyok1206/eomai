@@ -1,5 +1,39 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 수락된 수집의 로그인 만료 독립 복구
+
+`accepted_source_access`는 trusted controller가 실제 RESULT_ACCEPTED attempt에서만 얻는
+내부 source 권한 adapter다. 기존 `KakaoSourceService`의 예약·검증·Artifact 발행·CAS·task
+채택은 그대로 재사용한다. HTTP 세션/토큰을 만들거나 연장하지 않는다. 공개 source/PDF
+조회·다운로드는 기존 실제 API 로그인 검사를 유지한다.
+
+- 정상 logout·idle/absolute 만료 후에도 정확한 accepted run의 원본 발행/채택을 이어간다.
+  현재 owner·ADMIN/READ/COLLECT·binding/room lifecycle과 command/capability/result/report
+  pins를 매 경계에서 재검사한다. background read는 그 attempt의 source만 반환한다.
+- source commit 직후 controller 중단→세션 종료→service 재구성에서도 원 revision과 task만
+  복구하고 worker 파일/원본·사진 재발행·새 API 세션은 만들지 않는다. terminal run은 완료
+  source의 exact replay만 허용하고 새 발행은 차단한다. FAILED/미수락 결과는 권한을 못 얻는다.
+- 집중 임시 DB **29 PASS**, 소스·의존 방향·별도 설치 wheel **103 PASS**, 실제 API route/
+  pure 계약·문맥·배포 callback 검사 **156 PASS**, strict mypy5개·Ruff/format/diff PASS다.
+  전체 Kakao 임시 DB 회귀 **410 PASS**(집중29건 포함,366.51초)다. 공개 질문·packet·PDF/
+  개념 편집·현재 권한 다운로드 회귀까지 통과했지만 실제 카카오/모델 성공 증거는 아니다.
+- 집중 검사에서 현재 권한 철회 오류를 일반 evidence 오류로 덮던 catch 순서를 확인해
+  기존 `KakaoArchiveError`를 그대로 전달하도록 수정했다. 새 테스트의 짧은 멱등 key도
+  원래 계약에 맞게 고쳤으며 최초 실패 로그를 보존했다. 거부/권한 검사를 완화하지 않았다.
+- 추가 검사에서 기본 배포 준비는0094, 테스트 기대는0087에 남아 있음을 확인했다.
+  배포 준비는 기존 exact `MIGRATION_VERIFY_0097` callback으로 맞추고, 회귀는 정본
+  `CURRENT_MIGRATION_REVISION`과 대조하게 했다. 이전 callback/schema의 의미·bytes는
+  그대로이며 migration을 실행하거나 새 revision을 추가한 것이 아니다.
+
+증거: `staging/kakao-background-source-{db-final,full-db,unit-final,transport-final,types-final}-20261117.log`.
+입력/브라우저 관측은 합성이며 실제 source/Artifact/Identity 저장 owner로 검증한다. 이 수정은
+아직 운영 미설치다. 기존 운영 source `7533ca8f…`/DB0097, GPU/슬롯·인증·원본·실패 이력은
+변경하지 않았다. AUTO/개념 continuation도 아직 비활성이며 전체 goal은 미완료다.
+
+다음 검증은 trusted collector 출력 reader와 실제 관측 결과를 이 source 경로에 연결한 뒤,
+확인된 메시지 방향/사진 occurrence→저장 질문→Studio 편집·학생별 PDF로 이어지는 수직 경로다.
+로컬17쪽 샘플은 그대로 보존하며 정식 accepted source/Studio export 성공으로 재분류하지 않는다.
+
 ## 2026-11-17 수집 결과→원본 발행→task 채택 연결
 
 `KakaoCollectionAttemptService.publish_and_admit_capture_source`가 실제 RESULT_ACCEPTED의

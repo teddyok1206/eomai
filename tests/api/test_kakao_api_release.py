@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY = ROOT / "scripts/api/deploy_release.sh"
@@ -118,7 +119,8 @@ def test_new_release_pins_all_four_wheels_through_build_inspection_install_and_r
     build = source.split("build_release() {", 1)[1].split("inspect_release() {", 1)[0]
     assert '"${SOURCE_ROOT}/packages/kakao_archive_contracts" >/dev/null' in build
     assert source.count("--kakao-release") == 3
-    assert 'MIGRATION_VERIFY_0087 "${COMMIT}"' in source
+    revision_suffix = CURRENT_MIGRATION_REVISION.rsplit("_", 1)[-1]
+    assert f'MIGRATION_VERIFY_{revision_suffix} "${{COMMIT}}"' in source
     assert source.count('"eom_catalog_service.application_runner",') == 2
     assert 'MIGRATION_VERIFY_0079 "${COMMIT}"' not in source
     assert 'str(by_prefix["eom_kakao_archive_contracts"])' in source

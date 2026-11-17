@@ -7,7 +7,6 @@ capture owner must supply current admission authority; DTO validity is not a gra
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,8 +30,6 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.kakao_archive_authorization import (
     KakaoArchiveError,
-    authorize_kakao_actor,
-    authorize_kakao_room_scope,
     authorize_kakao_room_scopes,
 )
 from eom_catalog_service.kakao_archive_commands import (
@@ -43,6 +40,13 @@ from eom_catalog_service.kakao_archive_commands import (
 from eom_catalog_service.kakao_question_editing import (
     KakaoAttachmentSource,
     ResolvedKakaoQuestionSource,
+)
+from eom_catalog_service.kakao_source_access import (
+    KakaoSourcePrincipal,
+    source_authorization,
+)
+from eom_catalog_service.kakao_source_access import (
+    SourceAdmissionAuthorizer as SourceAdmissionAuthorizer,
 )
 from eom_catalog_service.kakao_source_models import (
     KakaoSourceCommandRecord,
@@ -58,7 +62,6 @@ from eom_catalog_service.kakao_source_resolution import (
     validate_capture_source,
 )
 
-SourceAdmissionAuthorizer = Callable[[Session, ActorContext, KakaoSourceAdmission], None]
 MAX_RESOLUTION_BYTES = 64 * 1024 * 1024
 
 
@@ -134,11 +137,16 @@ class KakaoSourceService:
         self._authorize_capture = authorize_capture
 
     def _scope(
-        self, session: Session, actor: ActorContext, binding_id: str, room_id: str, *, mutate: bool
+        self,
+        session: Session,
+        actor: KakaoSourcePrincipal,
+        binding_id: str,
+        room_id: str,
+        *,
+        mutate: bool,
     ) -> str:
-        owner, _ = authorize_kakao_room_scope(
+        owner = source_authorization(actor, self._authorize_capture).authorize_room(
             session,
-            actor,
             binding_id,
             room_id,
             PermissionKey.KAKAO_ARCHIVE_COLLECT if mutate else PermissionKey.KAKAO_ARCHIVE_READ,
@@ -149,10 +157,12 @@ class KakaoSourceService:
         return owner
 
     def _authority(
-        self, session: Session, actor: ActorContext, admission: KakaoSourceAdmission
+        self, session: Session, actor: KakaoSourcePrincipal, admission: KakaoSourceAdmission
     ) -> None:
         try:
-            self._authorize_capture(session, actor, admission)
+            source_authorization(actor, self._authorize_capture).authorize_capture(
+                session, admission
+            )
         except KakaoArchiveError:
             raise
         except (PermissionError, ValueError):
@@ -168,12 +178,12 @@ class KakaoSourceService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
 
     def _reserve(
-        self, actor: ActorContext, admission: KakaoSourceAdmission, key: str
+        self, actor: KakaoSourcePrincipal, admission: KakaoSourceAdmission, key: str
     ) -> _Reservation:
         digest = kakao_command_sha256(admission)
         with self._sessions.begin() as session:
-            owner = authorize_kakao_actor(
-                session, actor, PermissionKey.KAKAO_ARCHIVE_COLLECT, now=datetime.now(UTC)
+            owner = source_authorization(actor, self._authorize_capture).authorize_operator(
+                session, PermissionKey.KAKAO_ARCHIVE_COLLECT
             )
             lock_kakao_intent(session, owner, "source/" + admission.room_id, key)
             self._scope(session, actor, admission.source_binding_id, admission.room_id, mutate=True)
@@ -243,7 +253,7 @@ class KakaoSourceService:
             )
             return reserved
 
-    def _check(self, actor: ActorContext, admission: KakaoSourceAdmission) -> None:
+    def _check(self, actor: KakaoSourcePrincipal, admission: KakaoSourceAdmission) -> None:
         with self._sessions.begin() as session:
             self._scope(session, actor, admission.source_binding_id, admission.room_id, mutate=True)
             self._authority(session, actor, admission)
@@ -321,7 +331,7 @@ class KakaoSourceService:
         return normalization
 
     def admit_source(
-        self, actor: ActorContext, admission: KakaoSourceAdmission, *, idempotency_key: str
+        self, actor: KakaoSourcePrincipal, admission: KakaoSourceAdmission, *, idempotency_key: str
     ) -> AcceptedKakaoSource:
         try:
             admission = KakaoSourceAdmission.model_validate(admission.model_dump(mode="json"))
@@ -415,7 +425,7 @@ class KakaoSourceService:
 
     def _adopt(
         self,
-        actor: ActorContext,
+        actor: KakaoSourcePrincipal,
         resolution: KakaoSourceResolution,
         pointer: ArtifactMemberPointer,
         job_id: str,
@@ -423,8 +433,8 @@ class KakaoSourceService:
     ) -> bool:
         admission = resolution.admission
         with self._sessions.begin() as session:
-            owner = authorize_kakao_actor(
-                session, actor, PermissionKey.KAKAO_ARCHIVE_COLLECT, now=datetime.now(UTC)
+            owner = source_authorization(actor, self._authorize_capture).authorize_operator(
+                session, PermissionKey.KAKAO_ARCHIVE_COLLECT
             )
             lock_kakao_intent(session, owner, "source/" + admission.room_id, key)
             self._scope(session, actor, admission.source_binding_id, admission.room_id, mutate=True)
@@ -498,7 +508,7 @@ class KakaoSourceService:
 
     def completed_capture_source(
         self,
-        actor: ActorContext,
+        actor: KakaoSourcePrincipal,
         source_binding_id: str,
         room_id: str,
         *,
@@ -533,7 +543,12 @@ class KakaoSourceService:
         return self.get_source(actor, source_binding_id, room_id, source_revision_id=revision_id)
 
     def get_source(
-        self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
+        self,
+        actor: KakaoSourcePrincipal,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        source_revision_id: str,
     ) -> AcceptedKakaoSource:
         """Exact immutable revision read; no current/latest fallback and no runtime work."""
         with self._sessions.begin() as session:
@@ -593,6 +608,10 @@ class KakaoSourceService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_SOURCE_INVALID") from None
         with self._sessions.begin() as session:
             self._scope(session, actor, source_binding_id, room_id, mutate=False)
+            if not isinstance(actor, ActorContext):
+                # Accepted-work access is narrower than an authenticated room read:
+                # returning a source must also match this exact capture attempt.
+                self._authority(session, actor, admission)
             _, revision = validate_source_pointer_metadata(session, pointer)
             if revision.job_id != job_id:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_SOURCE_INVALID")
@@ -600,7 +619,12 @@ class KakaoSourceService:
         return AcceptedKakaoSource(resolution, pointer, job_id)
 
     def resolve_question_source(
-        self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
+        self,
+        actor: KakaoSourcePrincipal,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        source_revision_id: str,
     ) -> ResolvedKakaoQuestionSource:
         """One exact accepted source, for reuse across all its selected questions.
 
@@ -612,7 +636,12 @@ class KakaoSourceService:
         ).resolved
 
     def resolve_question_source_context(
-        self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
+        self,
+        actor: KakaoSourcePrincipal,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        source_revision_id: str,
     ) -> AcceptedKakaoQuestionSource:
         """Read once, retaining immutable source provenance for post-I/O adoption."""
         accepted = self.get_source(

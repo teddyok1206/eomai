@@ -69,6 +69,16 @@ capability/result/report pins는 계속 검사한다. 사진 binary는 재사용
 각각 남기며 검증되지 않은 화질/발신 방향을 승격하지 않는다. 실제 collector 실행·수락은
 여전히 별도이며 이 source 연결로 AUTO나 로컬 샘플을 운영 등록하지 않는다.
 
+`kakao_collection_source_access.py`는 이 경로의 trusted controller가 실제 RESULT_ACCEPTED
+attempt에서만 얻는 내부 권한 adapter다. `kakao_source_access.py`의 API adapter와 같은
+SourceService를 사용하지만, HTTP session을 생성/연장하지 않고 현재 DB owner·ADMIN/
+READ/COLLECT·binding/room·원 pin과 실제 accepted result를 재검사한다. 정상 logout/HTTP
+만료 후에도 정확한 원본 발행/채택은 이어지며, 공개 source 조회·PDF 다운로드는 여전히
+현재 API 로그인을 요구한다. background source read도 해당 capture의 admission에 한정한다.
+terminal run에서는 완료 source의 exact replay만 허용하고 새 publication을 시작하지 않는다.
+`test_kakao_collection_source_access.py`는 임시 DB에서 이 경계와 중단·경합을 검사한다.
+이 adapter는 worker/public DTO가 아니고, AUTO/collector 운영 활성화 자체도 아니다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

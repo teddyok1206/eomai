@@ -80,6 +80,31 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 수락된 run의 background 원본 권한 — 2026-11-17
+
+1. 수집 application이 이미 수락한 특정 RESULT_ACCEPTED attempt의 원본 발행/채택만
+   계속한다. 공개 API의 로그인/다운로드·새 수집 요청 권한은 바꾸지 않는다.
+2. 권한의 정본은 실제 run/attempt·현재 Identity·binding/room·고정 policy/capability와
+   원 command/result/report Artifact다. 브라우저/worker가 선언한 owner는 쓰지 않는다.
+3. 기존 run/task/attempt와 source revision 모델을 유지한다. 세션·토큰·새 authority row는 없다.
+4. internal source authorization port는 API actor adapter와 accepted collection adapter 두
+   실제 용도만 지원한다. background 객체는 worker JSON/HTTP DTO가 아니며 attempt 범위에
+   고정된다. 현재 owner와 모든 pin은 각 I/O/commit 경계에서 다시 확인한다.
+5. 접근은 attempt/run PK와 기존 unique source replay lookup이다. 순회/새 큐는 없다.
+6. 같은 SourceService의 예약·원문 검증·발행·CAS를 재사용하고 API/배경 권한만 명시적으로
+   분리한다. binding/room lifecycle·잠금 규칙은 기존 authorization owner에 한 번 둔다.
+7. metadata는 indexed O(1), 실제 입력의 byte/row/pixel 선형 검증 비용은 기존과 같다.
+8. 현재 binding→profile→run→browser→task 잠금 순서와 기존 source의 짧은 transaction을
+   유지한다. background 객체를 만들 때 DB lock이나 mutable ORM session을 보관하지 않는다.
+9. Catalog application/authorization adapter→기존 contracts/Identity repository 방향이다.
+   worker는 DB/NAS/Identity·타 worker와 통신하지 않는다. 새 cross-service 메시지는 없다.
+10. 정상 logout/HTTP 만료는 접수된 정확한 작업의 실행 권한을 없애지 않는다. 계정 중지·역할
+    철회·원본/채널 폐기·잘못된 policy/adapter/fence·FAILED/미수락 결과는 거부한다. terminal
+    run의 새 발행은 거부하고, 이미 수락된 source의 같은 요청 재조회/채택 복구만 허용한다.
+    원래 실패·원문·Artifact·수동 질문 편집은 변경하지 않는다.
+11. 기존 API 세션을 연장/가장하거나 system/ADMIN actor를 만드는 대안은 인증과 accepted
+    intent를 혼동하므로 사용하지 않는다. 별도 source 저장소/우회 발행 framework도 만들지 않는다.
+
 ### 수락된 수집 결과에서 원본 자료 발행까지 — 2026-11-17
 
 1. 책임은 기존 collection attempt application과 Catalog의 원본/사진 발행 adapter다.
