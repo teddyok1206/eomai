@@ -1,5 +1,31 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 02:59 UTC 원본 후보 화면·저장 연결 운영 반영
+
+1. source `f34e50ccd35d9920d88bc978492636e3dc817ac0`를 커밋·푸시하고 API/Catalog/platform/
+   QUERY owner·Web의 같은 source 호환 release로 설치했다. 아래 후보→기존 저장/PDF의
+   합성273개 임시 DB 검증을 유지한다. actual selector나 source 수락을 이 설치가 승인하지 않는다.
+2. clean source의 API4-wheel/RECORD와 Web offline closure·service identity105개 파일·
+   source-isolated 설치 검증 PASS다. API 후보는
+   `/tmp/eom-api-build/f34e50ccd35d9920d88bc978492636e3dc817ac0.UpOtd3/dist`, Web 후보는
+   `/tmp/eom-web-gui-build/f34e50ccd35d9920d88bc978492636e3dc817ac0.DTeVxj/dist`다.
+   protected ADMIT·MIGRATION_VERIFY_0093·API_ISOLATION_VERIFY와 설치 member/hash 검사를
+   통과했다. DB는0093 그대로이며 upgrade/downgrade나 테스트를 운영 DB에 실행하지 않았다.
+3. Web을 명시적으로 재시작하고 source build-info의 API/Web 일치, HTTPS 로그인200·API
+   READY200, 새 후보·상위 JS의 source/HTTP SHA 일치, 새 후보 경로의 비로그인401을 확인했다.
+   후보 JS SHA는 `sha256:133a647bda3223f7c7f3a63af76f36322a03125c53bbc224f0ac3e7571115798`다.
+   이 검증은 실제 사용자 질문 저장/PDF나 실제 카카오 수집의 성공 증거가 아니다.
+4. 기존 인증을 재사용해 추가 비밀번호 요청 없이 설치했다. 기존 creative producer는
+   지원된 SIGINT drain 후 정상 재시작했다. API/Web/Catalog/QUERY/chat/creative는 active다.
+   카카오 browser/remote와 collector 설치본·인증정보는 그대로다. GPU INDEX의 배포 전
+   FAILED/Invocation·수치 runtime/config도 보존했다. 원본·수동 편집·실패 기록을 변경하지 않았다.
+5. **MANUAL 유지·AUTO 비활성**이다. 실제 새 한 방의 CSV·사진 occurrence→학생 PDF와
+   전체 방의 누락 없는 주기 수집은 여전히 미완료다. 이미 요청한 카카오 연결 재개를 기다리며,
+   새로운 source 사실을 합성 시험이나 이름으로 추정하지 않는다. 전체 goal은 완료하지 않는다.
+6. 배포 증거는 `/var/lib/eom-kakao-capture-release-f34e50cc/{stage.json,api/activated.json}`와
+   `staging/kakao-capture-*-f34e50cc.log`다. 기존66e28b36 호환 설치본과 before config를
+   rollback 근거로 보존했다. 다음 실증은 실제 방의 새 관측에서 시작한다.
+
 ## 2026-11-17 수락 원본의 질문 후보 → 기존 저장/PDF 연결
 
 1. **이번 source 범위:** 선택한 방의 수락 원본에서 질문 후보를 찾고, 기존 CREATE API로
