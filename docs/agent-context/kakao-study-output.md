@@ -22,7 +22,14 @@ policy로 출제의 공식 retrieval을 읽는다. 최신 자료 학습 source V
 source-family 경로이고, `resolve_item_textbook_context`는 기존 출제의 source/accepted-result/
 Graph/anchor 검증을 typed 결과로 제공한다. 이전 Markdown owner는 같은 값을 포맷한다.
 worker에 전체 source pin 대신 작은 근거 key/분석 글을 넘기며 원문/이미지를 읽은 척하지 않는다.
-공유 슬롯 Workflow·교재 페이지/이미지·저장/편집·새 PDF의 최종 연결은 여전히 후속이다.
+
+`kakao_concept_pages.py`는 현재 reader의 source 재확인 아래 원래 page PNG를 private local에
+stage하고, 유효한 COMPOSE 결과의 실제 page에서만 crop한다. 공식 source V4/V5의 typed
+observation/anchor/member와 pixels/hash/크기/방향을 대조한다. `item_textbook_context`는 기존
+Markdown을 바꾸지 않고 typed page observations를 함께 보존한다. alias는 원본을 한 번만
+읽으며 같은 crop도 한 번만 만든다. 권한 전후 검사·NO_MATCH/원문 없음/일부 쪽 미제공과
+분석≠원문 구분을 유지한다. 로컬 crop은 미채택 derivative이지 발행된 Artifact가 아니다.
+공유 슬롯 Workflow·저장/편집·페이지/crop 발행·새 PDF의 최종 연결은 여전히 후속이다.
 
 ### 역할별 PDF
 
@@ -77,6 +84,10 @@ API/UDS/임시 DB/worker/다운로드와 실제 브라우저 fixture 검증은 *
 
 ## 확인할 검사
 
+- `test_kakao_concept_pages.py`: V4/V5 원본 PNG/typed 쪽 연결·원본 미열람 상태, 실제 픽셀
+  보존·바깥쪽 좌표 반올림·alias/crop dedup, decode/방향/hash/권한 철회·경로 경계 거부.
+- `test_kakao_concept_knowledge.py`: actual role/policy와 출제 read owner 재사용, V5/12 provenance,
+  공식 materializer의 page observations 보존과 옛 출제 Markdown 불변.
 - `test_kakao_study_render_contract.py`: 원 schema bytes 보존, 역할/시각·source closure,
   보강 revision/citation, member dedup/collision, result family와 no-network schema resolution.
 - `test_kakao_study_projection.py`: 학생/조교 사진 분리, 같은 binary의 독립 use,

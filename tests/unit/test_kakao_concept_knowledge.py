@@ -178,6 +178,30 @@ def test_uploaded_material_v5_and_accepted_v12_keep_all_source_and_rights_pointe
     )
 
 
+def test_official_materializer_retains_typed_page_observations_without_changing_markdown():
+    from eom_catalog_contracts import KnowledgeAnalysisRequestV8, KnowledgeAnalysisWorkerProposalV6
+    from eom_catalog_contracts.material_knowledge_analysis import (
+        EducationalDocumentKnowledgeSourceV5,
+    )
+
+    from tests.unit.test_knowledge_analysis_document_contracts import (
+        request_v8,
+        stable_identity_proposal,
+    )
+
+    request = KnowledgeAnalysisRequestV8.model_validate(request_v8())
+    proposal = KnowledgeAnalysisWorkerProposalV6.model_validate(stable_identity_proposal(request))
+    prior = materialized()
+    source = EducationalDocumentKnowledgeSourceV5.model_validate(uploaded_source())
+    value = replace(prior, analysis=replace(prior.analysis, source=source, proposal=proposal))
+    # Keep Graph pointers consistent with the actual new proposal's selected anchor.
+    loaded = resolved(value)
+    assert loaded.page_observations == proposal.page_image_observations
+    assert len(loaded.page_observations) == 2
+    assert "page_image_observations" not in loaded.as_markdown()
+    assert loaded.original_utf8_bytes == len(proposal.normalized_markdown.encode("utf-8"))
+
+
 def test_three_selected_analyses_stop_further_queries_and_are_materialized_together(monkeypatch):
     owner, read, _ = reader(monkeypatch, count=3)
     proposed = plan()

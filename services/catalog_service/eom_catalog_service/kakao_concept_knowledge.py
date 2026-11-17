@@ -1,8 +1,11 @@
 """Kakao concept evidence through the same authoring retrieval and textbook materializer."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, cast
 
 from eom_catalog_contracts import (
     ContentIntakeKnowledgeSourceV2,
@@ -17,7 +20,12 @@ from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumen
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import active_role_assignments, effective_permissions
 from eom_kakao_archive_contracts import canonical_bytes, sha256
-from eom_kakao_archive_contracts.concepts import ConceptEvidenceContext, ConceptPlan
+from eom_kakao_archive_contracts.concepts import (
+    ConceptComposeRequest,
+    ConceptEvidenceContext,
+    ConceptPlan,
+    ConceptResult,
+)
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_protocol.general_chat_rag_knowledge import ChatRagScope
@@ -36,6 +44,9 @@ from .knowledge_graph_publication_service import KnowledgeGraphPublicationServic
 from .knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from .models import ContentIntakeSourceFileRecord, EducationalDocumentRevisionRecord
 from .settings import CatalogSettings
+
+if TYPE_CHECKING:
+    from .kakao_concept_pages import PreparedConceptCapture, PreparedConceptPages
 
 RequesterRole = Literal["ADMIN", "EDITOR", "REVIEWER"]
 
@@ -108,6 +119,55 @@ class KakaoConceptKnowledgeReader:
         self.sessions = build_session_factory(engine)
         self.retrieval = KnowledgeRetrievalApplicationService(engine, settings)
         self.analyses = KnowledgeGraphPublicationService(engine, settings)
+
+    def prepare_pages(
+        self,
+        actor: ActorContext,
+        binding_id: str,
+        knowledge: ResolvedConceptTextbookKnowledge,
+        *,
+        source_root: Path,
+        reauthorize_question: Callable[[], None],
+    ) -> PreparedConceptPages:
+        """Materialize exact original page PNGs under current question/source authority."""
+        from .kakao_concept_pages import prepare_kakao_concept_pages
+
+        return prepare_kakao_concept_pages(
+            self.analyses.artifacts,
+            knowledge=knowledge,
+            source_root=source_root,
+            authorize=lambda: self.reauthorize(
+                actor, binding_id, knowledge, reauthorize_question=reauthorize_question
+            ),
+        )
+
+    def prepare_captures(
+        self,
+        actor: ActorContext,
+        binding_id: str,
+        prepared: PreparedConceptPages,
+        *,
+        request: ConceptComposeRequest,
+        result: ConceptResult,
+        output_root: Path,
+        reauthorize_question: Callable[[], None],
+    ) -> tuple[PreparedConceptCapture, ...]:
+        """Create local crop proposals, not publication or permission to edit the textbook."""
+        from .kakao_concept_pages import prepare_kakao_concept_captures
+
+        return prepare_kakao_concept_captures(
+            self.analyses.artifacts,
+            prepared=prepared,
+            request=request,
+            result=result,
+            output_root=output_root,
+            authorize=lambda: self.reauthorize(
+                actor,
+                binding_id,
+                prepared.knowledge,
+                reauthorize_question=reauthorize_question,
+            ),
+        )
 
     def _authority(
         self,

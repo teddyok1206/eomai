@@ -18,7 +18,12 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisSourceV3,
     KnowledgeArtifactMemberPointer,
 )
-from eom_catalog_contracts.knowledge import KnowledgeSourceAnchor, KnowledgeSourceAnchorV2
+from eom_catalog_contracts.knowledge import (
+    KnowledgeAnalysisWorkerProposalV4,
+    KnowledgePageImageObservation,
+    KnowledgeSourceAnchor,
+    KnowledgeSourceAnchorV2,
+)
 from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import and_, or_, select
@@ -235,6 +240,7 @@ class ResolvedTextbookContext:
     selected_anchors: tuple[KnowledgeSourceAnchor | KnowledgeSourceAnchorV2, ...]
     approved_analysis_text: str
     original_utf8_bytes: int
+    page_observations: tuple[KnowledgePageImageObservation, ...] = ()
 
     def as_markdown(self) -> str:
         return _format_analysis(self)
@@ -264,6 +270,11 @@ def _resolve_analysis(
         selected_anchors=tuple(anchors[key] for key in anchor_ids),
         approved_analysis_text=excerpt,
         original_utf8_bytes=len(raw),
+        page_observations=(
+            analysis.proposal.page_image_observations
+            if isinstance(analysis.proposal, KnowledgeAnalysisWorkerProposalV4)
+            else ()
+        ),
     )
 
 

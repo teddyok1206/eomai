@@ -12,6 +12,7 @@
         "packages/kakao_archive_contracts/eom_kakao_archive_contracts/concepts.py",
         "packages/kakao_archive_contracts/eom_kakao_archive_contracts/concept_validation.py",
         "services/catalog_service/eom_catalog_service/kakao_concept_knowledge.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_pages.py",
         "services/catalog_service/eom_catalog_service/item_textbook_context.py",
         "config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md",
         "schemas/kakao-archive/worker-study-render-v1.schema.json",
@@ -44,6 +45,7 @@
       "test_paths": [
         "tests/unit/test_kakao_concept_contracts.py",
         "tests/unit/test_kakao_concept_knowledge.py",
+        "tests/unit/test_kakao_concept_pages.py",
         "tests/unit/test_kakao_study_render_contract.py",
         "tests/unit/test_kakao_study_projection.py",
         "tests/unit/test_kakao_study_pdf.py",

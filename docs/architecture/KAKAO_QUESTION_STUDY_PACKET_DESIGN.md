@@ -220,6 +220,34 @@ V5/12를 온전히 표현하지 못함을 확인했다. 그 경로의 contract/�
 이 판단은 교재 이미지 사용을 제외하는 것이 아니다. 원문 해석·저장한 페이지와 실제 crop·
 출처·자료 편집/PDF까지 이어서 연결해야 최종 개념 보강 완료다.
 
+### 교과서 원본 이미지 전달·캡처 경계
+
+사용자는 교과서 이미지 사용을 명시 허용했다. 기존 승인 분석의 page-image observation과
+선택된 Graph anchor를 대조해 **원래 저장된 페이지 PNG**를 읽는다. 분석 문장·locator 문자열로
+PDF 좌표/쪽수를 추측하지 않는다. page PNG가 없는 과거 text-only source는 원문 미열람으로
+남긴다. 선택 anchor의 실제 member 또는 검증된 observation으로 쪽을 결정하며, 전체 범위가
+4쪽 이하일 때는 그 bounded 범위 전체를 제공할 수 있다. 더 긴 범위를 임의 일부 쪽으로
+대체하지 않는다. 근거3건·총12쪽·총96MiB 상한과 생략 여부를 명시한다.
+
+- 정본은 기존 source/accepted analysis/Graph/policy와 그 page Artifact다. model에는 작은
+  근거/page key·로컬 member만 전달하고 정본 pointer는 core가 보유한다. 동일 page member는
+  map으로 한 번만 읽고 stage한다. 원문을 별도 Kakao 사진 Artifact로 재등록하지 않는다.
+- 기존 source reader의 현재 사용자·질문·Graph·policy·권한/lifecycle 재확인을 전후에 수행한다.
+  Artifact reader가 exact revision/schema/media/hash를 검사하고 PNG header/실제 decode/크기/
+  단일 프레임/방향도 대조한다. stage 위치는 기존 private local root이며 NAS가 아니다.
+- model crop은 actual staged page key와 검증된 COMPOSE 결과에만 적용한다. 좌표는 원본 PNG의
+  좌상단 기준 정규화 값이며, 픽셀 변환은 바깥쪽 floor/ceil로 계산한다. 회전/축소/재배치를
+  하지 않는다. core는 이 사각형이 과학적으로 적절하다고 보장하지 않으며 Studio에서 확인한다.
+- crop은 명시적 derivative materialization 경계다. source pointer·원본 hash·pixel bounds·
+  고정 crop profile·결과 hash를 분리하고 같은 source/bounds는 한 번만 만든다. 저장/출력에
+  채택되기 전 로컬 결과는 정본/발행 결과가 아니다. 임의 모델 경로/URL을 해석하지 않는다.
+- 비용은 선택 anchor/페이지와 실제 읽는 bytes·decode pixels·고유 crop 수에 선형이다.
+  새 DB/index/queue/dependency는 없고 장시간 DB lock도 잡지 않는다. 실패 시 미채택 stage만
+  남으며 질문·교재·기존 자료를 변경하지 않는다. 같은 완료 결과를 다시 읽는 owner는 이전
+  immutable derivative pointer를 사용해야 하며 이 adapter로 조용히 재출력하지 않는다.
+- 단순 대안인 분석 요약을 원문처럼 캡처하거나 PDF 전체를 매번 복사하기는 출처·pixels·
+  비용을 보존하지 못한다. 기존 Artifact reader와 private file materializer를 재사용한다.
+
 ## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
 
 `worker-study-render-v1`은 기존 `worker-question-render-v1`을 변경하지 않는 별도 family다.

@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 교과서 원본 PNG·캡처 source 연결 — 실행/운영 미활성
+
+직전 `574bcd8b` 후속이다. 사용자 허용에 따라 `KakaoConceptKnowledgeReader.prepare_pages`와
+`prepare_captures`를 기존 official retrieval/source owner에 연결했다. 새로운 수집·검색 엔진이나
+worker/NAS 권한은 만들지 않았다. 운영 release는 아래 `c93f78f7` 그대로다.
+
+- 기존 `item_textbook_context`의 typed 결과에 승인된 page-image observation을 보존한다.
+  예전 출제 Markdown bytes/의미는 바꾸지 않는다. V4 교과서와 업로드 자료 V5 모두 원래
+  Artifact/revision/member/schema/media/hash·실제 dimensions를 유지한다.
+- 선택된 Graph anchor와 실제 observation/member로 쪽을 고르고, 기존 Artifact reader가
+  원본 PNG를 읽는다. 지문 locator로 쪽수/좌표를 추측하지 않는다. 원본 PNG가 없는 과거
+  text-only 근거는 미열람이며 캡처를 만들지 않는다. 일부 쪽 미제공도 표시한다.
+- 기존 현재 operator/질문/Graph/policy/source 검사를 전후 수행한다. private local root만
+  허용하고 NAS로 쓰지 않는다. 같은 canonical member는 한 번만 읽어 stage한다. PNG의
+  hash/길이·실제 decode/크기/단일 프레임/방향을 검증하며 source aliases의 metadata도 대조한다.
+- 유효한 exact COMPOSE 결과와 실제 제공한 page에서만 crop한다. 원본 pixels를 회전·축소·
+  재배치하지 않고, 좌표를 바깥쪽 정수 bounds로 변환한다. 같은 원본/범위의 crop은 재사용한다.
+  결과는 source pointer·pixel bounds·고정 profile·결과 hash가 분리된 **미채택 로컬 derivative**다.
+  현재 이것만으로 저장한 study revision·정식 Artifact·학생 PDF가 생기는 것은 아니다.
+- 관련 신규/기존 source 회귀 **256 PASS**, strict mypy3개·Ruff/format/diff PASS다. 실제 합성
+  PNG pixels와 crop pixels를 대조하고, 권한 철회·위조 source/hash/observation·stale context·
+  불안전 경로·원문 없음/부분 제공·alias/crop dedup·옛 출제/Chat·PDF 회귀를 검증했다.
+  개발 중 annotation import와 PNG `getexif()`→`verify()` 호출 순서 문제는 테스트에서 발견해
+  수정했다. production 실행/권한 검사를 낮추지 않았고 실패 로그도 staging에 보존했다.
+
+**남은 핵심:** 공유01–05 Workflow/프리셋/claim의 실제 실행, 불변 study 저장·편집, 이 page/crop의
+발행/새 PDF 연결과 실제 슬롯1건. 이번 source가 실제 교과서 검색·모델 실행·사용자 PDF의
+end-to-end 완료를 증명하지 않는다. 실제 카카오 한 방/전체 방 수집과 최종 실제 샘플 PDF도
+계속 남겨 둔다. API/schema/DB/migration·운영 인증/실패/기존 실행은 이번에 변경하지 않았다.
+
 ## 2026-11-17 유휴 Codex 슬롯의 개념 보강 착수 — source, 실행 미활성
 
 사용자가 전용 상시 슬롯이 아닌 남는 공유 슬롯과 이 기능 전용 프롬프트를 요구했고,
