@@ -6,6 +6,12 @@
 [체크포인트](../operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md)에 기록한다.
 이 문맥은 개발 탐색용이며 카카오 로그인·수집·운영 활성화 증거가 아니다.
 
+2026-11-17 사용자 추가 요구는
+[개념 보강·Studio 편집 설계](../architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md)에 있다.
+Studio에서 편집 후 PDF를 받으며 질문1쪽 뒤에 필요한 개념 쪽을 붙인다. 기존 수집은 비AI,
+새 선택적 개념 추천만 기존 공유 Codex 슬롯/GraphRAG를 사용한다. 아직 구현/활성화하지
+않았으며 기존 packet/render v1 의미를 바꾸지 않는다. HWPX 출력은 이번 추가 범위가 아니다.
+
 ## 책임과 원문
 
 기존 Studio/BFF → API → Catalog → Orchestrator 경계를 사용한다. 학생 대화는 비공개

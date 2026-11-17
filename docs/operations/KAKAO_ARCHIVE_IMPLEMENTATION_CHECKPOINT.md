@@ -1,5 +1,40 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 재로그인 없는 보호 PDF 검증에서 확인한 실행 경계
+
+- 기존 활성 PDF template와 전용 Catalog/renderer UID로 합성 질문2개·사진2개의 첫 실제
+  systemd 실행을 했다. 실제 카카오/DB/export 생성은 아니며, `kakaoattempt_b1659d84b46a4985b0a406eca4dae894`
+  는 worker exit2로 실패해 그대로 보존했다. 동일 실패 attempt를 다시 렌더하거나 성공으로 바꾸지 않았다.
+- 그 전에 보호 준비 프로그램의 PIL import가 실패했고, 실제 `python -I` 사진 inspector도
+  `KAKAO_ARCHIVE_MEDIA_DECODER_UNAVAILABLE`이었다. 이미 선언된 Pillow11.3.0이 API/Catalog
+  환경 lock/설치에 없었던 것이다. 기존 승인 wheel SHA
+  `sha256:676b2815362456b5b3216b4fd5bd89d362100dc6f4945154ff172e206a22c024`만 사용해 별도
+  설치 후보에서 검증한 뒤 해당 단일 의존성을 반영했다. 다른 package 업그레이드·서비스
+  재시작은 없었고 실제 `-I` PNG/JPEG/WebP inspector와 `pip check`, 관련44개 회귀가 통과했다.
+- 첫 PDF 실패는 읽기 전용 namespace probe로 원인을 분리했다. 실제 worker UID975/GID970/
+  groups970에서 parent0711은 direct input open=true지만 descriptor walk=false였다.
+  같은 격리의0755 후보에서는 둘 다true, NAS·secret·source·Catalog state·AF_INET 차단과
+  실제 host에 만든 synthetic peer directory의 namespace 비노출이 모두true다.
+  진단은 FAILED input을 읽기만 했으며 원래 output에 쓰지 않았다.
+- source template를 private read-only0755로 맞추고 공동 권한 계약을 회귀로 추가했다.
+  격리 해제·worker group 추가·descriptor 안전 검사 우회는 없다. 현재 이 template 수정은
+  운영 미반영이며 새 hash/Catalog pin의 paired 설치와 새 합성 attempt 검증이 다음 단계다.
+- 보존 증거는 `staging/kakao-pdf-protected-*20261117.log`,
+  `staging/kakao-pdf-permission-probe-v[12]*20261117.log`와 root-private
+  `/var/lib/eom-kakao-pdf-check-20261117`다. 학생/교재 원본·카카오 로그인·GPU는 건드리지 않았다.
+
+## 2026-11-17 사용자 추가 요구 — 개념 보강·편집 자료
+
+사용자가 단순 PDF 보관을 넘어 관련 개념 교재의 근거/캡처와 Codex 추천, 자료 편집을
+요청했다. 두 확인 답변은 **Studio 편집 후 PDF**와 **질문1쪽+필요한 개념 추가쪽**이다.
+HWPX를 새로 만드는 범위는 아니다. 원문/일반 PDF와 보강 자료 revision을 구별한다.
+
+후속 [설계](../architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md)에 경계·11항 설계 계약·
+단계/검증을 기록했다. 수집·질문 구성은 기존 비AI이며 새 선택적 개념 추천에만 공유 Codex
+슬롯과 실제 기존 GraphRAG를 사용한다. 교재 원문 pixels/쪽수를 확인하지 않고 분석 텍스트를
+캡처 근거로 꾸미지 않는다. 현재 이 확장의 schema/DB/worker/운영 활성화는 아직 없다.
+기존 전체 방 주기 수집 목표를 축소하거나 실제 카카오 검증을 대체하지 않는다.
+
 ## 2026-11-17 02:59 UTC 원본 후보 화면·저장 연결 운영 반영
 
 1. source `f34e50ccd35d9920d88bc978492636e3dc817ac0`를 커밋·푸시하고 API/Catalog/platform/

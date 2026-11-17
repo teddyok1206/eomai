@@ -29,6 +29,24 @@ def test_contract_dependency_accepts_both_existing_pins_without_unbounded_upgrad
     assert str(dependencies["pydantic"].specifier) == "==2.13.4"
 
 
+def test_selected_catalog_environment_includes_the_declared_photo_decoder():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    optional = {
+        requirement.name.lower(): requirement
+        for requirement in map(Requirement, project["optional-dependencies"]["kakao-runtime"])
+    }
+    locked = {
+        requirement.name.lower(): requirement
+        for requirement in map(
+            Requirement,
+            (ROOT / "infra/conda/eom-api.requirements.lock").read_text().splitlines(),
+        )
+    }
+    # The API/Catalog deployment selects this feature; --no-deps wheel installs
+    # cannot discover an omitted optional dependency from a successful pip check.
+    assert str(locked["pillow"].specifier) == str(optional["pillow"].specifier) == "==11.3.0"
+
+
 @pytest.mark.parametrize(
     "name",
     sorted(

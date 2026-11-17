@@ -26,6 +26,7 @@ mypy==1.20.2
 mypy_extensions==1.1.0
 packaging==26.2
 pathspec==1.1.1
+Pillow==11.3.0
 pluggy==1.6.0
 psycopg-binary==3.3.4
 psycopg==3.3.4

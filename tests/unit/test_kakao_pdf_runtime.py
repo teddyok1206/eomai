@@ -222,7 +222,7 @@ def test_runtime_template_is_network_off_resource_bounded_and_only_output_writab
         "LimitFSIZE=67108864",
         "TimeoutStartSec=180",
         "KillMode=control-group",
-        "TemporaryFileSystem=/run/eom-kakao-render:ro,mode=0711",
+        "TemporaryFileSystem=/run/eom-kakao-render:ro,mode=0755",
         "BindReadOnlyPaths=/var/lib/eom-catalog-api/staging/kakao-render/%i/input:",
         "ReadWritePaths=/run/eom-kakao-render/%i/output",
         "User=eom-kakao-render",
@@ -235,6 +235,22 @@ def test_runtime_template_is_network_off_resource_bounded_and_only_output_writab
     assert (
         "SupplementaryGroups=" not in raw and "docker" not in raw.split("InaccessiblePaths=", 1)[0]
     )
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="Root bypasses directory permission checks")
+def test_descriptor_walk_requires_a_readable_private_parent(tmp_path):
+    parent = tmp_path / "private-runtime"
+    child = parent / "own-attempt"
+    child.mkdir(parents=True)
+    parent.chmod(0o111)
+    try:
+        assert child.is_dir()  # Path traversal itself is allowed, not directory FD reads.
+        with pytest.raises(PermissionError), fixed_render.directory_descriptor(child):
+            pass
+    finally:
+        parent.chmod(0o755)
+    with fixed_render.directory_descriptor(child) as descriptor:
+        assert os.fstat(descriptor).st_ino == child.stat().st_ino
 
 
 def test_release_validation_rejects_wrong_root_before_launch(prepared):

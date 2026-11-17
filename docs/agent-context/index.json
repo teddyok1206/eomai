@@ -157,6 +157,7 @@
         "docs/architecture/KAKAO_REMOTE_GATEWAY_EXECUTION_BOUNDARY.md",
         "docs/architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md",
         "docs/architecture/KAKAO_ARCHIVE_DURABLE_CONTENT.md",
+        "docs/architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md",
         "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
       ]
     },

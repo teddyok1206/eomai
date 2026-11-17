@@ -53,6 +53,25 @@ root-owned Python/template와 release 환경 값의 일치를 검사한다.
 read-only `TemporaryFileSystem`으로 runtime parent를 가린 뒤 현재 attempt의 input/output만
 bind한다. root 설치 후 권한·네트워크·형제 workspace 음성 검사를 별도 수행해야 한다.
 
+### 실제 descriptor 접근과 격리 parent의 호환 — 2026-11-17
+
+보호된 합성 실행에서0711 private parent는 경로 통과는 허용하지만, 기존 descriptor walk의
+`O_RDONLY|O_DIRECTORY|O_NOFOLLOW` parent open을 거부하는 것을 확인했다. 파일을 임의
+경로로 열도록 우회하거나 descriptor 구현 전체를 바꾸지 않고 private read-only tmpfs의
+parent만0755로 맞춘다. 이 namespace에는 현재 attempt bind만 있으므로 host의 다른 학생
+attempt는 여전히 보이지 않는다. input read-only/output 한 곳 write, private network,
+NAS/인증정보/소스/host Catalog 상태 차단과 worker의 private group은 유지한다.
+
+기존0711 template의 실제 FAILED 기록은 보존한다. 수정은 새 template hash와 Catalog의
+기대 pin을 함께 반영하며 새 합성 attempt로 실제 실행·재수락을 검증한다. unit 문자열 검사나
+template hash 일치만으로 정상 PDF 실행을 선언하지 않는다. 결과는 운영 체크포인트에 따로 둔다.
+
+사진 수락은 Catalog의 선택적 `kakao-runtime` 의존인 Pillow11.3.0을 사용한다. 실제 API/
+Catalog 환경 lock에도 같은 pin을 포함한다. `--no-deps` EOM wheel 설치와 일반 `pip check`만
+통과해도 optional dependency가 없을 수 있으므로, 실제 `-I` 설치본의 PNG/JPEG/WebP
+검사를 함께 수행한다. feature-off import를 강제 의존으로 바꾸거나 worker의 decoder를
+API에서 임의로 원격 호출하지 않는다.
+
 ## 결과·발행
 
 원래 command와 정확히 맞는 실행 핀·학생 subset, canonical layout receipt, 기대한 PDF·PNG
