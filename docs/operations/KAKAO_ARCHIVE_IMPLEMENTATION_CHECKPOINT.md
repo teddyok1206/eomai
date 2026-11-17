@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 21:26 UTC 호환 운영 반영과 실제 수집 대기
+
+운영 core/API/Web/Catalog/Runner/QUERY source는
+`4f778cb4f3454c4e52279b229c3ee689d092fa60`로 반영했다. API/Web의 실제 설치 build-info가
+같은 commit이고 새 MainPID로 실행 중이다. 기존 protected release operator의 source archive/
+wheel admission, 별도 Web offline 설치 simulation·service identity110개 파일, 실제 API
+namespace 검사와 DB0097 read-only 검증이 통과했다. HTTPS 로그인 화면200과 API READY도
+확인했으나 **이번 release의 실제 사용자 로그인/실제 카카오 검증을 대신하지 않는다**.
+
+- 새 API build는 공식 OpenAPI 갱신 후 통과했다. 새 wire predecessor/명세의 의미를 바꾸거나
+  schema0097을 다시 upgrade하지 않았다. runtime 교체 중 API/Web은 잠시 중지했으며,
+  current worker/command/chat0과 transient process 부재를 기존 guard로 확인했다.
+- creative는 기존 지원 SIGINT로 배치를 drain한 뒤 이전 active 상태로 복원했다. 기존
+  INDEX는 배포 전부터 failed/MainPID0이었으며 원 Invocation/config·수치 실행 pin을 그대로
+  보존했다. GPU 재개를 주장하지 않는다. QUERY의 API provider/source closure만 호환 갱신했고
+  수치 모델·실행 설정의 나머지 필드는 기존 codec으로 동등성을 검사했다.
+- worker helper `b324019c…`, PDF worker `d18fa035…`, PDF layout/activation, MANUAL 설정과
+  인증·기존 Artifact는 보존했다. AUTO와 shared concept continuation은 켜지 않았다.
+  collection adapter 설정도 미지정 그대로라 실제 수락 authority를 임의로 활성화하지 않았다.
+- 과거 배포 스크립트에서 API 정지 중 호출했던 isolation 검사는 이번 reviewed release
+  instance에서 실제 API READY 이후에 호출했다. 최초 설치와 후속 verify가 모두 통과했다.
+  새 운영 배포 framework나 상시 서비스는 추가하지 않았다.
+
+증거는 `staging/kakao-4f778cb4-{api-build,web-build,stage,drain,activate,verify}-20261117.log`,
+보호된 release receipt는 `/var/lib/eom-kakao-capture-release-study-4f778cb4/api/activated.json`과
+기존 `/var/lib/eom-api/deployments/`다. 이번 release의 운영 side effect는 재시도하지 않았다.
+
+실제 수집의 다음 단계는 여전히 **미완료**다. `132f11d4`·`95a270d5` 체크포인트에 이어
+이번에도 browser/remote inactive/MainPID0이며 실제 화면 재연결 응답은 아직 없다. 과거
+고정 download root를 기존 protected reader와 실제 browser UID로 읽기 전용 검사했지만,
+현재 형식의 적격 `page-observation.json`은0건이었다. 이는 수신 CSV/사진이 없거나 유실됐다는
+판정이 아니며, source 권한/전체 방 inventory/사진 연결 증거로 사용하지 않는다. 계정·DB·
+browser·payload에 쓰지 않았고 메시지·이름·전체 URL은 검사 결과에 출력하지 않았다.
+증거: `staging/kakao-archived-dom-structure-20261117.{jsonl,err}`.
+
+전체 목표를 완료 처리하지 않는다. 실제 UI selector·CSV 범위·사진 occurrence 연결은 확인되지
+않았고 AUTO driver 실행·모든 접근 방의 주기 수집·실제 원본의 Studio PDF 재조회/다운로드도
+남아 있다. 추정 selector나 합성 source를 운영 성공으로 바꾸지 않는다. 다음 사용자 동작은
+Studio `일반 → KakaoTalk`에서 기존 연결의 `카카오 로그인 준비`를 누르고 방 하나를 열어
+화면을 유지하는 것이다. Linux/Studio 비밀번호 변경이나 메시지 전송은 필요 없다.
+
 ## 2026-11-17 후속 기능의 호환 운영 빌드 준비
 
 `95a270d5`의 공식 API build-only 검사가 installed-wheel OpenAPI와 새 질문 source refresh
