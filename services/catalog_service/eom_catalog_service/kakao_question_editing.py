@@ -67,6 +67,7 @@ class ResolvedKakaoQuestionSource:
     attachments: Mapping[str, KakaoAttachmentSource]
     messages: Mapping[int, KakaoNormalizedMessage] = field(init=False, repr=False)
     candidates: Mapping[int, KakaoQuestionCandidate] = field(init=False, repr=False)
+    unresolved_rows: tuple[int, ...] = field(init=False, repr=False)
     observations: Mapping[str, tuple[int, KakaoAttachmentObservation]] = field(
         init=False, repr=False
     )
@@ -112,6 +113,7 @@ class ResolvedKakaoQuestionSource:
             ),
         )
         candidates = build_question_candidates(self.normalization)
+        object.__setattr__(self, "unresolved_rows", candidates.unresolved_rows)
         object.__setattr__(
             self,
             "candidates",

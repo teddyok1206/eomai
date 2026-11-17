@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import islice
 from typing import Literal, cast
 from uuid import uuid4
 
@@ -39,7 +40,6 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.kakao_archive_authorization import (
     KakaoArchiveError,
-    authorize_kakao_actor,
     authorize_kakao_binding_scope,
     authorize_kakao_room_scope,
 )
@@ -68,6 +68,7 @@ from eom_catalog_service.kakao_room_models import (
     KakaoRoomMappingRevisionRecord,
     KakaoRoomRecord,
 )
+from eom_catalog_service.kakao_source_access import KakaoSourceAuthorization, KakaoSourcePrincipal
 from eom_catalog_service.kakao_source_models import KakaoSourceRevisionRecord
 from eom_catalog_service.kakao_source_pointers import validate_source_pointer_metadata_batch
 from eom_catalog_service.kakao_source_service import (
@@ -103,6 +104,17 @@ class _Reservation:
     mapping_id: str
     at: datetime
     completed: bool
+    owner_operator_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class KakaoCandidateSavePage:
+    """Internal bounded progress, not a worker grant or a replacement question head."""
+
+    saved: tuple[KakaoQuestionMutation, ...]
+    retained_question_ids: tuple[str, ...]
+    next_candidate_ordinal: int | None
+    unresolved_rows: tuple[int, ...]
 
 
 def _scope_key(command: QuestionCommand) -> str:
@@ -220,16 +232,24 @@ class KakaoQuestionService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
         return head
 
-    def _reserve(self, actor: ActorContext, command: QuestionCommand, key: str) -> _Reservation:
+    def _write_access(
+        self, actor: KakaoSourcePrincipal, command: QuestionCommand
+    ) -> KakaoSourceAuthorization:
+        # Accepted collection work may create candidates, not review/edit history.
+        if isinstance(command, KakaoQuestionChange) and not isinstance(actor, ActorContext):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
+        return self._sources.authorization(actor)
+
+    def _reserve(
+        self, actor: KakaoSourcePrincipal, command: QuestionCommand, key: str
+    ) -> _Reservation:
         digest, scope = kakao_command_sha256(command), _scope_key(command)
+        access = self._write_access(actor, command)
         with self._sessions.begin() as session:
-            owner = authorize_kakao_actor(
-                session, actor, PermissionKey.KAKAO_ARCHIVE_EDIT, now=datetime.now(UTC)
-            )
+            owner = access.authorize_operator(session, PermissionKey.KAKAO_ARCHIVE_EDIT)
             lock_kakao_intent(session, owner, scope, key)
-            _, room = authorize_kakao_room_scope(
+            _, room = access.authorize_room(
                 session,
-                actor,
                 command.source_binding_id,
                 command.room_id,
                 PermissionKey.KAKAO_ARCHIVE_EDIT,
@@ -252,6 +272,7 @@ class KakaoQuestionService:
                     old.mapping_revision_id,
                     old.reserved_at,
                     old.state == "COMPLETED",
+                    owner,
                 )
             create = isinstance(command, KakaoQuestionCreate)
             if isinstance(command, KakaoQuestionChange):
@@ -271,6 +292,7 @@ class KakaoQuestionService:
                 mapping_id,
                 datetime.now(UTC),
                 False,
+                owner,
             )
             session.add(
                 KakaoQuestionCommandRecord(
@@ -300,15 +322,14 @@ class KakaoQuestionService:
 
     def _check(
         self,
-        actor: ActorContext,
+        actor: KakaoSourcePrincipal,
         command: QuestionCommand,
         reserved: _Reservation,
         sources: tuple[AcceptedKakaoQuestionSource, ...],
     ) -> KakaoQuestionStudentPin | None:
         with self._sessions.begin() as session:
-            owner, room = authorize_kakao_room_scope(
+            owner, room = self._write_access(actor, command).authorize_room(
                 session,
-                actor,
                 command.source_binding_id,
                 command.room_id,
                 PermissionKey.KAKAO_ARCHIVE_EDIT,
@@ -353,15 +374,150 @@ class KakaoQuestionService:
     ) -> KakaoQuestionMutation:
         command = KakaoQuestionCreate.model_validate(command.model_dump(mode="json"))
         key = validate_kakao_idempotency_key(idempotency_key)
-        reserved = self._reserve(actor, command, key)
-        if reserved.completed:
-            return self._replay(actor, command, reserved)
+        return self._create_question(actor, command, key)
+
+    def _candidate_origins(
+        self,
+        actor: KakaoSourcePrincipal,
+        context: AcceptedKakaoQuestionSource,
+        origins: tuple[str, ...],
+    ) -> tuple[str, dict[str, str]]:
+        admission = context.accepted.resolution.admission
+        with self._sessions.begin() as session:
+            owner, room = self._sources.authorization(actor).authorize_room(
+                session,
+                admission.source_binding_id,
+                admission.room_id,
+                PermissionKey.KAKAO_ARCHIVE_EDIT,
+                lock=False,
+            )
+            self._sources.validate_question_source_metadata(session, actor, (context,))
+            found = session.execute(
+                select(
+                    KakaoQuestionRecord.origin_occurrence_id, KakaoQuestionRecord.question_id
+                ).where(
+                    KakaoQuestionRecord.owner_operator_id == owner,
+                    KakaoQuestionRecord.source_binding_id == admission.source_binding_id,
+                    KakaoQuestionRecord.room_id == admission.room_id,
+                    KakaoQuestionRecord.origin_occurrence_id.in_(origins),
+                )
+            )
+            # Include excluded and composition-superseded origins: their manual
+            # decisions must never be resurrected by an automatic recollection.
+            return room.current_mapping_revision_id, {
+                origin: question_id for origin, question_id in found if origin is not None
+            }
+
+    def create_source_candidates(
+        self,
+        actor: KakaoSourcePrincipal,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        source_revision_id: str,
+        after_candidate_ordinal: int = 0,
+        limit: int = 100,
+    ) -> KakaoCandidateSavePage:
+        """Save a bounded page using the same source rules and question owner.
+
+        No worker dispatch, period filtering, automatic review or edited-head
+        replacement. Accepted-run access is restricted to that exact capture.
+        """
+        if (
+            type(limit) is not int
+            or not 1 <= limit <= 100
+            or type(after_candidate_ordinal) is not int
+            or after_candidate_ordinal < 0
+        ):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_REQUEST_INVALID")
         context = self._sources.resolve_question_source_context(
+            actor, source_binding_id, room_id, source_revision_id=source_revision_id
+        )
+        candidates = tuple(
+            islice(
+                (
+                    candidate
+                    for ordinal, candidate in context.resolved.candidates.items()
+                    if ordinal > after_candidate_ordinal
+                ),
+                limit + 1,
+            )
+        )
+        page = candidates[:limit]
+        origins = tuple(
+            context.resolved.occurrence_ids[candidate.student_rows[0]] for candidate in page
+        )
+        mapping_id, existing = self._candidate_origins(actor, context, origins)
+        saved: list[KakaoQuestionMutation] = []
+        retained: list[str] = []
+        for candidate, origin in zip(page, origins, strict=True):
+            if origin in existing:
+                retained.append(existing[origin])
+                continue
+            command = KakaoQuestionCreate(
+                source_binding_id=source_binding_id,
+                room_id=room_id,
+                source_revision_id=source_revision_id,
+                candidate_ordinal=candidate.candidate_ordinal,
+                expected_mapping_revision_id=mapping_id,
+            )
+            key = validate_kakao_idempotency_key(
+                f"kakao:candidate:{source_revision_id}:{candidate.candidate_ordinal}"
+            )
+            try:
+                saved.append(self._create_question(actor, command, key, context))
+            except KakaoArchiveError as error:
+                if error.code != "KAKAO_ARCHIVE_CANDIDATE_ALREADY_REGISTERED":
+                    raise
+                # A manual save or another snapshot may have won after the read.
+                # Only an actual committed origin is a harmless retained result.
+                _, winner = self._candidate_origins(actor, context, (origin,))
+                if origin not in winner:
+                    raise
+                retained.append(winner[origin])
+        return KakaoCandidateSavePage(
+            tuple(saved),
+            tuple(retained),
+            page[-1].candidate_ordinal if len(candidates) > limit else None,
+            context.resolved.unresolved_rows,
+        )
+
+    def _create_question(
+        self,
+        actor: KakaoSourcePrincipal,
+        command: KakaoQuestionCreate,
+        key: str,
+        context: AcceptedKakaoQuestionSource | None = None,
+    ) -> KakaoQuestionMutation:
+        reserved = self._reserve(actor, command, key)
+        if reserved.completed and isinstance(actor, ActorContext):
+            return self._replay(actor, command, reserved)
+        context = context or self._sources.resolve_question_source_context(
             actor,
             command.source_binding_id,
             command.room_id,
             source_revision_id=command.source_revision_id,
         )
+        if reserved.completed:
+            with self._sessions.begin() as session:
+                owner, _ = self._write_access(actor, command).authorize_room(
+                    session,
+                    command.source_binding_id,
+                    command.room_id,
+                    PermissionKey.KAKAO_ARCHIVE_EDIT,
+                    lock=False,
+                )
+                self._sources.validate_question_source_metadata(session, actor, (context,))
+                stored = self._stored_in_session(
+                    session,
+                    owner,
+                    command.source_binding_id,
+                    command.room_id,
+                    reserved.question_id,
+                    reserved.revision_id,
+                )
+                validate_source_pointer_metadata_batch(session, (stored.manifest,))
+            return KakaoQuestionMutation(question=stored, replayed=True)
         source = context.resolved
         candidate = source.candidates.get(command.candidate_ordinal)
         if candidate is None:
@@ -373,7 +529,7 @@ class KakaoQuestionService:
             question_id=reserved.question_id,
             question_revision_id=reserved.revision_id,
             student=student,
-            actor_id=cast(str, actor.operator_id),
+            actor_id=reserved.owner_operator_id,
             created_at=reserved.at,
         )
 
@@ -435,7 +591,7 @@ class KakaoQuestionService:
 
     def _adopt(
         self,
-        actor: ActorContext,
+        actor: KakaoSourcePrincipal,
         command: QuestionCommand,
         reserved: _Reservation,
         publication: KakaoQuestionPublication,
@@ -446,13 +602,11 @@ class KakaoQuestionService:
     ) -> KakaoQuestionMutation:
         question, pointer = publication.published.question, publication.published.pointer
         with self._sessions.begin() as session:
-            owner = authorize_kakao_actor(
-                session, actor, PermissionKey.KAKAO_ARCHIVE_EDIT, now=datetime.now(UTC)
-            )
+            access = self._write_access(actor, command)
+            owner = access.authorize_operator(session, PermissionKey.KAKAO_ARCHIVE_EDIT)
             lock_kakao_intent(session, owner, _scope_key(command), key)
-            _, room = authorize_kakao_room_scope(
+            _, room = access.authorize_room(
                 session,
-                actor,
                 command.source_binding_id,
                 command.room_id,
                 PermissionKey.KAKAO_ARCHIVE_EDIT,

@@ -80,6 +80,35 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 수락 원본의 질문 후보 자동 저장 — 2026-11-17
+
+1. 기존 `KakaoQuestionService`가 수락 source의 결정론적 후보를 기존 최초 저장 use case로
+   연결한다. 수집/모델/수동 편집/packet 생성은 이 입구의 책임이 아니다.
+2. 정본은 exact source resolution·원문/정규화 Artifact와 기존 질문 revision이다.
+   순서가 미확인인 source는 기존 오류를 유지하며 발신 방향·사진 관측을 승격하지 않는다.
+3. 기존 question-create/1.0 JSON Schema와 command/origin unique를 재사용한다. 새 wire,
+   DB migration, queue나 권한 token은 만들지 않는다. 반환값은 내부 작은 frozen 값이다.
+4. API는 현재 로그인, background는 실제 accepted attempt의 현재 owner/ADMIN/READ/COLLECT에
+   EDIT도 확인한다. 해당 binding/room/capture만 허용하며 다른 source나 수동 편집은 위임하지 않는다.
+5. 주 접근은 source exact lookup, candidate 순서 순회, bounded origin membership와 key replay다.
+6. source당 한 번 해석한 map과 기존 `(room_id, origin_occurrence_id)` unique/index를 사용한다.
+   한 호출은 최대100개 후보이고 기존 origin은 한 번의 bounded IN 조회로 확인한다.
+7. 한 호출은 source rows/bytes에 선형 해석 + 선택 후보 수의 indexed 저장이다. 각 저장의
+   기존 pointer metadata 재검사 비용 O(P)는 유지하므로 전체 O(N + K·P)이며 K≤100이다.
+   다음 호출은 cursor로 이어가지만 source context는 다시 검증한다. 큰 이력 cache나 payload
+   복제는 없다. 원본 parse/hash를 후보마다 반복하지 않는다.
+8. 기존 intent→binding/room 잠금·예약→lock 밖 Artifact 발행→현재 권한/source 재확인→CAS
+   채택을 그대로 사용한다. source/candidate의 고정 key로 발행 직후 중단도 복구한다.
+9. Catalog application→기존 authorization/source/question/Artifact owner 방향이다. worker는
+   authority·학생 mapping·질문 ID를 정하거나 DB/NAS에 쓰지 않는다.
+10. 기존 origin은 현재 질문을 덮지 않고 건너뛴다. 분할/병합으로 supersede된 원본과 제외도
+    그대로 보존한다. 경합 중 최초 생성에 진 경우도 실제 origin을 재확인한 뒤에만 건너뛴다.
+    mapping 변경/권한 철회/해시 불일치는 명시적 오류이며 실패를 성공으로 바꾸지 않는다.
+    규칙이 해석하지 못한 row ordinal도 결과에 남겨 후보0개를 완전 수집으로 오인하지 않는다.
+11. API actor를 꾸미거나 질문 row를 직접 생성하는 대안은 인증/기존 편집 규칙을 우회한다.
+    기존 저장 owner의 API/accepted-source 권한 port만 재사용한다. 이 연결 자체는 실제
+    카카오 관측·AUTO dispatcher·전체 방 주기 수집·운영 활성화 완료 증거가 아니다.
+
 ### C1 결과 파일의 발행과 원 attempt 수락 — 2026-11-17
 
 1. 기존 attempt application이 COMMAND_READY의 실제 command/capability/현재 owner를 확인한

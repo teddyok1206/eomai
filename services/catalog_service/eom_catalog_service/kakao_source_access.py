@@ -10,6 +10,7 @@ from eom_operator_identity import ActorContext, PermissionKey
 from sqlalchemy.orm import Session
 
 from .kakao_archive_authorization import authorize_kakao_actor, authorize_kakao_room_scope
+from .kakao_room_models import KakaoRoomRecord
 
 SourceAdmissionAuthorizer = Callable[[Session, ActorContext, KakaoSourceAdmission], None]
 
@@ -21,7 +22,7 @@ class KakaoSourceAuthorization(Protocol):
 
     def authorize_room(
         self, session: Session, binding: str, room: str, permission: PermissionKey, *, lock: bool
-    ) -> str: ...
+    ) -> tuple[str, KakaoRoomRecord]: ...
 
     def authorize_capture(self, session: Session, admission: KakaoSourceAdmission) -> None: ...
 
@@ -39,11 +40,8 @@ class ApiKakaoSourceAuthorization:
 
     def authorize_room(
         self, session: Session, binding: str, room: str, permission: PermissionKey, *, lock: bool
-    ) -> str:
-        owner, _ = authorize_kakao_room_scope(
-            session, self.actor, binding, room, permission, lock=lock
-        )
-        return owner
+    ) -> tuple[str, KakaoRoomRecord]:
+        return authorize_kakao_room_scope(session, self.actor, binding, room, permission, lock=lock)
 
     def authorize_capture(self, session: Session, admission: KakaoSourceAdmission) -> None:
         self.capture_authorizer(session, self.actor, admission)

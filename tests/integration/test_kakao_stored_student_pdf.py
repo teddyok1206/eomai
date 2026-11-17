@@ -272,8 +272,9 @@ def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(
 
 
 @pytest.mark.parametrize("layout_policy", LAYOUTS)
+@pytest.mark.parametrize("autosave", [False, True])
 def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
-    question_store, source_store, tmp_path, monkeypatch, layout_policy
+    question_store, source_store, tmp_path, monkeypatch, layout_policy, autosave
 ):
     engine, actor, questions, initial, sources, artifacts, _binding = question_store
     previous = sources.get_source(
@@ -301,13 +302,23 @@ def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
     accepted_source = sources.admit_source(
         actor, admission, idempotency_key="photo-source-" + uuid4().hex
     )
-    created = questions.create_question(
-        actor,
-        initial.model_copy(
-            update={"source_revision_id": accepted_source.resolution.source_revision_id}
-        ),
-        idempotency_key="photo-question-" + uuid4().hex,
-    )
+    if autosave:
+        saved = questions.create_source_candidates(
+            actor,
+            initial.source_binding_id,
+            initial.room_id,
+            source_revision_id=accepted_source.resolution.source_revision_id,
+        )
+        assert len(saved.saved) == 1 and saved.unresolved_rows == ()
+        created = saved.saved[0]
+    else:
+        created = questions.create_question(
+            actor,
+            initial.model_copy(
+                update={"source_revision_id": accepted_source.resolution.source_revision_id}
+            ),
+            idempotency_key="photo-question-" + uuid4().hex,
+        )
     reviewed = questions.change_question(
         actor, change_command(created.question), idempotency_key="photo-review-" + uuid4().hex
     )

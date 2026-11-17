@@ -11,6 +11,7 @@ from eom_operator_identity import PermissionKey
 from sqlalchemy.orm import Session
 
 from .kakao_archive_authorization import KakaoArchiveError, read_owned_kakao_room_scope
+from .kakao_room_models import KakaoRoomRecord
 
 if TYPE_CHECKING:
     from .kakao_collection_attempt_service import KakaoCollectionAttemptService
@@ -27,12 +28,11 @@ class KakaoCollectionSourceAccess:
 
     def authorize_room(
         self, session: Session, binding: str, room: str, permission: PermissionKey, *, lock: bool
-    ) -> str:
+    ) -> tuple[str, KakaoRoomRecord]:
         if (binding, room) != (self.attempt.source_binding_id, self.attempt.room_id):
             raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
         owner = self.authorize_operator(session, permission)
-        read_owned_kakao_room_scope(session, owner, binding, room, lock=lock)
-        return owner
+        return owner, read_owned_kakao_room_scope(session, owner, binding, room, lock=lock)
 
     def authorize_capture(self, session: Session, admission: KakaoSourceAdmission) -> None:
         self.service.authorize_accepted_source(session, self, admission)

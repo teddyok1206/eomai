@@ -13,6 +13,8 @@ from eom_catalog_service.kakao_collection_attempt_models import KakaoCollectionA
 from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
 from eom_catalog_service.kakao_collection_models import KakaoCollectionRunRecord as Run
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
+from eom_catalog_service.kakao_question_models import KakaoQuestionRecord
+from eom_catalog_service.kakao_question_service import KakaoQuestionService
 from eom_catalog_service.kakao_room_models import KakaoRoomRecord
 from eom_catalog_service.kakao_source_service import KakaoSourceService
 from eom_identifiers import sha256_bytes
@@ -47,6 +49,49 @@ def accepted_access(attempt, **kwargs):
     data = result_input(attempt, **kwargs)
     attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
     return data, attempt.service.accepted_source_access(data.reserved.attempt_id)
+
+
+def test_accepted_access_requires_current_edit_and_does_not_grant_export(attempt):
+    data, access = accepted_access(attempt)
+    with Session(attempt.engine) as session, session.begin():
+        owner, room = access.authorize_room(
+            session,
+            data.reserved.source_binding_id,
+            data.reserved.room_id,
+            PermissionKey.KAKAO_ARCHIVE_EDIT,
+            lock=False,
+        )
+        assert owner == attempt.actor.operator_id and room.room_id == data.reserved.room_id
+        with pytest.raises(KakaoArchiveError, match="PERMISSION_DENIED"):
+            access.authorize_operator(session, PermissionKey.KAKAO_ARCHIVE_EXPORT)
+
+
+def test_unobserved_capture_order_is_not_promoted_to_autosaved_questions(attempt):
+    data, access = accepted_access(attempt)
+    source = publish_source(attempt, data, access, key="source-before-candidates-" + uuid4().hex)
+    questions = KakaoQuestionService(
+        attempt.engine,
+        artifacts=attempt.artifacts,
+        sources=attempt.service._sources,
+    )
+    with pytest.raises(KakaoArchiveError, match="SOURCE_ORDER_UNVERIFIED"):
+        questions.create_source_candidates(
+            access,
+            data.reserved.source_binding_id,
+            data.reserved.room_id,
+            source_revision_id=source.resolution.source_revision_id,
+        )
+    with Session(attempt.engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KakaoQuestionRecord)
+                .where(
+                    KakaoQuestionRecord.room_id == data.reserved.room_id,
+                )
+            )
+            == 0
+        )
 
 
 def publish_source(attempt, data, access, *, key, read=None, service=None):

@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 수락 원본의 후보 자동 저장과 실제 PDF 회귀
+
+`KakaoQuestionService.create_source_candidates`가 한 번 해석한 exact 수락 source의 최대100개
+후보를 기존 CREATE 예약·Artifact 발행·CAS에 연결한다. 새 DB/queue/wire/worker는 없다.
+고정 source/candidate key와 bounded origin IN lookup을 사용하며 다음 ordinal과 미해석 row를
+작은 내부 결과로 반환한다. 사진·CSV·질문 본문을 DB에 다시 넣지 않는다.
+
+- API는 실제 현재 로그인을 유지한다. 내부 accepted collection access는 원 capture의
+  현재 owner·ADMIN/READ/COLLECT와 **EDIT**까지 검사한다. source 권한 port가 authorized
+  room metadata를 함께 돌려주도록 재사용했으며, 세션/인증/worker 권한을 만들지 않는다.
+  background 권한으로 수동 검토·편집하거나 PDF를 다운로드하지 못한다.
+- 기존 origin은 제외·수동 편집·분할/병합 supersession 여부와 무관하게 보존한다. 경합에서
+  다른 저장이 이기면 실제 committed origin을 재확인한 경우만 건너뛴다. 발행 직후 중단은
+  같은 예약·Artifact를 채택하고, 다른 source/학생 mapping/권한 변경은 명시적으로 거부한다.
+- source order UNKNOWN은 기존 오류를 유지한다. 순서는 알지만 발신자를 모르는 row도
+  반환하므로 후보0개를 수집/업무 전체 완료로 간주하지 않는다. 사진 대응을 승격하지 않는다.
+- **전체 guarded disposable PostgreSQL454 PASS**, source/별도 설치 wheel·의존 방향
+  **126 PASS**, 개발 문맥13 PASS, strict mypy6개·Ruff/format/diff PASS다.
+  새 자동 저장 경로도 기존 CSV/동일 사진의 서로 다른 occurrence→질문 확인→packet→실제
+  worker의 기본/역할별 PDF 두 형식을 통과했다. 운영 DB에 pytest를 실행하지 않았다.
+- known-order 원본은 합성 accepted-source fixture로, background 질문 저장은 명시적인
+  테스트 권한 adapter로 검사했다. **실제 collection acceptance owner**의 별도 검사는
+  EDIT 범위와 UNKNOWN order의 질문 미생성을 확인한다. 전자를 실제 Kakao/AUTO 수집의
+  성공 증거로 확대하지 않는다. 공개 API/다운로드의 세션 만료·권한 회귀는 전체 suite에 포함된다.
+
+최초 집중 검사에서 SQLAlchemy 결과의 dict 변환 오류를 확인해 명시적 pair comprehension으로
+수정했다. 테스트의 provenance 접근과 API read에 내부 adapter를 넣던 잘못된 검증 호출도
+정정했으며 최초 실패 로그는 보존했다. 문맥 index 상한 검사는 새 테스트를 수집 주제로 배치해
+통과시켰고 schema 제한을 늘리지 않았다. 권한/원본/PDF 검증을 완화하지 않았다.
+
+증거: `staging/kakao-candidate-autosave-{focused*,full-db,unit,types*,context*}-20261117.log`.
+기준 source는 `4c96778e`; 변경 commit은 이 절의 Git history와 milestone 보고에서 확인한다.
+현재 운영 `7533ca8f…`/DB0097·기존 worker/QUERY/GPU pin은 변경하지 않았다. 이번 source도
+아직 미배포이며 AUTO dispatcher·전체 방 주기 수집을 활성화하거나 새 모델을 실행하지 않았다.
+앞서 만든 비교 PDF5종과 원17쪽 preview는 그대로 보존하며 새 수집/정식 export로 바꾸지 않는다.
+
+남은 확인: 이번 입구는 **최초 저장**이며 기존 UNREVIEWED 질문도 자동 재작성하지 않는다.
+후속 snapshot에 늦게 들어온 답변의 반영은 기존 수동 결정 보존과 함께 별도 명시적 revision
+흐름으로 닫아야 한다. 다음 우선 경로는 실제 방의 발신 방향·CSV/사진 occurrence 관측을
+근거로 수집→저장 질문→Studio packet/PDF를 검증하는 것이다. 전체 goal은 미완료다.
+
 ## 2026-11-17 실제 로컬 result 파일 수락과 출력 비교5종
 
 ### C1 proposal→결과 Artifact→attempt→원본 source/task

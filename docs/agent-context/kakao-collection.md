@@ -96,6 +96,13 @@ canonical bytes·report4MiB/hash를 검증한 뒤 `kakao_capture_result_publicat
 내부 metadata read는 source 권한이 아니며 그 다음 현재 accepted-source 권한 검사를 유지한다.
 설치 release commit은 trusted controller에서 전달하고 ambient Git을 사용하지 않는다.
 
+원본 채택 다음의 `KakaoQuestionService.create_source_candidates`는 같은 accepted access로
+최대100개 후보를 기존 질문 owner에 저장한다. API 세션을 꾸미지 않으며 현재 EDIT도 확인한다.
+source는 한 번 해석하고 origin을 bounded IN lookup해 이미 편집/제외/분할/병합된 원본은
+보존한다. 고정 source/candidate key로 중단 후 같은 Artifact를 채택하고, 미해석 row ordinal을
+반환한다. 아직 실제 AUTO dispatcher 호출/운영 활성화는 아니며 unknown source order를
+승격하지 않는다. 저장/수동 편집·PDF 접근은 [보관 문맥](kakao-archive.md)을 함께 본다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

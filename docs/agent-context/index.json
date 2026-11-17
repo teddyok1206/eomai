@@ -255,6 +255,7 @@
         "tests/integration/test_kakao_collection_attempt_storage.py",
         "tests/integration/test_kakao_collection_source_access.py",
         "tests/integration/test_kakao_staged_source_admission.py",
+        "tests/integration/test_kakao_candidate_autosave.py",
         "tests/unit/test_kakao_capture_inputs.py",
         "tests/unit/test_kakao_collection_browser_contracts.py",
         "tests/unit/test_kakao_collection_browser_runtime.py",

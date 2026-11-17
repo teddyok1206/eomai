@@ -64,6 +64,14 @@ exact attempt/fence 검증이 필수다. 같은 요청은 원래 identity를 재
 `kakao_question_store.py`, DB는 `kakao_question_models.py`에 있고 본문은 Artifact다.
 이는 source/storage 구현 경계이며 운영 migration 완료 증거가 아니다.
 
+`create_source_candidates`는 같은 저장 owner의 내부 bounded 최초 저장 연결이다. 실제 API
+actor 또는 trusted accepted-source port를 사용하고, background는 원 capture의 현재 EDIT까지
+검사한다. 자동 경로가 수동 리뷰/편집 권한을 얻지 않도록 분리한다. 원본은 호출당 한 번 읽고
+기존 origin membership·고정 key를 재사용하며, 제외/분할/병합된 원본도 재생성하지 않는다.
+미해석 row와 다음 candidate cursor를 작은 결과로 남긴다. source bytes/질문은 DB에 복제하지
+않으며 `test_kakao_candidate_autosave.py`와 기존 실제 worker PDF 검사가 담당한다.
+실제 collector 실행·정식 Studio export 활성화 증거는 아니다.
+
 질문 공개 연결은 `kakao_question_rpc.py` → 기존 API-only Catalog socket의
 `kakao_question_dispatch.py` → 위 owner와 `kakao_question_reads.py`다. exact 질문을 해석해
 원문 text와 사진 occurrence metadata만 화면 projection으로 내보낸다. 사진은 그 질문에

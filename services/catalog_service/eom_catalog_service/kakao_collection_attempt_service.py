@@ -185,6 +185,7 @@ class KakaoCollectionAttemptService:
         if access.service is not self or permission not in {
             PermissionKey.KAKAO_ARCHIVE_READ,
             PermissionKey.KAKAO_ARCHIVE_COLLECT,
+            PermissionKey.KAKAO_ARCHIVE_EDIT,
         }:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
         row = session.get(Attempt, access.attempt.attempt_id, populate_existing=True)
@@ -206,6 +207,10 @@ class KakaoCollectionAttemptService:
         for required in (PermissionKey.KAKAO_ARCHIVE_READ, PermissionKey.KAKAO_ARCHIVE_COLLECT):
             authorize_kakao_current_operator(
                 session, operator_id=run.owner_operator_id, permission=required, admin_only=True
+            )
+        if permission == PermissionKey.KAKAO_ARCHIVE_EDIT:
+            authorize_kakao_current_operator(
+                session, operator_id=run.owner_operator_id, permission=permission, admin_only=True
             )
         validate_kakao_collection_pins(session, run)
         validate_source_pointer_metadata_batch(
@@ -242,13 +247,14 @@ class KakaoCollectionAttemptService:
             )
         if actor.service is not self or actor.attempt.attempt_id != attempt_id:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
-        return actor.authorize_room(
+        owner, _ = actor.authorize_room(
             session,
             actor.attempt.source_binding_id,
             actor.attempt.room_id,
             PermissionKey.KAKAO_ARCHIVE_COLLECT,
             lock=False,
         )
+        return owner
 
     @staticmethod
     def _current(browser: Browser, profile: Profile, run: Run) -> None:

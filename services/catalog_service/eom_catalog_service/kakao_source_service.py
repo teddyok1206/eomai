@@ -42,6 +42,7 @@ from eom_catalog_service.kakao_question_editing import (
     ResolvedKakaoQuestionSource,
 )
 from eom_catalog_service.kakao_source_access import (
+    KakaoSourceAuthorization,
     KakaoSourcePrincipal,
     source_authorization,
 )
@@ -136,6 +137,10 @@ class KakaoSourceService:
         self._artifacts = artifacts
         self._authorize_capture = authorize_capture
 
+    def authorization(self, actor: KakaoSourcePrincipal) -> KakaoSourceAuthorization:
+        """Reuse current API or exact accepted-capture authorization, never mint it."""
+        return source_authorization(actor, self._authorize_capture)
+
     def _scope(
         self,
         session: Session,
@@ -145,7 +150,7 @@ class KakaoSourceService:
         *,
         mutate: bool,
     ) -> str:
-        owner = source_authorization(actor, self._authorize_capture).authorize_room(
+        owner, _ = self.authorization(actor).authorize_room(
             session,
             binding_id,
             room_id,
@@ -716,7 +721,7 @@ class KakaoSourceService:
     def validate_question_source_metadata(
         self,
         session: Session,
-        actor: ActorContext,
+        actor: KakaoSourcePrincipal,
         contexts: tuple[AcceptedKakaoQuestionSource, ...],
     ) -> None:
         """Current source ACL/lifecycle in a caller's short transaction; no file I/O.
@@ -734,12 +739,23 @@ class KakaoSourceService:
         grouped: dict[str, list[str]] = {}
         for binding, room in scopes:
             grouped.setdefault(binding, []).append(room)
-        binding_owners = {
-            binding: authorize_kakao_room_scopes(
-                session, actor, binding, tuple(rooms), PermissionKey.KAKAO_ARCHIVE_READ
-            )
-            for binding, rooms in grouped.items()
-        }
+        if isinstance(actor, ActorContext):
+            binding_owners = {
+                binding: authorize_kakao_room_scopes(
+                    session, actor, binding, tuple(rooms), PermissionKey.KAKAO_ARCHIVE_READ
+                )
+                for binding, rooms in grouped.items()
+            }
+        else:
+            access = self.authorization(actor)
+            binding_owners = {}
+            for binding, room in scopes:
+                owner, _ = access.authorize_room(
+                    session, binding, room, PermissionKey.KAKAO_ARCHIVE_READ, lock=False
+                )
+                binding_owners[binding] = owner
+            for item in contexts:
+                self._authority(session, actor, item.accepted.resolution.admission)
         expected = {item.accepted.resolution.source_revision_id: item for item in contexts}
         if len(expected) != len(contexts):
             raise KakaoArchiveError("KAKAO_ARCHIVE_SOURCE_DUPLICATED")
