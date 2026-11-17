@@ -84,6 +84,7 @@ class KakaoConceptWork(FrozenModel):
             or self.request_member.media_type != "application/json"
             or len({file.relative_path for file in self.files}) != len(self.files)
             or sum(file.size_bytes for file in self.files) > 128 * 1024 * 1024
+            or sum(file.width_pixels * file.height_pixels for file in self.files) > 256_000_000
         ):
             raise ValueError("KAKAO_CONCEPT_WORK_POINTER_INVALID")
         schema = load_kakao_concept_work_schema()

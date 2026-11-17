@@ -1,5 +1,47 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 원본 사진·교과서 PNG의 실제 image-input 경로 — 슬롯/운영은 미활성
+
+직전 source `0a112344` 후속이다. 선택 질문의 사진과 교과서 page PNG를 함께 private worker
+input으로 전달하는 경로를 기존 execution materializer/fixed worker에 추가했다. 모델에
+파일 경로만 적어 보내는 방식이 아니라, 해시 확인한 파일의 실제 `--image` 인자를 검증했다.
+현재 운영은 아래 `c93f78f7` 그대로이며 새 추천 endpoint/슬롯을 활성화하지 않았다.
+
+- 먼저 image manifest6의 JSON Schema2020-12·packaged mirror를 추가했다. schema SHA는
+  `sha256:db624a3f031646a78c22b01e84e9824d2544ba036f24b66905da0abce16930df`다.
+  학생 사진의 PNG/JPEG/WebP와 원래 교과서 PNG를 변환 없이 전달하며, 가짜 physical-page
+  번호를 붙이거나 질문 manifest/학생 명부를 worker에 복사하지 않는다. PLAN/COMPOSE 모두
+  exact task/phase/request hash·참조 member closure를 읽고, 실제 source-owner callback을
+  materialization/allowlist 해석 전후에 요구한다. source 거절을 다른 권한으로 우회하지 않는다.
+- 기존 plan42/instruction/AGENTS/invocation owner와 source pointer 검사를 재사용한다.
+  image는 하나씩 full decode·단일 frame/방향/실제 크기·media/hash/길이를 검사한다.
+  request/이미지는 exclusive write이며 완료한 입력을 덮지 않는다. 파일당64MiB/64M pixels,
+  최대72개·총128MiB/256M pixels다. 누락·stale·허가 철회·과대 입력은 실행 전에 실패한다.
+- root-installed fixed worker는 stdlib-only를 유지한다. 원래1–5 입력과 PNG 동작을 보존하고,
+  manifest6의 exact index/plan/path/hash/권한/길이와 PNG/JPEG/WebP bounded container header를
+  재확인한다. full decode는 core가 맡으며 header 검사에 전체 compressed frame 사본을
+  만들지 않는다. 새 helper SHA는
+  `b324019c47eec0a1a96aeb39cd53b1ac5b51299dc0c4b86e3fa525c5ebe2b58f`다.
+  이 helper와 platform은 향후 같은 호환 release에서 설치해야 한다. 지금 실행 중인 helper나
+  슬롯/GPU pin을 교체하지 않았다. 새 queue/DB/migration/dependency도 없다.
+- source 회귀308 PASS, 주변 공유 capacity/교재·page·별도 wheel 회귀256 PASS다.
+  실제 입력 경로의 추가 검사 결과는 `staging/kakao-concept-inputs-complete-20261117.log`에
+  별도 보존한다. 검사 묶음은 서로 겹치므로 합산한 고유 테스트 수라고 주장하지 않는다.
+  strict mypy6개·Ruff/format/diff, schema audit1488 canonical/1133 mirror/12886 refs PASS다.
+  guarded disposable DB에서는 기존 Workflow/command 생성·동시성·replay9 PASS를 재확인했다.
+  이 DB 검사는 synthetic source/plan port이며 실제 슬롯/교재 사용 증거가 아니다.
+- 첫 검사의 새 fixture에 기존 instruction record의 pinned manifest revision이 없었던 문제를
+  보완했다. 별도 설치본 검사는 모든 optional role schema까지 읽으므로 현재 pure Kakao
+  contract wheel도 격리 설치하도록 fixture를 수정했다(10 PASS). 기본 platform에 선택 기능을
+  필수 의존으로 넣거나 검사/권한/hash guard를 낮추지 않았다. 초기 실패 로그도 staging에 남겼다.
+
+**다음 한 경로:** Catalog의 실제 추천 task/source owner가 현재 operator·질문·교재 권한으로
+request Artifact를 발행/재확인하도록 연결하고, 기존 Runner/Orchestrator의 새 purpose adapter를
+실행 가능하게 만든다. 아직 그 source composition이 없으므로 executor의 명시 거부는 유지한다.
+그 뒤 shared slot PLAN→공식 GraphRAG/원본 page→COMPOSE→불변 study 저장/Studio 편집→새 PDF를
+실증한다. 부분 source를 전체 완료로 표시하지 않는다. 마지막 실제 CSV/사진 PDF 제작·링크와
+실제 한 방/전체 방 주기 수집도 계속 남아 있다. 이번 변경의 모델/GPU/운영 HTTP 실행은0이다.
+
 ## 2026-11-17 공유 개념 Workflow의 저장·제출 경계 — 실제 실행/운영 미활성
 
 직전 source `4ccb8004` 후속이다. 기존 Workflow/command·preset lock·capacity owner를 사용해

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import stat
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -46,6 +47,7 @@ from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInp
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImage
 from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog, OfficePictureView
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow import (
     CodexAssessmentImageInputManifest,
     CodexCreativeImageInputManifest,
@@ -104,6 +106,12 @@ from eom_workflow.inference_transfer_materialization import (
     InferenceTransferMaterializationContextV11,
     validate_inference_transfer_materialization_plan,
     validate_inference_transfer_materialization_plan_v11,
+)
+from eom_workflow.kakao_concept_images import concept_image_manifest, concept_image_path
+from eom_workflow.kakao_concept_plan import KakaoConceptExecutionPlan
+from eom_workflow.kakao_concept_request import (
+    KakaoConceptWork,
+    validate_kakao_concept_request_bytes,
 )
 from eom_workflow.material_learning_images import material_image_manifest, material_page_path
 from eom_workflow.models import RoleWorkerInput
@@ -253,6 +261,7 @@ def materialize_execution_step(
     | PublicSimilarityMaterializationContext
     | None = None,
     creative_page_publisher: ControlFileSetPublisher | None = None,
+    kakao_concept_authorize: Callable[[KakaoConceptWork], None] | None = None,
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
 
@@ -282,6 +291,7 @@ def materialize_execution_step(
         "resolved-execution-plan/33.0",
         "resolved-execution-plan/40.0",
         "resolved-execution-plan/41.0",
+        "resolved-execution-plan/42.0",
         "resolved-execution-plan/34.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
@@ -317,6 +327,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV20
         | ResolvedExecutionPlanV21
         | SupportedSimilarityExecutionPlan
+        | KakaoConceptExecutionPlan
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -354,6 +365,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/42.0":
+        plan = KakaoConceptExecutionPlan.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/41.0":
         plan = ResolvedExecutionPlanV41.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/40.0":
@@ -396,6 +409,12 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
+    if isinstance(plan, KakaoConceptExecutionPlan):
+        if kakao_concept_authorize is None:
+            raise ControlPlaneError(
+                "CONTROL_KAKAO_CONCEPT_AUTHORITY_REQUIRED", "concept source owner is unavailable"
+            )
+        kakao_concept_authorize(plan.work_input)
     if (
         isinstance(
             plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
@@ -721,6 +740,22 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
+    elif isinstance(plan, KakaoConceptExecutionPlan):
+        assert kakao_concept_authorize is not None
+        source_bytes, source_members = materialize_kakao_concept_sources(
+            session,
+            work=plan.work_input,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            authorize=kakao_concept_authorize,
+        )
+        total_bytes += source_bytes
+        member_count += source_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.work_input.request_member.artifact_revision_id
+        source_sha256 = plan.work_input.request_member.sha256
     elif isinstance(plan, ResolvedExecutionPlanV33):
         source_bytes, source_members = materialize_material_learning_sources(
             session,
@@ -915,6 +950,19 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
+    elif isinstance(plan, KakaoConceptExecutionPlan):
+        concept_images = concept_image_manifest(plan.plan_id, plan.work_input)
+        if concept_images is not None:
+            image_manifest_bytes = canonical_json_bytes(concept_images) + b"\n"
+            total_bytes += len(image_manifest_bytes)
+            member_count += 1
+            _require_total_size(total_bytes, analysis=True)
+            _write_exclusive(
+                workspace / "codex-image-inputs.json",
+                image_manifest_bytes,
+                group_id=worker_group_id,
+            )
+            image_input_manifest_sha256 = concept_images.manifest_sha256
     elif isinstance(plan, ResolvedExecutionPlanV33):
         material_images = material_image_manifest(plan.plan_id, plan.work_input)
         image_manifest_bytes = canonical_json_bytes(material_images) + b"\n"
@@ -1127,6 +1175,9 @@ def materialize_execution_step(
         invocation_bytes,
         group_id=worker_group_id,
     )
+    if isinstance(plan, KakaoConceptExecutionPlan):
+        assert kakao_concept_authorize is not None
+        kakao_concept_authorize(plan.work_input)
     return MaterializedExecution(
         plan_id=plan.plan_id,
         plan_sha256=plan.plan_sha256,
@@ -1164,6 +1215,7 @@ def authorized_execution_artifact_revisions(
     similarity_context: SimilarityMaterializationContext
     | PublicSimilarityMaterializationContext
     | None = None,
+    kakao_concept_authorize: Callable[[KakaoConceptWork], None] | None = None,
 ) -> frozenset[str]:
     """Derive the exact materialization allowlist from one immutable plan and its manifests."""
 
@@ -1202,6 +1254,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV20
             | ResolvedExecutionPlanV21
             | SupportedSimilarityExecutionPlan
+            | KakaoConceptExecutionPlan
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -1237,6 +1290,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/42.0":
+        plan = KakaoConceptExecutionPlan.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/41.0":
         plan = ResolvedExecutionPlanV41.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/40.0":
@@ -1408,6 +1463,19 @@ def authorized_execution_artifact_revisions(
                 plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
             }
         )
+    elif isinstance(plan, KakaoConceptExecutionPlan):
+        if kakao_concept_authorize is None:
+            raise ControlPlaneError(
+                "CONTROL_KAKAO_CONCEPT_AUTHORITY_REQUIRED", "concept source owner is unavailable"
+            )
+        kakao_concept_authorize(plan.work_input)
+        revision_ids.update(
+            {
+                plan.work_input.question_manifest.artifact_revision_id,
+                plan.work_input.request_member.artifact_revision_id,
+            }
+        )
+        revision_ids.update(file.source.artifact_revision_id for file in plan.work_input.files)
     elif isinstance(plan, ResolvedExecutionPlanV33):
         revision_ids.update(page.image.artifact_revision_id for page in plan.work_input.pages)
         revision_ids.update(
@@ -1443,6 +1511,9 @@ def authorized_execution_artifact_revisions(
             }
         )
     revision_ids.update(_authorized_step_bundle_revisions(session, step))
+    if isinstance(plan, KakaoConceptExecutionPlan):
+        assert kakao_concept_authorize is not None
+        kakao_concept_authorize(plan.work_input)
     return frozenset(revision_ids)
 
 
@@ -2077,6 +2148,106 @@ def _materialize_analysis_document_source(
             "document analysis materialized byte count differs from the plan",
         )
     return total_bytes, len(source.materialization_members)
+
+
+def materialize_kakao_concept_sources(
+    session: Session,
+    *,
+    work: KakaoConceptWork,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+    authorize: Callable[[KakaoConceptWork], None],
+) -> tuple[int, int]:
+    """Stage only the exact request closure after current source-owner authorization."""
+    _require_directory(workspace, group_id=worker_group_id, mode=WORKSPACE_MODE)
+    artifact_root = _canonical_root(artifact_root)
+    authorize(work)
+    _validate_assessment_member_pointer(
+        session,
+        pointer=work.question_manifest,
+        artifact_root=artifact_root,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    payload = _materialize_assessment_member(
+        session,
+        pointer=work.request_member,
+        relative_path="source/concepts/request.json",
+        workspace=workspace,
+        artifact_root=artifact_root,
+        worker_group_id=worker_group_id,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        maximum_bytes=262144,
+    )
+    try:
+        validate_kakao_concept_request_bytes(work, payload)
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_KAKAO_CONCEPT_INPUT_INVALID", "concept request differs from its pinned closure"
+        ) from exc
+    total = len(payload)
+    for file in work.files:
+        image = _materialize_assessment_member(
+            session,
+            pointer=file.source,
+            relative_path=concept_image_path(file.relative_path),
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=file.size_bytes,
+        )
+        if len(image) != file.size_bytes:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH", "concept image length differs"
+            )
+        _validate_concept_image_payload(
+            image,
+            media_type=file.source.media_type,
+            width=file.width_pixels,
+            height=file.height_pixels,
+        )
+        total += len(image)
+    authorize(work)
+    return total, 1 + len(work.files)
+
+
+def _validate_concept_image_payload(
+    payload: bytes, *, media_type: str, width: int, height: int
+) -> None:
+    """Optional full decoder stays in core, never in the standalone root worker helper."""
+    import io
+    import warnings
+
+    from PIL import Image
+
+    expected_format = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}[media_type]
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(payload)) as image:
+                if (
+                    image.format != expected_format
+                    or image.size != (width, height)
+                    or getattr(image, "n_frames", 1) != 1
+                ):
+                    raise ValueError("image format, dimensions or frames differ")
+                image.verify()
+            # verify must precede getexif/load on a fresh PNG handle.
+            with Image.open(io.BytesIO(payload)) as image:
+                if image.getexif().get(274, 1) != 1:
+                    raise ValueError("oriented image requires explicit source handling")
+                image.load()
+    except (
+        OSError,
+        ValueError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MEDIA_MISMATCH", "concept image is not the validated static original"
+        ) from exc
 
 
 def materialize_material_learning_sources(
@@ -2832,7 +3003,9 @@ def _jsonl_object_count(payload: bytes, label: str) -> int:
 def _assessment_member_expected_bytes(
     session: Session,
     *,
-    pointer: OriginArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2,
+    pointer: OriginArtifactMemberPointer
+    | KnowledgeAnalysisSourceArtifactMemberV2
+    | ArtifactMemberPointer,
     authorized_artifact_revision_ids: frozenset[str],
     allow_empty: bool = False,
 ) -> int:
@@ -2876,7 +3049,7 @@ def _assessment_member_expected_bytes(
 def _validate_assessment_member_pointer(
     session: Session,
     *,
-    pointer: OriginArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer | ArtifactMemberPointer,
     artifact_root: Path,
     authorized_artifact_revision_ids: frozenset[str],
 ) -> None:
@@ -2902,7 +3075,9 @@ def _validate_assessment_member_pointer(
 def _materialize_assessment_member(
     session: Session,
     *,
-    pointer: OriginArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2,
+    pointer: OriginArtifactMemberPointer
+    | KnowledgeAnalysisSourceArtifactMemberV2
+    | ArtifactMemberPointer,
     relative_path: str,
     workspace: Path,
     artifact_root: Path,

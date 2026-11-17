@@ -18,6 +18,9 @@
         "packages/workflow/eom_workflow/kakao_concept_request.py",
         "packages/workflow/eom_workflow/kakao_concept_plan.py",
         "packages/workflow/eom_workflow/kakao_concept_result.py",
+        "packages/workflow/eom_workflow/kakao_concept_images.py",
+        "services/orchestrator/eom_orchestrator/execution_materializer.py",
+        "services/orchestrator/eom_orchestrator/worker_exec.py",
         "services/orchestrator/eom_orchestrator/kakao_concept_plan_resolution.py",
         "services/workflow_runner/eom_workflow_runner/kakao_concept_admission.py",
         "services/workflow_runner/eom_workflow_runner/kakao_concept_start.py",
@@ -40,13 +43,10 @@
         "services/catalog_service/eom_catalog_service/kakao_export_service.py",
         "services/catalog_service/eom_catalog_service/kakao_pdf_delivery.py",
         "services/catalog_service/eom_catalog_service/kakao_delivery_composition.py",
-        "apps/web_gui/eom_web_gui/kakao_delivery_contracts.py",
         "apps/web_gui/eom_web_gui/static/kakao-publications.js",
         "services/orchestrator/eom_orchestrator/kakao_pdf_execution.py",
-        "services/orchestrator/eom_orchestrator/kakao_pdf_runtime.py",
         "services/kakao_archive_worker/eom_kakao_archive_worker/study_pages.py",
-        "services/kakao_archive_worker/eom_kakao_archive_worker/study_pdf.py",
-        "services/kakao_archive_worker/eom_kakao_archive_worker/cli.py"
+        "services/kakao_archive_worker/eom_kakao_archive_worker/study_pdf.py"
       ],
       "test_paths": [
         "tests/unit/test_kakao_concept_contracts.py",
@@ -54,6 +54,7 @@
         "tests/unit/test_kakao_concept_pages.py",
         "tests/unit/test_kakao_concept_workflow_contracts.py",
         "tests/unit/test_kakao_concept_plan_resolution.py",
+        "tests/unit/test_kakao_concept_materialization.py",
         "tests/integration/test_kakao_concept_workflow_storage.py",
         "tests/unit/test_kakao_study_render_contract.py",
         "tests/unit/test_kakao_study_projection.py",

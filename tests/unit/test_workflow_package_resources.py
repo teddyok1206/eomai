@@ -199,6 +199,50 @@ def installed_platform(platform_wheel: Path, tmp_path_factory: pytest.TempPathFa
     return target
 
 
+@pytest.fixture(scope="module")
+def installed_kakao_contracts(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The optional role inventory needs its matching pure wheel, not browser/PDF runtime code."""
+    wheel_dir = tmp_path_factory.mktemp("kakao-contract-wheel")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-deps",
+            "--no-index",
+            "--no-build-isolation",
+            "--wheel-dir",
+            str(wheel_dir),
+            str(REPOSITORY_ROOT / "packages/kakao_archive_contracts"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    wheels = tuple(wheel_dir.glob("eom_kakao_archive_contracts-*.whl"))
+    assert len(wheels) == 1
+    target = tmp_path_factory.mktemp("installed-kakao-contract-wheel")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--no-compile",
+            "--target",
+            str(target),
+            str(wheels[0]),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return target
+
+
 def test_built_wheel_contains_workflow_schemas(platform_wheel: Path) -> None:
     prefix = "eom_workflow/resources/"
     with zipfile.ZipFile(platform_wheel) as archive:
@@ -265,7 +309,7 @@ print("INSTALLED_REFRESH_CONTRACT=PASS; PARSING_IS_NOT_AUTHORITY")
 
 
 def test_installed_wheel_loads_schemas_without_source_checkout(
-    installed_platform: Path, tmp_path: Path
+    installed_platform: Path, installed_kakao_contracts: Path, tmp_path: Path
 ) -> None:
     definition = tmp_path / "generic-item-development.v1.1.yaml"
     definition.write_bytes(
@@ -295,6 +339,10 @@ definition_path = Path(sys.argv[3])
 transfer_definition_path = Path(sys.argv[4])
 axes_definition_path = Path(sys.argv[5])
 sys.path.insert(0, str(installed_root))
+optional_contract_root = Path(sys.argv[6]).resolve()
+sys.path.insert(0, str(optional_contract_root))
+import eom_kakao_archive_contracts.concept_validation as concept_validation
+assert Path(concept_validation.__file__).resolve().is_relative_to(optional_contract_root)
 
 from eom_workflow.compiler import compile_definition
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
@@ -430,6 +478,7 @@ print("installed_workflow_wheel_resources=PASS")
             str(definition),
             str(transfer_definition),
             str(axes_definition),
+            str(installed_kakao_contracts),
         ],
         cwd=tmp_path,
         check=True,

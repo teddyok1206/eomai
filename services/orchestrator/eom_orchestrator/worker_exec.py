@@ -51,6 +51,9 @@ PAIRED_REVIEW_IMAGE_PATH_PATTERN = re.compile(
     r"\Asource/(question|solution)/images/page-([0-9]{6})\.png\Z", re.ASCII
 )
 CREATIVE_IMAGE_PATH_PATTERN = re.compile(r"\Asource/pages/page-([0-9]{4})\.png\Z", re.ASCII)
+CONCEPT_IMAGE_PATH_PATTERN = re.compile(
+    r"\Asource/concepts/files/[A-Za-z0-9_-]+(?:[/.][A-Za-z0-9_-]+)*\Z", re.ASCII
+)
 REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
     "01": "eom-cdx-01",
@@ -282,7 +285,7 @@ def _load_image_inputs(
     group_id: int,
     expected_plan_id: str,
 ) -> tuple[Path, ...]:
-    """Load and re-hash one exact ordered set of job-local PNG inputs."""
+    """Load and re-hash one exact ordered set of job-local image inputs."""
 
     with _open_input(path, workspace=workspace, group_id=group_id) as stream:
         try:
@@ -296,6 +299,10 @@ def _load_image_inputs(
     if not isinstance(document, dict) or set(document) != required:
         raise ValueError("Codex image-input manifest shape is invalid")
     schema_version = document.get("schema_version")
+    if schema_version == "codex-image-input-manifest/6.0":
+        return _load_concept_image_inputs(
+            document, workspace=workspace, group_id=group_id, expected_plan_id=expected_plan_id
+        )
     if (
         schema_version
         not in {
@@ -437,7 +444,7 @@ def _load_image_inputs(
                 raise ValueError("paired review image-input identity is inconsistent")
             document_positions.append((str(document_role), page))
         image_path = workspace.joinpath(*Path(relative_path).parts)
-        _verify_png_input(
+        _verify_image_input(
             image_path,
             workspace=workspace,
             group_id=group_id,
@@ -489,7 +496,175 @@ def _load_image_inputs(
     return tuple(paths)
 
 
-def _verify_png_input(
+def _load_concept_image_inputs(
+    document: dict[str, object], *, workspace: Path, group_id: int, expected_plan_id: str
+) -> tuple[Path, ...]:
+    """Successor for original question photos and textbook PNGs; no invented physical pages."""
+    if document.get("plan_id") != expected_plan_id:
+        raise ValueError("Codex concept image plan differs")
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    if "sha256:" + hashlib.sha256(canonical).hexdigest() != document["manifest_sha256"]:
+        raise ValueError("Codex concept image manifest hash differs")
+    images = document.get("images")
+    if not isinstance(images, list) or not 1 <= len(images) <= 72:
+        raise ValueError("Codex concept image count is invalid")
+    keys = {
+        "input_index",
+        "relative_path",
+        "media_type",
+        "sha256",
+        "bytes",
+        "width_pixels",
+        "height_pixels",
+    }
+    paths: list[Path] = []
+    seen: set[str] = set()
+    total_bytes = total_pixels = 0
+    for index, item in enumerate(images, 1):
+        if not isinstance(item, dict) or set(item) != keys:
+            raise ValueError("Codex concept image shape is invalid")
+        relative, media, size, width, height = (
+            item.get(key)
+            for key in ("relative_path", "media_type", "bytes", "width_pixels", "height_pixels")
+        )
+        if (
+            type(item.get("input_index")) is not int
+            or item["input_index"] != index
+            or not isinstance(relative, str)
+            or len(relative) > 262
+            or CONCEPT_IMAGE_PATH_PATTERN.fullmatch(relative) is None
+            or any(part in {"", ".", ".."} for part in relative.split("/"))
+            or relative in seen
+            or not isinstance(media, str)
+            or media not in {"image/png", "image/jpeg", "image/webp"}
+            or type(size) is not int
+            or not 1 <= size <= 64 * 1024 * 1024
+            or type(width) is not int
+            or not 1 <= width <= 30_000
+            or type(height) is not int
+            or not 1 <= height <= 30_000
+            or width * height > 64_000_000
+            or SHA256_PATTERN.fullmatch(str(item.get("sha256"))) is None
+        ):
+            raise ValueError("Codex concept image values are invalid")
+        total_bytes += size
+        total_pixels += width * height
+        if total_bytes > MAX_IMAGE_TOTAL_BYTES or total_pixels > 256_000_000:
+            raise ValueError("Codex concept image total exceeds bounds")
+        seen.add(relative)
+        image_path = workspace.joinpath(*Path(relative).parts)
+        _verify_image_input(
+            image_path,
+            workspace=workspace,
+            group_id=group_id,
+            expected_bytes=size,
+            expected_sha256=str(item["sha256"]),
+            expected_width=width,
+            expected_height=height,
+            media_type=str(media),
+        )
+        paths.append(image_path)
+    return tuple(paths)
+
+
+def _encoded_image_dimensions(payload: bytes, media_type: str) -> tuple[int, int]:
+    """Bounded container-header check only; core performs the full static-image decode."""
+    if (
+        media_type == "image/png"
+        and len(payload) >= 24
+        and payload[:8] == b"\x89PNG\r\n\x1a\n"
+        and payload[12:16] == b"IHDR"
+    ):
+        return int.from_bytes(payload[16:20], "big"), int.from_bytes(payload[20:24], "big")
+    if media_type == "image/jpeg" and payload[:2] == b"\xff\xd8":
+        position = 2
+        while position < len(payload):
+            if payload[position] != 0xFF:
+                break
+            while position < len(payload) and payload[position] == 0xFF:
+                position += 1
+            if position >= len(payload):
+                break
+            marker = payload[position]
+            position += 1
+            if (
+                marker in {0, 0xD8, 0xD9, 0xDA}
+                or 0xD0 <= marker <= 0xD7
+                or position + 2 > len(payload)
+            ):
+                break
+            if marker == 1:  # TEM is the only standalone marker allowed here.
+                continue
+            length = int.from_bytes(payload[position : position + 2], "big")
+            if length < 2 or position + length > len(payload):
+                break
+            if 0xC0 <= marker <= 0xCF and marker not in {0xC4, 0xC8, 0xCC}:
+                if length >= 8 and length == 8 + 3 * payload[position + 7]:
+                    return int.from_bytes(
+                        payload[position + 5 : position + 7], "big"
+                    ), int.from_bytes(payload[position + 3 : position + 5], "big")
+                break
+            position += length
+    if (
+        media_type == "image/webp"
+        and len(payload) >= 20
+        and payload[:4] == b"RIFF"
+        and payload[8:12] == b"WEBP"
+        and int.from_bytes(payload[4:8], "little") == len(payload) - 8
+    ):
+        position = 12
+        canvas: tuple[int, int] | None = None
+        dimensions: tuple[int, int] | None = None
+        while position + 8 <= len(payload):
+            tag = payload[position : position + 4]
+            length = int.from_bytes(payload[position + 4 : position + 8], "little")
+            position += 8
+            if position + length + (length % 2) > len(payload) or tag in {b"ANIM", b"ANMF"}:
+                raise ValueError("Codex WebP header is truncated or animated")
+            # Only fixed headers are inspected here; do not copy an entire compressed frame.
+            chunk = payload[position : position + min(length, 10)]
+            if tag == b"VP8X":
+                if length != 10 or canvas is not None or chunk[0] & 2:
+                    raise ValueError("Codex WebP canvas is invalid")
+                canvas = (
+                    1 + int.from_bytes(chunk[4:7], "little"),
+                    1 + int.from_bytes(chunk[7:10], "little"),
+                )
+            elif tag in {b"VP8 ", b"VP8L"}:
+                if dimensions is not None:
+                    raise ValueError("Codex WebP image is duplicated")
+                if (
+                    tag == b"VP8 "
+                    and length >= 10
+                    and not chunk[0] & 1
+                    and chunk[3:6] == b"\x9d\x01\x2a"
+                ):
+                    dimensions = (
+                        int.from_bytes(chunk[6:8], "little") & 0x3FFF,
+                        int.from_bytes(chunk[8:10], "little") & 0x3FFF,
+                    )
+                elif tag == b"VP8L" and length >= 5 and chunk[0] == 0x2F and not chunk[4] & 0xE0:
+                    bits = int.from_bytes(chunk[1:5], "little")
+                    dimensions = ((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+                else:
+                    raise ValueError("Codex WebP frame header is invalid")
+            position += length + (length % 2)
+        if (
+            position == len(payload)
+            and dimensions is not None
+            and (canvas is None or canvas == dimensions)
+        ):
+            return dimensions
+    raise ValueError("Codex image format header is invalid")
+
+
+def _verify_image_input(
     path: Path,
     *,
     workspace: Path,
@@ -498,6 +673,7 @@ def _verify_png_input(
     expected_sha256: str,
     expected_width: int,
     expected_height: int,
+    media_type: str = "image/png",
 ) -> None:
     try:
         relative = path.relative_to(workspace)
@@ -522,17 +698,24 @@ def _verify_png_input(
             raise ValueError("Codex image input violates the file contract")
         digest = hashlib.sha256()
         header = b""
+        chunks: list[bytes] = []
+        read_bytes = 0
         while chunk := os.read(descriptor, 1024 * 1024):
+            read_bytes += len(chunk)
+            if read_bytes > expected_bytes:
+                raise ValueError("Codex image input grew beyond its pinned length")
             if len(header) < 24:
                 header += chunk[: 24 - len(header)]
             digest.update(chunk)
+            if media_type != "image/png":
+                chunks.append(chunk)
         if (
-            "sha256:" + digest.hexdigest() != expected_sha256
-            or len(header) < 24
-            or header[:8] != b"\x89PNG\r\n\x1a\n"
-            or header[12:16] != b"IHDR"
-            or int.from_bytes(header[16:20], "big") != expected_width
-            or int.from_bytes(header[20:24], "big") != expected_height
+            read_bytes != expected_bytes
+            or "sha256:" + digest.hexdigest() != expected_sha256
+            or _encoded_image_dimensions(
+                header if media_type == "image/png" else b"".join(chunks), media_type
+            )
+            != (expected_width, expected_height)
         ):
             raise ValueError("Codex image input content differs from its manifest")
     finally:

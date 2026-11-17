@@ -41,8 +41,13 @@ role1.41의 typed payload는 해당 결과를 읽을 때만 optional pure wheel�
 transaction을 재사용한다. `kakao_concept_plan_resolution`은 기존 preset lock과 capacity owner로
 P1.7의 일반01–05 support pool·고정 모델/지침을 pin한다. PLAN/COMPOSE는 한 definition의
 각각 독립 child이며 원래 Runner가 one-step을 만든다. 별도 queue/전용 slot은 없다.
-현재 `PlatformRoleJobExecutor`는 이 새 purpose의 **실제 source adapter/입력 materializer가
-아직 연결되지 않았으므로 명시 거부**한다. 다른 support prompt로 fallback하지 않는다.
+`kakao_concept_images`/image manifest6과 기존 `execution_materializer`는 exact request와
+참조한 원본 PNG/JPEG/WEBP를 stage한다. 현재 source-owner callback을 전후 요구하며 full
+decode/길이/hash/방향/집합을 검증한다. 질문 manifest/명부는 worker에 복사하지 않는다.
+stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인해 실제 `--image`
+인자로 연결한다. 과거1–5의 해석을 변경하지 않으며 helper의 exact source hash도 pin한다.
+현재 `PlatformRoleJobExecutor`는 이 새 purpose의 **실제 source adapter가 아직 composition에
+연결되지 않았으므로 명시 거부**한다. 다른 support prompt로 fallback하지 않는다.
 이 guard는 실행 source 연결 후에만 교체한다. 프리셋·운영 실행은 미활성이며, 실제 슬롯·
 추천 parent/store·study 저장/편집·페이지/crop 발행·새 PDF 연결은 여전히 후속이다.
 
@@ -108,6 +113,9 @@ API/UDS/임시 DB/worker/다운로드와 실제 브라우저 fixture 검증은 *
 - `test_kakao_concept_workflow_storage.py`: guarded 임시 DB의 실제 Workflow/command 저장·동시
   생성·서비스 재구성 후 replay·늦은 source 거절 rollback·실패 이력 보존. source/plan port는
   합성이며 실제 슬롯/model/교재 접근 증거가 아니다.
+- `test_kakao_concept_materialization.py`: 실제 image decoder·private request/file staging·고정
+  CLI의 ordered `--image` 인자, PLAN/COMPOSE의 기존 plan/instruction owner 연결, 현재 source
+  거절·stale/missing/hash/media/크기/경로/파일권한과 JPEG/WebP 헤더. 모델 실행 증거는 아니다.
 - `test_kakao_study_render_contract.py`: 원 schema bytes 보존, 역할/시각·source closure,
   보강 revision/citation, member dedup/collision, result family와 no-network schema resolution.
 - `test_kakao_study_projection.py`: 학생/조교 사진 분리, 같은 binary의 독립 use,

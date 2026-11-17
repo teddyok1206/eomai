@@ -272,6 +272,29 @@ Work 입력에는 task/phase·binding·question revision/manifest와 **개념 re
 자동 우회하지 않는다. 독립 동기 Codex 호출은 간단해 보여도 공유 슬롯·중단 복구·동시성
 기록을 우회하므로 사용하지 않는다. DB/Studio 저장 owner와 실행 canary는 별도 완료 gate다.
 
+### 원본 사진을 실제 Codex image input으로 전달
+
+- 책임은 기존 Orchestrator input materializer와 root-installed fixed worker다. core가 현재
+  질문/source 권한을 전후 재확인하고 request JSON과 참조한 image만 private workspace에
+  stage한다. worker가 NAS/DB/외부 교재를 직접 읽거나 별도 슬롯을 선택하지 않는다.
+- 정본은 Work가 pin한 request/image Artifact member다. `source/concepts/request.json`과
+  `source/concepts/files/…`는 일시 입력이며 질문 manifest/학생 명부는 복사하지 않는다.
+  원본 JPEG/WEBP를 PNG로 바꾸거나 교재 PNG에 가상의 question-page 번호를 붙이지 않는다.
+- image manifest6은 exact plan ID, ordered input index와 local path/media/hash/bytes/dimensions만
+  가진다. 기존1–5의 schema bytes·해석은 보존한다. 빈 image 집합에는 manifest를 만들지 않는다.
+- request closure/path uniqueness는 map/set, index는1부터 연속 순서다. 최대72개/총128MiB,
+  개별64MiB/64M pixels·총256M pixels다. 시간은 고유 입력 bytes+decode pixels에 선형이며
+  사진은 한 장씩 검증·stage한다. 새 DB/cache/index/queue는 없다.
+- core가 정확한 member/schema/media/hash/길이·실제 decode/크기/단일 frame/방향을 검사하고,
+  stdlib-only fixed worker는 고정된 private 경로·파일 권한/크기/hash·format header를 재확인해
+  실제 `--image` 인자로 연결한다. root helper에 Pillow/프로젝트 import를 추가하지 않는다.
+- source 거절·불완전 request·다른 page metadata·잘못된 image는 명시 실패다. 입력 파일은
+  exclusive write이며 실패한 workspace를 덮어 재사용하지 않는다. 실행 replay는 기존 Job/
+  claim owner가 맡는다. feature adapter가 실제 연결되기 전 executor 거부는 유지한다.
+- 파일 경로를 프롬프트에만 써두는 대안은 사진을 model에 보낸 증거가 아니고, 모든 입력을
+  PNG로 바꾸는 대안은 불필요한 derivative/재해시/원본 관계를 만든다. 새 manifest successor로
+  원본 bytes를 전달한다. fixed helper 교체는 기존 실행을 해치지 않는 호환 release에서 한다.
+
 ## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
 
 `worker-study-render-v1`은 기존 `worker-question-render-v1`을 변경하지 않는 별도 family다.

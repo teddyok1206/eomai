@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "codex-image-input-manifest-v6": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-image-input-manifest-v6.schema.json",
+            "resources/control-plane/codex-image-input-manifest-v6.schema.json",
+            "6.0",
+            "sha256:db624a3f031646a78c22b01e84e9824d2544ba036f24b66905da0abce16930df",
+        ),
         "kakao-concept-work": ControlSchemaResource(
             "schemas/workflow/control-plane/kakao-concept-work-v1.schema.json",
             "resources/control-plane/kakao-concept-work-v1.schema.json",
