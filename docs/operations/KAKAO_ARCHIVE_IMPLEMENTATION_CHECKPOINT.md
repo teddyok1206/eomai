@@ -2,6 +2,15 @@
 
 ## 2026-11-17 역할·시각 보존 후속 입력의 source 연결 — 운영 비활성
 
+source `e53ae0cbdb7306130f31ff21a8781a67b132fca8`를 커밋·푸시했다. 새 pure-contract wheel
+SHA는 `sha256:1f2de8a4a3cf2e2a37f11b06b45372bedce0dedd429874955b86136d7cc1883d`다.
+별도 `/tmp/eom-kakao-study-wheel.9VoVCIF6/venv`의 source 없는 `python -I`에서 새 module과
+packaged schema·전체 RECORD·합성 metadata 읽기가 통과했다. Catalog/SQLAlchemy가 없는
+격리 PDF 설치본을 기반으로 했고 `pip check`도 통과했다. 같은0.1.0인 parent 설치본 때문에
+첫 후보 설치가 skip된 것은 import/location 검사에서 거부됐으며, **별도 후보 venv에만**
+명시 설치해 다시 확인했다. 운영 prefix는 바꾸지 않았다. 결과는
+`staging/kakao-study-installed-e53ae0cb.json`이며 실제 PDF render/운영 활성화 증거는 아니다.
+
 1. 샘플의 수동 행/사진 선택을 운영 기능으로 복사하지 않고, 기존 exact packet/student/source
    해석을 공통 owner로 분리했다. 새 `project_kakao_student_study`는 같은 저장 원본에서 학생/
    조교 본문과 사진을 나누며 message occurrence·kind·raw date·timezone·UTC를 보존한다.
