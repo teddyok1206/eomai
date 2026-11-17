@@ -141,6 +141,24 @@ JSON body를 두지 않는다. source test의 completed-concept port는 합성�
 
 Delivery composition이 같은 packet/source owner로 study service를 구성한다. 추천 runtime이
 없어도 직접 쓴 메모 저장은 가능하고 모델이 필요한 선택만 명시 거부한다. 공개 RPC/API·Studio
-편집 화면·저장 revision의 공식 export는 아직 후속이다. release context1.30은 target0095와
+편집 화면은 아직 후속이다. release context1.30은 target0095와
 정확한0093→0095 또는0094→0095/같은0095만 지원하며 predecessor bytes는 보존한다.
 운영 migration/배포는 아직 수행하지 않았다.
+
+`kakao_study_export.py`의 새 작은 source pin/wrapper는 기존 export family2를 재사용한다.
+`KakaoExportService.request_study_export`가 study owner에서 packet/student를 해석하고 기존
+build/alias/claim을 쓴다. DB0096의 optional immutable `kakao_export_studies`만 source pin을
+연결한다. 현재 source의 read/실행 전후/발행/다운로드는 exact study와 교재를 재인가하고,
+기존 일반 PDF body/schema bytes와 완료/실패 history는 바꾸지 않는다.
+
+`kakao_study_pdf_inputs.py`는 저장한 block/capture 순서·제목/설명 수정·직접 쓴 메모만 기존
+PDF 입력에 붙인다. 인용/그림·원본 질문/답변·시각은 수정하지 않는다. 임시 원본 page/전체
+crop은 private temp에서 준비하고 선택한 고유 PNG만 최종 입력에 stage한다. byte budget은
+누적으로 제한하며 같은 PNG는 질문별 use만 구분한다. 완료 replay는 준비/모델/렌더가 없다.
+
+`test_kakao_study_export_storage.py`는 임시 DB의 저장본→실제 same-user child PDF→Artifact→
+재조회/다운로드·단일 claim·현재 source 거절/이력 보존·학생 혼입 거부를 검사한다. 그림 경로도
+실제 PNG/crop/PDF로 검사하지만 completed-concept/교재 byte reader는 합성 port다. protected
+UID/systemd·실제 카카오·실제 모델/교재 성공으로 보고하지 않는다. 공개 API/Studio 연결과
+실제 샘플·운영 배포는 아직 후속이다. context1.31은 target0096 및 명시적0093/94/95에서만
+전환/동일 head 확인을 지원한다. GPU/기존 슬롯·운영 DB에는 이 source 검사로 영향을 주지 않는다.

@@ -209,3 +209,44 @@ class KakaoExportAttemptRecord(Base):
     layout_sha256: Mapped[str | None] = mapped_column(String(71))
     publication_job_id: Mapped[str | None] = mapped_column(String(36))
     page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class KakaoExportStudyRecord(Base):
+    __tablename__ = "kakao_export_studies"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_operator_id", "source_binding_id", "export_id"],
+            [
+                "kakao_exports.owner_operator_id",
+                "kakao_exports.source_binding_id",
+                "kakao_exports.export_id",
+            ],
+            name="fk_kakao_export_study_owner",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["owner_operator_id", "source_binding_id", "study_id"],
+            [
+                "kakao_studies.owner_operator_id",
+                "kakao_studies.source_binding_id",
+                "kakao_studies.study_id",
+            ],
+            name="fk_kakao_export_study_source_owner",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["study_id", "study_revision_id"],
+            ["kakao_study_revisions.study_id", "kakao_study_revisions.study_revision_id"],
+            name="fk_kakao_export_study_revision",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "manifest_sha256 ~ '^sha256:[0-9a-f]{64}$'", name="ck_kakao_export_study_hash"
+        ),
+    )
+    export_id: Mapped[str] = mapped_column(String(44), primary_key=True)
+    owner_operator_id: Mapped[str] = mapped_column(String(41), nullable=False)
+    source_binding_id: Mapped[str] = mapped_column(String(45), nullable=False)
+    study_id: Mapped[str] = mapped_column(String(43), nullable=False, index=True)
+    study_revision_id: Mapped[str] = mapped_column(String(46), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)

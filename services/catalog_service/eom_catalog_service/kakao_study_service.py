@@ -451,42 +451,56 @@ class KakaoStudyService:
             session.flush()
             return False
 
+    def read_revision_metadata(
+        self,
+        session: Session,
+        actor: ActorContext,
+        binding: str,
+        study_id: str,
+        *,
+        revision_id: str | None = None,
+    ) -> KakaoStoredStudy:
+        """Current private ownership and immutable publication metadata, without source byte I/O."""
+        owner, _ = authorize_kakao_binding_scope(
+            session, actor, binding, PermissionKey.KAKAO_ARCHIVE_READ, lock=False
+        )
+        head = session.get(KakaoStudyRecord, study_id)
+        if head is None or (head.owner_operator_id, head.source_binding_id) != (owner, binding):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        revision = session.get(KakaoStudyRevisionRecord, revision_id or head.current_revision_id)
+        if revision is None or (
+            revision.study_id,
+            revision.owner_operator_id,
+            revision.source_binding_id,
+        ) != (study_id, owner, binding):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        view = _view(head, revision)
+        command = session.get(KakaoStudyCommandRecord, revision.command_id)
+        if command is None or (
+            command.state,
+            command.study_id,
+            command.study_revision_id,
+            command.expected_version + 1,
+            command.previous_revision_id,
+        ) != (
+            "COMPLETED",
+            study_id,
+            revision.study_revision_id,
+            revision.resource_version,
+            revision.previous_revision_id,
+        ):
+            raise KakaoArchiveError("KAKAO_STUDY_MANIFEST_INVALID")
+        _manifest_metadata(session, view.manifest)
+        return view
+
     def get_study(
         self, actor: ActorContext, binding: str, study_id: str, *, revision_id: str | None = None
     ) -> AcceptedKakaoStudy:
         with self.sessions() as session:
-            owner, _ = authorize_kakao_binding_scope(
-                session, actor, binding, PermissionKey.KAKAO_ARCHIVE_READ, lock=False
+            view = self.read_revision_metadata(
+                session, actor, binding, study_id, revision_id=revision_id
             )
-            head = session.get(KakaoStudyRecord, study_id)
-            if head is None or (head.owner_operator_id, head.source_binding_id) != (owner, binding):
-                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-            revision = session.get(
-                KakaoStudyRevisionRecord, revision_id or head.current_revision_id
-            )
-            if revision is None or (
-                revision.study_id,
-                revision.owner_operator_id,
-                revision.source_binding_id,
-            ) != (study_id, owner, binding):
-                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-            view = _view(head, revision)
-            command = session.get(KakaoStudyCommandRecord, revision.command_id)
-            if command is None or (
-                command.state,
-                command.study_id,
-                command.study_revision_id,
-                command.expected_version + 1,
-                command.previous_revision_id,
-            ) != (
-                "COMPLETED",
-                study_id,
-                revision.study_revision_id,
-                revision.resource_version,
-                revision.previous_revision_id,
-            ):
-                raise KakaoArchiveError("KAKAO_STUDY_MANIFEST_INVALID")
-            _manifest_metadata(session, view.manifest)
+            owner = cast(str, actor.operator_id)
         p = view.manifest
         raw = self.artifacts.read_member(
             artifact_id=p.artifact_id,

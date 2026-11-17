@@ -7,12 +7,13 @@ import stat
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from eom_catalog_contracts.kakao_question import KakaoQuestionImage
 from eom_identifiers import sha256_bytes
 from eom_kakao_archive_contracts import LocalMember, canonical_bytes
 from eom_kakao_archive_contracts.pdf_contracts import PdfManifest
+from eom_kakao_archive_contracts.study import StudyRenderManifest
 from eom_orchestrator.kakao_pdf_files import (
     local_directory,
     read_local,
@@ -49,6 +50,10 @@ class KakaoPreparedPdfInputs:
     font_member: LocalMember
     images: tuple[KakaoRenderImageInput, ...]
     source_root: Path = field(repr=False)
+
+
+class KakaoPdfStudySource(Protocol):
+    def apply(self, manifest: StudyRenderManifest, source_root: Path) -> StudyRenderManifest: ...
 
 
 def _font_bytes(path: Path, member: LocalMember) -> bytes:
@@ -98,6 +103,7 @@ def prepare_kakao_pdf_inputs(
     layout_policy: Literal[
         "student-question-a4/1.0", "student-study-a4/1.0"
     ] = "student-question-a4/1.0",
+    study: KakaoPdfStudySource | None = None,
 ) -> KakaoPreparedPdfInputs:
     """Only exact selected sources are staged, once per binary pointer.
 
@@ -108,6 +114,8 @@ def prepare_kakao_pdf_inputs(
         raise ValueError("KAKAO_ARCHIVE_RENDER_AUTHORITY_REQUIRED")
     authorize()
     if layout_policy not in {"student-question-a4/1.0", "student-study-a4/1.0"}:
+        raise ValueError("KAKAO_ARCHIVE_RENDER_LAYOUT_POLICY_INVALID")
+    if study is not None and layout_policy != "student-study-a4/1.0":
         raise ValueError("KAKAO_ARCHIVE_RENDER_LAYOUT_POLICY_INVALID")
     if (
         source_root == artifacts.settings.staging_root
@@ -208,6 +216,10 @@ def prepare_kakao_pdf_inputs(
         sources=tuple(item.resolved for item in selection.sources),
         images=tuple(images),
     )
+    if study is not None:
+        if not isinstance(manifest, StudyRenderManifest):
+            raise ValueError("KAKAO_ARCHIVE_RENDER_LAYOUT_POLICY_INVALID")
+        manifest = study.apply(manifest, source_root)
     raw_manifest = canonical_bytes(manifest.model_dump(mode="json"))
     if len(raw_manifest) > MAX_MANIFEST_BYTES:
         raise ValueError("KAKAO_ARCHIVE_RENDER_INPUT_TOO_LARGE")

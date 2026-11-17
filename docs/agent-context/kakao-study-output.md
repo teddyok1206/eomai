@@ -51,7 +51,7 @@ stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인�
 운영 activation이나 실제 모델 성공으로 해석하지 않는다. `KakaoConceptTaskService`의 저장·
 현재 source authority·공유 Workflow 제출과 COMPOSE provenance·로컬 보강/PDF 값 변환,
 새 saved-study owner는 [개념 추천 문맥](kakao-concepts.md)에 있다. 프리셋/자동 진행·공개 API·
-실제 슬롯·Studio 편집·저장 revision의 새 공식 PDF 연결은 여전히 후속이다.
+실제 슬롯·Studio 편집은 여전히 후속이다. saved-study의 PDF application 연결은 아래와 같다.
 
 ### 역할별 PDF
 
@@ -95,8 +95,11 @@ Catalog publisher도 두 family를 사용하고 원래의 claim/stopped proof·m
 layout 혼합은 실패한다. 기존 ExportService/Delivery가 원래 profile의 정확한 command family를
 사용하고 실제 publication의 쪽수·layout SHA·family 증거로 채택한다. 과거 key replay는
 당시 결과이고, 새 policy의 새 key는 다른 build다. 목록은 v1/v2를 함께 열 수 있다.
-현재 public owner는 질문/답변만 지원하므로 저장되지 않은 non-null study revision bind는
-막는다. 교재 보강을 지원하는 worker DTO만으로 저장/출처 authority를 부여하지 않는다.
+현재 source의 `KakaoStudyService`/`KakaoExportService`는 저장한 exact study revision의
+출력도 지원한다. `study-export-v1` wrapper와 DB0096의 optional source link를 쓰며 기존
+plain export의 serialized DTO/schema bytes는 유지한다. non-null study bind는 그 link와
+정확히 같아야 한다. 공개 RPC/API·Studio 편집은 아직 미연결이다. worker DTO만으로 저장/출처
+authority를 부여하지 않는다. source 선택·crop stage와 검증은 [개념 추천 문맥](kakao-concepts.md)이다.
 
 새 policy는 기존 composition의 `EOM_KAKAO_PDF_LAYOUT_POLICY`에서 명시 선택하며 default는
 v1이다. Web은 두 출력 형식을 읽고 새 자료의 답변 포함을 기본으로 제안한다. source의

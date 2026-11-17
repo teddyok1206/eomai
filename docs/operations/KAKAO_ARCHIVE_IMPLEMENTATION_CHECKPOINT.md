@@ -1,5 +1,50 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 저장한 편집본→기존 PDF 실행·발행·다운로드 — source 검증, 운영 미배포
+
+source `8bed83ed`의 후속이다. 기존 Export/claim/renderer/Artifact/download owner에 저장한
+study revision을 연결했다. application 호출로 실제 저장본을 PDF로 만들고 같은 완료본을 다시
+읽고 다운로드할 수 있다. **공개 RPC/API·Studio 편집/추천 화면, 실제 슬롯·교재와 수신 자료의
+최종 샘플, 운영 배포는 아직 후속이다.** 이 source 검증을 전체 목표 완료로 보고하지 않는다.
+
+- 새 `study-export-v1`의 작은 pin/create/wrapper/mutation을 Schema2020-12와 mirror/typed
+  DTO로 먼저 정의했다. SHA는
+  `sha256:8b2e35b043d4414c5252025bc6e57256a6c268a3981f0e7120e0d65cb2b77a7d`다.
+  요청은 binding과 study ID/revision/manifest SHA뿐이며 packet/student는 study owner에서
+  해석한다. 기존 export family1/2의 schema bytes와 serialized body는 그대로다.
+- DB0096의 optional immutable `kakao_export_studies`는 기존 export에 작은 source pin만
+  연결한다. tenant/주문·revision FK와 index, claim 이전의 동일 packet/student/profile/hash
+  초기 연결만 허용하는 trigger를 사용한다. 같은 새 명령·profile/subset에서 build hash를 다시
+  계산해 link 변조·기존 plain 출력의 재해석을 차단한다. 본문/그림은 DB에 넣지 않는다.
+- 긴 study/교재/원문 해석은 lock 밖, CAS/claim 안에서는 study owner의 public metadata reader로
+  정확한 관계를 검사한다. 실행 전후·발행·다운로드는 현재 source를 재인가한다. 저장본의 새
+  revision이 생겨도 옛 PDF와 source pin은 바뀌지 않는다. 완료 replay는 준비/모델/렌더가 없다.
+- 새 입력 adapter는 저장한 block/capture 순서·수정 설명·메모만 붙인다. 원 질문/답변·시각/
+  source 인용은 유지한다. 원본 page와 전체 crop은 private temp에 준비하고 선택한 고유 PNG만
+  최종 input boundary로 stage한다. bytes budget은 누적 제한하고 같은 PNG의 사용만 구분한다.
+  새 worker/렌더러/queue·영구 그림 사본을 만들지 않는다. 기존 FINAL 품질 검사는 유지한다.
+- 공식 guarded disposable DB 전체 **340 PASS**다. 저장본→실제 same-user child renderer→
+  PDF Artifact 발행→권한 검사 다운로드·재조회/완료 replay와 단일 claim을 검증했다. 실제 PNG/
+  crop이 PDF에 내장되고 인쇄 쪽수 미확인/출처/AI 초안 라벨·선택 그림만 worker에 전달됨도
+  확인했다. **채팅·completed-concept·교재 reader는 합성**이며 protected UID/systemd나 실제
+  카카오/교재/모델 실증이 아니다. source 거절 후 다운로드 차단·기존 완료 이력 보존, 다른 학생
+  link SQL 거부·immutable link·rollback-only 별도 schema의 migration 왕복/이력 보호도 검사했다.
+- 최종 source **644 PASS**, 독립 설치 wheel **10 PASS**, strict mypy9개·Ruff/format/diff/
+  bash syntax PASS다. 문맥/wire 회귀 **16 PASS**, audit1496 canonical/1138 mirror/13051 refs다.
+  최초 신규 unit 수집1건은 잘못된 fixture import명을 수정했다. source/권한/이력 guard를 완화하지
+  않았으며 실패 로그를 보존했다. focused7은 전체340에 포함되므로 별도 합산하지 않는다.
+- release context1.31/schema SHA는
+  `sha256:b28b83792865f13b79460ea7b21e11f5e8b9d4ed5d69c26d632541c94529a09e`다.
+  target0096과 명시적0093/94/95→0096·같은0096 확인만 지원한다. predecessor bytes를 바꾸지
+  않았고 설치/운영 migration을 실행하지 않았다. 현재 GPU·슬롯 실행에는 영향을 주지 않았다.
+
+증거: `staging/kakao-study-export-{full-source,full-db,installed-wheel,final-types,wire,
+context-wire,current-chain-db}-20261117.log`. 실제 model/GPU·운영 수집/HTTP canary는0이다.
+다음은 공개 API/Studio와 공유 슬롯의 자동 PLAN→COMPOSE 진행을 연결하고, 관련 있는 실제
+교과서 근거를 수신 CSV·사진·메타데이터에 붙인 PDF를 반복 생성해 열어 보고 링크를 전달하는
+것이다. 그 뒤 README 정리·호환 운영 배포/실제 검증을 마무리한다. 실제 한 방/전체 방의 주기
+수집 gate도 전체 목표에 남아 있으며 현재 AUTO를 활성화했다고 보고하지 않는다.
+
 ## 2026-11-17 학생별 개념 자료의 영속 저장·편집 revision — source 검증, 운영 미배포
 
 source `840b4d33` 후속이다. 기존 packet/student subset에 개념 block/capture 선택·제목/설명

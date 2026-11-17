@@ -18,6 +18,12 @@ from eom_catalog_contracts.kakao_export_store import (
     KakaoExportPage,
     KakaoExportProfile,
 )
+from eom_catalog_contracts.kakao_study_export import (
+    KakaoStudyExport,
+    KakaoStudyExportCreate,
+    KakaoStudyExportMutation,
+    KakaoStudyExportPin,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_kakao_archive_contracts import RenderExecution
 from eom_kakao_archive_contracts.pdf_contracts import PdfCommand, parse_pdf_command
@@ -40,6 +46,7 @@ from .kakao_export_models import (
     KakaoExportAttemptRecord,
     KakaoExportRecord,
     KakaoExportRequestRecord,
+    KakaoExportStudyRecord,
 )
 from .kakao_packet_service import AcceptedKakaoPacket, KakaoPacketService
 from .kakao_pdf_publication import PDF_REF, KakaoPdfPublication
@@ -47,6 +54,7 @@ from .kakao_question_editing import packet_student_subset
 from .kakao_question_service import ResolvedKakaoQuestions
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
 from .kakao_source_service import KakaoSourceService
+from .kakao_study_service import AcceptedKakaoStudy, KakaoStudyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +62,16 @@ class KakaoExportClaim:
     export: KakaoExport
     execution: RenderExecution
     acquired: bool
+
+
+def _study_pin(link: KakaoExportStudyRecord | None) -> KakaoStudyExportPin | None:
+    if link is None:
+        return None
+    return KakaoStudyExportPin(
+        study_id=link.study_id,
+        study_revision_id=link.study_revision_id,
+        manifest_sha256=link.manifest_sha256,
+    )
 
 
 def _execution(attempt: KakaoExportAttemptRecord) -> RenderExecution:
@@ -125,10 +143,86 @@ class KakaoExportService:
         packets: KakaoPacketService,
         sources: KakaoSourceService,
         profile: KakaoExportProfile,
+        studies: KakaoStudyService | None = None,
     ) -> None:
         self._sessions = build_session_factory(engine)
         self._artifacts, self._packets, self._sources = artifacts, packets, sources
         self._profile = KakaoExportProfile.model_validate(profile.model_dump(mode="json"))
+        self._studies = studies
+
+    def _study_metadata(
+        self, session: Session, actor: ActorContext, row: KakaoExportRecord
+    ) -> KakaoStudyExportPin | None:
+        link = session.get(KakaoExportStudyRecord, row.export_id)
+        pin = _study_pin(link)
+        if link is None or pin is None:
+            return None
+        if self._studies is None:
+            raise KakaoArchiveError("KAKAO_STUDY_RUNTIME_UNAVAILABLE")
+        view = self._studies.read_revision_metadata(
+            session, actor, row.source_binding_id, pin.study_id, revision_id=pin.study_revision_id
+        )
+        if (
+            (link.owner_operator_id, link.source_binding_id)
+            != (row.owner_operator_id, row.source_binding_id)
+            or (
+                view.packet_id,
+                view.packet_revision_id,
+                view.student_id,
+                view.question_count,
+                view.manifest.sha256,
+            )
+            != (
+                row.packet_id,
+                row.packet_revision_id,
+                row.student_id,
+                row.question_count,
+                pin.manifest_sha256,
+            )
+            or row.profile.get("layout_policy") != "student-study-a4/1.0"
+        ):
+            raise KakaoArchiveError("KAKAO_STUDY_EXPORT_INVALID")
+        expected = dict(
+            request=KakaoStudyExportCreate(
+                source_binding_id=row.source_binding_id, study=pin
+            ).model_dump(mode="json"),
+            profile=row.profile,
+            subset_sha256=row.subset_sha256,
+            mode=row.mode,
+        )
+        if sha256_bytes(canonical_json_bytes(expected)) != row.build_sha256:
+            raise KakaoArchiveError("KAKAO_STUDY_EXPORT_INVALID")
+        return pin
+
+    def study_reference(
+        self, actor: ActorContext, binding: str, export_id: str
+    ) -> KakaoStudyExportPin | None:
+        with self._sessions() as session:
+            row, _ = self._row(session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_READ)
+            return self._study_metadata(session, actor, row)
+
+    def resolve_study(
+        self, actor: ActorContext, binding: str, export_id: str
+    ) -> AcceptedKakaoStudy | None:
+        pin = self.study_reference(actor, binding, export_id)
+        if pin is None:
+            return None
+        assert self._studies is not None
+        study = self._studies.get_study(
+            actor, binding, pin.study_id, revision_id=pin.study_revision_id
+        )
+        if study.stored.manifest.sha256 != pin.manifest_sha256:
+            raise KakaoArchiveError("KAKAO_STUDY_SOURCE_CHANGED")
+        return study
+
+    def read_study_export(
+        self, actor: ActorContext, binding: str, export_id: str
+    ) -> KakaoStudyExport:
+        view = self.get_export(actor, binding, export_id)
+        pin = self.study_reference(actor, binding, export_id)
+        if pin is None:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        return KakaoStudyExport(study=pin, export=view)
 
     @staticmethod
     def _row(
@@ -198,6 +292,7 @@ class KakaoExportService:
         validate_source_pointer_metadata_batch(
             session, (packet.stored.manifest, *(q.stored.manifest for q in selected.questions))
         )
+        self._study_metadata(session, actor, row)
 
     def resolve_inputs(
         self,
@@ -210,13 +305,17 @@ class KakaoExportService:
                 session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_READ
             )
             view = _view(row, attempt)
-        packet, selected = self._packets.resolve_student(
-            actor,
-            binding,
-            view.packet_id,
-            revision_id=view.packet_revision_id,
-            student_id=view.student_id,
-        )
+        study = self.resolve_study(actor, binding, export_id)
+        if study is None:
+            packet, selected = self._packets.resolve_student(
+                actor,
+                binding,
+                view.packet_id,
+                revision_id=view.packet_revision_id,
+                student_id=view.student_id,
+            )
+        else:
+            packet, selected = study.packet, study.selected
         with self._sessions.begin() as session:
             row, attempt = self._row(
                 session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_READ
@@ -237,7 +336,33 @@ class KakaoExportService:
         *,
         idempotency_key: str,
     ) -> KakaoExportMutation:
-        command = KakaoExportCreate.model_validate(command.model_dump(mode="json"))
+        return self._request_export(
+            actor,
+            KakaoExportCreate.model_validate(command.model_dump(mode="json")),
+            idempotency_key=idempotency_key,
+        )
+
+    def request_study_export(
+        self, actor: ActorContext, command: KakaoStudyExportCreate, *, idempotency_key: str
+    ) -> KakaoStudyExportMutation:
+        command = KakaoStudyExportCreate.model_validate(command.model_dump(mode="json"))
+        result = self._request_export(actor, command, idempotency_key=idempotency_key)
+        pin = self.study_reference(actor, command.source_binding_id, result.export.export_id)
+        if pin != command.study:
+            raise KakaoArchiveError("KAKAO_STUDY_EXPORT_INVALID")
+        return KakaoStudyExportMutation(
+            result=KakaoStudyExport(study=command.study, export=result.export),
+            replayed=result.replayed,
+        )
+
+    def _request_export(
+        self,
+        actor: ActorContext,
+        request: KakaoExportCreate | KakaoStudyExportCreate,
+        *,
+        idempotency_key: str,
+    ) -> KakaoExportMutation:
+        command = request
         key, digest = validate_kakao_idempotency_key(idempotency_key), kakao_command_sha256(command)
         with self._sessions.begin() as session:
             owner, _ = authorize_kakao_binding_scope(
@@ -255,18 +380,40 @@ class KakaoExportService:
             return KakaoExportMutation.for_export(
                 export=self.get_export(actor, command.source_binding_id, old_id), replayed=True
             )
-        packet, selected = self._packets.resolve_student(
-            actor,
-            command.source_binding_id,
-            command.packet_id,
-            revision_id=command.packet_revision_id,
-            student_id=command.student_id,
-        )
+        pin = None
+        if isinstance(request, KakaoStudyExportCreate):
+            if self._studies is None or self._profile.layout_policy != "student-study-a4/1.0":
+                raise KakaoArchiveError("KAKAO_STUDY_RUNTIME_UNAVAILABLE")
+            study = self._studies.get_study(
+                actor,
+                request.source_binding_id,
+                request.study.study_id,
+                revision_id=request.study.study_revision_id,
+            )
+            if study.stored.manifest.sha256 != request.study.manifest_sha256:
+                raise KakaoArchiveError("KAKAO_STUDY_SOURCE_CHANGED")
+            packet, selected = study.packet, study.selected
+            pin = request.study
+            command = KakaoExportCreate(
+                source_binding_id=request.source_binding_id,
+                packet_id=study.stored.packet_id,
+                packet_revision_id=study.stored.packet_revision_id,
+                student_id=study.stored.student_id,
+            )
+        else:
+            command = request
+            packet, selected = self._packets.resolve_student(
+                actor,
+                command.source_binding_id,
+                command.packet_id,
+                revision_id=command.packet_revision_id,
+                student_id=command.student_id,
+            )
         subset = packet_student_subset(packet.packet, command.student_id)
         build = sha256_bytes(
             canonical_json_bytes(
                 dict(
-                    request=command.model_dump(mode="json"),
+                    request=request.model_dump(mode="json"),
                     profile=self._profile.model_dump(mode="json"),
                     subset_sha256=subset.subset_sha256,
                     mode=packet.packet.mode,
@@ -316,8 +463,23 @@ class KakaoExportService:
                     self._source_check(session, actor, row, packet, selected)
                     session.add(row)
                     session.flush()
+                    if pin is not None:
+                        session.add(
+                            KakaoExportStudyRecord(
+                                export_id=row.export_id,
+                                owner_operator_id=owner,
+                                source_binding_id=command.source_binding_id,
+                                study_id=pin.study_id,
+                                study_revision_id=pin.study_revision_id,
+                                manifest_sha256=pin.manifest_sha256,
+                            )
+                        )
+                        session.flush()
                 else:
                     self._source_check(session, actor, row, packet, selected)
+                if _study_pin(session.get(KakaoExportStudyRecord, row.export_id)) != pin:
+                    raise KakaoArchiveError("KAKAO_STUDY_EXPORT_INVALID")
+                self._source_check(session, actor, row, packet, selected)
                 export_id = row.export_id
                 session.add(
                     KakaoExportRequestRecord(
@@ -377,7 +539,10 @@ class KakaoExportService:
 
     @staticmethod
     def _command_matches(
-        row: KakaoExportRecord, attempt: KakaoExportAttemptRecord, command: PdfCommand
+        row: KakaoExportRecord,
+        attempt: KakaoExportAttemptRecord,
+        command: PdfCommand,
+        study: KakaoExportStudyRecord | None = None,
     ) -> None:
         profile = KakaoExportProfile.model_validate(row.profile)
         if (
@@ -393,8 +558,12 @@ class KakaoExportService:
             or command.font.sha256 != profile.font_sha256
             or command.font.size_bytes != profile.font_size_bytes
             or command.font.media_type != "font/otf"
-            # Supplements require the future saved-study owner, not just a worker capability.
-            or (isinstance(command, StudyRenderCommand) and command.study_revision_id is not None)
+            or (study is not None and not isinstance(command, StudyRenderCommand))
+            or (
+                isinstance(command, StudyRenderCommand)
+                and command.study_revision_id
+                != (None if study is None else study.study_revision_id)
+            )
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_EXECUTION_MISMATCH")
 
@@ -414,7 +583,9 @@ class KakaoExportService:
             if attempt is None or attempt.state != "RUNNING":
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
             self._source_check(session, actor, row, packet, selected)
-            self._command_matches(row, attempt, command)
+            self._command_matches(
+                row, attempt, command, session.get(KakaoExportStudyRecord, row.export_id)
+            )
             proposed = command.model_dump(mode="json")
             if attempt.command is not None and attempt.command != proposed:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_EXECUTION_MISMATCH")
@@ -429,6 +600,8 @@ class KakaoExportService:
         packet: AcceptedKakaoPacket,
         selected: ResolvedKakaoQuestions,
     ) -> None:
+        if isinstance(command, StudyRenderCommand) and command.study_revision_id is not None:
+            self.resolve_study(actor, binding, export_id)
         with self._sessions.begin() as session:
             row, attempt = self._row(
                 session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_EXPORT
@@ -440,7 +613,9 @@ class KakaoExportService:
             ):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
             self._source_check(session, actor, row, packet, selected)
-            self._command_matches(row, attempt, command)
+            self._command_matches(
+                row, attempt, command, session.get(KakaoExportStudyRecord, row.export_id)
+            )
 
     def check_claim(
         self,
@@ -452,6 +627,7 @@ class KakaoExportService:
         selected: ResolvedKakaoQuestions,
     ) -> None:
         """Authorize preparation before the exact render command has been materialized."""
+        self.resolve_study(actor, binding, export_id)
         with self._sessions.begin() as session:
             row, attempt = self._row(
                 session, actor, binding, export_id, PermissionKey.KAKAO_ARCHIVE_EXPORT
@@ -478,7 +654,9 @@ class KakaoExportService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
             self._source_check(session, actor, row, packet, selected)
             command = parse_pdf_command(attempt.command)
-            self._command_matches(row, attempt, command)
+            self._command_matches(
+                row, attempt, command, session.get(KakaoExportStudyRecord, row.export_id)
+            )
             return command
 
     @staticmethod
@@ -491,7 +669,9 @@ class KakaoExportService:
         if view.pdf is None or view.layout is None or attempt.command is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_EXPORT_INVALID")
         command = parse_pdf_command(attempt.command)
-        KakaoExportService._command_matches(row, attempt, command)
+        KakaoExportService._command_matches(
+            row, attempt, command, session.get(KakaoExportStudyRecord, row.export_id)
+        )
         metadata = validate_source_pointer_metadata_batch(session, (view.pdf, view.layout))
         logical, revision = metadata[(view.pdf.artifact_id, view.pdf.artifact_revision_id)]
         job = session.get(JobRecord, attempt.publication_job_id)
@@ -546,7 +726,9 @@ class KakaoExportService:
             )
             if attempt is None or attempt.command != command.model_dump(mode="json"):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_EXECUTION_MISMATCH")
-            self._command_matches(row, attempt, command)
+            self._command_matches(
+                row, attempt, command, session.get(KakaoExportStudyRecord, row.export_id)
+            )
             self._source_check(session, actor, row, packet, selected)
             if publication.export_id != export_id:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_EXECUTION_MISMATCH")

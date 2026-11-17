@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/study-export-v1/1.0",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/pin"
+    },
+    {
+      "$ref": "#/$defs/create"
+    },
+    {
+      "$ref": "#/$defs/view"
+    },
+    {
+      "$ref": "#/$defs/mutation"
+    }
+  ],
+  "$defs": {
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "study_id",
+        "study_revision_id",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "study_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/study"
+        },
+        "study_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/revision"
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/hash"
+        }
+      }
+    },
+    "create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "study"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-study-export-create/1.0"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/binding"
+        },
+        "study": {
+          "$ref": "#/$defs/pin"
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "study",
+        "export"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-study-export/1.0"
+        },
+        "study": {
+          "$ref": "#/$defs/pin"
+        },
+        "export": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v2/2.0#/$defs/Export"
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "result",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-study-export-mutation/1.0"
+        },
+        "result": {
+          "$ref": "#/$defs/view"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -86,7 +86,12 @@ def build_kakao_delivery_application(
         layout_policy=cast(ExportLayoutPolicy, policy),
     )
     exports = KakaoExportService(
-        engine, artifacts=artifacts, packets=packets, sources=sources, profile=profile
+        engine,
+        artifacts=artifacts,
+        packets=packets,
+        sources=sources,
+        profile=profile,
+        studies=studies,
     )
     runtime = FixedKakaoPdfLauncher(hashes[1], hashes[0])
     worker_uid = pwd.getpwnam("eom-kakao-render").pw_uid
@@ -105,6 +110,7 @@ def build_kakao_delivery_application(
         grp.getgrnam("eom-kakao-render").gr_gid,
         runtime,
         runtime.close_finished,
+        studies,
     )
     coordinator = KakaoPdfCoordinator(delivery)
     return KakaoDeliveryComposition(

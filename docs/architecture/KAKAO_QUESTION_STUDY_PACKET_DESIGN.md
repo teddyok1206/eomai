@@ -541,3 +541,28 @@ capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변
 공개 편집 입력은 제목/설명/질문과의 관련성·block/capture 선택·직접 쓴 메모로 제한한다.
 임의 source ID/파일 경로/인용문을 추가하는 입력은 없다. 인용·원본 그림은 저장한 task의 실제
 결과와 교재에서만 파생한다. editable study는 source/모델 결과 자체를 바꾸지 않는다.
+
+## 15. 저장한 study revision과 기존 PDF export 연결
+
+1. 기존 ExportService/claim/renderer/publication/download를 확장한다. 별도 출력 엔진·queue는 없다.
+2. 정본은 저장한 exact study manifest, 기존 packet/student subset과 PDF Artifact다. 새 명령은
+   binding과 작은 study ID/revision/manifest hash pin만 받고 packet/student는 owner가 해석한다.
+3. 기존 export ID에 optional 불변 study link를 한 번 연결한다. 출력 attempt/revision/hash와
+   study logical/revision은 다르다. 같은 입력/renderer는 기존 build를 재사용한다.
+4. 공개/다운로드와 실행 전후에 study owner로 현재 packet/질문·교재/task 권한을 재검사한다.
+   metadata CAS 중에는 public metadata reader를 사용하며 긴 source read/decode는 lock 밖이다.
+5. 접근은 export ID→study link의 indexed lookup, study revision lookup과 ordered 질문/block이다.
+   새 link 표는 export PK·기존 export tenant FK·study revision FK·study 목록 index를 갖는다.
+6. 작은 typed link만 DB에 두고 사진·교재·편집 body를 복제하지 않는다. link는 immutable이며
+   claim이 시작된 export에 나중에 덧붙일 수 없다. 기존 v1/v2 schema bytes는 바꾸지 않는다.
+7. 로컬 입력 비용은 원문 bytes+선택 질문/block/crop에 선형이다. 동일 crop member를 공유하고
+   worker에는 최종 manifest가 사용하는 파일만 stage한다. 임시 원본 page는 worker에 넘기지 않는다.
+8. 새 export와 link/alias를 같은 짧은 transaction으로 수락한다. 먼저 현재 study/source를 해석하고,
+   출력은 기존 single-winner claim을 쓴다. saved study의 다음 revision은 다른 출력 identity다.
+9. SourceStudy→PDF 입력 adapter가 기존 projection에 보강 값만 붙인다. 기존 source 역할/시각/
+   학생 subset을 바꾸지 않는다. worker는 로컬 renderer이며 근거 검색/권한/저장을 맡지 않는다.
+10. 같은 key/body는 같은 export다. GET/완료 replay는 새 모델·crop·렌더를 실행하지 않는다.
+    source 철회/바뀐 pin·중단은 명시적 상태이며 기존 실패·완료·plain PDF 기록을 재해석하지 않는다.
+11. 기존 Export 응답 family2는 같은 renderer/layout이므로 그대로 재사용하고 작은 study-export
+    wrapper가 추가 source pin을 표현한다. 기존 DTO 전체의 serializer/구형 history를 다시 만드는
+    대안보다 단순하며 exact study provenance도 잃지 않는다.

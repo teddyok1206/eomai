@@ -86,6 +86,11 @@ def test_saved_study_revisions_are_append_only_with_small_head_and_command_grant
     assert grants["UPDATE", "kakao_studies"] == {"current_revision_id", "resource_version"}
     assert grants["UPDATE", "kakao_study_commands"] == {"state", "completed_at"}
     assert ("UPDATE", "kakao_study_revisions") not in grants
+    assert "kakao_export_studies" in READ_TABLES and "kakao_export_studies" in INSERT_TABLES
+    assert "kakao_export_studies" not in UPDATE_TABLES
+    assert not any(
+        verb == "UPDATE" and table == "kakao_export_studies" for verb, table, _ in COLUMN_PRIVILEGES
+    )
 
 
 def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity() -> None:

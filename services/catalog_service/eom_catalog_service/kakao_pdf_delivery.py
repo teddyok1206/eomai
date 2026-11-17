@@ -22,6 +22,7 @@ from .artifacts import CatalogArtifactService
 from .kakao_export_service import KakaoExportService
 from .kakao_pdf_inputs import prepare_kakao_pdf_inputs
 from .kakao_pdf_publication import publish_kakao_pdf
+from .kakao_study_service import KakaoStudyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,7 @@ class KakaoPdfDelivery:
     shared_gid: int
     launcher: KakaoPdfLauncher = field(repr=False)
     assert_stopped: KakaoPdfStoppedCheck = field(repr=False)
+    studies: KakaoStudyService | None = field(default=None, repr=False)
 
     def run(self, actor: ActorContext, binding: str, export_id: str) -> KakaoExport:
         claim = self.exports.claim_export(actor, binding, export_id)
@@ -65,6 +67,14 @@ class KakaoPdfDelivery:
                 source_root = create_directory(
                     self.input_root, claim.execution.attempt_id, gid=os.getgid(), mode=0o700
                 )
+                study = None
+                pin = self.exports.study_reference(actor, binding, export_id)
+                if pin is not None:
+                    from .kakao_study_pdf_inputs import KakaoSavedStudyPdfSource
+
+                    if self.studies is None:
+                        raise ValueError("KAKAO_STUDY_RUNTIME_UNAVAILABLE")
+                    study = KakaoSavedStudyPdfSource(self.studies, actor, binding, pin)
                 prepared = prepare_kakao_pdf_inputs(
                     self.artifacts,
                     packet=packet,
@@ -75,6 +85,7 @@ class KakaoPdfDelivery:
                     font=self.font,
                     authorize=authorize_claim,
                     layout_policy=claim.export.profile.layout_policy,
+                    study=study,
                 )
                 fields = dict(
                     execution=claim.execution,
@@ -92,7 +103,10 @@ class KakaoPdfDelivery:
                 if isinstance(prepared.manifest, StudyRenderManifest):
                     command = StudyRenderCommand.model_validate(
                         fields
-                        | dict(schema_version="kakao-study-render/1.0", study_revision_id=None)
+                        | dict(
+                            schema_version="kakao-study-render/1.0",
+                            study_revision_id=prepared.manifest.study_revision_id,
+                        )
                     )
                 else:
                     command = RenderCommand.model_validate(

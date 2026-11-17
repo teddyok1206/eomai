@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING
 from eom_catalog_contracts.kakao_delivery_rpc import KakaoPacketStudent, KakaoPacketView
 from eom_catalog_contracts.kakao_export_store import KakaoExportCreate, KakaoExportMutation
 from eom_catalog_contracts.kakao_question import KakaoQuestionProvenance
+from eom_catalog_contracts.kakao_study_export import (
+    KakaoStudyExportCreate,
+    KakaoStudyExportMutation,
+)
 from eom_operator_identity import ActorContext
 
 from .kakao_archive_authorization import KakaoArchiveError
@@ -66,4 +70,16 @@ class KakaoDeliveryApplication:
         # restore a lost process-local wake-up without creating another DB export.
         if result.export.state in {"PENDING", "RUNNING"}:
             self.submit_export(actor, command.source_binding_id, result.export.export_id)
+        return result
+
+    def request_study_export(
+        self, actor: ActorContext, command: KakaoStudyExportCreate, *, idempotency_key: str
+    ) -> KakaoStudyExportMutation:
+        if self.submit_export is None:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PDF_RUNTIME_UNAVAILABLE")
+        result = self.export_owner().request_study_export(
+            actor, command, idempotency_key=idempotency_key
+        )
+        if result.result.export.state in {"PENDING", "RUNNING"}:
+            self.submit_export(actor, command.source_binding_id, result.result.export.export_id)
         return result
