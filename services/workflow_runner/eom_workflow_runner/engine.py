@@ -126,6 +126,7 @@ from eom_workflow_runner.external_item_learning_catalog_client import (
     prepare_external_item_learning_execution_context,
 )
 from eom_workflow_runner.inference_transfer_execution_port import InferenceTransferRoleJobExecutor
+from eom_workflow_runner.kakao_concept_catalog_client import prepare_kakao_concept_execution_context
 from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
 from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
 from eom_workflow_runner.local_embedding_step_execution import (
@@ -503,13 +504,6 @@ class PlatformRoleJobExecutor:
         prompt_text: str | None,
         material_requirement: ContentTeamMaterialRequirement | None = None,
     ) -> RoleExecutionResult:
-        if isinstance(request, KakaoConceptWorkerRequest):
-            # Submission storage is not activation. Replace this gate only with the
-            # original-question/source provider and exact staged-input materializer.
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
-                "concept execution source adapter is not activated",
-            )
         if step.worker_role is None or step.result_schema is None:
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
@@ -518,6 +512,15 @@ class PlatformRoleJobExecutor:
         prompt_name = _prompt_name_for_request(worker_role=step.worker_role, request=request)
         if isinstance(request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)):
             prompt_text = material_learning_guidance(request)
+        if isinstance(request, KakaoConceptWorkerRequest):
+            prompt_text = (
+                "Read only source/concepts/request.json and its supplied local images. "
+                "Follow the pinned kakao-concepts instruction bundle and exact role schema. "
+                "PLAN proposes search queries; COMPOSE uses only the supplied evidence and pages. "
+                "Do not claim to have retrieved evidence or inspected an unavailable image. "
+                "Do not access Kakao, network, database, NAS or other workers. "
+                "Return only the supplied workflow-role/1.41.0 support result JSON."
+            )
         if (
             prompt_text is None
             and isinstance(request, ExternalItemLearningWorkerRequest)
@@ -581,6 +584,16 @@ class PlatformRoleJobExecutor:
         creative_context = None
         material_context = None
         knowledge_source_reader = None
+        concept_context = None
+        if isinstance(request, KakaoConceptWorkerRequest):
+            with self.sessions() as session:
+                concept_context = prepare_kakao_concept_execution_context(
+                    session,
+                    workflow=workflow,
+                    step=step,
+                    request=request,
+                    publisher=self.creative_page_publisher,
+                )
         if isinstance(request, KnowledgeAnalysisWorkerRequest) and isinstance(
             request.analysis_request, KnowledgeAnalysisRequestV12
         ):
@@ -632,6 +645,7 @@ class PlatformRoleJobExecutor:
             similarity_context=similarity_context,
             external_item_learning=creative_context,
             material_learning=material_context,
+            kakao_concepts=concept_context,
             reauthorize_knowledge_source=knowledge_source_reader,
             before_execute=bind_platform_job,
             execution_tier=(

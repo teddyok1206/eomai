@@ -54,6 +54,7 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capture_composition import build_kakao_capture_intake
+from eom_catalog_service.kakao_concept_authorization import CatalogKakaoConceptAuthorizationService
 from eom_catalog_service.kakao_delivery_composition import build_kakao_delivery_application
 from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
 from eom_catalog_service.kakao_question_composition import build_kakao_question_application
@@ -372,6 +373,11 @@ def serve() -> int:
             material_native_item_reads=MaterialNativeItemReadService(engine),
             material_learning_authorizations=CatalogMaterialLearningAuthorizationService(
                 engine, CatalogSettings.from_environment()
+            ),
+            kakao_concept_authorizations=(
+                CatalogKakaoConceptAuthorizationService(questions.concepts)
+                if questions.concepts is not None
+                else None
             ),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),

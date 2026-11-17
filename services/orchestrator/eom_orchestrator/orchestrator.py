@@ -87,6 +87,11 @@ from eom_workflow.inference_transfer_workflow import (
     InferenceTransferWorkflowRequest,
     InferenceTransferWorkflowRequestV11,
 )
+from eom_workflow.kakao_concept_plan import KakaoConceptExecutionPlan
+from eom_workflow.kakao_concept_request import (
+    CONCEPT_RESULT_SCHEMA,
+    KakaoConceptWorkerRequest,
+)
 from eom_workflow.material_learning_request import (
     MaterialLearningWorkerRequest,
     MaterialLearningWorkerRequestFamily,
@@ -105,6 +110,7 @@ from eom_workflow.models import (
     GeneratedVectorDrawingV6,
     InferenceTransferPairRoleResult,
     InferenceTransferPairRoleResultV11,
+    KakaoConceptRoleResultHeader,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -185,6 +191,8 @@ from eom_orchestrator.external_item_learning_execution import (
     validate_external_item_learning_execution_plan,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.kakao_concept_execution import KakaoConceptExecutionContext
+from eom_orchestrator.kakao_concept_plan_resolution import validate_kakao_concept_execution_plan
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_orchestrator.legacy_item_editorial_compatibility_artifact import (
     stage_legacy_item_editorial_compatibility_proposal,
@@ -261,6 +269,7 @@ WorkflowRoleRequest = (
     | LegacyItemExtractionWorkerRequest
     | ExternalItemLearningWorkerRequest
     | MaterialLearningWorkerRequestFamily
+    | KakaoConceptWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
@@ -738,11 +747,58 @@ class Orchestrator:
         | None = None,
         external_item_learning: ExternalItemLearningExecutionContext | None = None,
         material_learning: MaterialLearningExecutionContext | None = None,
+        kakao_concepts: KakaoConceptExecutionContext | None = None,
         reauthorize_knowledge_source: Callable[[KnowledgeAnalysisWorkerRequest], None]
         | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
+        is_concept = isinstance(request, KakaoConceptWorkerRequest)
+
+        def reauthorize_concepts() -> None:
+            if is_concept:
+                if kakao_concepts is None or not isinstance(request, KakaoConceptWorkerRequest):
+                    raise ControlPlaneError(
+                        "CONTROL_KAKAO_CONCEPT_NOT_ACTIVATED", "concept source owner required"
+                    )
+                kakao_concepts.reauthorize(request)
+
+        concept_plan: KakaoConceptExecutionPlan | None = None
+        if is_concept or kakao_concepts is not None:
+            if (
+                not isinstance(request, KakaoConceptWorkerRequest)
+                or kakao_concepts is None
+                or role != "support"
+                or step_key != "assist"
+                or attempt != 1
+                or result_schema != CONCEPT_RESULT_SCHEMA
+                or upstream_artifacts
+                or execution_tier != "PRIMARY"
+                or similarity_context is not None
+                or external_item_learning is not None
+                or material_learning is not None
+                or material_requirement is not None
+                or reauthorize_transfer_sources is not None
+                or transfer_workflow_request is not None
+                or transfer_core_prompt_sha256 is not None
+                or reauthorize_knowledge_source is not None
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_KAKAO_CONCEPT_CONTEXT_INVALID", "concept context differs"
+                )
+            request = KakaoConceptWorkerRequest.model_validate(request.model_dump(mode="json"))
+            reauthorize_concepts()
+            with self.sessions() as session:
+                concept_plan = validate_kakao_concept_execution_plan(
+                    session.scalar(
+                        select(ResolvedExecutionPlanRecord).where(
+                            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                        )
+                    ),
+                    workflow_id=workflow_id,
+                    step_key=step_key,
+                    work=request.work_input,
+                )
         is_uploaded_knowledge = isinstance(request, KnowledgeAnalysisWorkerRequest) and isinstance(
             request.analysis_request, KnowledgeAnalysisRequestV12
         )
@@ -949,6 +1005,7 @@ class Orchestrator:
                     request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
                 )
                 material_learning.reauthorize(request)
+            reauthorize_concepts()
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
@@ -1044,6 +1101,7 @@ class Orchestrator:
                         request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
                     )
                     material_learning.reauthorize(request)
+                reauthorize_concepts()
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
@@ -1070,6 +1128,7 @@ class Orchestrator:
 
         try:
             reauthorize_uploaded_knowledge()
+            reauthorize_concepts()
             if material_learning is not None:
                 assert isinstance(
                     request, (MaterialLearningWorkerRequest, MaterialLearningWorkerRequestV2)
@@ -1084,7 +1143,10 @@ class Orchestrator:
                 # failed history rather than strand an executable QUEUED job.
                 self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
             with self.sessions() as session:
-                if transfer_plan is not None:
+                if concept_plan is not None:
+                    plan_document = concept_plan.model_dump(mode="json")
+                    plan_id = concept_plan.plan_id
+                elif transfer_plan is not None:
                     plan_document = transfer_plan.model_dump(mode="json")
                     plan_id = transfer_plan.plan_id
                 elif creative_plan is not None:
@@ -1146,6 +1208,7 @@ class Orchestrator:
                             if request.request_name
                             in {
                                 "KNOWLEDGE_ANALYSIS_REQUEST",
+                                "KAKAO_CONCEPT_REQUEST",
                                 "LEGACY_ITEM_EXTRACTION_REQUEST",
                                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
                                 "EXTERNAL_ITEM_LEARNING_REQUEST",
@@ -1186,6 +1249,8 @@ class Orchestrator:
                     resolved_evidence_plan=resolved_evidence_plan,
                     material_requirement=material_requirement,
                 )
+                if kakao_concepts is not None:
+                    output_schema = kakao_concepts.constrain_schema(output_schema)
                 with transaction(self.sessions) as session:
                     # Reservation activation uses the same fence and rejects this claimed Job.
                     session.execute(
@@ -1228,6 +1293,11 @@ class Orchestrator:
                                 step_key=str(plan_step["step_key"]),
                                 inference_transfer_context=transfer_materialization_context,
                                 similarity_context=similarity_context,
+                                kakao_concept_authorize=(
+                                    kakao_concepts.authorize_work
+                                    if kakao_concepts is not None
+                                    else None
+                                ),
                             )
                             evidence = materialize_execution_step(
                                 materialization_session,
@@ -1240,6 +1310,11 @@ class Orchestrator:
                                 execution_tier=execution_tier,
                                 inference_transfer_context=transfer_materialization_context,
                                 similarity_context=similarity_context,
+                                kakao_concept_authorize=(
+                                    kakao_concepts.authorize_work
+                                    if kakao_concepts is not None
+                                    else None
+                                ),
                                 creative_page_publisher=(
                                     external_item_learning.page_publisher
                                     if external_item_learning is not None
@@ -1252,6 +1327,7 @@ class Orchestrator:
                             and not is_creative
                             and not is_material
                             and not is_uploaded_knowledge
+                            and not is_concept
                         ):
                             self._transition(
                                 job_id,
@@ -1261,7 +1337,13 @@ class Orchestrator:
                             )
                         return evidence
 
-                    if is_transfer or is_creative or is_material or is_uploaded_knowledge:
+                    if (
+                        is_transfer
+                        or is_creative
+                        or is_material
+                        or is_uploaded_knowledge
+                        or is_concept
+                    ):
                         # Preparation and materialization cannot have started a process.
                         # Only the actual launch boundary may retain an uncertain lease.
                         prepared_workspace = self.worker_adapter.prepare_structured_workspace(
@@ -1272,7 +1354,9 @@ class Orchestrator:
                             slot=slot,
                         )
                         evidence = materialize(prepared_workspace.workspace)
-                        if is_uploaded_knowledge:
+                        if is_concept:
+                            reauthorize_concepts()
+                        elif is_uploaded_knowledge:
                             reauthorize_uploaded_knowledge()
                         elif isinstance(request, InferenceTransferPairWorkerRequest):
                             assert reauthorize_transfer_sources is not None
@@ -1343,6 +1427,22 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            if isinstance(result, KakaoConceptRoleResultHeader):
+                if kakao_concepts is None or not isinstance(
+                    worker_input.request, KakaoConceptWorkerRequest
+                ):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "concept result has no pinned source context",
+                    )
+                try:
+                    kakao_concepts.validate_result(worker_input.request, result)
+                except ValueError as error:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "concept result differs from its exact request",
+                    ) from error
+                reauthorize_concepts()
             if isinstance(
                 result,
                 (
@@ -1768,6 +1868,7 @@ class Orchestrator:
                         revision_id=artifact.revision_id,
                         content_hash=staged.content_hash,
                     )
+                reauthorize_concepts()
                 self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
                 final_path = commit_artifact(staged, self.settings.nas_artifact_root)
                 content_hash = staged.content_hash
@@ -1775,6 +1876,12 @@ class Orchestrator:
                 content_bytes = staged.manifest.content_bytes
                 manifest_document = staged.manifest.model_dump(mode="json")
                 database_result = result_document
+                if isinstance(result, KakaoConceptRoleResultHeader):
+                    # Full private text/citations remain in the canonical Artifact, not a
+                    # second DB copy. This existing header is sufficient for Job outcome.
+                    database_result = KakaoConceptRoleResultHeader.model_validate(
+                        result.model_dump(exclude={"output"})
+                    ).model_dump(mode="json")
                 if isinstance(
                     result,
                     (
@@ -1799,6 +1906,7 @@ class Orchestrator:
                         input_sha256=worker_input.request.work_input.input_sha256,
                         result_sha256=content_sha256(result_document),
                     ).model_dump(mode="json")
+            reauthorize_concepts()
             with transaction(self.sessions) as session:
                 committing = session.execute(
                     select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()

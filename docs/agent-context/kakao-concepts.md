@@ -42,8 +42,6 @@ release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context
 ## 아직 실제로 연결되지 않은 것
 
 - 현재 Graph scope 선택/PLAN 실행 제어를 제공하는 공개 API·화면 composition.
-- Runner↔Catalog의 현재 source 검사를 전달하는 small authorization RPC와 실행 context.
-  그래서 `PlatformRoleJobExecutor`의 미활성 거부를 아직 제거하지 않는다.
 - 실제 preset/지침 발행·공유 슬롯 model run, PLAN→GraphRAG→COMPOSE 진행 coordinator.
 - COMPOSE provenance/원본 page·capture 발행, saved-study 저장·Studio 편집/새 PDF 연결.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
@@ -64,5 +62,32 @@ worker를 직접 실행하거나 다른 support purpose로 fallback해 이 연�
 - `test_release_operator_migration_0094.py`/`test_catalog_runtime_privileges.py`: exact release
   admission과 column-bounded grants. source unit PASS는 운영 migration/배포 승인 증거가 아니다.
 
-다음 구현은 **small source-authorization RPC→기존 Runner/Orchestrator 실제 실행**에 집중한다.
-새 source owner·queue·독립 Codex 프로세스를 더 만들지 않는다.
+## 공유 슬롯 실행 경계
+
+`concept-authorization-v1`은 exact Workflow/step/plan ID와 plan/Work hash만 받는다.
+`kakao_concept_authorization.py`는 저장한 human owner·original/current request·definition·plan42·
+accepted phase link를 대조한 뒤 기존 task authority로 현재 source를 재검사한다. Runner UID의
+이 operation만 socket에 허용한다. API/채팅/worker나 caller-supplied actor는 사용할 수 없다.
+Catalog의 기본 composition은 source 재인가만 구성하며, Graph scope provider 없이 새 task를
+만들면 명시 거부한다. 가짜 scope/API session으로 source 읽기를 성립시키지 않는다.
+
+`kakao_concept_catalog_client.py`는 그 작은 RPC와 Core 공개 Artifact reader를 조합한다.
+`KakaoConceptExecutionContext`는 canonical request를 한 번 읽고 실제 E/page/quote를 검증한다.
+Runner의 임시 미활성 guard는 이 adapter로 대체됐다. 기존 Orchestrator의 ordinary 공유
+claim/lease·prepare/run·중단 결과 복구·replay·Artifact 발행을 사용하며 generic support 실행으로
+fallback하지 않는다. 실행 전후/채택 직전 source를 재인가한다. 실제 provided E/page만 generation
+schema에 허용하고, pure input-aware 검사는 결과에서도 다시 수행한다.
+취소한 Workflow는 거부하며 단순 HTTP session 만료를 계정/원본 철회와 혼동하지 않는다.
+
+Job DB에는 기존 role metadata header만 넣고 긴 개념 설명·인용/crop은 canonical Artifact에 둔다.
+완료/실패 terminal replay는 재실행하지 않으며 current permission 철회도 우회하지 않는다.
+pure Kakao result/request behavior는 해당 purpose에만 lazy load한다. root fixed helper는 이전
+image-input 변경 그대로다. 이 source 연결을 실제 운영 activation/model 성공으로 해석하지 않는다.
+
+`test_kakao_concept_execution.py`/`test_kakao_concept_authorization.py`는 synthetic worker/storage로
+이 연결을 검사한다. 저장 integration의 actual-concept 검사는 기존 question/source·실제 plan/
+공유 capacity·동시 동일 Job claim/lease·현재 account 철회까지 disposable DB에서 검사한다.
+capability observation은 합성이며 actual Codex/systemd 실행은 없다.
+
+다음 구현은 **현재 Graph scope/실행 preset 구성→PLAN 결과의 공식 GraphRAG/원본 PNG→COMPOSE
+진행→saved-study/Studio 편집·새 PDF**에 집중한다. 새 queue/독립 Codex 프로세스를 만들지 않는다.

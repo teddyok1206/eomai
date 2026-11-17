@@ -16,6 +16,11 @@
         "추천 요청"
       ],
       "source_paths": [
+        "schemas/kakao-archive/concept-authorization-v1.schema.json",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_concept_authorization.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_authorization.py",
+        "services/workflow_runner/eom_workflow_runner/kakao_concept_catalog_client.py",
+        "services/orchestrator/eom_orchestrator/kakao_concept_execution.py",
         "schemas/kakao-archive/concept-task-store-v1.schema.json",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_concept_tasks.py",
         "services/catalog_service/eom_catalog_service/kakao_concept_models.py",
@@ -35,6 +40,8 @@
         "config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md"
       ],
       "test_paths": [
+        "tests/unit/test_kakao_concept_execution.py",
+        "tests/unit/test_kakao_concept_authorization.py",
         "tests/unit/test_kakao_concept_tasks.py",
         "tests/integration/test_kakao_concept_task_storage.py",
         "tests/unit/test_kakao_concept_contracts.py",

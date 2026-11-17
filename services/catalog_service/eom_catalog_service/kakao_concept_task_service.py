@@ -125,7 +125,7 @@ class KakaoConceptTaskService:
         artifacts: CatalogArtifactService,
         questions: KakaoQuestionService,
         sources: KakaoSourceService,
-        scope_provider: Callable[[Session, ActorContext, str], ChatRagScope],
+        scope_provider: Callable[[Session, ActorContext, str], ChatRagScope] | None = None,
         authorize_study: Callable[[Session, ActorContext, KakaoConceptCreate], None] | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
@@ -203,6 +203,8 @@ class KakaoConceptTaskService:
                 if self.authorize_study is None:
                     raise KakaoArchiveError("KAKAO_CONCEPT_STUDY_NOT_AVAILABLE")
                 self.authorize_study(session, actor, command)
+            if self.scope_provider is None:
+                raise KakaoArchiveError("KAKAO_CONCEPT_SCOPE_NOT_CONFIGURED")
             scope = self.scope_provider(session, actor, command.source_binding_id)
             row = KakaoConceptTaskRecord(
                 task_id="kakaoconcepttask_" + uuid4().hex,
@@ -416,6 +418,15 @@ class KakaoConceptTaskService:
             pointer, task = _intent_pointer(row), _view(row)
             if pointer is None:
                 raise KakaoArchiveError("KAKAO_CONCEPT_INPUT_NOT_PREPARED")
+        intent = self._read_intent(pointer)
+        with self.sessions.begin() as session:
+            row = self._row(session, actor, binding, task_id)
+            if _intent_pointer(row) != pointer:
+                raise KakaoArchiveError("KAKAO_CONCEPT_INTENT_CHANGED")
+            self._validate_intent(session, row, intent)
+        return task, intent
+
+    def _read_intent(self, pointer: ArtifactMemberPointer) -> KakaoConceptIntent:
         opened = self.artifacts.open_verified_member(
             artifact_id=pointer.artifact_id,
             revision_id=pointer.artifact_revision_id,
@@ -432,12 +443,29 @@ class KakaoConceptTaskService:
         intent = KakaoConceptIntent.model_validate_json(raw)
         if canonical_json_bytes(intent) != raw:
             raise KakaoArchiveError("KAKAO_CONCEPT_INTENT_CHANGED")
+        return intent
+
+    def accepted_source_authority(
+        self, *, task_id: str, operator_id: str
+    ) -> KakaoConceptSourceAuthority:
+        """Read a persisted intent outside write locks; never manufacture an API session."""
         with self.sessions.begin() as session:
-            row = self._row(session, actor, binding, task_id)
+            row = session.get(KakaoConceptTaskRecord, task_id)
+            if row is None or row.owner_operator_id != operator_id:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+            for permission in (PermissionKey.KAKAO_ARCHIVE_READ, PermissionKey.KAKAO_ARCHIVE_EDIT):
+                authorize_kakao_current_operator(
+                    session, operator_id=operator_id, permission=permission
+                )
+            pointer = _intent_pointer(row)
+            if pointer is None:
+                raise KakaoArchiveError("KAKAO_CONCEPT_INPUT_NOT_PREPARED")
+        intent = self._read_intent(pointer)
+        with self.sessions.begin() as session:
+            row = self.accepted_intent_row(session, intent, operator_id=operator_id)
             if _intent_pointer(row) != pointer:
                 raise KakaoArchiveError("KAKAO_CONCEPT_INTENT_CHANGED")
-            self._validate_intent(session, row, intent)
-        return task, intent
+        return KakaoConceptSourceAuthority(self, intent)
 
     def get_task(self, actor: ActorContext, binding: str, task_id: str) -> KakaoConceptTask:
         with self.sessions.begin() as session:

@@ -257,6 +257,16 @@ def test_http_logout_does_not_cancel_exact_accepted_background_work_or_allow_pub
                 operator_id=actor.operator_id,
                 work=work.model_copy(update={"task_id": "kakaoconcepttask_" + uuid4().hex}),
             )
+    restored = KakaoConceptTaskService(
+        store[0],
+        artifacts=service.artifacts,
+        questions=service.questions,
+        sources=service.sources,
+    ).accepted_source_authority(task_id=work.task_id, operator_id=actor.operator_id)
+    with Session(store[0]) as session:
+        assert restored.reauthorize(session, operator_id=actor.operator_id, work=work) == work
+    with pytest.raises(KakaoArchiveError):
+        service.accepted_source_authority(task_id=work.task_id, operator_id="operator_" + "0" * 32)
     with pytest.raises(KakaoArchiveError):
         service.get_task(actor, command.source_binding_id, work.task_id)
 
@@ -322,6 +332,225 @@ def test_actual_source_owner_submits_the_existing_workflow_and_replays_one_comma
             session.get(WorkflowInstanceRecord, first.workflow_id).created_actor_id
             == actor.operator_id
         )
+
+
+def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_store):
+    """Actual source/Workflow/plan/lease owners; capability data remains synthetic, no process."""
+    from copy import deepcopy
+    from datetime import timedelta
+
+    from eom_catalog_contracts.kakao_concept_authorization import KakaoConceptAuthorizationRequest
+    from eom_catalog_service.kakao_concept_authorization import (
+        CatalogKakaoConceptAuthorizationService,
+    )
+    from eom_identifiers import content_sha256
+    from eom_orchestrator.control_models import (
+        ExecutionPresetRecord,
+        ExecutionPresetRevisionRecord,
+        ResolvedExecutionPlanRecord,
+    )
+    from eom_orchestrator.control_service import (
+        acquire_worker_lease,
+        publish_capacity_policy_revision,
+        publish_execution_preset_revision,
+        record_capacity_policy_revision,
+        record_execution_preset_revision,
+        terminalize_worker_lease,
+    )
+    from eom_orchestrator.repository import ensure_protocol_version, submit_structured_job
+    from eom_orchestrator.state_machine import JobState, transition_job
+    from eom_workflow.control_plane import WorkerRole
+    from eom_workflow.models import RoleWorkerInput
+    from eom_workflow.schemas import role_schema_bundle_hash
+    from eom_workflow.shared_worker_capacity import SharedWorkerCapacityPolicy
+    from eom_workflow_runner.repository import create_step_run
+    from eom_workflow_runner.role_execution_binding import bind_platform_role_job
+    from eom_workflow_runner.state_machine import StepState, transition_step
+
+    from tests.integration import test_control_plane_persistence as controls
+    from tests.unit.test_shared_worker_capacity import capacity_value
+
+    service, actor, _, store = concept_store
+    _, work = prepared(concept_store)
+    engine, identity = store[0], uuid4().hex
+    compiled = compile_definition(ROOT / "config/workflows/kakao-concepts.v1.yaml", {"support"})
+    with Session(engine, expire_on_commit=False) as session, session.begin():
+        original, _, _ = controls._complete_control_plane(session, roles=tuple(WorkerRole))
+        capacity = capacity_value()
+        capacity.update(
+            capacity_policy_id="capacity_" + identity,
+            capacity_policy_revision_id="capacityrev_" + identity,
+        )
+        capacity = SharedWorkerCapacityPolicy.model_validate(capacity).model_dump(mode="json")
+        capacity["content_sha256"] = content_sha256(
+            {k: v for k, v in capacity.items() if k != "content_sha256"}
+        )
+        capacity_row = record_capacity_policy_revision(
+            session,
+            policy_key="concept-test-" + identity,
+            document=capacity,
+            created_by="disposable-test",
+        )
+        publish_capacity_policy_revision(
+            session,
+            capacity_policy_id=capacity_row.capacity_policy_id,
+            capacity_policy_revision_id=capacity_row.capacity_policy_revision_id,
+        )
+        base_plan = session.get(ResolvedExecutionPlanRecord, original)
+        base = session.get(ExecutionPresetRevisionRecord, base_plan.preset_revision_id)
+        preset = deepcopy(base.canonical_document)
+        old = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "kakao-concepts"
+            )
+        )
+        last = (
+            session.get(ExecutionPresetRevisionRecord, old.current_revision_id)
+            if old is not None
+            else None
+        )
+        support = next(entry for entry in preset["role_policies"] if entry["role"] == "support")
+        support["reference_bundle"] = None
+        preset.update(
+            preset_id=old.preset_id if old is not None else "execpreset_" + identity,
+            preset_revision_id="execpresetrev_" + identity,
+            revision_number=last.revision_number + 1 if last else 1,
+            role_policies=[support],
+            capacity_policy_revision_id=capacity_row.capacity_policy_revision_id,
+            general_knowledge_policy="DENY",
+            compatible_workflow_protocols=["workflow-role/1.41.0"],
+        )
+        preset["content_sha256"] = content_sha256(
+            {k: v for k, v in preset.items() if k != "content_sha256"}
+        )
+        ensure_protocol_version(
+            session, "workflow-role/1.41.0", role_schema_bundle_hash("workflow-role/1.41.0")
+        )
+        preset_row = record_execution_preset_revision(
+            session, preset_key="kakao-concepts", document=preset, created_by="disposable-test"
+        )
+        publish_execution_preset_revision(
+            session,
+            preset_id=preset_row.preset_id,
+            preset_revision_id=preset_row.preset_revision_id,
+        )
+        definition, _ = import_workflow_definition(session, compiled)
+        session.expunge(definition)
+    submitted = submit_kakao_concept_phase(
+        service,
+        actor=actor,
+        work=work,
+        definition=definition,
+        expected_preset=ExecutionPresetRevision.model_validate(preset),
+    )
+    with Session(engine, expire_on_commit=False) as session, session.begin():
+        row = session.scalar(
+            select(ResolvedExecutionPlanRecord).where(
+                ResolvedExecutionPlanRecord.workflow_id == submitted.workflow_id
+            )
+        )
+        pinned = KakaoConceptExecutionPlan.model_validate(row.canonical_document)
+        step = create_step_run(
+            session,
+            workflow_id=submitted.workflow_id,
+            step_key="assist",
+            step_type="agent",
+            worker_role="support",
+            result_schema="kakao-concepts-result@1.0",
+            input_pointer_manifest={},
+            max_attempts=1,
+        )
+        ensure_protocol_version(
+            session, "workflow-role/1.41.0", role_schema_bundle_hash("workflow-role/1.41.0")
+        )
+        worker = RoleWorkerInput(
+            protocol_version="workflow-role/1.41.0",
+            job_id="job_" + uuid4().hex,
+            workflow_id=submitted.workflow_id,
+            step_run_id=step.step_run_id,
+            attempt=1,
+            role="support",
+            request=dict(
+                request_name="KAKAO_CONCEPT_REQUEST", work_input=work.model_dump(mode="json")
+            ),
+            upstream_artifacts=(),
+            artifact=dict(
+                logical_artifact_id="artifact_" + uuid4().hex, revision_id="rev_" + uuid4().hex
+            ),
+        )
+        job, _ = submit_structured_job(
+            session,
+            job_id=worker.job_id,
+            protocol_version=worker.protocol_version,
+            idempotency_key="concept-job-" + identity,
+            task_type="workflow_support",
+            request=worker.model_dump(mode="json"),
+            logical_artifact_id=worker.artifact.logical_artifact_id,
+            revision_id=worker.artifact.revision_id,
+        )
+        transition_job(session, job.job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
+        transition_job(session, job.job_id, JobState.QUEUED, "JOB_QUEUED")
+        transition_step(step, StepState.RUNNING)
+        bind_platform_role_job(
+            session,
+            workflow_id=submitted.workflow_id,
+            step_run_id=step.step_run_id,
+            step_key="assist",
+            attempt=1,
+            worker_role="support",
+            job_id=job.job_id,
+        )
+        selection = KakaoConceptAuthorizationRequest(
+            workflow_id=submitted.workflow_id,
+            step_run_id=step.step_run_id,
+            plan_id=pinned.plan_id,
+            plan_sha256=pinned.plan_sha256,
+            work_sha256=content_sha256(work),
+        )
+    authorizer = CatalogKakaoConceptAuthorizationService(service)
+    assert authorizer.authorize(selection).status == "SUCCESS"
+    barrier = Barrier(2)
+
+    def claim(_index):
+        barrier.wait(timeout=15)
+        with Session(engine) as session, session.begin():
+            lease = acquire_worker_lease(
+                session,
+                plan_id=pinned.plan_id,
+                step_key="assist",
+                job_id=worker.job_id,
+                attempt=1,
+                workload_class="KNOWLEDGE_ANALYSIS",
+                acquired_at=controls.NOW + timedelta(minutes=1),
+                ttl=timedelta(minutes=30),
+            )
+            return lease.lease_id, lease.worker_slot_id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        leases = tuple(executor.map(claim, range(2)))
+    assert leases[0] == leases[1] and leases[0][1] in {"01", "02", "03", "04", "05"}
+    with Session(engine) as session, session.begin():
+        terminalize_worker_lease(
+            session,
+            lease_id=leases[0][0],
+            terminal_state="RELEASED",
+            reason_code="TEST_COMPLETED_NO_PROCESS",
+            released_at=controls.NOW + timedelta(minutes=2),
+        )
+        session.execute(
+            update(ApiSessionRecord)
+            .where(ApiSessionRecord.api_session_id == actor.session_id)
+            .values(revoked_at=datetime.now(UTC))
+        )
+    assert authorizer.authorize(selection).status == "SUCCESS"
+    with Session(engine) as session, session.begin():
+        session.execute(
+            update(OperatorRecord)
+            .where(OperatorRecord.operator_id == actor.operator_id)
+            .values(status="DISABLED")
+        )
+    with pytest.raises(KakaoArchiveError):
+        authorizer.authorize(selection)
 
 
 @pytest.mark.parametrize("phase", ["intent", "plan"])

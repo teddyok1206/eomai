@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "kakao-concept-authorization-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/concept-authorization-v1.schema.json",
+            "resources/kakao-archive/concept-authorization-v1.schema.json",
+            "1.0",
+            "sha256:9d444d554d755f98a650ad981d195218263d52894abbf626696831c077c2e94b",
+        ),
         "kakao-concept-task-store-v1": CatalogSchemaResource(
             "schemas/kakao-archive/concept-task-store-v1.schema.json",
             "resources/kakao-archive/concept-task-store-v1.schema.json",

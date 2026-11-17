@@ -441,6 +441,20 @@ from eom_orchestrator.inference_transfer_snapshot_staging import (
 from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
 from eom_workflow_runner.role_execution_port import RoleExecutionResult
 from eom_workflow_runner.role_execution_binding import bind_platform_role_job
+from eom_catalog_contracts.kakao_concept_authorization import (
+    KakaoConceptAuthorizationRequest,
+)
+from eom_orchestrator.kakao_concept_execution import KakaoConceptExecutionContext
+from eom_workflow_runner.kakao_concept_catalog_client import CatalogKakaoConceptSourceReader
+from eom_catalog_service.kakao_concept_authorization import (
+    CatalogKakaoConceptAuthorizationService,
+)
+load_catalog_schema("kakao-concept-authorization-v1")
+KakaoConceptAuthorizationRequest(
+    workflow_id="workflow_" + "1" * 32, step_run_id="steprun_" + "2" * 32,
+    plan_id="execplan_" + "3" * 32, plan_sha256="sha256:" + "4" * 64,
+    work_sha256="sha256:" + "5" * 64,
+)
 load_inference_transfer_workflow_request_schema()
 load_inference_transfer_workflow_request_schema_v11()
 load_catalog_schema("item-inference-transfer")

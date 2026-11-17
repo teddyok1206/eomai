@@ -151,18 +151,31 @@ def test_changed_work_on_replay_does_not_reuse_a_stale_input():
         resolve(session, work=KakaoConceptWork.model_validate(changed))
 
 
-def test_unactivated_platform_executor_does_not_fall_back_to_another_support_prompt():
+def test_missing_source_authority_does_not_fall_back_to_another_support_prompt(monkeypatch):
+    from contextlib import nullcontext
+    from unittest.mock import Mock
+
     from eom_workflow.kakao_concept_request import KakaoConceptWorkerRequest
+    from eom_workflow_runner import engine as engine_module
     from eom_workflow_runner.engine import PlatformRoleJobExecutor
-    from eom_workflow_runner.errors import WorkflowError
 
     executor = object.__new__(PlatformRoleJobExecutor)
-    with pytest.raises(WorkflowError, match="source adapter is not activated"):
+    executor.sessions = lambda: nullcontext(Mock())
+    executor.orchestrator = Mock()
+    executor.creative_page_publisher = Mock()
+    executor.similarity_context_provider = None
+    monkeypatch.setattr(
+        engine_module,
+        "prepare_kakao_concept_execution_context",
+        Mock(side_effect=ControlPlaneError("SOURCE_NOT_ACCEPTED", "source not accepted")),
+    )
+    with pytest.raises(ControlPlaneError, match="source not accepted"):
         executor.execute(
-            workflow=None,
-            step=None,
+            workflow=SimpleNamespace(workflow_id="workflow_" + "a" * 32),
+            step=SimpleNamespace(worker_role="support", result_schema="kakao-concepts-result@1.0"),
             request=KakaoConceptWorkerRequest(work_input=work_value()),
             upstream=(),
             idempotency_key="synthetic-no-dispatch",
             prompt_text=None,
         )
+    executor.orchestrator.submit_workflow_role.assert_not_called()

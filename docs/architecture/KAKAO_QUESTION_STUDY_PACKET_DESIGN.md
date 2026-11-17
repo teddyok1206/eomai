@@ -440,3 +440,27 @@ Work 입력에는 task/phase·binding·question revision/manifest와 **개념 re
   v1/v2 혼합 history를 검사하고 실제 source 실증과 구분한다.
 - 단순히 v1의 쪽수나 layout 의미를 바꾸는 대안은 과거 결과를 오해하게 한다. 현재 두 wire
   family에 필요한 얇은 additive 응답만 추가하는 것이 기존 프레임워크 안의 가장 작은 변경이다.
+
+## 11. 수락된 개념 작업의 실제 공유 슬롯 실행 연결
+
+Catalog는 private task/phase의 현재 source 권한을, Runner는 저장 Workflow의 실행을,
+Orchestrator는 입력 materialization·결과 검증·Artifact 발행을 담당한다. 새 queue나 전용
+슬롯은 만들지 않는다. 정본은 이미 수락한 intent/phase Work와 exact Workflow·plan42다.
+
+- 작은 Runner 전용 authorization RPC는 Workflow/step/plan ID와 plan/Work hash만 받는다.
+  operator/session/task/권한을 요청에서 받지 않는다. Catalog가 저장한 human owner와 phase의
+  workflow link를 따라 intent·원 질문·원 source closure·현재 계정/권한을 재검사한다.
+- intent는 기존 Artifact owner로 lock 밖에서 읽고 canonical bytes/hash를 검증한다. 현재
+  metadata/ACL은 호출마다 다시 확인한다. 긴 학생 내용·사진·교재가 RPC/DB로 복사되지 않는다.
+  keyed ID lookup과 unique (task,phase)를 사용하며 비용은 bounded source closure에 선형이다.
+- 기존 Catalog socket의 정확한 Runner UID에 이 operation만 추가한다. 일반 API/채팅/worker가
+  background authority를 주장하지 못한다. 원 HTTP 만료는 accepted task를 바꾸지 않으며 실제
+  계정/원본 철회는 실행 전·복구·결과 채택을 차단한다.
+- Runner는 공개 plan validator와 기존 Core Artifact reader를 조합한 exact execution context를
+  전달한다. Orchestrator가 기존 claim/lease·prepare/run·중단 복구 경로에서 재인가하고, pure
+  request/result validator로 실제 E/page/quote/crop을 검사한 뒤에만 결과를 발행한다.
+- 같은 요청은 기존 Job·Artifact를 재조회하며 실패 이력을 수정하거나 새 identity로 우회하지
+  않는다. 새 DB/schema migration은 이 연결에 필요 없다. pure Kakao package는 해당 purpose에만
+  lazy load하여 다른 Workflow의 설치 의존성을 늘리지 않는다.
+- 단순 direct Codex 호출은 기존 claim/lease·source revocation·복구를 잃는다. 기존 material
+  authorization의 transport 패턴만 재사용하고 purpose/DTO/검증은 분리하는 것이 작은 대안이다.

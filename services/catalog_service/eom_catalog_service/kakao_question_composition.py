@@ -6,6 +6,7 @@ from sqlalchemy import Engine
 
 from .artifacts import CatalogArtifactService
 from .kakao_archive_authorization import KakaoArchiveError
+from .kakao_concept_task_service import KakaoConceptTaskService
 from .kakao_question_compose_service import KakaoQuestionComposeService
 from .kakao_question_reads import KakaoQuestionReads
 from .kakao_question_service import KakaoQuestionService
@@ -17,6 +18,7 @@ class KakaoQuestionApplication:
     questions: KakaoQuestionService
     reads: KakaoQuestionReads
     composer: KakaoQuestionComposeService | None = None
+    concepts: KakaoConceptTaskService | None = None
 
 
 def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication:
@@ -37,4 +39,7 @@ def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication
         KakaoQuestionComposeService(
             engine, questions=questions, sources=sources, artifacts=artifacts
         ),
+        # Source reauthorization is available without inventing a Graph scope. Creating a
+        # new recommendation still requires the separately configured official scope owner.
+        KakaoConceptTaskService(engine, artifacts=artifacts, questions=questions, sources=sources),
     )

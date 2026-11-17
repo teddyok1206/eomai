@@ -39,13 +39,25 @@ def test_named_uid_only_keeps_modes_and_exact_replay(tmp_path):
 
 
 @pytest.mark.parametrize("enabled", (False, True))
-def test_actual_server_constructor_grants_only_separately_enabled_runner(tmp_path, enabled):
+@pytest.mark.parametrize("purpose", ("workflow", "concept"))
+def test_actual_server_constructor_grants_only_separately_enabled_runner(
+    tmp_path, enabled, purpose
+):
     directory = tmp_path / "server-runtime"
     directory.mkdir(mode=0o750)
     directory.chmod(0o750)
     server = CatalogApplicationServer(
         *(SimpleNamespace() for _ in range(5)),
-        workflow_similarity_reads=SimpleNamespace(read=lambda request: None) if enabled else None,
+        workflow_similarity_reads=(
+            SimpleNamespace(read=lambda request: None)
+            if enabled and purpose == "workflow"
+            else None
+        ),
+        kakao_concept_authorizations=(
+            SimpleNamespace(authorize=lambda request: None)
+            if enabled and purpose == "concept"
+            else None
+        ),
         workflow_runner_uid=os.getuid() + 100000,
         chat_owner_uid=os.getuid() + 200001,
         allowed_uid=os.getuid() + 200000,

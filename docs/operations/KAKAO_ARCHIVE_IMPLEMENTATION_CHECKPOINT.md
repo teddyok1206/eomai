@@ -1,5 +1,54 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 공유 슬롯의 실제 purpose 실행 연결 — source 검증, 운영 미활성
+
+source 기준 `bcc6ba70`의 후속이다. Runner의 임시 미활성 거부를 실제 Catalog source 재인가
+adapter로 대체했고, 기존 Orchestrator의 claim/lease→prepare→실행→검증→Artifact 발행과
+중단 결과 복구에 PLAN/COMPOSE를 연결했다. **실제 모델·운영 API/화면 활성화는 아직 아니다.**
+현재 운영 release는 아래 `c93f78f7`이며 GPU/기존 슬롯·실패 이력은 변경하지 않았다.
+
+- 먼저 작은 `concept-authorization-v1` Schema2020-12/mirror/닫힌 DTO를 추가했다. SHA는
+  `sha256:9d444d554d755f98a650ad981d195218263d52894abbf626696831c077c2e94b`다.
+  요청은 Workflow/step/plan ID와 plan/Work hash만 포함한다. Catalog가 저장한 human owner·
+  original/current request·정의·plan42·accepted phase link를 확인한 뒤 기존 task authority로
+  원 질문·source closure/Artifact와 현재 계정·권한을 확인한다. 취소 Workflow는 거부한다.
+  socket은 Runner UID의 이 operation만 허용한다. API/채팅/worker 권한을 넓히지 않았다.
+- accepted intent는 I/O lock 밖에서 canonical bytes/hash로 읽는다. 원 session은 감사 provenance
+  그대로이며 현재 계정/room/source는 매번 검사한다. source 재인가 기본 composition에는 가짜
+  Graph scope를 넣지 않았다. official scope provider가 없으면 새 추천 task 생성은 명시 거부한다.
+- Runner는 공개 plan validator·Core Artifact resolver로 exact private request를 읽고 실행 context를
+  전달한다. prepare 단계/복구/replay/실행 전후/채택 직전에 source를 검사한다. 일반 support 실행,
+  전용 슬롯이나 새로운 queue로 우회하지 않는다. workload 분류에서 새 request가 CODEX로
+  분류되던 연결 누락도 검사로 발견해 KNOWLEDGE_ANALYSIS로 수정했다.
+- COMPOSE는 actual E/page를 generation schema에 묶고, 결과에서도 actual request로 quote·
+  page/crop/citation·task/hash를 검사한다. 존재하지 않는 근거는 Artifact에 채택하지 않는다.
+  긴 설명·인용/crop은 canonical Artifact에, DB에는 기존 role metadata header만 남긴다.
+- 종료된 결과 복구는 기존 fixed-unit 종료 확인 경로다. terminal 성공/실패 replay는 모델을
+  재실행하지 않고 실패 이력을 바꾸지 않는다. source 철회를 replay로 우회하지 않는다.
+- guarded disposable DB Kakao 전체318 PASS다. 추가 actual-concept 검사는 기존 question/source·
+  실제 released preset/plan42·Job/step binding·공유 capacity와 동시 동일 Job claim의 lease1개를
+  검증했다. 슬롯01–05만 허용했고6번을 쓰지 않았다. logout 후 accepted work 재인가와 현재 계정
+  중지 시 거부도 검사했다. **capability observation은 합성이며 Codex/systemd 실행은0이다.**
+- 소스 회귀377 PASS, 별도 설치 wheel12 PASS, strict mypy10개·Ruff/format/diff PASS다. 현재
+  cancellation/input-error 처리까지 반영한 source-authority/claim/logout DB focused2 PASS도
+  재확인했다(전체318과 겹치므로 합산하지 않는다). wire audit1491 canonical/1135 mirror/
+  12938 refs와 개발 문맥/wire 회귀16 PASS다. synthetic worker로 두 phase의 기존 실행/발행
+  경로와 변조·철회·재조회·복구를 검증하며 실제 model success를 뜻하지 않는다.
+  초기 fixture의 canonical definition dump, capacity 날짜 normalization, protocol 선등록 누락은
+  수정했고 guard를 완화하지 않았다. 같은 로그를 성공으로 덮어쓰지 않았다.
+
+증거: `staging/kakao-concept-execution-all-source-20261117.log`,
+`staging/kakao-concept-execution-full-db-20261117.log`,
+`staging/kakao-concept-execution-current-db-20261117.log`,
+`staging/kakao-concept-execution-wheel-current-20261117.log`,
+`staging/kakao-concept-execution-final-mypy-20261117.log`,
+`staging/kakao-concept-execution-context-wire-20261117.log`.
+
+**다음 한 경로:** 실제 Graph scope/preset 구성→공유 슬롯 PLAN 결과→기존 GraphRAG·교과서 원본
+PNG→COMPOSE→saved-study/Studio 편집·PDF를 연결한다. 그 뒤 현재 사용자 요청대로 README 정리,
+커밋/푸시와 호환 운영 배포·실제 새 요청을 검증한다. 지금은 그 후속을 완료/배포했다고 표시하지
+않는다. 실제 CSV/사진의 최종 반복 출력 PDF·링크와 한 방/전체 방 주기 수집도 전체 goal에 남는다.
+
 ## 2026-11-17 실제 질문 원본의 추천 task·PLAN 저장/Workflow 제출 — 운영 미활성
 
 직전 source `08a53219` 후속이다. 기존 실제 question/source/Artifact owner를 사용하는

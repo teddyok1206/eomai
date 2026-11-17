@@ -246,6 +246,10 @@ from eom_catalog_service.item_similarity_publication_service import (
 from eom_catalog_service.kakao_archive_dispatch import dispatch_kakao_binding
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capture_dispatch import dispatch_kakao_capture
+from eom_catalog_service.kakao_concept_authorization import (
+    CatalogKakaoConceptAuthorizationService,
+    dispatch_kakao_concept_authorization,
+)
 from eom_catalog_service.kakao_delivery_application import KakaoDeliveryApplication
 from eom_catalog_service.kakao_delivery_dispatch import dispatch_kakao_delivery
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
@@ -406,6 +410,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     cast(BinaryIO, self.rfile),
                     cast(BinaryIO, self.wfile),
                 )
+                return
+            if raw_operation == "AUTHORIZE_KAKAO_CONCEPT_INPUT":
+                self.wfile.write(
+                    dispatch_kakao_concept_authorization(
+                        value, self.server.kakao_concept_authorizations
+                    )
+                )
+                self.wfile.flush()
                 return
             if isinstance(raw_operation, str) and raw_operation in MATERIAL_LEARNING_OPERATIONS:
                 if raw_operation == "PREPARE_NATIVE_MATERIAL_EXAM":
@@ -2132,6 +2144,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         kakao_students: KakaoStudentService | None = None,
         kakao_rooms: KakaoRoomService | None = None,
         kakao_questions: KakaoQuestionApplication | None = None,
+        kakao_concept_authorizations: CatalogKakaoConceptAuthorizationService | None = None,
         kakao_delivery: KakaoDeliveryApplication | None = None,
         kakao_manual: KakaoManualApplication | None = None,
         kakao_captures: KakaoCaptureIntakeService | None = None,
@@ -2182,6 +2195,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.kakao_students = kakao_students
         self.kakao_rooms = kakao_rooms
         self.kakao_questions = kakao_questions
+        self.kakao_concept_authorizations = kakao_concept_authorizations
         self.kakao_delivery = kakao_delivery
         self.kakao_manual = kakao_manual
         self.kakao_captures = kakao_captures
@@ -2222,6 +2236,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             workflow_similarity_reads is not None
             or external_item_learning_authorization is not None
             or material_learning_authorizations is not None
+            or kakao_concept_authorizations is not None
         ):
             actual_runner_uid = (
                 pwd.getpwnam("eom-workflow-runner").pw_uid
@@ -2295,6 +2310,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                     self.workflow_similarity_reads is not None
                     or self.external_item_learning_authorization is not None
                     or self.material_learning_authorizations is not None
+                    or self.kakao_concept_authorizations is not None
                 )
                 and uid == self.workflow_runner_uid
             )
@@ -2320,6 +2336,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                 self.material_learning_authorizations is not None
                 and uid == self.workflow_runner_uid
             )
+        if operation == "AUTHORIZE_KAKAO_CONCEPT_INPUT":
+            return self.kakao_concept_authorizations is not None and uid == self.workflow_runner_uid
         return uid == self.allowed_uid or (
             uid == self.chat_owner_uid
             and operation
