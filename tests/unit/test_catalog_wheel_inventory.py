@@ -50,6 +50,8 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         # before a root-owned service can select that release.
         required_members = {
             "eom_catalog_contracts/kakao_question_edit_context.py",
+            "eom_catalog_contracts/kakao_question_candidates.py",
+            "eom_catalog_contracts/resources/kakao-archive/question-candidate-page-v1.schema.json",
             "eom_catalog_contracts/resources/kakao-archive/question-edit-context-v1.schema.json",
             "eom_catalog_contracts/kakao_capture_intake.py",
             "eom_catalog_contracts/kakao_capture_rpc.py",

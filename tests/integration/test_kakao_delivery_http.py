@@ -259,6 +259,24 @@ def test_actual_studio_packet_student_pdf_download_and_same_request_replay(
                 root + path, json=body, headers={"X-CSRF-Token": csrf, "Idempotency-Key": key}
             )
 
+        candidates = web.get(
+            root + "/questions/candidates",
+            params={
+                "source_binding_id": qcommand.source_binding_id,
+                "room_id": qcommand.room_id,
+            },
+        )
+        assert candidates.status_code == 200, candidates.text
+        candidate_page = candidates.json()
+        assert candidate_page["source_revision_id"] == qcommand.source_revision_id
+        assert candidate_page["items"][0]["photo_count"] == 2
+        qcommand = qcommand.model_copy(
+            update={
+                "source_revision_id": candidate_page["source_revision_id"],
+                "candidate_ordinal": candidate_page["items"][0]["candidate_ordinal"],
+                "expected_mapping_revision_id": candidate_page["mapping_revision_id"],
+            }
+        )
         created = post(
             "/questions", qcommand.model_dump(mode="json"), "studio-question-" + uuid4().hex
         )

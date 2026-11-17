@@ -246,6 +246,14 @@ from eom_catalog_contracts.kakao_manual_rpc import (
     parse_kakao_manual_reply,
     parse_kakao_manual_request,
 )
+from eom_catalog_contracts.kakao_question_candidates import (
+    KakaoCandidateFailure,
+    KakaoQuestionCandidatePage,
+    ListKakaoQuestionCandidates,
+    check_candidate_reply,
+    parse_candidate_reply,
+    parse_candidate_request,
+)
 from eom_catalog_contracts.kakao_question_compose_rpc import (
     ComposeKakaoQuestionsRequest,
     KakaoComposeFailure,
@@ -813,6 +821,43 @@ class CatalogApplicationClient:
             }
         )
         return cast(KakaoQuestionView, self._request_kakao_question(request))
+
+    def list_kakao_question_candidates(
+        self,
+        binding: str,
+        room: str,
+        *,
+        actor: ActorContext,
+        source_revision_id: str | None = None,
+        after_ordinal: int = 0,
+        limit: int = 50,
+    ) -> KakaoQuestionCandidatePage:
+        request = ListKakaoQuestionCandidates.model_validate(
+            {
+                **self._kakao_identity(actor),
+                "source_binding_id": binding,
+                "room_id": room,
+                "source_revision_id": source_revision_id,
+                "after_ordinal": after_ordinal,
+                "limit": limit,
+            }
+        )
+        try:
+            parsed = parse_candidate_request(request.model_dump(mode="json"))
+            reply = parse_candidate_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_candidate_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private candidate list invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoCandidateFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private candidate list failed")
+        return reply.result
 
     def read_kakao_question_edit_context(
         self,

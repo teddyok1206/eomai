@@ -1001,6 +1001,8 @@ def test_chat_owner_peer_is_read_only_not_a_catalog_mutation_peer(tmp_path: Path
             "GET_ITEM_CONTENT",
             "GET_EXTERNAL_ITEM_PREVIEW_MEDIA",
             "PREPARE_EXTERNAL_ITEM_PREVIEW",
+            "READ_KAKAO_QUESTION_EDIT_CONTEXT",
+            "LIST_KAKAO_QUESTION_CANDIDATES",
             None,
         ):
             assert not server.peer_can_operate(left, operation)

@@ -31,6 +31,35 @@
 
 ## 1. 책임·범위: 두 owner로 사용자 경로 연결
 
+### 2026-11-17 수락한 원본의 후보 → 기존 질문 저장 연결
+
+1. 기존 source owner의 수락된 방 원본을 question reads가 해석하고 Studio가 기존 CREATE
+   명령으로 저장한다. 새 수집 권한·정규화·별도 질문 저장소는 만들지 않는다.
+2. 정본은 accepted source resolution/normalization과 기존 immutable 질문 manifest다.
+   후보는 파생 read projection이며 DB에 중복 저장하지 않는다.
+3. 최초 조회만 명시적으로 current source를 선택한다. 응답에 exact source revision/hash를
+   돌려주고 후속 페이지·저장·재확인은 그 pin을 유지한다. 지정한 revision을 latest로 대체하지 않는다.
+4. READ+EDIT·실제 owner/room·mapping을 검사하고 source resolver가 schema/hash/lifecycle을
+   검증한다. I/O 뒤 현재 권한과 같은 source closure/mapping을 재검사한다.
+5. 주요 접근은 방 current head lookup, 하나의 고정 source 해석, 후보 ordinal 페이지 및 기존
+   origin occurrence membership다. 후보 하나마다 원본을 다시 읽는 N+1은 만들지 않는다.
+6. 기존 후보 map, 최대100개 페이지와 occurrence set, `(room_id,origin_occurrence_id)` unique
+   index의 IN lookup를 사용한다. 별도 index/cache/queue/migration은 없다.
+7. 한 GET은 O(source bytes+message count+page size), 추가 반환 공간 O(page size)다.
+   원본은 기존 bounded read 상한을 따른다. 페이지마다 원본 재해석 비용은 남으며, 성능 근거
+   없이 또 하나의 persistent 후보 index를 만들지 않는다.
+8. GET은 저장하지 않는다. POST는 기존 후보 origin unique·명령 예약·Artifact 발행·CAS를
+   재사용한다. 저장 완료/편집·분할된 origin을 목록에 표시해 재수집으로 덮지 않는다.
+9. Studio/BFF→API→question reads→source owner/순수 후보 규칙이다. worker가 DB/NAS를
+   조회하거나 프런트엔드가 후보 규칙을 다시 구현하지 않는다.
+10. 응답 유실은 같은 CREATE body/key로 확인한다. 저장 성공 뒤 목록 실패는 조회만 재시도한다.
+    flat CREATE의 정렬된 필드와 WebCrypto SHA-256으로 key를 정하므로 새로고침 뒤 같은
+    입력도 원래 요청을 재사용한다. key는 권한이 아니며 실제 사용자 scope·원래 명령 검증은
+    기존 owner가 계속 수행한다. 목록 실패로 고정 원본 선택을 잃거나 latest로 바꾸지 않는다.
+    mapping/source/권한 변경·없는 원본·미확정 순서는 명시적으로 알리고 임의 새 요청을 만들지 않는다.
+11. 개발 CLI에 source ID/ordinal을 직접 입력하는 대안은 실제 Studio 업무 경로를 완성하지
+    못한다. 반대로 범용 bulk-import framework는 필요 없으므로 작은 조회와 기존 저장을 연결한다.
+
 구현할 경로는 `수락한 원본 → 질문 목록/검토 → 선택한 질문 묶음 → 학생별 PDF/페이지 열람`이다.
 다음 두 Catalog 응용 책임만 추가한다. 각각의 테이블마다 서비스·repository·queue를 만들지 않는다.
 

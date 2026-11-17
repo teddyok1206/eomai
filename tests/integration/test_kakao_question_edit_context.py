@@ -292,6 +292,8 @@ def test_edit_context_requires_current_read_and_edit_permissions(
             )
             denied = api.get(path + "/edit-context", params=params)
             assert denied.status_code == 403 and "text_blocks" not in denied.text
+            candidates = api.get("/api/v1/kakao-archive/questions/candidates", params=params)
+            assert candidates.status_code == 403 and "preview" not in candidates.text
         finally:
             with Session(engine) as session, session.begin():
                 session.execute(

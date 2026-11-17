@@ -199,6 +199,17 @@ hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export p
 대응시킨다. 저장은 기존 compose의 TEXT_SPAN·같은 key/body·입력 CAS를 사용한다.
 표시문 override는 원문 좌표가 아니므로 내부 분할을 막는다. 표시문 수정 UI는 아직 미연결이다.
 이 확장의 source/API/임시 DB/실제 browser 합성 검증과 실제 카카오/운영 활성화는 별도다.
+
+`kakao_question_candidates.py`의 candidate-page 공개 read는 기존 순수 후보 계약과 별개다.
+처음만 source owner의 명시적 current selection을 읽고 모든 후속 조회/저장은 exact source
+revision/hash를 pin한다. reads owner가 같은 source를 한 번 해석하고 origin occurrence의
+indexed membership query로 이미 저장/분할·병합된 후보를 구분한다. 다른 source를 latest로
+대체하거나 수동 결과를 재수집으로 덮지 않는다. 수락된 원본이 없는 방은 빈 목록이며,
+원문 순서가 미확정인 원본은 명시적으로 거부한다. 사진/본문은 DB에 추가 복제하지 않는다.
+`kakao-question-candidates.js`는 후보 조회와 기존 CREATE만 연결한다. flat command의
+결정론적 key는 응답 유실·새로고침 뒤에도 원 요청을 재사용하며 저장 성공 뒤 열람 실패는
+GET/결과 열기만 재시도한다. lookup 실패로 source pin을 버리지 않고 계정/방 변경의 늦은
+응답을 차단한다. 이 UI는 카카오 수집을 시작하거나 unknown capability를 승인하지 않는다.
 학생 디렉터리는 `kakao-students.js`가 담당한다. 실제 학생 RPC/API/BFF를 사용하며 연결
 선택과 독립된 owner/요청 순서 검사로 늦은 응답을 차단한다. 학생 생성 자체는 방 mapping이 아니다.
 `kakao-rooms.js`는 확인된 방 조회와 학생 연결/해제를 같은 경계에서 수행한다. 연결 변경은

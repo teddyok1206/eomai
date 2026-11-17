@@ -6,6 +6,7 @@ from typing import Annotated
 
 from eom_api_contracts import SingleResponse
 from eom_api_contracts.kakao_questions import (
+    KakaoQuestionCandidatePage,
     KakaoQuestionComposition,
     KakaoQuestionCompositionResult,
     KakaoQuestionCreate,
@@ -47,6 +48,7 @@ _ERROR_STATUS = {
     "KAKAO_ARCHIVE_COMPOSITION_SCOPE_INVALID": 422,
     "KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID": 422,
     "KAKAO_ARCHIVE_QUESTION_EDIT_INVALID": 422,
+    "KAKAO_ARCHIVE_SOURCE_ORDER_UNVERIFIED": 409,
 }
 
 
@@ -62,6 +64,42 @@ def _boundary() -> Iterator[None]:
             "KakaoTalk request failed",
             "The private question operation could not be completed.",
         ) from error
+
+
+@router.get(
+    "/candidates",
+    operation_id="kakao_question_candidate_list",
+    response_model=SingleResponse[KakaoQuestionCandidatePage],
+    dependencies=[Depends(EDIT)],
+)
+def list_candidates(
+    request: Request,
+    response: Response,
+    source_binding_id: BindingId,
+    room_id: RoomId,
+    authentication: Auth,
+    source_revision_id: str | None = Query(default=None, pattern=r"^kakaosourcerev_[0-9a-f]{32}$"),
+    after_ordinal: int = Query(default=0, ge=0, le=100000),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> SingleResponse[KakaoQuestionCandidatePage]:
+    if after_ordinal and source_revision_id is None:
+        raise ApiError(
+            422,
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "Pinned source required",
+            "Pin the source revision for a following page.",
+        )
+    with _boundary():
+        result = request.app.state.services.catalog_application.list_kakao_question_candidates(
+            source_binding_id,
+            room_id,
+            actor=request.state.request_context.actor(),
+            source_revision_id=source_revision_id,
+            after_ordinal=after_ordinal,
+            limit=limit,
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, result)
 
 
 @router.post(

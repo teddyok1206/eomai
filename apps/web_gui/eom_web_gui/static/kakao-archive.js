@@ -5,6 +5,7 @@ import {createKakaoManual} from "./kakao-manual.js";
 import {createKakaoCaptures} from "./kakao-captures.js";
 import {createKakaoPublications} from "./kakao-publications.js";
 import {createKakaoQuestionComposer} from "./kakao-question-composer.js";
+import {createKakaoQuestionCandidates} from "./kakao-question-candidates.js";
 const BASE = "/kakao-archive";
 const ID = /^[a-z][a-z0-9_]{1,48}_[a-f0-9]{32}$/;
 const TERMINAL_RUNS = new Set(["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "PAUSED", "AUTH_REQUIRED"]);
@@ -71,9 +72,18 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     if (!live(token) || !unchanged() || binding?.source_binding_id !== result.source_binding_id || (currentRoom && currentRoom !== result.room_id)) return false;
     return await openQuestion(result.outputs[0].question_id, result.outputs[0].question_revision_id) === true;
   }});
+  const candidates = createKakaoQuestionCandidates({document, api, explainError,
+    onOpen: reference => openQuestion(reference.question_id, reference.question_revision_id),
+    onSaved: async question => {
+      const token = generation, room = currentRoom;
+      if (!live(token) || question.source_binding_id !== binding?.source_binding_id || question.room_id !== room) return false;
+      await loadQuestions(token);
+      if (!live(token) || currentRoom !== room || question.source_binding_id !== binding?.source_binding_id) return false;
+      return await openQuestion(question.question_id, question.question_revision_id) === true;
+    }});
   const rooms = createKakaoRooms({document, api, explainError, onSelect: row => {
     if (!active || !readReady() || row.source_binding_id !== binding?.source_binding_id) return;
-    const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear();
+    const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear(); candidates.setRoom(row);
     empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
     void loadQuestions(token).catch(error => { if (live(token)) message(explainError(error), true); });
   }});
@@ -125,6 +135,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     captures.setBinding(null);
     void publications.setBinding(null);
     composer.setBinding(null);
+    candidates.setBinding(null);
     nodes.connection.replaceChildren(); nodes.run.replaceChildren();
     nodes.questions.replaceChildren();
     clearDetails(); stopTimer();
@@ -187,8 +198,9 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     nodes.manual = node("section"); manual.install(nodes.manual);
     nodes.captures = node("section"); captures.install(nodes.captures);
     nodes.composer = node("section", undefined, "kakao-question-composer"); composer.install(nodes.composer);
+    nodes.candidates = node("section", undefined, "kakao-question-candidates"); candidates.install(nodes.candidates);
     rooms.install(nodes.rooms);
-    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.captures, nodes.students, nodes.run, work, nodes.composer, publicationSection);
+    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.captures, nodes.students, nodes.run, nodes.candidates, work, nodes.composer, publicationSection);
     clearDetails(); syncBootstrapControls();
   }
 
@@ -341,6 +353,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       captures.setBinding(detail);
       await publications.setBinding(detail);
       composer.setBinding(detail);
+      candidates.setBinding(detail);
       if (!live(token)) return;
       nodes.connection.replaceChildren(node("strong", detail.display_name), status(detail.state));
       if (!archiveReady()) {
@@ -587,6 +600,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     captures.setOwner(next);
     publications.setOwner(next);
     composer.setOwner(next);
+    candidates.setOwner(next);
     owner = next || null; permissions = new Set(); roles = new Set();
     generation++; listGeneration++; collectionIntent = null; collectionPending = false; bindingIntent = null; bindingPending = false;
     if (installed) { clearPrivateView(); nodes.refresh.disabled = false; }
@@ -598,6 +612,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     captures.setPermissions(values);
     publications.setPermissions(values);
     composer.setPermissions(values);
+    candidates.setPermissions(values);
     permissions = new Set(values);
     generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
@@ -610,7 +625,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     if (installed) clearPrivateView();
     if (active && owner && allowed("read")) void refresh();
   }
-  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); captures.open(); publications.open(); composer.open(); await Promise.all([refresh(), students.open()]); }
+  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); captures.open(); publications.open(); composer.open(); candidates.open(); await Promise.all([refresh(), students.open()]); }
   function close() {
     students.close();
     rooms.close();
@@ -618,6 +633,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     captures.close();
     publications.close();
     composer.close();
+    candidates.close();
     active = false; generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
     // A pending request keeps its key while the same owner navigates away and back.

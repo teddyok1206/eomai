@@ -60,6 +60,37 @@ class QuestionPage(WebModel):
     next_cursor: QuestionId | None
 
 
+class CandidateQuestionReference(WebModel):
+    question_id: QuestionId
+    question_revision_id: RevisionId
+
+
+class CandidateSummary(WebModel):
+    candidate_ordinal: int = Field(strict=True, ge=1, le=100000)
+    student_message_count: int = Field(strict=True, ge=1, le=100000)
+    reply_message_count: int = Field(strict=True, ge=0, le=100000)
+    photo_count: int = Field(strict=True, ge=0, le=100000)
+    first_student_at_utc: UtcDatetime | None
+    preview: str = Field(max_length=240)
+    boundary_uncertain: bool = Field(strict=True)
+    review_reasons: tuple[str, ...] = Field(max_length=8)
+    saved_question: CandidateQuestionReference | None
+    recomposed: bool = Field(strict=True)
+
+
+class QuestionCandidatePage(WebModel):
+    schema_version: Literal["kakao-question-candidate-page/1.0"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    source_revision_id: str | None = Field(pattern=r"^kakaosourcerev_[0-9a-f]{32}$")
+    source_resolution_sha256: str | None = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    mapping_revision_id: str = Field(pattern=r"^kakaomappingrev_[0-9a-f]{32}$")
+    total_candidates: int = Field(strict=True, ge=0, le=100000)
+    unknown_sender_rows: int = Field(strict=True, ge=0, le=100000)
+    items: tuple[CandidateSummary, ...] = Field(max_length=100)
+    next_after_ordinal: int | None = Field(strict=True, ge=1, le=100000)
+
+
 class QuestionCreate(WebModel):
     schema_version: Literal["kakao-question-create/1.0"]
     source_binding_id: BindingId

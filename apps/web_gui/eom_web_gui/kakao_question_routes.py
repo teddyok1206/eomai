@@ -25,6 +25,29 @@ def install_kakao_question_routes(
 ) -> None:
     prefix = "/studio/api/v1/kakao-archive/questions"
 
+    @app.get(prefix + "/candidates")
+    async def list_candidates(
+        response: Response,
+        source_binding_id: BindingId,
+        room_id: RoomId,
+        session: Annotated[WebSession, Depends(require_session)],
+        source_revision_id: str | None = Query(
+            default=None, pattern=r"^kakaosourcerev_[0-9a-f]{32}$"
+        ),
+        after_ordinal: int = Query(default=0, ge=0, le=100000),
+        limit: int = Query(default=50, ge=1, le=100),
+    ) -> dict[str, object]:
+        result = await gateway.kakao_question_candidates(
+            session,
+            source_binding_id,
+            room_id,
+            source_revision_id=source_revision_id,
+            after_ordinal=after_ordinal,
+            limit=limit,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return result.model_dump(mode="json")
+
     @app.post(prefix + "/compose")
     async def compose_questions(
         response: Response,

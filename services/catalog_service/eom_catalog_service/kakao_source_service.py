@@ -483,6 +483,19 @@ class KakaoSourceService:
             command.completed_at = datetime.now(UTC)
             return False
 
+    def current_source_revision(
+        self, actor: ActorContext, source_binding_id: str, room_id: str
+    ) -> str | None:
+        """Explicit mutable selection only; consumers pin the returned accepted revision."""
+        with self._sessions.begin() as session:
+            owner = self._scope(session, actor, source_binding_id, room_id, mutate=False)
+            head = session.get(KakaoSourceHeadRecord, room_id)
+            if head is None:
+                return None
+            if (head.owner_operator_id, head.source_binding_id) != (owner, source_binding_id):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_SOURCE_INVALID")
+            return head.current_source_revision_id
+
     def get_source(
         self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
     ) -> AcceptedKakaoSource:
@@ -614,6 +627,8 @@ class KakaoSourceService:
                     attachments[attachment.attachment_id] = KakaoAttachmentSource(
                         attachment.attachment_revision_id, attachment.original, attachment.quality
                     )
+            if normalization.source_order == "unknown":
+                raise KakaoArchiveError("KAKAO_ARCHIVE_SOURCE_ORDER_UNVERIFIED")
             resolved = ResolvedKakaoQuestionSource(
                 normalization,
                 admission.normalization,

@@ -40,6 +40,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:ac40f4d144960ed6e6ce3da7b61c55b7ec4ad742860d1cbc03b0e8aa9f4578f3",
         ),
+        "kakao-question-candidate-page-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-candidate-page-v1.schema.json",
+            "resources/kakao-archive/question-candidate-page-v1.schema.json",
+            "1.0",
+            "sha256:cfd6f3b04a42536dd36ab6327a64ed819777aefcff6eebf6a0bbd20b7bd49d33",
+        ),
         "catalog-kakao-capture-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-capture-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-capture-v1.schema.json",

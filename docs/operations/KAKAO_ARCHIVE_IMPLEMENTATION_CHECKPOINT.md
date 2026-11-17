@@ -1,5 +1,39 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 수락 원본의 질문 후보 → 기존 저장/PDF 연결
+
+1. **이번 source 범위:** 선택한 방의 수락 원본에서 질문 후보를 찾고, 기존 CREATE API로
+   저장·열람한다. 후보 번호·짧은 원문 미리보기·학생/답변/사진 수·저장 여부를 표시한다.
+   학생이 연결된 방만 화면에서 저장하며 이미 나누거나 합친 origin은 다시 등록하지 않는다.
+   사진 다운로드·카카오 수집·capability 확인을 이 버튼이 대신하지 않는다.
+2. **기존 구조:** 순수 후보 규칙과 원본/질문 owner, API-peer socket·API·BFF, 기존 Artifact/
+   CREATE 멱등·origin unique·CAS를 재사용했다. 새 DB/migration/queue/worker/cache/AI/의존성은
+   없다. 기존 순수 `question-candidates-v1`과 공개 페이지의 이름 충돌을 정리해 전자는 원래
+   bytes를 보존하고 additive `question-candidate-page-v1`을 따로 정의했다.
+3. **원본/복구:** 최초 current selection 이후 exact source revision/hash와 mapping을 고정한다.
+   실패 뒤 재조회도 pin을 유지하며, 다음 페이지에 source pin이 없으면 거부한다. 빈 방은
+   원본 없음으로 표시하고, 미확정 원문 순서는 explicit409다. 같은 flat CREATE의 정렬된
+   필드로 key를 정해 새로고침·응답 유실 뒤에도 원 요청을 재사용한다. 저장 성공 뒤 화면
+   열기 실패는 같은 저장을 다시 하지 않는다. READ+EDIT·owner/source 권한을 I/O 뒤 재확인한다.
+4. **합성 실증:** 실제 BFF→API→socket→guarded PostgreSQL에서 조회 자체의 무변경,
+   저장/replay·분할된 origin의 재등록 거부·서비스 재구성 뒤 읽기, 새 source 수락 뒤에도
+   옛 pin 유지, 없는 source의 latest 대체 없음, late session 철회와 빈 방을 확인했다.
+   기존 Studio HTTP 출력 시험도 후보 조회에서 시작하도록 보강해 합성 CSV/사진2개→질문
+   저장→packet→별도 로컬 렌더 프로세스→학생 PDF 다운로드/같은 bytes 재조회까지 통과했다.
+   이는 전용 UID sandbox나 실제 카카오 방의 성공으로 확대하지 않는다.
+5. **브라우저:** 실제 Chromium 합성 화면에서 유실 응답의 같은 key/body, reload 뒤 같은 key,
+   저장 완료 후 열기만 재시도, 조회 실패 뒤 원본 pin 보존, 타 계정 늦은 응답 차단,
+   textContent/XSS·390px·외부 요청 없음이 통과했다. 관련 source/API/BFF/Chromium/wheel104
+   PASS, 최종 공식 임시 DB273 PASS(이전 반복272 PASS), OpenAPI/schema10 PASS,
+   개발 문맥/API-peer44 PASS, Web 설치 경계15 PASS다. 겹치는 수치는 합산하지 않는다.
+   핵심13개 strict mypy·Ruff/format, schema audit1478/1123/12727, OpenAPI 비파괴 비교 PASS다.
+6. **운영/실제 계정:** 이번 변경은 아직 미배포이며 운영 source는66e28b36이다. 새 카카오
+   로그인·다운로드·source 수락은 실행하지 않았다. 기존 비밀정보/실패 기록·문항·벡터를
+   변경하지 않았다. 실제 한 방 사진 occurrence→PDF와 전체 방 주기 수집은 여전히 미완료다.
+7. **다음:** 이 source의 clean build/설치 검증 후 공유 API·Web의 호환 release로 반영한다.
+   사용자 원격 로그인 요청은 중복하지 않는다. 실제 화면에서 확인하지 않은 selector·사진
+   대응을 승인된 사실로 만들지 않고 실제 새 관측을 받아 한 방의 전체 경로를 실증한다.
+
 ## 2026-11-17 02:13 UTC 문장 내부 나누기 호환 운영 반영
 
 1. source `66e28b36919b33179ca0af85fe615cbb51fcdc7d`를 커밋·푸시했다. 동일 source의 API/

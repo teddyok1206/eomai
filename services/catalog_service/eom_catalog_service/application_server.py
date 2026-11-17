@@ -128,6 +128,7 @@ from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
 from eom_catalog_contracts.kakao_capture_rpc import KAKAO_CAPTURE_OPERATIONS
 from eom_catalog_contracts.kakao_delivery_rpc import KAKAO_DELIVERY_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
+from eom_catalog_contracts.kakao_question_candidates import LIST_KAKAO_QUESTION_CANDIDATES
 from eom_catalog_contracts.kakao_question_compose_rpc import COMPOSE_KAKAO_QUESTIONS
 from eom_catalog_contracts.kakao_question_edit_context import READ_KAKAO_QUESTION_EDIT_CONTEXT
 from eom_catalog_contracts.kakao_question_rpc import KAKAO_QUESTION_OPERATIONS
@@ -382,7 +383,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 return
             if isinstance(raw_operation, str) and (
                 raw_operation in KAKAO_QUESTION_OPERATIONS
-                or raw_operation == READ_KAKAO_QUESTION_EDIT_CONTEXT
+                or raw_operation
+                in (READ_KAKAO_QUESTION_EDIT_CONTEXT, LIST_KAKAO_QUESTION_CANDIDATES)
             ):
                 questions = self.server.kakao_questions
                 dispatch_kakao_question(

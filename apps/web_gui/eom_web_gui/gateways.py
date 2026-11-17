@@ -186,6 +186,7 @@ from eom_web_gui.kakao_manual_contracts import (
     ManualStart,
 )
 from eom_web_gui.kakao_question_contracts import (
+    QuestionCandidatePage,
     QuestionComposition,
     QuestionCompositionResult,
     QuestionCreate,
@@ -625,6 +626,17 @@ class ApplicationGateway(Protocol):
         value: QuestionCreate,
         idempotency_key: str,
     ) -> QuestionMutation: ...
+
+    async def kakao_question_candidates(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str,
+        *,
+        source_revision_id: str | None = None,
+        after_ordinal: int = 0,
+        limit: int = 50,
+    ) -> QuestionCandidatePage: ...
 
     async def kakao_question_edit_context(
         self,
@@ -2087,6 +2099,47 @@ class HttpApplicationGateway:
                 revision,
             ) or (room is not None and q.room_id != room):
                 raise ValueError("different question version")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_candidates(
+        self,
+        session: WebSession,
+        binding: str,
+        room: str,
+        *,
+        source_revision_id: str | None = None,
+        after_ordinal: int = 0,
+        limit: int = 50,
+    ) -> QuestionCandidatePage:
+        _require_id(binding, "kakaobinding_")
+        _require_id(room, "kakaoroom_")
+        if source_revision_id is not None:
+            _require_id(source_revision_id, "kakaosourcerev_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/questions/candidates",
+            params={
+                "source_binding_id": binding,
+                "room_id": room,
+                "after_ordinal": after_ordinal,
+                "limit": limit,
+                **({"source_revision_id": source_revision_id} if source_revision_id else {}),
+            },
+            timeout=130.0,
+        )
+        try:
+            result = QuestionCandidatePage.model_validate(self._data(response))
+            if (result.source_binding_id, result.room_id) != (binding, room) or (
+                source_revision_id is not None and result.source_revision_id != source_revision_id
+            ):
+                raise ValueError("different candidate source")
+            if len(result.items) > limit or (
+                result.items and result.items[0].candidate_ordinal != after_ordinal + 1
+            ):
+                raise ValueError("different candidate page")
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
