@@ -184,6 +184,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:99a822a3fb39ff4eb9171514b9fa9828cc94fe59b270f39e0c01690a2017273c",
         ),
+        "kakao-question-source-refresh-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/question-source-refresh-v1.schema.json",
+            "resources/kakao-archive/question-source-refresh-v1.schema.json",
+            "1.0",
+            "sha256:41f1090fe8832eefd39cf512c332e874b6c8e949890bb0d01e214cf7010236e7",
+        ),
         "kakao-media-blob-v1": CatalogSchemaResource(
             "schemas/kakao-archive/media-blob-v1.schema.json",
             "resources/kakao-archive/media-blob-v1.schema.json",

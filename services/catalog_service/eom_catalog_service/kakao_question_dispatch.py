@@ -27,6 +27,17 @@ from eom_catalog_contracts.kakao_question_edit_context import (
     parse_edit_context_reply,
     parse_edit_context_request,
 )
+from eom_catalog_contracts.kakao_question_refresh import (
+    REFRESH_ERROR_CODES,
+    REFRESH_KAKAO_QUESTION_SOURCE,
+    RefreshErrorCode,
+    RefreshKakaoQuestionSourceFailure,
+    RefreshKakaoQuestionSourceReply,
+    RefreshReply,
+    check_refresh_reply,
+    parse_refresh_reply,
+    parse_refresh_request,
+)
 from eom_catalog_contracts.kakao_question_rpc import (
     KAKAO_QUESTION_ERROR_CODES,
     KAKAO_QUESTION_OPERATIONS,
@@ -64,6 +75,9 @@ def dispatch_kakao_question(
     output: BinaryIO,
 ) -> None:
     operation = value.get("operation")
+    if operation == REFRESH_KAKAO_QUESTION_SOURCE:
+        _dispatch_refresh(questions, value, output)
+        return
     if operation == LIST_KAKAO_QUESTION_CANDIDATES:
         _dispatch_candidates(reads, value, output)
         return
@@ -177,6 +191,61 @@ def dispatch_kakao_question(
     finally:
         if image is not None:
             image.member.stream.close()
+
+
+def _dispatch_refresh(
+    questions: KakaoQuestionService | None, value: dict[str, object], output: BinaryIO
+) -> None:
+    request_id = "invalid-request"
+    with suppress(ValueError):
+        request_id = TypeAdapter(RequestId).validate_python(value.get("request_id"))
+
+    def failure(code: str) -> RefreshKakaoQuestionSourceFailure:
+        return RefreshKakaoQuestionSourceFailure(
+            request_id=request_id,
+            error_code=cast(
+                RefreshErrorCode,
+                code if code in REFRESH_ERROR_CODES else "CATALOG_APPLICATION_INTERNAL_ERROR",
+            ),
+        )
+
+    reply: RefreshReply
+    try:
+        request = parse_refresh_request(value)
+    except (ValueError, SchemaError):
+        reply = failure("KAKAO_ARCHIVE_REQUEST_INVALID")
+    else:
+        if questions is None:
+            reply = failure("CATALOG_APPLICATION_UNAVAILABLE")
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                source=ActorSource.APPLICATION_API,
+                operator_id=request.actor_id,
+                session_id=request.session_id,
+                request_id=request.request_id,
+                authentication_time=request.authentication_time,
+                permissions=frozenset(),
+            )
+            try:
+                reply = RefreshKakaoQuestionSourceReply(
+                    request_id=request_id,
+                    result=questions.refresh_question_source(
+                        actor,
+                        request.command,
+                        idempotency_key=request.idempotency_key,
+                    ),
+                )
+                reply = parse_refresh_reply(reply.model_dump(mode="json"))
+                check_refresh_reply(request, reply)
+            except KakaoArchiveError as error:
+                reply = failure(error.code)
+            except (ValueError, SchemaError):
+                reply = failure("KAKAO_ARCHIVE_RESULT_INVALID")
+            except Exception:
+                reply = failure("CATALOG_APPLICATION_INTERNAL_ERROR")
+    output.write(canonical_json_bytes(reply.model_dump(mode="json")) + b"\n")
+    output.flush()
 
 
 def _dispatch_candidates(

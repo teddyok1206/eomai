@@ -8,7 +8,12 @@ from fastapi import Depends, FastAPI, Header, Path, Query, Response
 from .contracts import StudioIdempotencyKey
 from .downloads import download_response
 from .gateways import ApplicationGateway
-from .kakao_question_contracts import QuestionComposition, QuestionCreate, QuestionReview
+from .kakao_question_contracts import (
+    QuestionComposition,
+    QuestionCreate,
+    QuestionReview,
+    QuestionSourceRefresh,
+)
 from .sessions import WebSession
 
 BindingId = Annotated[str, Query(pattern=r"^kakaobinding_[0-9a-f]{32}$")]
@@ -82,6 +87,26 @@ def install_kakao_question_routes(
         idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
     ) -> dict[str, object]:
         result = await gateway.kakao_question_create(session, body, idempotency_key)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["ETag"] = f'"v{result.question.resource_version}"'
+        return result.model_dump(mode="json")
+
+    @app.post(prefix + "/{question_id}/refresh-source")
+    async def refresh_source(
+        response: Response,
+        question_id: QuestionId,
+        body: QuestionSourceRefresh,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+        if_match: Annotated[str, Header(alias="If-Match", pattern=r'^"v[1-9][0-9]*"$')],
+    ) -> dict[str, object]:
+        result = await gateway.kakao_question_source_refresh(
+            session,
+            question_id,
+            body,
+            idempotency_key,
+            if_match,
+        )
         response.headers["Cache-Control"] = "no-store"
         response.headers["ETag"] = f'"v{result.question.resource_version}"'
         return result.model_dump(mode="json")

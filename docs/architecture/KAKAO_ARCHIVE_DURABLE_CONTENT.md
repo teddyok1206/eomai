@@ -31,6 +31,29 @@
 
 ## 1. 책임·범위: 두 owner로 사용자 경로 연결
 
+### 2026-11-17 늦게 받은 답변/사진으로 새 검토본 만들기
+
+1. 기존 question owner에 사람의 명시적 source refresh를 추가한다. 재수집/autosave는 이
+   작업을 실행하지 않으며 기존 수동 결과를 덮지 않는다. 단순 새 검토 revision 생성이다.
+2. 정본은 기존 exact question revision과 새 accepted source revision/candidate다.
+3. 기존 question/manifest/revision/command 테이블과 CREATE/EDIT 저장 모델을 재사용한다.
+   독립 additive `question-source-refresh-v1` JSON Schema를 먼저 정의하며 v1 bytes는 유지한다.
+4. 원 질문/원본·새 source의 현재 READ/EDIT, 같은 room/학생 mapping과 첫 학생 occurrence를
+   모두 확인한다. worker/public command는 owner·사진 pointer·본문·결과 ID를 제공하지 않는다.
+5. 주요 접근은 exact question/source lookup·candidate map lookup·기존 command key replay다.
+6. 기존 PK/room+origin unique·CAS와 불변 Artifact manifest를 사용한다. 새 큐/index/DB는 없다.
+7. 원본 해석은 고유 source bytes에 선형, 새 문항 구성은 선택 block 수에 선형이다.
+   이전 source는 중복 해석하지 않으며 source metadata는 기존 batch 검증을 사용한다.
+8. 기존 intent 예약→lock 밖 source/Artifact I/O→현재 권한/parent/version/mapping 재검사→
+   새 revision 채택을 사용한다. 중단/응답 유실은 같은 key/body로 원 예약/발행본을 복구한다.
+9. API/Studio→기존 question application→순수 question 구성/source/Artifact owner 방향이다.
+   background collection 권한으로 refresh·review·download를 수행하지 않는다.
+10. 원 질문의 origin이 새 후보와 다르거나 분할/병합으로 supersede되었으면 명시적으로
+    거부한다. 사용자는 표시 편집 대체에 동의하고 exact parent를 지정해야 한다. 새 검토본은
+    UNREVIEWED이며 전 parent를 provenance로 연결한다. 기존 packet/PDF는 옛 revision을 유지한다.
+11. 기존 head/source를 제자리 수정하거나 autosave가 최신 snapshot을 몰래 반영하는 대안은
+    수동 편집과 발행 이력을 손상하므로 제외한다. 새 범용 composition framework도 필요 없다.
+
 ### 2026-11-17 수락한 원본의 후보 → 기존 질문 저장 연결
 
 1. 기존 source owner의 수락된 방 원본을 question reads가 해석하고 Studio가 기존 CREATE

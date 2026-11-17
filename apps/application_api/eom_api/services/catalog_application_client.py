@@ -281,6 +281,14 @@ from eom_catalog_contracts.kakao_question_edit_context import (
     parse_edit_context_reply,
     parse_edit_context_request,
 )
+from eom_catalog_contracts.kakao_question_refresh import (
+    KakaoQuestionSourceRefresh,
+    RefreshKakaoQuestionSourceFailure,
+    RefreshKakaoQuestionSourceRequest,
+    check_refresh_reply,
+    parse_refresh_reply,
+    parse_refresh_request,
+)
 from eom_catalog_contracts.kakao_question_rpc import (
     ChangeKakaoQuestionRequest,
     CreateKakaoQuestionRequest,
@@ -840,6 +848,35 @@ class CatalogApplicationClient:
             ) from error
         if isinstance(reply, KakaoComposeFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private composition failed")
+        return reply.result
+
+    def refresh_kakao_question_source(
+        self, command: KakaoQuestionSourceRefresh, *, actor: ActorContext, idempotency_key: str
+    ) -> KakaoQuestionMutation:
+        try:
+            request = parse_refresh_request(
+                RefreshKakaoQuestionSourceRequest.model_validate(
+                    {
+                        **self._kakao_identity(actor),
+                        "command": command,
+                        "idempotency_key": idempotency_key,
+                    },
+                ).model_dump(mode="json")
+            )
+            reply = parse_refresh_reply(
+                self._raw_request(
+                    request.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_refresh_reply(request, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE",
+                "Private source refresh response invalid or unavailable",
+            ) from error
+        if isinstance(reply, RefreshKakaoQuestionSourceFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private source refresh failed")
         return reply.result
 
     def create_kakao_question(

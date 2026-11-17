@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from .contracts import UtcDatetime, WebModel
 from .kakao_archive_contracts import Label, ResourceVersion
@@ -98,6 +98,26 @@ class QuestionCreate(WebModel):
     source_revision_id: str = Field(pattern=r"^kakaosourcerev_[0-9a-f]{32}$")
     candidate_ordinal: int = Field(strict=True, ge=1, le=100000)
     expected_mapping_revision_id: str = Field(pattern=r"^kakaomappingrev_[0-9a-f]{32}$")
+
+
+class QuestionSourceRefresh(WebModel):
+    schema_version: Literal["kakao-question-source-refresh/1.0"]
+    source_binding_id: BindingId
+    room_id: RoomId
+    question_id: QuestionId
+    parent_revision_id: RevisionId
+    expected_resource_version: int = Field(strict=True, ge=1, le=2147483646)
+    expected_mapping_revision_id: str = Field(pattern=r"^kakaomappingrev_[0-9a-f]{32}$")
+    source_revision_id: str = Field(pattern=r"^kakaosourcerev_[0-9a-f]{32}$")
+    candidate_ordinal: int = Field(strict=True, ge=1, le=100000)
+    replace_display_edits: Literal[True]
+
+    @field_validator("replace_display_edits", mode="before")
+    @classmethod
+    def explicit_replacement(cls, value: object) -> object:
+        if value is not True:
+            raise ValueError("KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID")
+        return value
 
 
 class QuestionConfirm(WebModel):

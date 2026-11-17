@@ -72,6 +72,17 @@ actor 또는 trusted accepted-source port를 사용하고, background는 원 cap
 않으며 `test_kakao_candidate_autosave.py`와 기존 실제 worker PDF 검사가 담당한다.
 실제 collector 실행·정식 Studio export 활성화 증거는 아니다.
 
+`refresh_question_source`는 늦게 받은 답변/사진을 **사람이 명시적으로 선택**해 같은 질문의
+새 UNREVIEWED revision으로 저장한다. additive `kakao_question_refresh.py`의 작은 명령/RPC가
+exact parent/version/source/candidate/mapping과 표시 편집 대체 동의를 받는다. 기존 예약/
+발행/CAS를 사용하며 첫 학생 occurrence가 다르거나 superseded면 거부한다. 원 parent의
+manifest와 양쪽 source 권한도 I/O/채택 경계에서 재검사한다. 자동 수집 authority로 이 수동
+갱신을 실행하지 않는다. 이전 질문/packet/PDF는 그대로이며 새 본도 확인 전 최종 출력 불가다.
+후보 UI의 ‘이 원본으로 새 검토본 준비’는 기존 질문 열람→동의→같은 POST/key 확인을 사용한다.
+공개 경계는 기존 dispatch/API/BFF의 `/questions/{id}/refresh-source`이며 수집 버튼이 아니다.
+저장/HTTP 테스트는 수집 문맥 index의 `test_kakao_question_refresh_*`를 따른다. 실제 카카오
+관측·운영 활성화는 별도다. 정본 설계는 저장 문서의 ‘늦게 받은 답변/사진’ 절이다.
+
 질문 공개 연결은 `kakao_question_rpc.py` → 기존 API-only Catalog socket의
 `kakao_question_dispatch.py` → 위 owner와 `kakao_question_reads.py`다. exact 질문을 해석해
 원문 text와 사진 occurrence metadata만 화면 projection으로 내보낸다. 사진은 그 질문에

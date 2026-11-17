@@ -34,11 +34,12 @@ async function requestKey(body) {
 export function createKakaoQuestionCandidates({document, api, explainError, onSaved, onOpen}) {
   let root, owner = null, binding = null, room = null, active = false, permissions = new Set();
   let generation = 0, read = 0, loading = false, pending = null, page = null, selection = null, intent = null, notice = "";
+  let sourceRefresh = null;
   const allowed = () => active && owner && binding && room && permissions.has("kakao_archive:read") && permissions.has("kakao_archive:edit");
   const live = token => allowed() && token === generation;
   function el(tag, text, className = "") { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; node.className = className; return node; }
   function button(text, action) { const node = el("button", text, "button quiet"); node.type = "button"; node.addEventListener("click", action); return node; }
-  function clear() { generation++; read++; loading = false; page = selection = null; notice = ""; render(); }
+  function clear() { generation++; read++; loading = false; page = selection = sourceRefresh = null; notice = ""; render(); }
   function render() {
     if (!root) return;
     root.replaceChildren(); root.hidden = !allowed();
@@ -56,7 +57,23 @@ export function createKakaoQuestionCandidates({document, api, explainError, onSa
       item.append(el("strong", `질문 후보 ${row.candidate_ordinal}`), el("p", row.preview || "사진이 포함된 질문", "kakao-message-text"),
         el("small", `학생 메시지 ${row.student_message_count}개 · 답변 ${row.reply_message_count}개 · 학생 사진 ${row.photo_count}개`));
       if (row.recomposed) item.append(el("p", "이미 나누거나 합쳐 저장했습니다. 질문 목록에서 편집 결과를 확인해 주세요.", "muted-label"));
-      else if (row.saved_question) item.append(button("저장한 질문 열기", () => { if (allowed() && !pending) void onOpen(row.saved_question); }));
+      else if (row.saved_question) {
+        item.append(button("저장한 질문 열기", () => { if (allowed() && !pending) void onOpen(row.saved_question); }));
+        const prepare = button("이 원본으로 새 검토본 준비", () => void prepareSourceRefresh(row));
+        prepare.disabled = loading || pending || Boolean(intent && !intent.receipt) || room.mapping?.state !== "MAPPED" || room.mapping.mapping_revision_id !== page.mapping_revision_id;
+        item.append(prepare);
+        if (sourceRefresh?.ordinal === row.candidate_ordinal && sourceRefresh.source === page.source_revision_id) {
+          const label = el("label", undefined, "kakao-source-refresh-confirm");
+          const acknowledge = el("input"); acknowledge.type = "checkbox"; acknowledge.checked = sourceRefresh.acknowledged;
+          acknowledge.disabled = Boolean(pending);
+          acknowledge.addEventListener("change", () => { if (sourceRefresh) { sourceRefresh.acknowledged = acknowledge.checked; render(); } });
+          label.append(acknowledge, el("span", "기존 표시 편집을 적용하지 않은 새 검토본을 만듭니다. 이전 버전과 PDF는 보존됩니다."));
+          item.append(label);
+          const save = button("새 검토본 저장", () => void saveSourceRefresh(row));
+          save.disabled = !sourceRefresh.acknowledged || pending || loading || Boolean(intent && !intent.receipt);
+          item.append(save);
+        }
+      }
       else {
         const save = button("질문으로 저장", () => void saveCandidate(row));
         save.disabled = loading || pending || Boolean(intent && !intent.receipt) || room.mapping?.state !== "MAPPED" || room.mapping.mapping_revision_id !== page.mapping_revision_id;
@@ -74,7 +91,7 @@ export function createKakaoQuestionCandidates({document, api, explainError, onSa
   async function load(after = 0) {
     if (!allowed() || pending) return;
     const token = generation, request = ++read, selected = selection;
-    loading = true; notice = "수락한 대화의 질문 후보를 확인하고 있습니다."; render();
+    loading = true; sourceRefresh = null; notice = "수락한 대화의 질문 후보를 확인하고 있습니다."; render();
     const query = new URLSearchParams({source_binding_id:binding.source_binding_id,room_id:room.room_id,limit:"50",after_ordinal:String(after)});
     if (selected) query.set("source_revision_id", selected.revision);
     try {
@@ -99,16 +116,47 @@ export function createKakaoQuestionCandidates({document, api, explainError, onSa
     finally { if (pending === preparation) { pending = null; render(); } }
     if (live(token) && intent?.body === body) await submit(intent);
   }
+  async function prepareSourceRefresh(row) {
+    if (!allowed() || loading || pending || intent && !intent.receipt || row.recomposed || !row.saved_question || !page?.source_revision_id || room.mapping?.state !== "MAPPED" || room.mapping.mapping_revision_id !== page.mapping_revision_id) return;
+    const token = generation, attempt = {}, source = page.source_revision_id;
+    pending = attempt; sourceRefresh = null; notice = "저장한 질문 버전을 확인하고 있습니다."; render();
+    try {
+      const query = new URLSearchParams({source_binding_id:binding.source_binding_id,room_id:room.room_id});
+      const value = await api(`${BASE}/${row.saved_question.question_id}/revisions/${row.saved_question.question_revision_id}?${query}`);
+      if (!live(token) || page?.source_revision_id !== source) return;
+      const q = value?.question;
+      if (q?.source_binding_id !== binding.source_binding_id || q.room_id !== room.room_id || q.question_id !== row.saved_question.question_id || q.question_revision_id !== row.saved_question.question_revision_id || !Number.isInteger(q.resource_version) || q.resource_version < 1 || q.resource_version >= 2147483647 || q.student?.room_mapping_revision_id !== page.mapping_revision_id) throw new Error("학생 연결과 질문 버전을 다시 확인해 주세요.");
+      sourceRefresh = {ordinal:row.candidate_ordinal,source,question:q,acknowledged:false};
+      notice = "이번 원본의 질문·답변·사진으로 새 검토본을 만들 수 있습니다. 저장 후 다시 확인해야 합니다.";
+    } catch (error) { if (live(token)) notice = `검토본 준비를 완료하지 못했습니다. ${error.code ? explainError(error) : error.message}`; }
+    finally { if (pending === attempt) { pending = null; render(); } }
+  }
+  async function saveSourceRefresh(row) {
+    if (!allowed() || loading || pending || intent && !intent.receipt || !sourceRefresh?.acknowledged || sourceRefresh.ordinal !== row.candidate_ordinal || sourceRefresh.source !== page?.source_revision_id || room.mapping?.mapping_revision_id !== page?.mapping_revision_id) return;
+    const token = generation, previous = sourceRefresh.question;
+    const body = {schema_version:"kakao-question-source-refresh/1.0",source_binding_id:binding.source_binding_id,room_id:room.room_id,question_id:previous.question_id,parent_revision_id:previous.question_revision_id,expected_resource_version:previous.resource_version,expected_mapping_revision_id:page.mapping_revision_id,source_revision_id:page.source_revision_id,candidate_ordinal:row.candidate_ordinal,replace_display_edits:true};
+    const preparation = {}; pending = preparation; render();
+    try {
+      const key = await requestKey(body);
+      if (!live(token)) return;
+      intent = {owner,body,key,receipt:null};
+    } catch { if (live(token)) notice = "새 검토본의 저장 요청을 준비하지 못했습니다. 다시 확인해 주세요."; }
+    finally { if (pending === preparation) { pending = null; render(); } }
+    if (live(token) && intent?.body === body) await submit(intent);
+  }
   async function submit(current) {
     if (!allowed() || pending || intent !== current || current.owner !== owner || current.body.source_binding_id !== binding.source_binding_id || current.body.room_id !== room.room_id) return;
     const token = generation, attempt = {}; pending = attempt; notice = "질문 저장 결과를 확인하고 있습니다."; render();
     try {
       if (!current.receipt) {
-        const result = await api(BASE, {method:"POST",mutation:true,body:current.body,headers:{"Idempotency-Key":current.key}});
+        const refresh = current.body.schema_version === "kakao-question-source-refresh/1.0";
+        const result = await api(refresh ? `${BASE}/${current.body.question_id}/refresh-source` : BASE, {method:"POST",mutation:true,body:current.body,headers:{"Idempotency-Key":current.key,...(refresh ? {"If-Match":`"v${current.body.expected_resource_version}"`} : {})}});
         if (owner !== current.owner || intent !== current) return;
         const saved = result?.question;
         if (saved?.source_binding_id !== current.body.source_binding_id || saved.room_id !== current.body.room_id || !QUESTION.test(saved.question_id || "") || !REVISION.test(saved.question_revision_id || "")) throw new Error("저장 결과의 연결을 확인하지 못했습니다.");
+        if (refresh && (saved.question_id !== current.body.question_id || saved.previous_revision_id !== current.body.parent_revision_id || saved.resource_version !== current.body.expected_resource_version + 1 || saved.review_state !== "UNREVIEWED")) throw new Error("새 검토본의 연결을 확인하지 못했습니다.");
         current.receipt = saved;
+        sourceRefresh = null;
         if (live(token) && page?.source_revision_id === current.body.source_revision_id) page = {...page,items:page.items.map(row => row.candidate_ordinal === current.body.candidate_ordinal ? {...row,saved_question:{question_id:saved.question_id,question_revision_id:saved.question_revision_id}} : row)};
       }
       if (live(token)) { const opened = await onSaved(current.receipt); if (live(token)) notice = opened === false ? "저장했습니다. ‘저장 결과 다시 열기’를 눌러 확인해 주세요." : "질문을 저장했습니다. 원문과 사진을 확인해 주세요."; }

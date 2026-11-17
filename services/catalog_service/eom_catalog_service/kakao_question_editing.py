@@ -434,6 +434,44 @@ def question_from_candidate(
     )
 
 
+def question_from_refreshed_source(
+    previous: KakaoQuestionManifest,
+    source: ResolvedKakaoQuestionSource,
+    candidate: KakaoQuestionCandidate,
+    *,
+    question_revision_id: str,
+    actor_id: str,
+    created_at: datetime,
+) -> KakaoQuestionManifest:
+    """Rebuild an explicitly selected revision; permission/origin/CAS stay with owner."""
+    if (previous.source_binding_id, previous.room_id) != (
+        source.normalization.source_binding_id,
+        source.normalization.room_id,
+    ) or question_revision_id == previous.question_revision_id:
+        raise ValueError("KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID")
+    refreshed = question_from_candidate(
+        source,
+        candidate,
+        question_id=previous.question_id,
+        question_revision_id=question_revision_id,
+        student=previous.student,
+        actor_id=actor_id,
+        created_at=created_at,
+    )
+    return KakaoQuestionManifest.model_validate(
+        refreshed.model_dump()
+        | {
+            "previous_revision_id": previous.question_revision_id,
+            "provenance": (
+                KakaoQuestionProvenance(
+                    question_id=previous.question_id,
+                    question_revision_id=previous.question_revision_id,
+                ),
+            ),
+        }
+    )
+
+
 def question_final_blockers(
     question: KakaoQuestionManifest, *, include_replies: bool = False
 ) -> tuple[FinalBlocker, ...]:

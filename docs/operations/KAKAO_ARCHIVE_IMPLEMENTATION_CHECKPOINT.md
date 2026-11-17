@@ -1,5 +1,51 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 늦게 받은 답변·사진의 명시적 새 검토본
+
+`refresh_question_source`는 같은 학생/방의 exact 새 수락 source/candidate를 기존 질문의
+새 UNREVIEWED revision으로 저장한다. 사람의 parent/version/mapping pin과 표시 편집 대체
+동의를 필수로 받고, 기존 command 예약→Artifact 발행→CAS 채택을 재사용한다. 자동 수집이나
+background 권한으로 기존 질문을 갱신하지 않는다. 새 DB/queue/worker와 외부 AI 호출은 없다.
+
+- 독립 additive `question-source-refresh-v1`은 명령과 기존 API-peer socket의 새 operation을
+  정의한다. 기존 question store/manifest/RPC schema bytes를 수정하지 않았다. 이전 question/
+  packet/PDF는 원 revision에 고정되며 새 검토본은 다시 확인하기 전 최종 출력 대상이 아니다.
+- 현재 원/새 source와 parent manifest의 존재·hash/schema·상태/권한을 다시 검사한다.
+  첫 학생 occurrence가 다르거나 분할/병합된 원본이면 거부한다. 출처가 애매한 동일 문구를
+  같은 메시지라고 강제하지 않는다. 갱신 발행 중 수동 편집이 이기면 CAS 실패로 기존 결정을 보존한다.
+- 기존 API/BFF에 `POST /questions/{id}/refresh-source`를 연결했다. CSRF·If-Match·같은 요청
+  key/body를 유지하고 결과의 학생 mapping·parent/version/검토 전 상태를 확인한다.
+  후보 화면은 기존 질문을 연 뒤 ‘이 원본으로 새 검토본 준비’→동의→저장을 사용한다.
+  수신 원본을 다시 조회하거나 방/계정을 바꾸면 준비 상태를 비워 오래된 입력을 제출하지 않는다.
+- 임시 DB의 실제 HTTP/BFF/API-peer socket/owner를 통과했다. 서비스 재구성 뒤 같은 명령
+  재전송도 같은 결과를 읽는다. 합성 CSV의 늦은 조교 답변·PNG가 새 질문→확인→packet→
+  실제 별도 subprocess renderer→Artifact에 들어가며, 선택하지 않은 다른 후보는 PDF에
+  들어가지 않는다. 이 검사는 보호된 systemd sandbox의 별도 승인 증거는 아니다.
+- 합성 실제 Chromium 검사에서 동의 전 저장 금지·응답 유실/화면 열기 실패 후 같은 key의
+  복구·완료 후 재열기 무POST·계정 전환/늦은 응답·좁은 화면·안전한 textContent를 확인했다.
+  실제 Kakao 페이지/원격 profile이나 인증정보를 사용하지 않았다.
+
+최초 테스트의 반복 문구만 있는 원본은 기존 정합 규칙에서 origin 연결이 불확실해 거부됐다.
+성공 fixture를 서로 다른 anchor가 있는 합성 원본으로 바꿨으며 정합/권한 기준을 낮추지 않았다.
+다른 초기 실패는 편집 명령 fixture의 필수 필드와 PDF 결과 manifest의 출력 참조 방식이었다.
+승인 Artifact를 바꾸려던 음성 fixture도 기존 DB 불변 trigger가 거부했다. 해당 검사는 승인
+row/trigger를 바꾸지 않고 기존 metadata read 경계의 실패를 주입하도록 정정했다. 실패 로그는 보존한다.
+오래된 Node/Playwright의 브라우저 캐시는 없어, 별도 설치 없이 이미 설치된1.65.2의 Node와
+Chromium을 합성 화면 검사에 재사용했다. 운영 browser driver/설정·모델·GPU는 바꾸지 않았다.
+
+검증 증거: `staging/kakao-question-refresh-{verified-full-db,final-unit,browser-final,types-final-v2,context}-20261117.log`.
+최종 guarded disposable PostgreSQL **473 PASS**(431.80초), source/API/BFF/별도 설치 wheel/
+의존 방향·계약 호환 **174 PASS**, 실제 Chromium 합성 화면 PASS, strict mypy10개·개발 문맥
+13건·Ruff/format/diff PASS다. 실제 카카오/HTTPS 로그인 검증이나 운영 활성화 증거는 아니다.
+그 전 전체472 PASS와 초기 실패·집중 재실행 로그도 각각 보존한다. 기준 source는 `bd9682c7`이며
+이 절을 포함한 commit은 Git history와 milestone 보고에서 확인한다.
+
+**운영 미배포**다. 운영 core/API/Web `7533ca8f…`/DB0097과 기존 실행 pin·인증은 유지했고,
+실제 카카오 새 방 수집·공유 개념 모델·정식 Studio PDF를 새로 실행한 것은 아니다. 기존5종
+비교 PDF/17쪽 preview도 새 수집 결과로 바꾸지 않았다. 원격 browser/remote는 확인 시
+inactive/MainPID0이어서 실제 방의 추가 CSV/사진 대응은 재연결 후 확인해야 한다.
+실제 한 방 수집→source→질문/Studio PDF와 전체 접근 방·주기 수집은 원래 goal에 남아 있다.
+
 ## 2026-11-17 수락 원본의 후보 자동 저장과 실제 PDF 회귀
 
 `KakaoQuestionService.create_source_candidates`가 한 번 해석한 exact 수락 source의 최대100개

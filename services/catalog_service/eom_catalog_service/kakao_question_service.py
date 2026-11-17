@@ -21,6 +21,7 @@ from eom_catalog_contracts.kakao_question import (
     KakaoQuestionProvenance,
     KakaoQuestionStudentPin,
 )
+from eom_catalog_contracts.kakao_question_refresh import KakaoQuestionSourceRefresh
 from eom_catalog_contracts.kakao_question_store import (
     KakaoQuestionChange,
     KakaoQuestionCreate,
@@ -52,6 +53,7 @@ from eom_catalog_service.kakao_question_editing import (
     PublishedKakaoQuestion,
     edit_question,
     question_from_candidate,
+    question_from_refreshed_source,
     validate_question_sources,
 )
 from eom_catalog_service.kakao_question_models import (
@@ -80,7 +82,8 @@ from eom_catalog_service.kakao_student_models import (
     KakaoStudentRecord,
 )
 
-QuestionCommand = KakaoQuestionCreate | KakaoQuestionChange
+RevisionCommand = KakaoQuestionChange | KakaoQuestionSourceRefresh
+QuestionCommand = KakaoQuestionCreate | RevisionCommand
 _MAX_SOURCE_BYTES = 128 * 1024 * 1024
 
 
@@ -122,6 +125,14 @@ def _scope_key(command: QuestionCommand) -> str:
         "candidate/" + command.room_id
         if isinstance(command, KakaoQuestionCreate)
         else "question/" + command.question_id
+    )
+
+
+def _parent_revision(command: RevisionCommand) -> str:
+    return (
+        command.edit.parent_revision_id
+        if isinstance(command, KakaoQuestionChange)
+        else command.parent_revision_id
     )
 
 
@@ -210,7 +221,7 @@ class KakaoQuestionService:
         return pin
 
     @staticmethod
-    def _head(session: Session, owner: str, command: KakaoQuestionChange) -> KakaoQuestionRecord:
+    def _head(session: Session, owner: str, command: RevisionCommand) -> KakaoQuestionRecord:
         head = session.scalar(
             select(KakaoQuestionRecord)
             .where(
@@ -226,7 +237,7 @@ class KakaoQuestionService:
         if head.superseded_by_composition_id is not None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
         if (head.current_revision_id, head.resource_version) != (
-            command.edit.parent_revision_id,
+            _parent_revision(command),
             command.expected_resource_version,
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
@@ -236,7 +247,7 @@ class KakaoQuestionService:
         self, actor: KakaoSourcePrincipal, command: QuestionCommand
     ) -> KakaoSourceAuthorization:
         # Accepted collection work may create candidates, not review/edit history.
-        if isinstance(command, KakaoQuestionChange) and not isinstance(actor, ActorContext):
+        if not isinstance(command, KakaoQuestionCreate) and not isinstance(actor, ActorContext):
             raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
         return self._sources.authorization(actor)
 
@@ -275,11 +286,11 @@ class KakaoQuestionService:
                     owner,
                 )
             create = isinstance(command, KakaoQuestionCreate)
-            if isinstance(command, KakaoQuestionChange):
+            if not isinstance(command, KakaoQuestionCreate):
                 self._head(session, owner, command)
             mapping_id = (
                 command.expected_mapping_revision_id
-                if isinstance(command, KakaoQuestionCreate)
+                if isinstance(command, (KakaoQuestionCreate, KakaoQuestionSourceRefresh))
                 else room.current_mapping_revision_id
             )
             self.current_student_pin(session, room, mapping_id)
@@ -308,7 +319,7 @@ class KakaoQuestionService:
                     question_revision_id=result.revision_id,
                     previous_revision_id=None
                     if isinstance(command, KakaoQuestionCreate)
-                    else command.edit.parent_revision_id,
+                    else _parent_revision(command),
                     expected_version=0
                     if isinstance(command, KakaoQuestionCreate)
                     else command.expected_resource_version,
@@ -349,8 +360,40 @@ class KakaoQuestionService:
                     reserved.revision_id,
                 ).student
             pin = self.current_student_pin(session, room, reserved.mapping_id)
-            if isinstance(command, KakaoQuestionChange):
-                self._head(session, owner, command)
+            if not isinstance(command, KakaoQuestionCreate):
+                head = self._head(session, owner, command)
+                if isinstance(command, KakaoQuestionSourceRefresh):
+                    context = next(
+                        (
+                            item
+                            for item in sources
+                            if item.accepted.resolution.source_revision_id
+                            == command.source_revision_id
+                        ),
+                        None,
+                    )
+                    candidate = (
+                        context.resolved.candidates.get(command.candidate_ordinal)
+                        if context is not None
+                        else None
+                    )
+                    if context is None or candidate is None:
+                        raise KakaoArchiveError("KAKAO_ARCHIVE_CANDIDATE_NOT_FOUND")
+                    stored = self._stored_in_session(
+                        session,
+                        owner,
+                        command.source_binding_id,
+                        command.room_id,
+                        command.question_id,
+                        command.parent_revision_id,
+                    )
+                    validate_source_pointer_metadata_batch(session, (stored.manifest,))
+                    if (
+                        head.origin_occurrence_id
+                        != context.resolved.occurrence_ids[candidate.student_rows[0]]
+                        or stored.student != pin
+                    ):
+                        raise KakaoArchiveError("KAKAO_ARCHIVE_QUESTION_SELECTION_INVALID")
             else:
                 source = sources[0].resolved
                 candidate = source.candidates.get(command.candidate_ordinal)
@@ -589,6 +632,60 @@ class KakaoQuestionService:
         )
         return self._adopt(actor, command, reserved, published, key, sources=contexts)
 
+    def refresh_question_source(
+        self, actor: ActorContext, command: KakaoQuestionSourceRefresh, *, idempotency_key: str
+    ) -> KakaoQuestionMutation:
+        """Explicit new unreviewed revision, keeping all previous edits and packets."""
+        command = KakaoQuestionSourceRefresh.model_validate(command.model_dump(mode="json"))
+        key = validate_kakao_idempotency_key(idempotency_key)
+        reserved = self._reserve(actor, command, key)
+        if reserved.completed:
+            return self._replay(actor, command, reserved)
+        previous, contexts = self._resolved_question(
+            actor,
+            command.source_binding_id,
+            command.room_id,
+            command.question_id,
+            command.parent_revision_id,
+        )
+        context = next(
+            (
+                item
+                for item in contexts
+                if item.accepted.resolution.source_revision_id == command.source_revision_id
+            ),
+            None,
+        )
+        if context is None:
+            context = self._sources.resolve_question_source_context(
+                actor,
+                command.source_binding_id,
+                command.room_id,
+                source_revision_id=command.source_revision_id,
+            )
+            contexts = (*contexts, context)
+        self._check(actor, command, reserved, contexts)
+        candidate = context.resolved.candidates[command.candidate_ordinal]
+        question = question_from_refreshed_source(
+            previous.published.question,
+            context.resolved,
+            candidate,
+            question_revision_id=reserved.revision_id,
+            actor_id=reserved.owner_operator_id,
+            created_at=reserved.at,
+        )
+
+        def authorize() -> None:
+            self._check(actor, command, reserved, contexts)
+
+        published = publish_kakao_question(
+            self._artifacts,
+            question=question,
+            sources=(context.resolved,),
+            authorize=authorize,
+        )
+        return self._adopt(actor, command, reserved, published, key, sources=contexts)
+
     def _adopt(
         self,
         actor: KakaoSourcePrincipal,
@@ -620,8 +717,21 @@ class KakaoQuestionService:
             ):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
             self._sources.validate_question_source_metadata(session, actor, sources)
+            parent_pointers: tuple[ArtifactMemberPointer, ...] = ()
+            if isinstance(command, KakaoQuestionSourceRefresh):
+                parent_pointers = (
+                    self._stored_in_session(
+                        session,
+                        owner,
+                        command.source_binding_id,
+                        command.room_id,
+                        command.question_id,
+                        command.parent_revision_id,
+                    ).manifest,
+                )
             pointers = (
                 pointer,
+                *parent_pointers,
                 *(source.pointer for source in question.sources),
                 *(
                     block.source_pointer

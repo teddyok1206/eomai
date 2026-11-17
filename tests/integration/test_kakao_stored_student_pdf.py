@@ -28,6 +28,8 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from tests.integration.test_kakao_packet_storage import packet_store as packet_store
+from tests.integration.test_kakao_question_refresh_storage import refresh_case as refresh_case
+from tests.integration.test_kakao_question_refresh_storage import refresh_command
 from tests.integration.test_kakao_question_storage import change_command
 from tests.integration.test_kakao_question_storage import question_store as question_store
 from tests.integration.test_kakao_source_storage import source_store as source_store
@@ -112,6 +114,111 @@ def current_authorizer(engine, actor, sources, packet, selected):
 
 
 LAYOUTS = ("student-question-a4/1.0", "student-study-a4/1.0")
+
+
+def test_refreshed_late_answer_photo_reaches_real_study_pdf(refresh_case, source_store, tmp_path):
+    store, old, previous, _command = refresh_case
+    engine, actor, questions, creation, sources, artifacts, _binding = store
+    image = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 300))
+    image.clear_with(170)
+    photo = image.tobytes("png")
+    admission, _ = source_store[-1](
+        previous=previous.resolution,
+        texts=(
+            "first unique question",
+            "unique continuation",
+            "later staff reply",
+            "separate question",
+        ),
+        roles=("student", "student", "staff", "student"),
+        photos={3: (photo, 400, 300)},
+    )
+    source = sources.admit_source(actor, admission, idempotency_key="late-photo-" + uuid4().hex)
+    command = refresh_command(
+        old, source.resolution.source_revision_id, creation.expected_mapping_revision_id
+    )
+    refreshed = questions.refresh_question_source(
+        actor, command, idempotency_key="late-photo-question-" + uuid4().hex
+    )
+    reviewed = questions.change_question(
+        actor,
+        change_command(refreshed.question),
+        idempotency_key="late-photo-review-" + uuid4().hex,
+    ).question
+    packets = KakaoPacketService(engine, artifacts=artifacts, questions=questions, sources=sources)
+    packet = packets.save_packet(
+        actor,
+        KakaoPacketCreate(
+            source_binding_id=command.source_binding_id,
+            title="late answer and photo",
+            questions=(
+                KakaoQuestionProvenance(
+                    question_id=reviewed.question_id,
+                    question_revision_id=reviewed.question_revision_id,
+                ),
+            ),
+            display_start_date=date(2026, 1, 1),
+            display_end_date_inclusive=date(2026, 12, 31),
+            mode="FINAL",
+            include_replies=True,
+        ),
+        idempotency_key="late-photo-packet-" + uuid4().hex,
+    )
+    accepted, selected = packets.resolve_student(
+        actor,
+        command.source_binding_id,
+        packet.packet.packet_id,
+        revision_id=packet.packet.packet_revision_id,
+        student_id=reviewed.student.student_id,
+    )
+    authorize = current_authorizer(engine, actor, sources, accepted, selected)
+    prepared, render_command = staged(
+        tmp_path,
+        artifacts,
+        accepted,
+        selected,
+        reviewed.student.student_id,
+        authorize,
+        LAYOUTS[1],
+    )
+    assert len(prepared.manifest.questions[0].staff.images) == 1
+    assert len(prepared.manifest.questions[0].student.images) == 0
+    launcher = RenderProcess()
+    root = tmp_path / "late-photo-worker"
+    root.mkdir(mode=0o700)
+    output = KakaoPdfExecutor(
+        root,
+        os.getuid(),
+        os.getgid(),
+        launcher,
+        lambda _: authorize(),
+    ).execute(render_command, source_root=prepared.source_root)
+    assert output.result.status == "COMPLETED" and launcher.calls == 1
+    assert sum(len(page.layout.image_blocks) for page in output.layout.pages) == 1
+    with pymupdf.open(output.staging_root / "report.pdf") as document:
+        assert sum(len(page.get_image_info()) for page in document) == 1
+        assert "later staff reply" in "".join(page.get_text() for page in document)
+        assert "separate question" not in "".join(page.get_text() for page in document)
+    published = publish_kakao_pdf(
+        artifacts,
+        command=render_command,
+        manifest_bytes=(prepared.source_root / "manifest.json").read_bytes(),
+        accepted=output,
+        authorize=authorize,
+    )
+    assert published.pdf.sha256 == next(
+        member.sha256 for member in output.result.outputs if member.relative_path == "report.pdf"
+    )
+    assert (
+        questions.get_question(
+            actor,
+            old.source_binding_id,
+            old.room_id,
+            old.question_id,
+            revision_id=old.question_revision_id,
+        ).stored
+        == old
+    )
 
 
 def staged(tmp_path, artifacts, packet, selection, student_id, authorize, layout_policy=LAYOUTS[0]):

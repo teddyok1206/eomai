@@ -201,6 +201,7 @@ from eom_web_gui.kakao_question_contracts import (
     QuestionMutation,
     QuestionPage,
     QuestionReview,
+    QuestionSourceRefresh,
     QuestionView,
 )
 from eom_web_gui.kakao_room_contracts import Room, RoomCommand, RoomMap, RoomMutation, RoomPage
@@ -641,6 +642,15 @@ class ApplicationGateway(Protocol):
         session: WebSession,
         value: QuestionCreate,
         idempotency_key: str,
+    ) -> QuestionMutation: ...
+
+    async def kakao_question_source_refresh(
+        self,
+        session: WebSession,
+        question: str,
+        value: QuestionSourceRefresh,
+        idempotency_key: str,
+        if_match: str,
     ) -> QuestionMutation: ...
 
     async def kakao_question_candidates(
@@ -2547,6 +2557,51 @@ class HttpApplicationGateway:
                 or q.review_state != "UNREVIEWED"
             ):
                 raise ValueError("different created question")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_question_source_refresh(
+        self,
+        session: WebSession,
+        question: str,
+        value: QuestionSourceRefresh,
+        idempotency_key: str,
+        if_match: str,
+    ) -> QuestionMutation:
+        _require_id(question, "kakaoquestion_")
+        if question != value.question_id or if_match != f'"v{value.expected_resource_version}"':
+            raise GatewayError(status=412, code="API_PRECONDITION_FAILED")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/kakao-archive/questions/{question}/refresh-source",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+            timeout=130.0,
+        )
+        try:
+            result = QuestionMutation.model_validate(self._data(response))
+            q = result.question
+            if (
+                q.source_binding_id,
+                q.room_id,
+                q.question_id,
+                q.previous_revision_id,
+                q.resource_version,
+                q.review_state,
+            ) != (
+                value.source_binding_id,
+                value.room_id,
+                value.question_id,
+                value.parent_revision_id,
+                value.expected_resource_version + 1,
+                "UNREVIEWED",
+            ) or (
+                q.student is not None
+                and q.student.room_mapping_revision_id != value.expected_mapping_revision_id
+            ):
+                raise ValueError("different refreshed question")
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error

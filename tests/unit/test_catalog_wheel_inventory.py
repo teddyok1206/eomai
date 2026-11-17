@@ -87,6 +87,8 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_contracts/resources/kakao-archive/source-resolution-v1.schema.json",
             "eom_catalog_service/kakao_media_publication.py",
             "eom_catalog_service/kakao_source_service.py",
+            "eom_catalog_contracts/kakao_question_refresh.py",
+            "eom_catalog_contracts/resources/kakao-archive/question-source-refresh-v1.schema.json",
             "eom_catalog_service/kakao_source_resolution.py",
             "eom_catalog_contracts/kakao_manual_rpc.py",
             "eom_catalog_contracts/resources/kakao-archive/manual-session-v1.schema.json",

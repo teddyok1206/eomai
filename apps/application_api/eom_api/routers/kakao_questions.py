@@ -14,6 +14,7 @@ from eom_api_contracts.kakao_questions import (
     KakaoQuestionMutation,
     KakaoQuestionPage,
     KakaoQuestionReview,
+    KakaoQuestionSourceRefresh,
     KakaoQuestionView,
 )
 from eom_catalog_contracts.kakao_question_store import KakaoQuestionChange
@@ -199,6 +200,39 @@ def read_question(
             question_id,
             revision_id,
             actor=request.state.request_context.actor(),
+        )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["ETag"] = etag(result.question.resource_version)
+    return one(request, result)
+
+
+@router.post(
+    "/{question_id}/refresh-source",
+    operation_id="kakao_question_source_refresh",
+    response_model=SingleResponse[KakaoQuestionMutation],
+    dependencies=[Depends(EDIT)],
+)
+def refresh_source(
+    request: Request,
+    response: Response,
+    question_id: QuestionId,
+    body: KakaoQuestionSourceRefresh,
+    authentication: Auth,
+    expected: ExpectedVersion,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[KakaoQuestionMutation]:
+    if body.question_id != question_id or body.expected_resource_version != expected:
+        raise ApiError(
+            412,
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "Question changed",
+            "Select the exact parent question revision.",
+        )
+    with _boundary():
+        result = request.app.state.services.catalog_application.refresh_kakao_question_source(
+            body,
+            actor=request.state.request_context.actor(),
+            idempotency_key=idempotency_key,
         )
     response.headers["Cache-Control"] = "no-store"
     response.headers["ETag"] = etag(result.question.resource_version)

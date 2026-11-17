@@ -92,6 +92,8 @@
 .kakao-concept-picker fieldset { margin-block: 16px; min-width: 0; }
 .kakao-concept-picker figure { margin: 12px 0; }
 .kakao-concept-picker input[type="checkbox"] { display: inline-block; width: 20px; min-height: 20px; margin-inline-end: 8px; vertical-align: middle; }
+.kakao-source-refresh-confirm { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; margin-block: 8px; }
+.kakao-source-refresh-confirm input { flex: 0 0 18px; width: 18px; height: 18px; margin: 2px 0; accent-color: var(--eom-primary); }
 .kakao-concept-picker .button { margin: 4px 8px 4px 0; }
 .kakao-concept-page { position: relative; width: min(100%, 360px); }
 .kakao-concept-page img { display: block; width: 100%; height: auto; }
