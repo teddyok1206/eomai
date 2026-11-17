@@ -1,5 +1,40 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 보호 PDF 검증 완료·실제 수신 자료 샘플
+
+1. source `76032729af2d80e2457906b7cdee6b78de2b3cd1`의 PDF worker wheel
+   `sha256:2b60819f4f2d8660ab980da737600e097e98615a472e33fe7e2585f5741d419e`를 offline/no-deps로
+   설치하고 Catalog와 renderer의 release pin을 함께 반영했다. API/Web/QUERY는f34e50cc
+   설치본을 유지한다. 새 DB/migration·브라우저/원격 화면·인증·GPU 변경은 없다.
+   설치 기록은 `/var/lib/eom-kakao-pdf-readback-76032729/installed.json`이다.
+2. 실제 Noto glyph의 ToUnicode 역매핑을 개별 문자 목록 대신 exact nonzero glyph ID로
+   검증한다. 원문 codepoint와 layout coverage는 그대로다. 관련152개 회귀, Ruff/format,
+   strict mypy, 별도 non-editable 설치본의 실제 Noto/ellipsis/Jamo PDF가 통과했다.
+3. 이전 합성2질문·사진2개의 worker는 정상 출력했다. 검증 프로그램의 잘못된 primary GID와
+   NBSP substring assertion 때문에 후처리만 실패했고, 같은 정지 attempt의 accepted 결과를
+   올바른 shared GID로 재검증했다. **새 렌더 없이 같은 bytes 재수락·중복 dispatch 거부 PASS**다.
+   원래 exit2/INVALID_INPUT·개발 검증 실패 로그는 보존했다.
+4. 사용자 요청으로 retained CSV1개·JPEG2개를 기존 Orchestrator reader로 다시 확인했다.
+   기존 원본을 바꾸거나 source admission/학생 등록을 만들지 않았다. 수신10행에서 수동으로
+   고른 질문3묶음을 전용 UID/고정 systemd sandbox로3쪽 렌더했다. 사진2장 무crop,
+   input/output hash·같은 결과 복구·중복 실행 거부 PASS다. 일반 source owner의 수락이나
+   provider 사진 occurrence 정합, Studio 다운로드 완료로 보고하지 않는다.
+5. core가 질문3쪽에 조교 답변 원문3쪽을 붙인 **6쪽 비공개 샘플 PDF**를 NAS에 보관했다.
+   학생 소개는 표시에서 제외했고 원본 CSV는 보존한다. 질문/답변 원문, 사진, 시각 metadata를
+   구분한다. 사진2장은 내용 직접 대조로 배치했고 첫 질문의 사진1장은 미확보다. CSV에
+   조교 사진 표식은 없었다. 조교 원문의 오탈자·주장을 새 해설로 고치지 않았다.
+   관련 교재 원문/캡처는 **아직 미포함**이며 자료에도 개념 보강 전으로 표시한다.
+6. 정본 보고 파일은 `/mnt/nas/eom/user-deliverables/kakao-sample-20261117/`의
+   `카카오_질문답변_샘플.pdf`, `미리보기.png`, `manifest.json`이다. file hash·6쪽/사진2장·
+   답변의 실제 glyph readback과 무overflow를 확인하고 contact sheet도 직접 열어 확인했다.
+   이는 사용자 요청 샘플이며 Catalog packet/export를 가장하지 않는다.
+7. 개념 보강 Codex 프롬프트 초안을 별도 설계 문서에 작성했다. 학생/조교 사진, metadata,
+   조교 원문과 새 설명, 승인 분석과 실제 원문 pixels를 구별한다. 현재 추천 worker/schema/
+   프리셋·도구는 미활성이다. 수집/일반 PDF의 비AI 계약은 그대로다.
+8. Catalog active·API READY 확인. INDEX는 기존 FAILED/Invocation
+   `aada2a6ef82043e4a15ae68f6dd73f20` 그대로이며 이번 작업으로 복구했다고 하지 않는다.
+   실제 새 방의 정합/수락→Studio PDF와 모든 방 주기 수집은 여전히 미완료다. 전체 goal은 유지한다.
+
 ## 2026-11-17 PDF 설정 반영과 실제 설치 폰트의 readback
 
 - `186a2212f08e8a743ae28a899ef7724cbee844f1`을 커밋·푸시했다. private0755 template와

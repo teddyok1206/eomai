@@ -179,8 +179,11 @@ released 질문 v1 wire bytes는 바꾸지 않는다. 공개 source 연결은 GU
 별도 `eom_kakao_archive_contracts`와 `eom_kakao_archive_worker` wheel은 격리 렌더링 경계다.
 worker 구현은 staged local members만 읽고 DB·NAS·브라우저 profile·네트워크를 사용하지 않는다.
 `kakao_pdf_execution.py`는 exact attempt/fence·로컬 input/output·중단 후 동일 결과
-수락을 연결한다. unit/template 소스는 있어도 실제 전용 UID·sandbox 설치 검증은
-별도 운영 gate이며 아직 PASS로 기록하지 않는다.
+수락을 연결한다. private read-only namespace parent는 descriptor walk와 호환되는0755이며
+현재 attempt bind 외의 host 형제 디렉터리는 가린다. 실제 전용 UID·sandbox의 실행 검증과
+합성/source 검사, 실제 카카오 수락·Studio 다운로드는 각각 별도 증거다. 최신 운영 증거는
+체크포인트를 확인한다. Noto ToUnicode alias의 PDF readback은 원문을 치환하지 않고 pinned
+font의 같은 nonzero glyph만 허용하며 원문 codepoint는 manifest/coverage에 남긴다.
 `kakao_pdf_publication.py`는 이 완료 결과를 기존 Artifact 발행에 연결한다. 별도 NAS
 writer나 재렌더 없이 export+attempt의 같은 publication을 재조회하고, 원래 JSON bytes의
 hash와 PDF/PNG/layout member 집합을 유지한다. 발행 후 현재 export pointer 수락과
