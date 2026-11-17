@@ -489,3 +489,25 @@ Orchestrator는 입력 materialization·결과 검증·Artifact 발행을 담당
   교재 활용으로 보고하지 않는다. 실패/취소/NEEDS_INPUT은 기존 이력을 보존하고 중복 실행하지 않는다.
 - 단순히 모델 설명과 그림 경로만 저장하는 대안은 정확한 교재/페이지·실행 근거를 잃는다.
   기존 file-set Artifact의 두 작은 member로 연결하는 것이 별도 DB aggregate보다 단순하다.
+
+## 13. 검증된 COMPOSE 결과를 기존 PDF 보강 block으로 연결
+
+Catalog의 작은 projection이 완료 COMPOSE·현재 재인가한 교재 provenance와 실제 준비한
+capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변은 변경하지 않는다.
+설명은 MODEL_DRAFT, 교재 인용/원본 PNG는 확인한 출처와 물리 페이지를 각각 표시한다.
+조교 답변 확인 메모·추천의 한계는 별도 block이며 관련 기초 개념을 정답 근거로 과장하지 않는다.
+
+- 정본은 기존 phase 결과/COMPOSE request와 원본 PNG다. 출력용 attachment ID는 로컬 render
+  use의 deterministic identity이며 카카오 메시지/첨부 DB 등록이나 source 권한을 뜻하지 않는다.
+  draft는 exact task/question/phase-result pin과 crop provenance를 보유한다. saved-study owner가
+  채택하기 전에는 독립적인 저장 revision·공식 export 완료로 표시하지 않는다.
+- 입력은 이미 정의한 DTO이며 새 wire·DB·queue는 필요 없다. 긴 원문 decode와 crop은 기존
+  page adapter에서 수행한다. projection은 keyed capture/evidence 조회와 ordered tuple로
+  O(block+capture+text bytes), 원본 bytes는 고유 member별 한 번씩 준비한다.
+- 같은 crop은 로컬 member를 공유하고 여러 표시 use만 구분한다. 실제 original/page/bounds/
+  media/hash가 맞지 않으면 거부한다. 원문을 못 받은 경우 그림을 만들지 않는다. crop의
+  `quality_accepted`는 false로 시작해 단순 decode를 사람의 편집 품질 승인으로 바꾸지 않는다.
+  DRAFT 출력은 가능하지만 FINAL 품질/레이아웃 검사는 기존 규칙을 유지한다.
+- 모든 I/O 전후에 accepted task와 현재 교재 권한을 재인가한다. 재조회는 모델을 재실행하지
+  않으며 현재 local draft 준비는 canonical 발행/편집 CAS와 다르다. 저장·Studio 편집·공식
+  export 연계는 별도 owner에서 이어간다. 근거 없는 경로/이미지를 붙이는 대안은 제외한다.

@@ -1,5 +1,35 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 교재 설명·원본 capture→기존 PDF 보강 block — source 검증, 운영 미활성
+
+source `f6eefe93`의 후속이다. `kakao_concept_study.py`가 완료 COMPOSE와 현재 재인가한
+교재·실제 capture를 기존 `StudySupplement`로 변환한다. 개념 설명·질문과의 연결·출처·
+교재 원문 발췌·원본 PNG의 물리 페이지·조교 답변 확인 메모·근거의 한계를 구분한다.
+학생 질문·사진/조교 답변·원래 시기는 변경하지 않으며 추천을 교재의 정답 보증으로 쓰지 않는다.
+
+- 기존 page owner의 원본 PNG/crop·crop bounds 규칙을 재사용한다. 새 source·검색기·queue·
+  DB/schema는 없다. 근거 본문/원본 page metadata 검사는 공통 함수로 모아 재사용했다.
+  같은 crop member는 한 번 준비하고 여러 render use만 구분한다. 이 표시 ID가 카카오
+  첨부 DB의 등록이나 canonical 학습자료 revision을 뜻하지는 않는다.
+- 그림을 못 찾은 text-only 근거는 그림을 만들지 않는다. NO_MATCH도 학습 주제와 한계를
+  표시하며 가짜 교재 인용/그림을 넣지 않는다. 원문 인용과 승인 분석·모델 설명을 구별한다.
+- 새 capture의 quality_accepted는 false다. 원본 decode/crop 성공을 인간 편집 품질 승인으로
+  확대하지 않는다. DRAFT PDF는 가능하나 기존 FINAL 품질/레이아웃 검사는 그대로다.
+- 합성 교재의 **실제 PNG→crop→PDF 내장·PDF 재열람**과 기존 layout receipt 검사를 통과했다.
+  질문/답변 다음에 보강 자료가 나오며 출처·물리 페이지·AI 초안 라벨과 원본 crop 크기가
+  PDF에 보존됨을 확인했다. 이는 실제 교과서 검색·Codex 결과나 사용자가 받을 최종 PDF가 아니다.
+- 최종 소스 **519 PASS**, disposable DB focused **19 PASS/300 deselected**, 독립 설치
+  wheel+개발 문맥 **23 PASS**, strict mypy3개·Ruff/format/diff PASS다. 직전 전체 DB319 PASS와
+  focused19는 겹치므로 합산하지 않는다. 초기2개 실패는 예상보다 앞서 동작한 metadata guard의
+  테스트 위치와 context-manager mock 누락을 고쳤다. source/permission 보호를 완화하지 않았다.
+  로그는 `staging/kakao-concept-study-{initial,regression,notes,full-source,focused-db,
+  wheel-context,final-types}-20261117.log`다. 실제 모델·운영 DB·GPU side effect는0이다.
+
+로컬 초안 생성은 연결됐으나 **canonical saved-study/Studio 편집·공식 export·실제 샘플 링크는
+여전히 남아 있다.** 운영은 `c93f78f7` 그대로다. 다음은 이 저장·편집·출력 경로를 연결하고
+실제 수신 자료와 적절한 실제 교재 근거로 반복 생성한 PDF를 전달하는 것이다. README 정리와
+호환 운영 배포도 그 사용자 경로 검증 뒤 이어간다. 전체 goal 완료로 보고하지 않는다.
+
 ## 2026-11-17 PLAN 완료본→교재 근거·원본 PNG→저장된 COMPOSE 입력 — 운영 미활성
 
 source `b92201b3`의 후속이다. 기존 질문·Task·Workflow·Artifact owner를 연결해 완료된

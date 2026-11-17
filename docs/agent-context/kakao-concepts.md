@@ -115,3 +115,14 @@ accepted source authority가 실제 저장 owner를 보유하므로 HTTP 만료 
 다음 구현은 **실행 preset/자동 coordinator·공개 API→실제 COMPOSE→saved-study/Studio 편집·새 PDF**에
 집중한다. 실제 CSV/사진 샘플의 관련 교과서 보강·최종 PDF 링크도 남아 있다. 새 queue/독립
 Codex 프로세스를 만들지 않는다.
+
+`kakao_concept_study.py`는 완료 COMPOSE 결과와 현재 재인가한 교재/원본 capture를 기존
+`StudySupplement`로 변환한다. 설명·관련성·검증된 인용·원본 PNG/물리 페이지·조교 답변
+확인 메모·한계를 구분하며 원래 답변을 바꾸지 않는다. 로컬 render image use는 deterministic
+ID이고 실제 카카오 첨부/저장 revision이 아니다. 단순 decode로 품질 승인을 만들어내지 않아
+새 capture는 `quality_accepted=false`다. 실제 DRAFT PDF는 가능하나 FINAL 검사 규칙은 유지한다.
+
+pure projection과 임시 page/crop 준비만 연결됐으며 canonical saved-study/Studio 편집·공식
+export를 대신하지 않는다. `test_kakao_concept_study.py`는 합성 개념/교재의 실제 PNG→crop→
+PDF 내장·출처·질문/답변/개념 순서와 layout receipt를 검사한다. 실제 카카오/교재/모델 성공이나
+사용자에게 전달할 최종 샘플이라고 보고하지 않는다.

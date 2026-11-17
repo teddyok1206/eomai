@@ -120,12 +120,6 @@ def authorize_kakao_concept_composition(
         receipt,
         reauthorize_question=_question_authorizer(authority),
     )
-    expected_evidence = knowledge.worker_context().evidence
-    if len(request.context.evidence) != len(expected_evidence) or any(
-        actual.model_dump(exclude={"location"}) != expected.model_dump(exclude={"location"})
-        for actual, expected in zip(request.context.evidence, expected_evidence, strict=True)
-    ):
-        raise KakaoArchiveError("KAKAO_CONCEPT_EVIDENCE_TEXT_CHANGED")
     page_index = {page.page_key: page for page in request.context.pages}
     keys = tuple(f"{pin.evidence_key}P{pin.physical_page}" for pin in receipt.pages)
     if tuple(page_index) != keys:

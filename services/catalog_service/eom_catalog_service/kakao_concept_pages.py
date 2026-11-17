@@ -17,6 +17,7 @@ from eom_kakao_archive_contracts.concepts import (
     ConceptComposeRequest,
     ConceptEvidenceContext,
     ConceptPage,
+    ConceptRectangle,
     ConceptResult,
     validate_concept_result,
 )
@@ -81,6 +82,12 @@ def validate_kakao_concept_page_sources(
     """Shared metadata gate for staged originals and saved COMPOSE provenance; no byte reads."""
     if context.pages != tuple(source.page for source in sources):
         raise KakaoArchiveError("KAKAO_CONCEPT_CAPTURE_CONTEXT_MISMATCH")
+    expected_evidence = knowledge.worker_context().evidence
+    if len(context.evidence) != len(expected_evidence) or any(
+        actual.model_dump(exclude={"location"}) != expected.model_dump(exclude={"location"})
+        for actual, expected in zip(context.evidence, expected_evidence, strict=True)
+    ):
+        raise KakaoArchiveError("KAKAO_CONCEPT_EVIDENCE_TEXT_CHANGED")
     originals: dict[
         tuple[str, int | None],
         KnowledgeAnalysisDocumentMaterializationMemberV4 | MaterialKnowledgePageMember,
@@ -120,6 +127,23 @@ class PreparedConceptCapture:
     pixel_bounds: tuple[int, int, int, int]
     member: LocalMember
     profile: str = CROP_PROFILE
+
+
+def concept_crop_pixel_bounds(
+    page: ConceptPage, rectangle: ConceptRectangle
+) -> tuple[int, int, int, int]:
+    bounds = (
+        math.floor(rectangle.x * page.width_pixels),
+        math.floor(rectangle.y * page.height_pixels),
+        math.ceil((rectangle.x + rectangle.width) * page.width_pixels),
+        math.ceil((rectangle.y + rectangle.height) * page.height_pixels),
+    )
+    if not (
+        0 <= bounds[0] < bounds[2] <= page.width_pixels
+        and 0 <= bounds[1] < bounds[3] <= page.height_pixels
+    ):
+        raise KakaoArchiveError("KAKAO_CONCEPT_CROP_OUTSIDE_PAGE")
+    return bounds
 
 
 def _private_root(artifacts: CatalogArtifactReader, root: Path) -> None:
@@ -336,18 +360,8 @@ def prepare_kakao_concept_captures(
     for block_index, block in enumerate(validated.output.blocks):
         for capture_index, capture in enumerate(block.captures):
             source = pages[capture.page_key]
-            page, rect = source.page, capture.rectangle
-            bounds = (
-                math.floor(rect.x * page.width_pixels),
-                math.floor(rect.y * page.height_pixels),
-                math.ceil((rect.x + rect.width) * page.width_pixels),
-                math.ceil((rect.y + rect.height) * page.height_pixels),
-            )
-            if not (
-                0 <= bounds[0] < bounds[2] <= page.width_pixels
-                and 0 <= bounds[1] < bounds[3] <= page.height_pixels
-            ):
-                raise KakaoArchiveError("KAKAO_CONCEPT_CROP_OUTSIDE_PAGE")
+            page = source.page
+            bounds = concept_crop_pixel_bounds(page, capture.rectangle)
             grouped.setdefault(source.original, []).append(
                 (block_index, capture_index, page.page_key, bounds)
             )
