@@ -1,7 +1,7 @@
 # KakaoTalk 질문 자료의 개념 보강·Studio 편집
 
-상태: **2026-11-17 역할별 PDF·저장/공개 연결은 source 구현·합성 검증 중이다.
-운영 활성화·실제 수신 자료의 반복 출력·개념 보강 편집/추천은 아직 미완료다.**
+상태: **2026-11-17 역할별 PDF·저장/공개 연결은 호환 운영 배포와 합성 fixed-systemd 검증을
+완료했다. 실제 수신 자료의 반복 출력·개념 보강 편집/추천은 아직 미완료다.**
 
 기존 [명세](KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md)와
 [저장/PDF 연결](KAKAO_ARCHIVE_DURABLE_CONTENT.md)을 확장한다. 수집·질문 구성·일반 PDF에
@@ -167,6 +167,58 @@ Codex 역할 지침의 개발용 초안은
 
 이 요구 추가가 실제 카카오 검증을 생략하거나 전체 goal을 작은 편집 기능으로 축소하는 뜻은
 아니다. 원래 전체 방 주기 수집·보관·학생별 자료 목표와 함께 완료해야 한다.
+
+### 2026-11-17 공유 슬롯의 개념 자료 찾기 구현 결정
+
+사용자가 전용 상시 슬롯 대신 **남는 공유 슬롯 + 이 기능 전용 프롬프트**를 재확인했다.
+카카오 수집/일반 PDF와 선택적 Codex 추천을 계속 분리한다. 구현 책임/절차는 다음과 같다.
+
+1. 기존 질문 owner가 exact question revision과 source 접근을 해석한다. 이름·학교·연락처·
+   학생 목록·전체 CSV는 worker envelope에 넣지 않고 선택 질문/조교 답변/사진만 stage한다.
+2. 새 purpose는 기존 Workflow/Orchestrator/Content Pack의 얇은 작업으로 추가한다. 현재
+   `SharedWorkerCapacityPolicy/1.7`의01–05 순환 claim·lease·모델 검증·host 상한을 재사용한다.
+   06 채팅 예약·관리자 중지·기존 preset을 바꾸지 않는다. 슬롯이 없으면 대기하며 기능
+   전용 worker 서비스/queue·별도 임의 Codex 프로세스를 만들지 않는다.
+3. 기존 일반 worker는 로컬 입력/구조화 출력이므로, 대화 전용06 runtime이나 이름만 있는
+   검색 tool을 재사용한 척하지 않는다. **PLAN → 기존 Catalog GraphRAG → COMPOSE**의
+   순서로 한다. PLAN은 사진까지 읽어 검색 개념/질의를 제안하고, core가 현재 실제 operator와
+   고정 Graph/policy/허용 교재로 공식 read-only retrieval/source-resolution을 호출한다.
+   COMPOSE는 materialize된 근거/실제 페이지만 읽어 교사용 보강 초안을 만든다.
+4. 검색한 source/analysis/Artifact/policy의 전체 pins는 core의 실행/저장 provenance가 가진다.
+   worker에는 작은 근거 key와 검증된 설명/로컬 page member만 전달한다. 모델은 그 key만
+   인용하고 임의 source ID·경로·URL·권한을 반환할 수 없다. 분석과 원문 인용을 구분하고,
+   실제 페이지가 없는 경우에는 crop/쪽수를 만들어내지 않는다.
+5. 두 단계 메시지를 JSON Schema2020-12/Pydantic으로 먼저 닫는다. task/question/request hash·
+   exact input phase·근거 key·실제 page key/범위·인용문을 core가 대조한다. 새 request key로
+   timeout을 우회하지 않는다. 같은 요청은 기존 phase/Job 결과를 재사용한다.
+6. 추천 초안은 기존 packet을 참조하는 immutable study revision으로 저장한다. 원문 질문이나
+   조교 답변을 고치지 않으며 current 편집 revision의 CAS로만 채택한다. 늦은 결과가 최신
+   사용자 편집을 덮지 않는다. 저장/재조회/Studio 선택·편집/새 PDF 연결까지가 완료 범위다.
+7. 주요 접근은 exact question/task/evidence lookup·ordered block 순회·동일 key replay다.
+   bounded dict/set/tuple과 기존 indexed Job/Workflow/Artifact를 쓴다. 비용은 질문 텍스트+
+   실제 staged bytes+선택 근거에 선형이며 교재 전체를 worker마다 복사/재검색하지 않는다.
+   영속 편집 owner의 row/index/transaction은 구현 전 기존 packet/command 구조와 맞춰 별도
+   구체화한다. 큰 본문/사진/로그는 DB가 아니라 기존 Artifact다.
+8. source 미확보/근거 없음/페이지 미열람/권한 철회/한도 소진·잘못된 모델 출력은 구분한다.
+   추천이 실패해도 일반 질문 PDF/수동 편집이 가능해야 한다. 교재 원문과 모델 설명을
+   혼동하거나 빈 결과를 성공한 교재 찾기로 표시하지 않는다.
+9. 의존 방향은 Studio→API→Catalog application→기존 Orchestrator→공유 worker이며,
+   pure worker DTO는 DB/NAS/HTTP/권한 owner를 import하지 않는다. worker끼리 통신하지 않는다.
+10. 검증은 source/schema·인용 위조/학생 격리·임시 DB의 claim/replay/편집 경합·실제 유휴
+    슬롯1건·교재 근거→저장→재조회→PDF까지 구분한다. fixture PASS로 모델 실행/교재 검색
+    성공을 주장하지 않는다. 과거 실패와 현재 GPU/등록 작업은 보존한다.
+11. 대안인 질문 문자열만으로 바로 검색하기는 ‘이 그림이 궁금해요’ 같은 질문에서 실패하고,
+    전용 채팅 runtime/브라우저 Codex에 모두 맡기기는 권한·출처·공유 슬롯 책임을 흐린다.
+    기존 작업의 두 작은 단계와 공식 retrieval owner를 연결하는 구조를 선택한다.
+
+연결 대조에서 채팅 전용 구 reader의 source-reference/accepted-result 범위가 새 자료 학습
+V5/12를 온전히 표현하지 못함을 확인했다. 그 경로의 contract/권한을 임의로 넓히지 않는다.
+`retrieve_material_read_only`가 출제의 `UPLOADED_MATERIAL_V1` source 해석을 명시 재사용하고,
+기존 `item_textbook_context`의 Graph/source/accepted-result/anchor 검증 결과를 typed 값으로
+받는다. 이전 출제 Markdown은 같은 typed 값에서 동일하게 출력한다. 교재 원문 PNG가 실제로
+제공된 경우에만 page key/crop 제안을 허용하며 구 text-only source는 별도 원문 열람이 필요하다.
+이 판단은 교재 이미지 사용을 제외하는 것이 아니다. 원문 해석·저장한 페이지와 실제 crop·
+출처·자료 편집/PDF까지 이어서 연결해야 최종 개념 보강 완료다.
 
 ## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
 

@@ -16,8 +16,11 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisSourceV3,
+    KnowledgeArtifactMemberPointer,
 )
+from eom_catalog_contracts.knowledge import KnowledgeSourceAnchor, KnowledgeSourceAnchorV2
 from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -59,6 +62,24 @@ def materialize_item_textbook_context(
     graph_snapshot_revision_id: str,
     selections: tuple[TextbookContextSelection, ...],
 ) -> dict[str, str]:
+    return {
+        key: value.as_markdown()
+        for key, value in resolve_item_textbook_context(
+            session,
+            analyses=analyses,
+            graph_snapshot_revision_id=graph_snapshot_revision_id,
+            selections=selections,
+        ).items()
+    }
+
+
+def resolve_item_textbook_context(
+    session: Session,
+    *,
+    analyses: KnowledgeGraphPublicationService,
+    graph_snapshot_revision_id: str,
+    selections: tuple[TextbookContextSelection, ...],
+) -> dict[str, ResolvedTextbookContext]:
     """Read at most three selected analyses once; indexed metadata checks stay bounded."""
 
     if not selections:
@@ -196,12 +217,33 @@ def materialize_item_textbook_context(
             raise ItemTextbookContextError("textbook Graph node anchor identity or hash differs")
         selected_anchors.setdefault(selection.analysis_run_id, set()).update(anchor_ids)
     return {
-        run_id: _render_analysis(materialized[run_id], tuple(sorted(selected_anchors[run_id])))
+        run_id: _resolve_analysis(materialized[run_id], tuple(sorted(selected_anchors[run_id])))
         for run_id in run_ids
     }
 
 
-def _render_analysis(value: MaterializedAcceptedAnalysis, anchor_ids: tuple[str, ...]) -> str:
+@dataclass(frozen=True, slots=True)
+class ResolvedTextbookContext:
+    analysis_run_id: str
+    source: (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | EducationalDocumentKnowledgeSourceV5
+    )
+    accepted_result: KnowledgeArtifactMemberPointer
+    normalized_markdown: ArtifactMemberPointer
+    selected_anchors: tuple[KnowledgeSourceAnchor | KnowledgeSourceAnchorV2, ...]
+    approved_analysis_text: str
+    original_utf8_bytes: int
+
+    def as_markdown(self) -> str:
+        return _format_analysis(self)
+
+
+def _resolve_analysis(
+    value: MaterializedAcceptedAnalysis,
+    anchor_ids: tuple[str, ...],
+) -> ResolvedTextbookContext:
     analysis = value.analysis
     text = analysis.proposal.normalized_markdown
     if not text.strip():
@@ -214,10 +256,22 @@ def _render_analysis(value: MaterializedAcceptedAnalysis, anchor_ids: tuple[str,
     if not excerpt.strip():
         raise ItemTextbookContextError("bounded textbook excerpt has no text")
     anchors = {anchor.anchor_id: anchor for anchor in analysis.proposal.anchors}
+    return ResolvedTextbookContext(
+        analysis_run_id=analysis.analysis_run_id,
+        source=analysis.source,
+        accepted_result=analysis.accepted_result,
+        normalized_markdown=value.markdown_member,
+        selected_anchors=tuple(anchors[key] for key in anchor_ids),
+        approved_analysis_text=excerpt,
+        original_utf8_bytes=len(raw),
+    )
+
+
+def _format_analysis(value: ResolvedTextbookContext) -> str:
     # JSON string encoding keeps source text visibly data, not surrounding prompt directives.
     content = {
-        "analysis_run_id": analysis.analysis_run_id,
-        "source": analysis.source.model_dump(
+        "analysis_run_id": value.analysis_run_id,
+        "source": value.source.model_dump(
             mode="json",
             include={
                 "source_kind",
@@ -228,14 +282,14 @@ def _render_analysis(value: MaterializedAcceptedAnalysis, anchor_ids: tuple[str,
                 "artifact_member",
             },
         ),
-        "accepted_result": analysis.accepted_result.model_dump(mode="json"),
-        "normalized_markdown": value.markdown_member.model_dump(mode="json"),
-        "selected_anchors": [anchors[identity].model_dump(mode="json") for identity in anchor_ids],
-        "original_utf8_bytes": len(raw),
-        "excerpt_utf8_bytes": len(excerpt.encode("utf-8")),
+        "accepted_result": value.accepted_result.model_dump(mode="json"),
+        "normalized_markdown": value.normalized_markdown.model_dump(mode="json"),
+        "selected_anchors": [anchor.model_dump(mode="json") for anchor in value.selected_anchors],
+        "original_utf8_bytes": value.original_utf8_bytes,
+        "excerpt_utf8_bytes": len(value.approved_analysis_text.encode("utf-8")),
         "text_limit_bytes": TEXTBOOK_TEXT_MAX_BYTES,
-        "truncated": len(raw) > TEXTBOOK_TEXT_MAX_BYTES,
-        "approved_analysis_text": excerpt,
+        "truncated": value.original_utf8_bytes > TEXTBOOK_TEXT_MAX_BYTES,
+        "approved_analysis_text": value.approved_analysis_text,
     }
     return (
         "### 승인된 교과서 분석 본문\n"

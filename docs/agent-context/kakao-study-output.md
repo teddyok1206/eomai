@@ -7,6 +7,25 @@ Codex/공식 GraphRAG를 사용한다. source와 실제 설치/활성화는 별�
 
 ## 현재 후속 경계
 
+### 선택적 개념 추천 source — 아직 실행/운영 비활성
+
+`concept-assistance-v1`/`concepts.py`는 한 질문의 PLAN/COMPOSE 로컬 입력과 초안 결과다.
+학생 이름/명부/인증/slot 선택 필드는 없으며 task/request hash·phase·근거 key·인용문/
+실제 page key·crop 범위를 검증한다. `concept_validation.py`는 기존 study/render schema를
+hash-pinned registry로 읽는다. 모델 출력 schema는 외부 ref 없이 해당 family만 제한한다.
+전용 역할 지침 source는 `config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md`다.
+파일 존재는 실행 프리셋 발행·모델/슬롯 연결 증거가 아니다.
+
+`kakao_concept_knowledge.py`는 실제 operator/session/채널·질문의 현재 접근과 pinned Graph/
+policy로 출제의 공식 retrieval을 읽는다. 최신 자료 학습 source V5를 구 채팅 contract로
+축약하지 않는다. `retrieve_material_read_only`는 같은 retrieval owner의 명시적 uploaded
+source-family 경로이고, `resolve_item_textbook_context`는 기존 출제의 source/accepted-result/
+Graph/anchor 검증을 typed 결과로 제공한다. 이전 Markdown owner는 같은 값을 포맷한다.
+worker에 전체 source pin 대신 작은 근거 key/분석 글을 넘기며 원문/이미지를 읽은 척하지 않는다.
+공유 슬롯 Workflow·교재 페이지/이미지·저장/편집·새 PDF의 최종 연결은 여전히 후속이다.
+
+### 역할별 PDF
+
 `worker-study-render-v1.schema.json`은 기존 `worker-question-render-v1` bytes를 바꾸지 않는
 독립 family다. pure `study.py`/`study_validation.py`가 hash-pinned packaged resource와
 in-memory registry로 predecessor의 member/참조 정의를 재사용한다. 원격 schema 조회는 없다.

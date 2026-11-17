@@ -1674,6 +1674,33 @@ class KnowledgeRetrievalApplicationService:
         *,
         reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
     ) -> ReadOnlyKnowledgeSelection:
+        return self._retrieve_read_only(
+            session,
+            command,
+            reuse_context=reuse_context,
+            source_family=EvidenceSourceFamily.RELEASED_CONSUMER,
+        )
+
+    def retrieve_material_read_only(
+        self,
+        session: Session,
+        command: CreateEvidenceBundleCommand,
+    ) -> ReadOnlyKnowledgeSelection:
+        """Explicit uploaded-material consumer of the same read-only ranking and source checks."""
+        return self._retrieve_read_only(
+            session,
+            command,
+            source_family=EvidenceSourceFamily.UPLOADED_MATERIAL_V1,
+        )
+
+    def _retrieve_read_only(
+        self,
+        session: Session,
+        command: CreateEvidenceBundleCommand,
+        *,
+        source_family: EvidenceSourceFamily,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
+    ) -> ReadOnlyKnowledgeSelection:
         """Reuse authoring authorization/ranking/source checks without publishing anything.
 
         The caller owns its read-only transaction and subsequent bounded analysis
@@ -1703,6 +1730,7 @@ class KnowledgeRetrievalApplicationService:
             policy,
             include_solution_evidence=False,
             reuse_context=reuse_context,
+            source_family=source_family,
         )
         # Candidate order and source resolution are the exact existing authoring
         # algorithm. The conversational projection applies its smaller text budget.

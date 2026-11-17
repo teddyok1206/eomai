@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 유휴 Codex 슬롯의 개념 보강 착수 — source, 실행 미활성
+
+사용자가 전용 상시 슬롯이 아닌 남는 공유 슬롯과 이 기능 전용 프롬프트를 요구했고,
+교과서 원문 이미지 사용도 허용했다. 기존 수집·질문 구성·일반 출력은 계속 비AI다.
+선택적 추천만 PLAN→공식 GraphRAG→COMPOSE의 두 작은 단계로 구현한다.
+
+- behavior 전에 `concept-assistance-v1` JSON Schema2020-12와 packaged mirror를 정의했다.
+  SHA는 `sha256:d0975dcedc5a8b51935fe2695f385e79c85377d952aa89b3d9291a45502abfda`다.
+  frozen DTO/closed registry가 task/request hash·phase·질문 pin·로컬 member·근거/페이지 key·
+  원문 인용과 crop 범위를 검사한다. worker 입력에는 명부/계정/인증/slot 선택 필드가 없다.
+  실제 근거가 없으면 NO_MATCH이며 source를 찾은 것으로 포장하지 않는다.
+- 전용 역할 지침 source는 `config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md`다.
+  PLAN은 질문·사진에서 필요한 개념만 찾으며 검색했다고 주장하지 않는다. COMPOSE는
+  materialize된 근거와 실제 제공 페이지만 보고 초안을 제안한다. 분석 글과 원문 인용을
+  구분하고, 조교 답변을 수정하지 않으며 카카오 조작·메시지 전송도 금지한다.
+- 채팅 전용 구 read contract는 uploaded-material source V5/accepted12를 온전히 표현하지
+  못하므로 거기에 새 기능을 결합하지 않았다. 임시 Chat consumer 확장안은 제거했으며
+  기존 Chat source/wire는 변경하지 않았다. 출제 owner의 `retrieve_material_read_only`가
+  기존 ranking/권한/source 해석의 명시적 uploaded-family 읽기를 재사용한다.
+  `resolve_item_textbook_context`는 기존 Graph/source/accepted-result/anchor 검증을 typed
+  결과로 제공하고, 과거 출제 Markdown도 같은 결과에서 유지한다. 별도 검색 엔진은 없다.
+- `kakao_concept_knowledge`가 실제 operator/session/채널 권한과 현재 role/permission,
+  고정 Graph/policy를 검사한다. 최대3개 교재 분석을 함께 materialize하고 원래 source/
+  rights/Artifact/anchor pins를 core에 보존한다. worker에는 작은 E1~E3 key/분석 글만
+  투영하며 원문 page/이미지를 보았다고 주장하지 않는다. 현재 권한·원래 question callback과
+  같은 근거 재해석을 전후 검사한다. 새 queue·DB·migration·별도 worker 서비스는 없다.
+- 최종 source152 PASS, strict mypy5개·Ruff/format/diff PASS다. 신규 V5/12 source와 rights
+  pointer 보존·query source-family 구분·기존 출제 Markdown/Chat 회귀를 포함한다. 초기
+  fixture ID/JSON escape 기대값·공개 type import와 typing 오류는 source 단계에서 수정했다.
+  wire audit1483 canonical/1128 mirror/12867 refs가 PASS다.
+- 공식 guarded disposable DB의 공유 knowledge query/권한/index 경계140 PASS다. 처음 선택한
+  임시 DB에는 runtime role env가 없어 실행 전에 거절됐고, 공식 `--reconcile`로 **그 임시 DB만**
+  준비한 뒤 다시 실행했다. 운영 DB 테스트나 운영 role/auth 변경은 없었다. 이140개가 신규
+  Kakao 추천의 실제 DB/Workflow/슬롯/화면 성공을 증명하는 것은 아니다.
+
+**미완료:** 기존 Workflow/프리셋/01–05 공유 claim 연결, 교재 실제 page/이미지와 crop owner,
+불변 study 저장·Studio 편집·새 PDF, 실제 슬롯1건 실증이다. 현재 보강 프리셋·도구·모델은
+발행/활성화하지 않았다. 마지막 실제 CSV·사진 PDF와 실제 한 방→전체 방 주기 수집도
+별도 완료 gate로 유지한다. 운영은 아래 `c93f78f7` 호환 배포 그대로이며 소스 존재나 테스트를
+추천 기능 운영 완료로 보고하지 않는다.
+
 ## 2026-11-17 역할별 PDF 호환 운영 배포
 
 source `c93f78f7df43ee261566c40e6a1dbf4d3f501ddf`를 커밋·푸시하고 API/platform/contracts,

@@ -8,6 +8,12 @@
       "note": "kakao-study-output.md",
       "keywords": ["KakaoTalk", "학생 사진", "조교 답변", "기록 정보", "개념 보강", "study PDF", "역할별 출력"],
       "source_paths": [
+        "schemas/kakao-archive/concept-assistance-v1.schema.json",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/concepts.py",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/concept_validation.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_knowledge.py",
+        "services/catalog_service/eom_catalog_service/item_textbook_context.py",
+        "config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md",
         "schemas/kakao-archive/worker-study-render-v1.schema.json",
         "schemas/kakao-archive/worker-study-layout-v1.schema.json",
         "schemas/kakao-archive/export-store-v2.schema.json",
@@ -36,6 +42,8 @@
         "services/kakao_archive_worker/eom_kakao_archive_worker/cli.py"
       ],
       "test_paths": [
+        "tests/unit/test_kakao_concept_contracts.py",
+        "tests/unit/test_kakao_concept_knowledge.py",
         "tests/unit/test_kakao_study_render_contract.py",
         "tests/unit/test_kakao_study_projection.py",
         "tests/unit/test_kakao_study_pdf.py",

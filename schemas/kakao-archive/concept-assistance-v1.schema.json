@@ -1,0 +1,711 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/concept-assistance/1.0",
+  "title": "Bounded local Codex concept assistance; no retrieval, storage or capture authority",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    },
+    {
+      "$ref": "#/$defs/context"
+    }
+  ],
+  "$defs": {
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_revision_id",
+        "question_manifest_sha256",
+        "student",
+        "staff"
+      ],
+      "properties": {
+        "question_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/worker-study-render/1.0#/$defs/questionrev"
+        },
+        "question_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "student": {
+          "$ref": "eom://schemas/kakao-archive/worker-study-render/1.0#/$defs/source_content"
+        },
+        "staff": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/worker-study-render/1.0#/$defs/source_content"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "original_passage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passage_key",
+        "text"
+      ],
+      "properties": {
+        "passage_key": {
+          "type": "string",
+          "pattern": "^Q[1-9][0-9]?$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_key",
+        "source_class",
+        "display_title",
+        "location",
+        "text_kind",
+        "analysis_text",
+        "original_passages"
+      ],
+      "properties": {
+        "evidence_key": {
+          "type": "string",
+          "pattern": "^E[1-3]$"
+        },
+        "source_class": {
+          "const": "TEXTBOOK"
+        },
+        "display_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "text_kind": {
+          "const": "APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE"
+        },
+        "analysis_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 6000
+        },
+        "original_passages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/original_passage"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_key",
+        "evidence_key",
+        "physical_page",
+        "width_pixels",
+        "height_pixels",
+        "member"
+      ],
+      "properties": {
+        "page_key": {
+          "type": "string",
+          "pattern": "^E[1-3]P[1-9][0-9]{0,4}$"
+        },
+        "evidence_key": {
+          "type": "string",
+          "pattern": "^E[1-3]$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "width_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "height_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "member": {
+          "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/member"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "context_sha256",
+        "evidence",
+        "pages",
+        "limitations"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-evidence-context/1.0"
+        },
+        "context_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/page"
+          },
+          "minItems": 0,
+          "maxItems": 12
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 0,
+          "maxItems": 12
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept",
+        "query",
+        "reason"
+      ],
+      "properties": {
+        "concept": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "status",
+        "focus_summary",
+        "queries",
+        "limitations"
+      ],
+      "properties": {
+        "phase": {
+          "const": "PLAN"
+        },
+        "status": {
+          "enum": [
+            "PLANNED",
+            "NEEDS_INPUT"
+          ]
+        },
+        "focus_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/query"
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 0,
+          "maxItems": 12
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "PLANNED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "queries": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "queries": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_key",
+        "passage_key",
+        "quote"
+      ],
+      "properties": {
+        "evidence_key": {
+          "type": "string",
+          "pattern": "^E[1-3]$"
+        },
+        "passage_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^Q[1-9][0-9]?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "rectangle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_key",
+        "rectangle",
+        "reason"
+      ],
+      "properties": {
+        "page_key": {
+          "type": "string",
+          "pattern": "^E[1-3]P[1-9][0-9]{0,4}$"
+        },
+        "rectangle": {
+          "$ref": "#/$defs/rectangle"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "relevance",
+        "explanation",
+        "citations",
+        "captures"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "relevance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/citation"
+          },
+          "minItems": 1,
+          "maxItems": 6
+        },
+        "captures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capture"
+          },
+          "minItems": 0,
+          "maxItems": 4
+        }
+      }
+    },
+    "staff_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation",
+        "reason",
+        "evidence_keys"
+      ],
+      "properties": {
+        "observation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "evidence_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^E[1-3]$"
+          },
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "compose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "status",
+        "focus_summary",
+        "blocks",
+        "staff_checks",
+        "limitations"
+      ],
+      "properties": {
+        "phase": {
+          "const": "COMPOSE"
+        },
+        "status": {
+          "enum": [
+            "DRAFT_READY",
+            "NO_MATCH",
+            "NEEDS_INPUT"
+          ]
+        },
+        "focus_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "staff_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/staff_check"
+          },
+          "minItems": 0,
+          "maxItems": 6
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 0,
+          "maxItems": 12
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "DRAFT_READY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blocks": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "blocks": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "plan_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "question",
+        "base_study_revision_id",
+        "additional_instructions",
+        "phase"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-assistance-request/1.0"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "question": {
+          "$ref": "#/$defs/question"
+        },
+        "base_study_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/worker-study-render/1.0#/$defs/studyrev"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additional_instructions": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 6000
+        },
+        "phase": {
+          "const": "PLAN"
+        }
+      }
+    },
+    "compose_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "question",
+        "base_study_revision_id",
+        "additional_instructions",
+        "phase",
+        "plan",
+        "context"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-assistance-request/1.0"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "question": {
+          "$ref": "#/$defs/question"
+        },
+        "base_study_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/worker-study-render/1.0#/$defs/studyrev"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additional_instructions": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 6000
+        },
+        "phase": {
+          "const": "COMPOSE"
+        },
+        "plan": {
+          "$ref": "#/$defs/plan"
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        }
+      }
+    },
+    "plan_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "request_sha256",
+        "output"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-assistance-result/1.0"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "output": {
+          "$ref": "#/$defs/plan"
+        }
+      }
+    },
+    "compose_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "request_sha256",
+        "output"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-assistance-result/1.0"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "output": {
+          "$ref": "#/$defs/compose"
+        }
+      }
+    },
+    "request": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plan_request"
+        },
+        {
+          "$ref": "#/$defs/compose_request"
+        }
+      ]
+    },
+    "result": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plan_result"
+        },
+        {
+          "$ref": "#/$defs/compose_result"
+        }
+      ]
+    }
+  }
+}

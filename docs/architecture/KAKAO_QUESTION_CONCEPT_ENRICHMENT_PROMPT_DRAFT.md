@@ -1,7 +1,9 @@
 # KakaoTalk 질문의 개념 보강 — Codex 프롬프트 초안
 
-상태: 2026-11-17 사용자 요청으로 준비한 **개발용 초안**. 아직 실행 프리셋·worker 계약·
-도구를 활성화하지 않았다. [학습자료 설계](KAKAO_QUESTION_STUDY_PACKET_DESIGN.md)의
+상태: 2026-11-17 사용자 요청으로 준비한 **개발용 초안**. 후속 역할 지침 source는
+`config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md`에 구현 중이며
+PLAN/COMPOSE worker 계약을 정의했다. 아직 실행 프리셋·슬롯·추천 기능은 활성화하지 않았다.
+[학습자료 설계](KAKAO_QUESTION_STUDY_PACKET_DESIGN.md)의
 Studio 편집→질문1쪽+보강 쪽 PDF를 위한 후속이다. 수집·원문 저장·일반 질문 PDF는 비AI다.
 컨텐츠팀장 원문 프롬프트를 수정하거나 이 문서로 대체하지 않는다.
 
