@@ -450,6 +450,10 @@ from eom_catalog_service.kakao_concept_authorization import (
     CatalogKakaoConceptAuthorizationService,
 )
 load_catalog_schema("kakao-concept-authorization-v1")
+load_catalog_schema("kakao-concept-knowledge-v1")
+from eom_catalog_contracts.kakao_concept_knowledge import KakaoConceptKnowledge
+from eom_catalog_service.kakao_concept_composition import prepare_kakao_concept_composition
+from eom_catalog_service.kakao_concept_phase_results import read_kakao_concept_phase_result
 KakaoConceptAuthorizationRequest(
     workflow_id="workflow_" + "1" * 32, step_run_id="steprun_" + "2" * 32,
     plan_id="execplan_" + "3" * 32, plan_sha256="sha256:" + "4" * 64,

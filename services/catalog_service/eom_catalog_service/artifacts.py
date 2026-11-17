@@ -472,6 +472,57 @@ class CatalogArtifactService:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
 
+    def published_member_pointer(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        schema_ref: str,
+        media_type: str,
+        max_bytes: int,
+    ) -> ArtifactMemberPointer:
+        """Resolve a sibling in an immutable file-set manifest; not permission to read it.
+
+        The caller already pins the revision and owns source authorization. Bytes still go
+        through open_verified_member; a path alone is never a canonical identity.
+        """
+        with self.sessions() as session:
+            row = session.get(ArtifactRevisionRecord, revision_id)
+            logical = session.get(ArtifactRecord, artifact_id)
+            if (
+                row is None
+                or logical is None
+                or not row.approved
+                or not logical.approved
+                or row.logical_artifact_id != artifact_id
+            ):
+                raise ValueError("CATALOG_ARTIFACT_POINTER_INVALID")
+            files = row.manifest.get("files") if isinstance(row.manifest, dict) else None
+            if not isinstance(files, list) or any(
+                not isinstance(member, dict) or not isinstance(member.get("file_name"), str)
+                for member in files
+            ):
+                raise ValueError("CATALOG_ARTIFACT_MANIFEST_INVALID")
+            by_name = {member.get("file_name"): member for member in files}
+            member = by_name.get(member_path)
+            if (
+                len(by_name) != len(files)
+                or member is None
+                or (member.get("schema_ref"), member.get("media_type")) != (schema_ref, media_type)
+                or type(member.get("bytes")) is not int
+                or not 0 < member["bytes"] <= max_bytes
+            ):
+                raise ValueError("CATALOG_ARTIFACT_MEMBER_INVALID")
+            return ArtifactMemberPointer(
+                artifact_id=artifact_id,
+                artifact_revision_id=revision_id,
+                member_path=member_path,
+                schema_ref=schema_ref,
+                media_type=media_type,
+                sha256=member.get("sha256"),
+            )
+
     def commit_file_set(
         self,
         *,

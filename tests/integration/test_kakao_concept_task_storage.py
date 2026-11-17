@@ -334,15 +334,13 @@ def test_actual_source_owner_submits_the_existing_workflow_and_replays_one_comma
         )
 
 
-def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_store):
-    """Actual source/Workflow/plan/lease owners; capability data remains synthetic, no process."""
+@pytest.fixture
+def concept_execution_store(concept_store):
+    """Actual source/Workflow/plan owners; capability observations remain synthetic."""
     from copy import deepcopy
-    from datetime import timedelta
+    from types import SimpleNamespace
 
     from eom_catalog_contracts.kakao_concept_authorization import KakaoConceptAuthorizationRequest
-    from eom_catalog_service.kakao_concept_authorization import (
-        CatalogKakaoConceptAuthorizationService,
-    )
     from eom_identifiers import content_sha256
     from eom_orchestrator.control_models import (
         ExecutionPresetRecord,
@@ -350,12 +348,10 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_s
         ResolvedExecutionPlanRecord,
     )
     from eom_orchestrator.control_service import (
-        acquire_worker_lease,
         publish_capacity_policy_revision,
         publish_execution_preset_revision,
         record_capacity_policy_revision,
         record_execution_preset_revision,
-        terminalize_worker_lease,
     )
     from eom_orchestrator.repository import ensure_protocol_version, submit_structured_job
     from eom_orchestrator.state_machine import JobState, transition_job
@@ -507,6 +503,32 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_s
             plan_sha256=pinned.plan_sha256,
             work_sha256=content_sha256(work),
         )
+    return SimpleNamespace(
+        service=service,
+        actor=actor,
+        store=store,
+        work=work,
+        engine=engine,
+        pinned=pinned,
+        worker=worker,
+        selection=selection,
+        now=controls.NOW,
+        submitted=submitted,
+    )
+
+
+def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_execution_store):
+    """Actual source/Workflow/plan/lease owners; capability data remains synthetic, no process."""
+    from datetime import timedelta
+
+    from eom_catalog_service.kakao_concept_authorization import (
+        CatalogKakaoConceptAuthorizationService,
+    )
+    from eom_orchestrator.control_service import acquire_worker_lease, terminalize_worker_lease
+
+    value = concept_execution_store
+    service, actor, selection = value.service, value.actor, value.selection
+    engine, pinned, worker = value.engine, value.pinned, value.worker
     authorizer = CatalogKakaoConceptAuthorizationService(service)
     assert authorizer.authorize(selection).status == "SUCCESS"
     barrier = Barrier(2)
@@ -521,7 +543,7 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_s
                 job_id=worker.job_id,
                 attempt=1,
                 workload_class="KNOWLEDGE_ANALYSIS",
-                acquired_at=controls.NOW + timedelta(minutes=1),
+                acquired_at=value.now + timedelta(minutes=1),
                 ttl=timedelta(minutes=30),
             )
             return lease.lease_id, lease.worker_slot_id
@@ -535,7 +557,7 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_s
             lease_id=leases[0][0],
             terminal_state="RELEASED",
             reason_code="TEST_COMPLETED_NO_PROCESS",
-            released_at=controls.NOW + timedelta(minutes=2),
+            released_at=value.now + timedelta(minutes=2),
         )
         session.execute(
             update(ApiSessionRecord)
@@ -551,6 +573,279 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_s
         )
     with pytest.raises(KakaoArchiveError):
         authorizer.authorize(selection)
+
+
+def _complete_synthetic_concept_plan(value):
+    """New deterministic test-double output, not reinterpretation of a failed/model execution."""
+    import tempfile
+    from pathlib import Path
+
+    from eom_orchestrator.artifacts import commit_artifact, stage_structured_artifact
+    from eom_orchestrator.models import JobRecord
+    from eom_orchestrator.repository import create_artifact_records
+    from eom_orchestrator.state_machine import JobState, transition_job
+    from eom_workflow.kakao_concept_result import KakaoConceptRoleResult
+    from eom_workflow.models import KakaoConceptRoleResultHeader
+    from eom_workflow_runner.models import WorkflowStepRunRecord
+    from eom_workflow_runner.state_machine import (
+        StepState,
+        WorkflowState,
+        transition_step,
+        transition_workflow,
+    )
+
+    from tests.unit.test_kakao_concept_contracts import plan
+
+    pointer = value.work.request_member
+    raw = value.service.artifacts.read_member(
+        artifact_id=pointer.artifact_id,
+        revision_id=pointer.artifact_revision_id,
+        member_path=pointer.member_path,
+        sha256=pointer.sha256,
+        schema_ref=pointer.schema_ref,
+        media_type=pointer.media_type,
+        max_bytes=value.work.request_bytes,
+    )
+    request = validate_kakao_concept_request_bytes(value.work, raw)
+    body = {
+        key: field
+        for key, field in value.worker.model_dump(mode="json").items()
+        if key
+        in {
+            "schema_version",
+            "protocol_version",
+            "job_id",
+            "workflow_id",
+            "step_run_id",
+            "role",
+            "artifact",
+        }
+    }
+    body.update(
+        status="ok",
+        completed_at=datetime.now(UTC).isoformat(),
+        output=dict(
+            schema_version="kakao-concept-assistance-result/1.0",
+            task_id=request.task_id,
+            request_sha256=pointer.sha256,
+            output=plan(),
+        ),
+    )
+    result = KakaoConceptRoleResult.model_validate(body)
+    settings = value.service.artifacts.settings
+    with tempfile.TemporaryDirectory(
+        prefix="concept-fake-worker.", dir=settings.staging_root
+    ) as directory:
+        staged = stage_structured_artifact(
+            result=result.model_dump(mode="json"),
+            job_id=value.worker.job_id,
+            logical_artifact_id=value.worker.artifact.logical_artifact_id,
+            revision_id=value.worker.artifact.revision_id,
+            staging=Path(directory),
+            worker_slot="05",
+        )
+        final = commit_artifact(staged, settings.nas_artifact_root)
+        with Session(value.engine) as session, session.begin():
+            job = session.get(JobRecord, value.worker.job_id)
+            job.worker_slot_id = "05"
+            for state in (
+                JobState.CLAIMED,
+                JobState.RUNNING,
+                JobState.VALIDATING_RESULT,
+                JobState.COMMITTING,
+            ):
+                transition_job(session, job.job_id, state, "SYNTHETIC_WORKER_TEST")
+            create_artifact_records(
+                session,
+                job=job,
+                content_hash=staged.content_hash,
+                manifest_hash=staged.manifest_hash,
+                content_bytes=staged.manifest.content_bytes,
+                nas_path=str(final),
+                manifest=staged.manifest.model_dump(mode="json"),
+                result=KakaoConceptRoleResultHeader.model_validate(
+                    result.model_dump(exclude={"output"})
+                ).model_dump(mode="json"),
+            )
+            transition_job(session, job.job_id, JobState.SUCCEEDED, "SYNTHETIC_RESULT_COMMITTED")
+            step = session.get(WorkflowStepRunRecord, value.selection.step_run_id)
+            transition_step(step, StepState.SUCCEEDED)
+            for state in (WorkflowState.RUNNING, WorkflowState.COMPLETED):
+                transition_workflow(
+                    session,
+                    value.submitted.workflow_id,
+                    state,
+                    "SYNTHETIC_WORKER_TEST",
+                    actor_type="human",
+                    actor_id=value.actor.operator_id,
+                    command_id=None,
+                )
+
+
+def test_actual_phase_result_to_persisted_composition_and_restart_replay(
+    concept_execution_store, monkeypatch
+):
+    """Real DB/Artifact chain and PNG decode; Graph ports and PLAN content are synthetic."""
+    import tempfile
+    from dataclasses import replace
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    from eom_catalog_service.kakao_concept_knowledge import KakaoConceptKnowledgeReader
+    from eom_catalog_service.kakao_concept_pages import prepare_kakao_concept_pages
+    from eom_catalog_service.kakao_concept_phase_results import read_kakao_concept_phase_result
+    from eom_protocol.artifact_members import ArtifactMemberPointer
+
+    from tests.unit.test_kakao_concept_pages import knowledge
+
+    value = concept_execution_store
+    _complete_synthetic_concept_plan(value)
+    authority = value.service.source_authority(
+        value.actor, value.work.source_binding_id, value.work.task_id
+    )
+    completed = read_kakao_concept_phase_result(authority, "PLAN")
+    assert completed.pin.job_id == value.worker.job_id
+    textbook, png_bytes = knowledge()
+    material = textbook.materials[0]
+    original = next(
+        member
+        for member in material.analysis.source.materialization_members
+        if member.member_kind == "PAGE_IMAGE"
+    )
+    artifacts = value.service.artifacts
+    with tempfile.TemporaryDirectory(
+        prefix="concept-book-fixture.", dir=artifacts.settings.staging_root
+    ) as directory:
+        source_path = Path(directory) / "page.png"
+        source_path.write_bytes(png_bytes)
+        publication = artifacts.commit_file_set(
+            files={original.member_path: source_path},
+            primary_file=original.member_path,
+            artifact_type="synthetic-textbook-page",
+            idempotency_key="concept-book-page-" + uuid4().hex,
+            request={"sha256": original.sha256},
+            result={},
+            file_metadata={
+                original.member_path: dict(
+                    schema_ref=original.schema_ref, media_type=original.media_type
+                )
+            },
+        )
+    replacement = original.model_copy(
+        update=dict(
+            artifact_id=publication.artifact_id, artifact_revision_id=publication.revision_id
+        )
+    )
+    source = material.analysis.source.model_copy(
+        update=dict(
+            chunk_manifests=(
+                *material.analysis.source.chunk_manifests,
+                material.analysis.source.chunk_manifests[0].model_copy(
+                    update=dict(
+                        artifact_id=publication.artifact_id,
+                        artifact_revision_id=publication.revision_id,
+                    )
+                ),
+            ),
+            materialization_members=tuple(
+                replacement if member == original else member
+                for member in material.analysis.source.materialization_members
+            ),
+        )
+    )
+    material = replace(material, analysis=replace(material.analysis, source=source))
+    textbook = replace(
+        textbook,
+        scope=authority.intent.scope,
+        materials=(material,),
+        snapshot=textbook.snapshot.model_copy(
+            update=dict(
+                graph_snapshot_revision_id=authority.intent.scope.snapshot.graph_snapshot_revision_id
+            )
+        ),
+    )
+    reader = Mock(spec=KakaoConceptKnowledgeReader)
+    reader.retrieve.return_value = textbook
+    reader.restore.return_value = textbook
+    reader.prepare_pages.side_effect = (
+        lambda _principal, _binding, knowledge, *, source_root, reauthorize_question: (
+            prepare_kakao_concept_pages(
+                artifacts,
+                knowledge=knowledge,
+                source_root=source_root,
+                authorize=reauthorize_question,
+            )
+        )
+    )
+    value.service.knowledge_reader = reader
+    work = value.service.prepare_compose(
+        value.actor, value.work.source_binding_id, value.work.task_id
+    )
+    assert work.phase == "COMPOSE" and len(work.files) == 1
+    expected = ArtifactMemberPointer.model_validate(
+        replacement.model_dump(include=set(ArtifactMemberPointer.model_fields))
+    )
+    assert work.files[0].source == expected
+    knowledge_pointer = artifacts.published_member_pointer(
+        artifact_id=work.request_member.artifact_id,
+        revision_id=work.request_member.artifact_revision_id,
+        member_path="knowledge.json",
+        schema_ref="eom://schemas/kakao-archive/concept-knowledge/1.0",
+        media_type="application/json",
+        max_bytes=2 * 1024 * 1024,
+    )
+    assert knowledge_pointer.artifact_revision_id == work.request_member.artifact_revision_id
+    with Session(value.engine) as session:
+        before = session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+    restored = KakaoConceptTaskService(
+        value.engine,
+        artifacts=artifacts,
+        questions=value.service.questions,
+        sources=value.service.sources,
+        knowledge_reader=reader,
+    )
+    for _ in range(2):
+        assert restored.prepare_compose(value.actor, work.source_binding_id, work.task_id) == work
+    with Session(value.engine) as session:
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == before
+    reader.retrieve.assert_called_once()
+    reader.prepare_pages.assert_called_once()
+    with Session(value.engine) as session, session.begin():
+        session.execute(
+            update(ApiSessionRecord)
+            .where(ApiSessionRecord.api_session_id == value.actor.session_id)
+            .values(revoked_at=datetime.now(UTC))
+        )
+    background = restored.accepted_source_authority(
+        task_id=work.task_id, operator_id=value.actor.operator_id
+    )
+    assert restored.prepare_accepted_compose(background) == work
+    with pytest.raises(KakaoArchiveError):
+        restored.get_task(value.actor, work.source_binding_id, work.task_id)
+    from eom_catalog_service.kakao_concept_workflow_submission import (
+        submit_accepted_kakao_concept_phase,
+    )
+    from eom_orchestrator.control_models import ExecutionPresetRevisionRecord
+    from eom_workflow_runner.models import WorkflowDefinitionRecord
+
+    with Session(value.engine, expire_on_commit=False) as session:
+        plan_workflow = session.get(WorkflowInstanceRecord, value.submitted.workflow_id)
+        definition = session.get(WorkflowDefinitionRecord, plan_workflow.definition_id)
+        preset = ExecutionPresetRevision.model_validate(
+            session.get(
+                ExecutionPresetRevisionRecord, value.pinned.preset_revision_id
+            ).canonical_document
+        )
+        session.expunge(definition)
+    first = submit_accepted_kakao_concept_phase(
+        background, work=work, definition=definition, expected_preset=preset
+    )
+    replay = submit_accepted_kakao_concept_phase(
+        background, work=work, definition=definition, expected_preset=preset
+    )
+    assert first.workflow_id == replay.workflow_id and first.command_id == replay.command_id
+    assert first.workflow_id != value.submitted.workflow_id
+    reader.retrieve.assert_called_once()
 
 
 @pytest.mark.parametrize("phase", ["intent", "plan"])

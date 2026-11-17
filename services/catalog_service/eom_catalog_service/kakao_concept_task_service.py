@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from eom_catalog_contracts.kakao_concept_tasks import (
@@ -48,6 +48,9 @@ from .kakao_source_models import KakaoSourceRevisionRecord
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
 from .kakao_source_service import KakaoSourceService, source_admission_pointers
 
+if TYPE_CHECKING:
+    from .kakao_concept_knowledge import KakaoConceptKnowledgeReader
+
 
 def _intent_pointer(row: KakaoConceptTaskRecord) -> ArtifactMemberPointer | None:
     if row.intent_artifact_id is None:
@@ -83,10 +86,13 @@ class KakaoConceptSourceAuthority:
 
     service: "KakaoConceptTaskService"
     intent: KakaoConceptIntent
+    owner_operator_id: str
 
     def reauthorize(
         self, session: Session, *, operator_id: str, work: KakaoConceptWork
     ) -> KakaoConceptWork:
+        if operator_id != self.owner_operator_id:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
         row = self.service.accepted_intent_row(session, self.intent, operator_id=operator_id)
         stored = session.get(
             KakaoConceptPhaseRecord, (row.task_id, work.phase), populate_existing=True
@@ -114,6 +120,12 @@ class KakaoConceptSourceAuthority:
         validate_source_pointer_metadata_batch(
             session, (work.request_member, *(file.source for file in work.files))
         )
+        if work.phase == "COMPOSE":
+            from .kakao_concept_composition import authorize_kakao_concept_composition
+
+            if self.service.knowledge_reader is None:
+                raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_NOT_CONFIGURED")
+            authorize_kakao_concept_composition(self.service.knowledge_reader, self, work)
         return work
 
 
@@ -127,11 +139,13 @@ class KakaoConceptTaskService:
         sources: KakaoSourceService,
         scope_provider: Callable[[Session, ActorContext, str], ChatRagScope] | None = None,
         authorize_study: Callable[[Session, ActorContext, KakaoConceptCreate], None] | None = None,
+        knowledge_reader: "KakaoConceptKnowledgeReader | None" = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.artifacts, self.questions = artifacts, questions
         self.sources = sources
         self.scope_provider, self.authorize_study = scope_provider, authorize_study
+        self.knowledge_reader = knowledge_reader
 
     @staticmethod
     def _row(
@@ -465,7 +479,7 @@ class KakaoConceptTaskService:
             row = self.accepted_intent_row(session, intent, operator_id=operator_id)
             if _intent_pointer(row) != pointer:
                 raise KakaoArchiveError("KAKAO_CONCEPT_INTENT_CHANGED")
-        return KakaoConceptSourceAuthority(self, intent)
+        return KakaoConceptSourceAuthority(self, intent, operator_id)
 
     def get_task(self, actor: ActorContext, binding: str, task_id: str) -> KakaoConceptTask:
         with self.sessions.begin() as session:
@@ -481,7 +495,7 @@ class KakaoConceptTaskService:
                 self.accepted_intent_row(session, intent, operator_id=cast(str, actor.operator_id))
 
         with self.sessions.begin() as session:
-            authority = KakaoConceptSourceAuthority(self, intent)
+            authority = KakaoConceptSourceAuthority(self, intent, cast(str, actor.operator_id))
             self.accepted_intent_row(session, intent, operator_id=cast(str, actor.operator_id))
             old = session.get(KakaoConceptPhaseRecord, (task_id, "PLAN"))
             if old is not None:
@@ -493,14 +507,58 @@ class KakaoConceptTaskService:
         work = prepare_kakao_concept_plan(
             self.artifacts, intent=intent, selected=selected, authorize=authorize
         )
+        return self.adopt_phase(actor, binding, task_id, work)
+
+    def adopt_phase(
+        self, actor: ActorContext, binding: str, task_id: str, work: KakaoConceptWork
+    ) -> KakaoConceptWork:
+        """Adopt one already-published exact input with the existing unique phase identity."""
+        _, intent = self.get_intent(actor, binding, task_id)
+        authority = KakaoConceptSourceAuthority(self, intent, cast(str, actor.operator_id))
+        return self.adopt_accepted_phase(authority, work)
+
+    def adopt_accepted_phase(
+        self, authority: KakaoConceptSourceAuthority, work: KakaoConceptWork
+    ) -> KakaoConceptWork:
+        """Accepted background work uses its actual saved owner, never an invented HTTP actor."""
+        if authority.service is not self:
+            raise KakaoArchiveError("KAKAO_CONCEPT_WORK_NOT_ACCEPTED")
+        intent = authority.intent
+        task_id, binding = intent.task_id, intent.request.source_binding_id
+        if (
+            work.task_id,
+            work.source_binding_id,
+            work.question_revision_id,
+            work.question_manifest,
+        ) != (task_id, binding, intent.request.question_revision_id, intent.question_manifest):
+            raise KakaoArchiveError("KAKAO_CONCEPT_WORK_NOT_ACCEPTED")
+        if work.phase == "COMPOSE":
+            from .kakao_concept_composition import authorize_kakao_concept_composition
+
+            if self.knowledge_reader is None:
+                raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_NOT_CONFIGURED")
+            # Retrieval, original reads, decode and input publication precede the adoption lock.
+            authorize_kakao_concept_composition(self.knowledge_reader, authority, work)
         with self.sessions.begin() as session:
-            row = self._row(session, actor, binding, task_id, lock=True)
+            row = session.scalar(
+                select(KakaoConceptTaskRecord)
+                .where(
+                    KakaoConceptTaskRecord.task_id == task_id,
+                    KakaoConceptTaskRecord.owner_operator_id == authority.owner_operator_id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
             self.accepted_intent_row(session, intent, operator_id=row.owner_operator_id)
-            phase = session.get(KakaoConceptPhaseRecord, (task_id, "PLAN"))
+            validate_source_pointer_metadata_batch(
+                session, (work.request_member, *(file.source for file in work.files))
+            )
+            phase = session.get(KakaoConceptPhaseRecord, (task_id, work.phase))
             if phase is None:
                 phase = KakaoConceptPhaseRecord(
                     task_id=task_id,
-                    phase="PLAN",
+                    phase=work.phase,
                     work_input=work.model_dump(mode="json"),
                     work_sha256=content_sha256(work),
                     request_artifact_id=work.request_member.artifact_id,
@@ -509,9 +567,40 @@ class KakaoConceptTaskService:
                 )
                 session.add(phase)
                 session.flush()
-            return authority.reauthorize(session, operator_id=row.owner_operator_id, work=work)
+            elif phase.work_sha256 != content_sha256(work) or phase.work_input != work.model_dump(
+                mode="json"
+            ):
+                raise KakaoArchiveError("KAKAO_CONCEPT_PHASE_INPUT_CHANGED")
+        with self.sessions() as session:
+            return authority.reauthorize(
+                session, operator_id=authority.owner_operator_id, work=work
+            )
+
+    def prepare_compose(self, actor: ActorContext, binding: str, task_id: str) -> KakaoConceptWork:
+        from .kakao_concept_composition import prepare_kakao_concept_composition
+
+        if self.knowledge_reader is None:
+            raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_NOT_CONFIGURED")
+        return prepare_kakao_concept_composition(
+            self, self.knowledge_reader, actor=actor, binding_id=binding, task_id=task_id
+        )
+
+    def prepare_accepted_compose(self, authority: KakaoConceptSourceAuthority) -> KakaoConceptWork:
+        from .kakao_concept_composition import prepare_kakao_concept_composition
+
+        if self.knowledge_reader is None or authority.service is not self:
+            raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_NOT_CONFIGURED")
+        return prepare_kakao_concept_composition(
+            self,
+            self.knowledge_reader,
+            actor=authority,
+            binding_id=authority.intent.request.source_binding_id,
+            task_id=authority.intent.task_id,
+        )
 
     def source_authority(
         self, actor: ActorContext, binding: str, task_id: str
     ) -> KakaoConceptSourceAuthority:
-        return KakaoConceptSourceAuthority(self, self.get_intent(actor, binding, task_id)[1])
+        return KakaoConceptSourceAuthority(
+            self, self.get_intent(actor, binding, task_id)[1], cast(str, actor.operator_id)
+        )

@@ -41,9 +41,9 @@ release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context
 
 ## 아직 실제로 연결되지 않은 것
 
-- 현재 Graph scope 선택/PLAN 실행 제어를 제공하는 공개 API·화면 composition.
+- 추천 요청의 공개 API·화면 시작/상태/history와 자동 단계 진행 coordinator.
 - 실제 preset/지침 발행·공유 슬롯 model run, PLAN→GraphRAG→COMPOSE 진행 coordinator.
-- COMPOSE provenance/원본 page·capture 발행, saved-study 저장·Studio 편집/새 PDF 연결.
+- 실제 COMPOSE 완료 뒤 원본 capture 발행, saved-study 저장·Studio 편집/새 PDF 연결.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
 
 실제 reader/page/crop/worker input/역할별 PDF는 [자료 출력 문맥](kakao-study-output.md)을 따른다.
@@ -68,8 +68,9 @@ worker를 직접 실행하거나 다른 support purpose로 fallback해 이 연�
 `kakao_concept_authorization.py`는 저장한 human owner·original/current request·definition·plan42·
 accepted phase link를 대조한 뒤 기존 task authority로 현재 source를 재검사한다. Runner UID의
 이 operation만 socket에 허용한다. API/채팅/worker나 caller-supplied actor는 사용할 수 없다.
-Catalog의 기본 composition은 source 재인가만 구성하며, Graph scope provider 없이 새 task를
-만들면 명시 거부한다. 가짜 scope/API session으로 source 읽기를 성립시키지 않는다.
+Catalog의 기본 composition은 현재 출제 프리셋의 검증된 retrieval policy와 허용 corpus의
+active Graph를 초기 요청에서 한 번 pin한다. scope provider가 없는 별도 source-only adapter는
+여전히 새 task를 만들 수 없다. 가짜 scope/API session으로 source 읽기를 성립시키지 않는다.
 
 `kakao_concept_catalog_client.py`는 그 작은 RPC와 Core 공개 Artifact reader를 조합한다.
 `KakaoConceptExecutionContext`는 canonical request를 한 번 읽고 실제 E/page/quote를 검증한다.
@@ -89,5 +90,28 @@ image-input 변경 그대로다. 이 source 연결을 실제 운영 activation/m
 공유 capacity·동시 동일 Job claim/lease·현재 account 철회까지 disposable DB에서 검사한다.
 capability observation은 합성이며 actual Codex/systemd 실행은 없다.
 
-다음 구현은 **현재 Graph scope/실행 preset 구성→PLAN 결과의 공식 GraphRAG/원본 PNG→COMPOSE
-진행→saved-study/Studio 편집·새 PDF**에 집중한다. 새 queue/독립 Codex 프로세스를 만들지 않는다.
+## PLAN 결과를 교재와 연결해 다음 단계로 준비
+
+`kakao_concept_phase_results.py`는 exact child의 완료 Workflow/step/Job/Artifact와 role 입력·
+결과를 대조해 canonical result를 읽는다. 실패·진행 중·다른 purpose/Job을 완료본으로 쓰지 않는다.
+`kakao_concept_composition.py`는 공식 reader의 교재/실제 PNG로 COMPOSE request를 만들고 기존
+Artifact의 `request.json` + `knowledge.json`에 함께 발행한다. 후자는 작은 source/accepted/
+normalized-text·Graph/policy·PLAN-result·원본 page pin이다. DB는 기존 phase Work pointer다.
+
+Source 재인가는 그 sibling provenance와 실제 PLAN 결과·같은 질문/지시·분석 hash·page use·
+Work 파일 집합을 대조하고, 공식 `restore`로 정확한 교재만 재확인한다. 새 검색/최신 교재로
+대체하지 않는다. 긴 준비/PNG decode/발행은 phase adoption lock 밖이다. 종료된 phase 준비를
+다시 읽거나 서비스 재구성해도 새 검색/원본·request 발행을 하지 않는다. original PNG가 없는
+text-only source는 한계를 보존한다. 과목 범위가 다르면 연결되는 기초 개념까지만 제안한다.
+
+accepted source authority가 실제 저장 owner를 보유하므로 HTTP 만료 뒤에도 `prepare_accepted_compose`
+와 `submit_accepted_kakao_concept_phase`로 같은 요청을 이어간다. 가짜 ActorContext/session을
+만들지 않으며 현재 owner/계정·권한·source 검사는 유지한다. 공개 조회는 실제 API session이다.
+
+`test_kakao_concept_composition.py`의 Graph/Workflow port는 합성이다. 저장 integration의 phase-result
+검사는 실제 Job/Artifact 결과→등록된 PNG→COMPOSE 저장/서비스 재구성·logout 뒤 동일 Workflow
+제출을 검증하지만 PLAN 출력·Graph/교재 discovery는 합성이다. 모델/실제 교재 검색 성공은 아니다.
+
+다음 구현은 **실행 preset/자동 coordinator·공개 API→실제 COMPOSE→saved-study/Studio 편집·새 PDF**에
+집중한다. 실제 CSV/사진 샘플의 관련 교과서 보강·최종 PDF 링크도 남아 있다. 새 queue/독립
+Codex 프로세스를 만들지 않는다.

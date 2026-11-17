@@ -70,36 +70,45 @@ class PreparedConceptPages:
     source_root: Path = field(repr=False)
 
     def __post_init__(self) -> None:
-        if self.context.pages != tuple(source.page for source in self.sources):
-            raise KakaoArchiveError("KAKAO_CONCEPT_CAPTURE_CONTEXT_MISMATCH")
-        originals: dict[
-            tuple[str, int | None],
-            KnowledgeAnalysisDocumentMaterializationMemberV4 | MaterialKnowledgePageMember,
-        ] = {}
-        for index, material in enumerate(self.knowledge.materials, 1):
-            document_source = material.analysis.source
-            if isinstance(
-                document_source,
-                (EducationalDocumentKnowledgeSourceV4, EducationalDocumentKnowledgeSourceV5),
-            ):
-                originals.update(
-                    ((f"E{index}", member.physical_page), member)
-                    for member in document_source.materialization_members
-                    if member.member_kind == "PAGE_IMAGE"
-                )
-        for source in self.sources:
-            page = source.page
-            member = originals.get((page.evidence_key, page.physical_page))
-            if (
-                member is None
-                or any(
-                    getattr(source.original, name) != getattr(member, name)
-                    for name in ArtifactMemberPointer.model_fields
-                )
-                or (page.width_pixels, page.height_pixels, page.member.size_bytes)
-                != (member.width_pixels, member.height_pixels, member.bytes)
-            ):
-                raise KakaoArchiveError("KAKAO_CONCEPT_PAGE_POINTER_INVALID")
+        validate_kakao_concept_page_sources(self.knowledge, self.context, self.sources)
+
+
+def validate_kakao_concept_page_sources(
+    knowledge: ResolvedConceptTextbookKnowledge,
+    context: ConceptEvidenceContext,
+    sources: tuple[ConceptPageSource, ...],
+) -> None:
+    """Shared metadata gate for staged originals and saved COMPOSE provenance; no byte reads."""
+    if context.pages != tuple(source.page for source in sources):
+        raise KakaoArchiveError("KAKAO_CONCEPT_CAPTURE_CONTEXT_MISMATCH")
+    originals: dict[
+        tuple[str, int | None],
+        KnowledgeAnalysisDocumentMaterializationMemberV4 | MaterialKnowledgePageMember,
+    ] = {}
+    for index, material in enumerate(knowledge.materials, 1):
+        document_source = material.analysis.source
+        if isinstance(
+            document_source,
+            (EducationalDocumentKnowledgeSourceV4, EducationalDocumentKnowledgeSourceV5),
+        ):
+            originals.update(
+                ((f"E{index}", member.physical_page), member)
+                for member in document_source.materialization_members
+                if member.member_kind == "PAGE_IMAGE"
+            )
+    for source in sources:
+        page = source.page
+        member = originals.get((page.evidence_key, page.physical_page))
+        if (
+            member is None
+            or any(
+                getattr(source.original, name) != getattr(member, name)
+                for name in ArtifactMemberPointer.model_fields
+            )
+            or (page.width_pixels, page.height_pixels, page.member.size_bytes)
+            != (member.width_pixels, member.height_pixels, member.bytes)
+        ):
+            raise KakaoArchiveError("KAKAO_CONCEPT_PAGE_POINTER_INVALID")
 
 
 @dataclass(frozen=True, slots=True)

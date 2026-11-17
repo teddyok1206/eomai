@@ -15,6 +15,10 @@ from eom_catalog_contracts import (
     EducationRetrievalAccessPolicy,
     EvidenceBudget,
 )
+from eom_catalog_contracts.kakao_concept_knowledge import (
+    KakaoConceptKnowledge,
+    KakaoConceptTextbookPin,
+)
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_identifiers import content_sha256
@@ -27,8 +31,13 @@ from eom_kakao_archive_contracts.concepts import (
     ConceptResult,
 )
 from eom_operator_identity import ActorContext, PermissionKey
+from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
 from eom_orchestrator.database import build_session_factory
-from eom_protocol.general_chat_rag_knowledge import ChatRagScope
+from eom_orchestrator.preset_model_selection import validated_preset
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_protocol.general_chat_grounding import ChatKnowledgeSnapshot
+from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy, ChatRagScope
+from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
@@ -38,7 +47,8 @@ from .item_textbook_context import (
     resolve_item_textbook_context,
 )
 from .kakao_archive_authorization import KakaoArchiveError, authorize_kakao_binding_scope
-from .knowledge_graph_models import KnowledgeGraphSnapshotRecord
+from .kakao_concept_task_service import KakaoConceptSourceAuthority
+from .knowledge_graph_models import KnowledgeCorpusRecord, KnowledgeGraphSnapshotRecord
 from .knowledge_graph_projection import knowledge_node_terms
 from .knowledge_graph_publication_service import KnowledgeGraphPublicationService
 from .knowledge_retrieval_service import KnowledgeRetrievalApplicationService
@@ -63,6 +73,31 @@ class ConceptTextbookMaterial:
             source=self.analysis.source,
             node_ids=self.graph_node_ids,
             anchor_ids=tuple(a.anchor_id for a in self.analysis.selected_anchors),
+        )
+
+    def pin(self) -> KakaoConceptTextbookPin:
+        source = self.analysis.source
+        if not isinstance(
+            source,
+            (
+                ContentIntakeKnowledgeSourceV2,
+                EducationalDocumentKnowledgeSourceV3,
+                EducationalDocumentKnowledgeSourceV4,
+                EducationalDocumentKnowledgeSourceV5,
+            ),
+        ):
+            raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_POINTER_INVALID")
+        return KakaoConceptTextbookPin(
+            title=self.title,
+            analysis_run_id=self.analysis.analysis_run_id,
+            source=source,
+            node_ids=self.graph_node_ids,
+            anchor_ids=tuple(anchor.anchor_id for anchor in self.analysis.selected_anchors),
+            accepted_result=ArtifactMemberPointer.model_validate(
+                self.analysis.accepted_result.model_dump(exclude={"logical_name"})
+            ),
+            normalized_markdown=self.analysis.normalized_markdown,
+            analysis_text_sha256=sha256(self.analysis.approved_analysis_text.encode("utf-8")),
         )
 
 
@@ -120,9 +155,67 @@ class KakaoConceptKnowledgeReader:
         self.retrieval = KnowledgeRetrievalApplicationService(engine, settings)
         self.analyses = KnowledgeGraphPublicationService(engine, settings)
 
+    def capture_authoring_scope(
+        self, session: Session, actor: ActorContext, binding_id: str
+    ) -> ChatRagScope:
+        """Initial intent only: pin the currently published authoring policy and its one corpus."""
+        logical = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "knowledge-grounded-item"
+            )
+        )
+        revision = (
+            session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+            if logical is not None and logical.current_revision_id is not None
+            else None
+        )
+        if (
+            logical is None
+            or logical.state != "ACTIVE"
+            or revision is None
+            or revision.preset_id != logical.preset_id
+        ):
+            raise KakaoArchiveError("KAKAO_CONCEPT_SCOPE_NOT_CONFIGURED")
+        preset = validated_preset(revision)
+        if not isinstance(preset, ExecutionPresetRevisionV2) or preset.state != "RELEASED":
+            raise KakaoArchiveError("KAKAO_CONCEPT_SCOPE_NOT_CONFIGURED")
+        policy = preset.retrieval_policy
+        if (
+            len(policy.allowed_corpus_keys) != 1
+            or "TEXTBOOK" not in policy.allowed_source_classes
+            or "ITEM_PREPARATION" not in policy.allowed_query_kinds
+        ):
+            raise KakaoArchiveError("KAKAO_CONCEPT_SCOPE_NOT_CONFIGURED")
+        corpus = session.scalar(
+            select(KnowledgeCorpusRecord).where(
+                KnowledgeCorpusRecord.corpus_key == policy.allowed_corpus_keys[0],
+                KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
+            )
+        )
+        if corpus is None or corpus.current_graph_snapshot_revision_id is None:
+            raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_NOT_AVAILABLE")
+        snapshot = self.retrieval.resolve_snapshot_pointer(
+            session, corpus.current_graph_snapshot_revision_id
+        )
+        row = session.get(KnowledgeGraphSnapshotRecord, snapshot.graph_snapshot_revision_id)
+        if row is None or snapshot.graph_id != corpus.graph_id:
+            raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_POINTER_INVALID")
+        scope = ChatRagScope(
+            snapshot=ChatKnowledgeSnapshot(
+                graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                sha256=row.snapshot_sha256,
+            ),
+            policy=ChatRagPolicy(
+                access_policy_revision_id=policy.access_policy_revision_id,
+                sha256=policy.access_policy_sha256,
+            ),
+        )
+        self._authority(session, actor, binding_id, scope)
+        return scope
+
     def prepare_pages(
         self,
-        actor: ActorContext,
+        actor: ActorContext | KakaoConceptSourceAuthority,
         binding_id: str,
         knowledge: ResolvedConceptTextbookKnowledge,
         *,
@@ -143,7 +236,7 @@ class KakaoConceptKnowledgeReader:
 
     def prepare_captures(
         self,
-        actor: ActorContext,
+        actor: ActorContext | KakaoConceptSourceAuthority,
         binding_id: str,
         prepared: PreparedConceptPages,
         *,
@@ -172,7 +265,7 @@ class KakaoConceptKnowledgeReader:
     def _authority(
         self,
         session: Session,
-        actor: ActorContext,
+        actor: ActorContext | KakaoConceptSourceAuthority,
         binding_id: str,
         scope: ChatRagScope,
     ) -> tuple[
@@ -181,13 +274,17 @@ class KakaoConceptKnowledgeReader:
         EducationRetrievalAccessPolicy,
         KnowledgeGraphSnapshotPointer,
     ]:
-        owner, _ = authorize_kakao_binding_scope(
-            session,
-            actor,
-            binding_id,
-            PermissionKey.KAKAO_ARCHIVE_EDIT,
-            lock=False,
-        )
+        if isinstance(actor, ActorContext):
+            owner, _ = authorize_kakao_binding_scope(
+                session, actor, binding_id, PermissionKey.KAKAO_ARCHIVE_EDIT, lock=False
+            )
+        else:
+            stored = actor.service.accepted_intent_row(
+                session, actor.intent, operator_id=actor.owner_operator_id
+            )
+            if stored.source_binding_id != binding_id or actor.intent.scope != scope:
+                raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_FORBIDDEN")
+            owner = stored.owner_operator_id
         permissions = effective_permissions(session, owner)
         if (
             not {
@@ -294,7 +391,7 @@ class KakaoConceptKnowledgeReader:
 
     def retrieve(
         self,
-        actor: ActorContext,
+        actor: ActorContext | KakaoConceptSourceAuthority,
         binding_id: str,
         *,
         scope: ChatRagScope,
@@ -344,7 +441,9 @@ class KakaoConceptKnowledgeReader:
                     access_policy_revision_id=scope.policy.access_policy_revision_id,
                     requester_role=role,
                     requester_permission_keys=tuple(sorted(p.value for p in permissions)),
-                    requested_by=actor.actor_id,
+                    requested_by=actor.actor_id
+                    if isinstance(actor, ActorContext)
+                    else actor.owner_operator_id,
                     target_item_revision_id=None,
                 )
                 digest = content_sha256(body)
@@ -403,7 +502,7 @@ class KakaoConceptKnowledgeReader:
 
     def reauthorize(
         self,
-        actor: ActorContext,
+        actor: ActorContext | KakaoConceptSourceAuthority,
         binding_id: str,
         value: ResolvedConceptTextbookKnowledge,
         *,
@@ -425,3 +524,35 @@ class KakaoConceptKnowledgeReader:
             ) != tuple(m.analysis for m in value.materials):
                 raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_POINTER_INVALID")
         reauthorize_question()
+
+    def restore(
+        self,
+        actor: ActorContext | KakaoConceptSourceAuthority,
+        binding_id: str,
+        receipt: KakaoConceptKnowledge,
+        *,
+        reauthorize_question: Callable[[], None],
+    ) -> ResolvedConceptTextbookKnowledge:
+        """Reauthorize exact saved selections; never rerank or substitute a newer textbook."""
+        reauthorize_question()
+        with self.sessions() as session, session.begin():
+            session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+            session.execute(text("SET TRANSACTION READ ONLY"))
+            _, _, _, snapshot = self._authority(session, actor, binding_id, receipt.scope)
+            resolved = resolve_item_textbook_context(
+                session,
+                analyses=self.analyses,
+                graph_snapshot_revision_id=receipt.scope.snapshot.graph_snapshot_revision_id,
+                selections=tuple(
+                    TextbookContextSelection(p.analysis_run_id, p.source, p.node_ids, p.anchor_ids)
+                    for p in receipt.materials
+                ),
+            )
+            materials = tuple(
+                ConceptTextbookMaterial(p.title, p.node_ids, resolved[p.analysis_run_id])
+                for p in receipt.materials
+            )
+            if tuple(material.pin() for material in materials) != receipt.materials:
+                raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_POINTER_INVALID")
+        reauthorize_question()
+        return ResolvedConceptTextbookKnowledge(receipt.scope, snapshot, materials)

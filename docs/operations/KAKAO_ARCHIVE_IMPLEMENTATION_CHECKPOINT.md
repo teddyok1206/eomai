@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 PLAN 완료본→교재 근거·원본 PNG→저장된 COMPOSE 입력 — 운영 미활성
+
+source `b92201b3`의 후속이다. 기존 질문·Task·Workflow·Artifact owner를 연결해 완료된
+PLAN의 exact 결과와 공식 GraphRAG 교재 근거를 다음 COMPOSE 입력으로 저장하고,
+서비스 재구성·HTTP logout 뒤에도 같은 accepted 작업을 이어갈 수 있게 했다.
+**실제 교재 검색·Codex 실행·saved-study 편집/최종 PDF는 아직 완료하지 않았다.**
+현재 운영은 `c93f78f7`/DB0093 그대로이며 이 변경을 운영 배포했다고 보고하지 않는다.
+
+- 새 `concept-knowledge/1.0` Schema2020-12·mirror·typed DTO를 먼저 정의했다. SHA는
+  `sha256:0e538225f8d9967501a5d04e17ce135edee0b78c5817aa06b6b76585bc16e56d`다.
+  교재 source/accepted-result/normalized-text·Graph/policy·원본 page·PLAN 결과의 정확한
+  revision/hash를 작은 provenance로 고정한다. `request.json`과 `knowledge.json`만 같은
+  기존 Artifact 발행에 넣으며 사진/교재 PNG를 복사해 정본을 중복 저장하지 않는다.
+- 최초 Graph scope는 현재 출제 preset의 검증된 retrieval policy/허용 corpus에서 한 번
+  선택한다. 이후 공식 source resolver는 저장한 교재/node/anchor/분석 hash만 재인가하며
+  재검색이나 최신 교재 대체를 하지 않는다. TEXTBOOK 외 source를 교재로 위장하지 않는다.
+- 완료 Workflow/step/Job/Artifact와 실제 role request/result를 대조하는 reader를 추가했다.
+  실패/진행 중/다른 purpose 결과는 받지 않는다. 원본 PNG가 없는 text-only source는
+  존재하지 않는 그림을 만들지 않는다. 실제 페이지 metadata와 ordered file closure도 검사한다.
+- accepted Task의 실제 owner/current 권한으로 background COMPOSE 준비·Workflow 제출을
+  연결했다. 만료 API session이나 WORKER/ADMIN 권한을 만들어내지 않는다. 같은 phase는
+  원 request/Workflow를 재사용하고 계정/권한/source 철회는 차단한다. 새 queue/migration은 없다.
+- 사용자의 통합과학 교과서→지구과학 Q&A 요청에 맞춰 전용 추천 지침에 관련 기초 개념과
+  원문이 실제로 뒷받침하는 범위를 구분하도록 추가했다. 억지 연결·없는 심화 근거를 금지한다.
+  컨텐츠팀장 지침은 변경하지 않았으며 이 전용 지침도 아직 운영 발행/활성화하지 않았다.
+- guarded disposable DB 전체 **319 PASS**, 최종 schema·background continuation focused
+  **19 PASS/300 deselected**다(중복 집계하지 않는다). 실제 Job 결과 Artifact→등록 PNG→
+  COMPOSE 저장·재구성·logout 후 같은 Workflow 제출을 검사했다. **PLAN 결과·교재 discovery·
+  capability는 합성**이며 실제 교재/모델 성공의 대체 증거가 아니다. 초기 합성 V5 source의
+  chunk manifest membership 누락은 fixture를 고쳤고 source guard를 완화하지 않았다.
+- 최종 소스 **443 PASS**, 독립 설치 wheel **10 PASS**, strict mypy9개·Ruff/format/diff PASS,
+  문맥/wire 회귀 **16 PASS**다. wire audit는1492 canonical/1136 mirror/12954 refs다.
+  테스트·log는 `staging/kakao-concept-composition-{full-db,final-db,final-source,final-wheel,
+  final-types,wire-audit,context-wire}-20261117.log`다. 운영 DB·모델·GPU 실행은0이다.
+
+다음은 **실제 preset/자동 coordinator·공개 API→COMPOSE 완료→saved-study/Studio 편집→PDF**의
+사용자 경로다. 실제 수신 CSV/사진·메타데이터와 관련 있는 실제 교재 근거/그림으로 최종
+샘플 PDF를 반복 생성해 열어 보고 링크를 전달한다. 부적절한 교재를 억지로 넣지 않는다.
+그 뒤 README·커밋/푸시·호환 운영 배포를 마무리한다. 실제 한 방/전체 방 주기 수집 gate도
+전체 goal에 남아 있다. 이 체크포인트를 전체 완료나 운영 활성화로 간주하지 않는다.
+
 ## 2026-11-17 공유 슬롯의 실제 purpose 실행 연결 — source 검증, 운영 미활성
 
 source 기준 `bcc6ba70`의 후속이다. Runner의 임시 미활성 거부를 실제 Catalog source 재인가

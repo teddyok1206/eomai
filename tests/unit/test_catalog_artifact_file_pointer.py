@@ -129,6 +129,39 @@ def test_exact_file_pointer_resolves_a_pinned_regular_member(tmp_path: Path) -> 
     service.verify_file_pointer(**pointer)
 
 
+def test_member_pointer_is_manifest_metadata_and_still_requires_verified_byte_read(tmp_path):
+    service, values, _ = _read_member_service(tmp_path)
+    pointer = service.published_member_pointer(
+        **{key: value for key, value in values.items() if key != "sha256"}
+    )
+    assert pointer.sha256 == values["sha256"]
+    assert service.read_member(**values) == b'{"schema_version":"1.0"}'
+
+
+@pytest.mark.parametrize(
+    "change", ["foreign", "duplicate", "unhashable", "schema", "media", "size", "withdrawn"]
+)
+def test_member_pointer_rejects_malformed_stale_or_mixed_manifest_metadata(tmp_path, change):
+    service, values, revision = _read_member_service(tmp_path)
+    member = revision.manifest["files"][0]
+    if change == "foreign":
+        revision.logical_artifact_id = "artifact_" + "f" * 32
+    elif change == "duplicate":
+        revision.manifest["files"].append(dict(member))
+    elif change == "unhashable":
+        member["file_name"] = ["invalid"]
+    elif change in {"schema", "media"}:
+        member["schema_ref" if change == "schema" else "media_type"] = "other"
+    elif change == "size":
+        member["bytes"] = True
+    else:
+        revision.approved = False
+    with pytest.raises(ValueError):
+        service.published_member_pointer(
+            **{key: value for key, value in values.items() if key != "sha256"}
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

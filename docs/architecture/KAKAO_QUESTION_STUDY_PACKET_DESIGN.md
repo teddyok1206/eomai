@@ -464,3 +464,28 @@ Orchestrator는 입력 materialization·결과 검증·Artifact 발행을 담당
   lazy load하여 다른 Workflow의 설치 의존성을 늘리지 않는다.
 - 단순 direct Codex 호출은 기존 claim/lease·source revocation·복구를 잃는다. 기존 material
   authorization의 transport 패턴만 재사용하고 purpose/DTO/검증은 분리하는 것이 작은 대안이다.
+
+## 12. PLAN 결과에서 교재 근거를 붙여 COMPOSE 입력 만들기
+
+책임은 기존 Catalog 추천 task와 공식 GraphRAG reader다. 초기 Graph scope는 현재 출제
+프리셋의 검증된 retrieval policy와 그 허용 corpus의 active snapshot에서 한 번만 고정한다.
+모델/브라우저가 policy·Graph를 지정하지 않는다. 수락 후 재개는 그 exact scope다.
+
+- 정본은 accepted 질문 intent, 성공한 PLAN Workflow/step/Job의 canonical result, 공식 검색이
+  해석한 accepted analysis/원문 page다. 새로운 source/검색 엔진이나 worker 통신은 없다.
+- COMPOSE request Artifact의 sibling `knowledge.json`에 typed provenance를 둔다. 동일 immutable
+  revision이 request hash와 PLAN result·Graph/policy/source/analysis·page pointer를 묶는다.
+  Work/phase DB에는 기존 request Artifact pointer만 남기므로 새 migration/queue는 없다.
+- provenance는 본문 사본이 아니라 작은 source/accepted-analysis/normalized-text pointer와 hash,
+  node/anchor 선택·원본 page pin이다. 모델은 기존 작은 E/page key와 materialized 내용만 읽는다.
+  질문/교재 원문과 crop을 새 원본으로 등록하거나 request만 보고 접근을 허가하지 않는다.
+- dominant access는 (task,phase), Workflow/Job와 Artifact revision lookup, 최대3근거/12page의
+  ordered iteration·map dedup다. 비용은 선택된 source closure·bytes에 선형이다. 기존 unique/CAS와
+  Artifact idempotency key를 사용한다. 같은 완료 phase는 다시 검색·렌더하지 않는다.
+- source reader는 매 실행/채택에서 actual owner의 현재 권한과 저장한 모든 pins를 공식 reader로
+  재확인한다. scope를 최신으로 바꾸거나 source 부족을 일반 지식으로 메우지 않는다. 긴 원문
+  준비/PNG decode·Artifact 발행은 phase row adoption lock 밖에서 수행한다.
+- 실제 슬롯 실행과 공개 API·Studio 편집/PDF는 별도 검증한다. source 테스트/합성 근거를 실제
+  교재 활용으로 보고하지 않는다. 실패/취소/NEEDS_INPUT은 기존 이력을 보존하고 중복 실행하지 않는다.
+- 단순히 모델 설명과 그림 경로만 저장하는 대안은 정확한 교재/페이지·실행 근거를 잃는다.
+  기존 file-set Artifact의 두 작은 member로 연결하는 것이 별도 DB aggregate보다 단순하다.

@@ -304,6 +304,62 @@ def test_current_identity_and_source_scope_not_actor_claims_are_authority(monkey
         owner._authority(session, actor(), "binding", scope())
 
 
+@pytest.mark.parametrize(
+    "change", [None, "revoked-task", "binding", "scope", "permissions", "role"]
+)
+def test_accepted_background_owner_uses_saved_task_and_current_permissions_without_fake_session(
+    monkeypatch, change
+):
+    from eom_catalog_contracts.kakao_concept_tasks import KakaoConceptIntent
+    from eom_catalog_service.kakao_concept_task_service import KakaoConceptSourceAuthority
+
+    from tests.unit.test_kakao_concept_tasks import intent_value
+
+    value = intent_value()
+    value["scope"] = scope().model_dump(mode="json")
+    intent = KakaoConceptIntent.model_validate(value)
+    tasks = Mock()
+    tasks.accepted_intent_row.return_value = SimpleNamespace(
+        owner_operator_id=ACTOR, source_binding_id=intent.request.source_binding_id
+    )
+    principal = KakaoConceptSourceAuthority(tasks, intent, ACTOR)
+    owner = object.__new__(KakaoConceptKnowledgeReader)
+    owner.retrieval = Mock(spec=KnowledgeRetrievalApplicationService)
+    owner.retrieval.resolve_access_policy.return_value = policy()
+    owner.retrieval.resolve_snapshot_pointer.return_value = snapshot()
+    permissions = PERMISSIONS | {PermissionKey.KAKAO_ARCHIVE_EDIT}
+    if change == "permissions":
+        permissions -= {PermissionKey.CONTENT_INTAKE_READ}
+    monkeypatch.setattr(module, "effective_permissions", lambda _s, _a: permissions)
+    monkeypatch.setattr(
+        module,
+        "active_role_assignments",
+        lambda _s, _a: [
+            (None, SimpleNamespace(role_key="VIEWER" if change == "role" else "EDITOR"))
+        ],
+    )
+    binding, selected = intent.request.source_binding_id, scope()
+    if change == "revoked-task":
+        tasks.accepted_intent_row.side_effect = KakaoArchiveError("KAKAO_ARCHIVE_PERMISSION_DENIED")
+    elif change == "binding":
+        binding = "kakaobinding_" + "0" * 32
+    elif change == "scope":
+        selected = selected.model_copy(
+            update={
+                "snapshot": selected.snapshot.model_copy(update={"sha256": "sha256:" + "0" * 64})
+            }
+        )
+    session = Mock()
+    session.get.return_value = SimpleNamespace(snapshot_sha256=HASH)
+    if change is None:
+        role, _, _, _ = owner._authority(session, principal, binding, selected)
+        assert role == "EDITOR"
+    else:
+        with pytest.raises(KakaoArchiveError):
+            owner._authority(session, principal, binding, selected)
+    tasks.accepted_intent_row.assert_called_once_with(session, intent, operator_id=ACTOR)
+
+
 @pytest.mark.parametrize("material", [False, True])
 def test_read_only_retrieval_chooses_exact_source_family_without_publication(material):
     from tests.unit.test_knowledge_retrieval_service import _request
