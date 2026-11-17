@@ -39,6 +39,13 @@
   포함됐지만 Python DTO/route2개의 고정 파일 목록 누락으로 설치 전에 거부됐다. 두 파일을
   명시적 inventory에 추가하며 guard를 완화하지 않는다. 실패 빌드는 보존하고 수정 commit에서
   공식 Web build와 source-isolated 설치 검증을 다시 수행한다. 운영 설치는 실행하지 않았다.
+- 수정 commit `1da58229277f5908fa4737156a4ce89207d55b18`은 push 완료다. 같은 source의
+  API4-wheel/RECORD 검사와 Web offline dependency closure·RECORD·source-isolated104개 파일
+  설치 검증이 PASS다. Web inventory/배포 회귀15개도 PASS다. API 후보는
+  `/tmp/eom-api-build/1da58229277f5908fa4737156a4ce89207d55b18.H6IYqI/dist`, Web 후보는
+  `/tmp/eom-web-gui-build/1da58229277f5908fa4737156a4ce89207d55b18.cRwOpT/dist`다.
+  Web wheel SHA는 `sha256:1b9eb918759c19bb5a6bfa0f33053288523e1c6b8b9f698d5352d850acf0b600`.
+  이는 설치 **시뮬레이션**이며 운영 배포·카카오 실제 방/PDF 검증을 뜻하지 않는다.
 
 ## 2026-11-16 collection command/result에서 기존 원본 등록으로 연결
 
