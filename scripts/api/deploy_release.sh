@@ -1929,6 +1929,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/customer-support.v1.yaml"
         ).read_bytes()
     )
+    kakao_concept_definition = root / "kakao-concepts.v1.yaml"
+    kakao_concept_definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/kakao-concepts.v1.yaml"
+        ).read_bytes()
+    )
     pdf_document_review_definition_v1 = root / "pdf-document-review.v1.yaml"
     pdf_document_review_definition_v1.write_bytes(
         (
@@ -2073,7 +2080,7 @@ from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
 expected_migration_revision = sys.argv.pop()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, analysis_v12, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, pdf_document_review_definition_v1_5, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, reference_query_definition_v2, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, analysis_v12, legacy_definition, editorial_definition, customer_support_definition, kakao_concept_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, pdf_document_review_definition_v1_5, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, reference_query_definition_v2, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2538,6 +2545,7 @@ admitted_definitions = (
     compile_definition(material_exact_score_definition, {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
+    compile_definition(Path(kakao_concept_definition), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_1), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_2), {"support"}),
@@ -2611,6 +2619,7 @@ validate_contract(
             str(legacy_definition),
             str(editorial_definition),
             str(customer_support_definition),
+            str(kakao_concept_definition),
             str(pdf_document_review_definition_v1),
             str(pdf_document_review_definition_v1_1),
             str(pdf_document_review_definition_v1_2),

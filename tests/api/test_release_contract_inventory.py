@@ -384,6 +384,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         "legacy-item-extraction",
         "legacy-item-editorial-compatibility",
         "customer-support",
+        "kakao-concepts",
         "item-inference-transfer-comparison",
         "local-embedding-index",
         "local-embedding-reference-query",
@@ -449,6 +450,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
     "omitted_definition",
     (
         "private_chat_query_definition",
+        "kakao_concept_definition",
         "local_embedding_definition_v2",
         "reference_query_definition_v2",
         "material_exact_score_definition",
