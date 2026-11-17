@@ -80,6 +80,33 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 고정된 로컬 수집 출력에서 source 채택까지 — 2026-11-17
+
+1. Orchestrator의 filesystem adapter는 configured root 아래 exact accepted attempt의
+   `outputs/` member만 읽는다. Catalog composition은 이 reader와 기존 source application을
+   연결한다. reader 자체는 수집·source 권한·Artifact 발행을 하지 않는다.
+2. 정본은 기존 Catalog가 수락한 command/result/report와 그 안의 member SHA다. 로컬
+   workspace는 untrusted materialization이다. 파일 경로나 파일명이 identity가 아니다.
+3. 기존 attempt/run/source revision을 사용한다. root/UID/GID는 설치한 trusted composition
+   설정이고 public API/worker가 선택하지 않는다. 새 wire/DB/queue/authority는 없다.
+4. root는 core-owned2750, attempt와 하위 출력 directory는 worker-owned750, member는
+   worker-owned640/control group이다. 기존 OS adapter로 symlink·다중 link·위험 권한·크기·
+   읽는 동안의 변경을 거부하고, exact member 크기/SHA를 확인한다. 오류에는 경로를 넣지 않는다.
+5. 접근은 validated attempt ID/direct member lookup다. directory 전체를 탐색하거나 복사하지 않는다.
+6. 기존 `protected_directory`/`read_protected`와 typed `LocalMember`/`CsvMember`를 재사용한다.
+   복사본 index/cache·새 generic filesystem framework는 만들지 않는다.
+7. metadata는 경로 깊이에 선형, 실제 bytes 검증은 O(member bytes)다. 전체 입력 예산은
+   기존 C1 report의256MiB, CSV32MiB 상한과 publisher의 closed member set이 계속 보호한다.
+8. 파일 I/O 중 DB lock을 보관하지 않는다. application의 현재 owner/pin 재검사와 source
+   CAS/멱등 발행·task 채택을 재사용한다. 같은 member의 모든 bytes는 단일 read에서 반환한다.
+9. Catalog composition→기존 attempt/source use case 및 Orchestrator OS adapter 방향이다.
+   worker는 staged local output만 제공하고 PostgreSQL/NAS·다른 worker를 호출하지 않는다.
+10. adapter 생성은 lazy이며 completed source replay에 파일 존재를 요구하지 않는다.
+    missing/변조/다른 attempt는 실패이지 재다운로드나 FAILED 성공 변경의 이유가 아니다.
+11. 임의 `Path.read_bytes()` callback은 실제 file type/owner/link/범위 검사가 없어 부족하다.
+    이 연결은 실제 browser/selector·원문 발신 방향/사진 occurrence 확인을 대체하지 않으며,
+    설치하지 않은 root를 추측해 읽거나 AUTO를 활성화하지 않는다.
+
 ### 수락된 run의 background 원본 권한 — 2026-11-17
 
 1. 수집 application이 이미 수락한 특정 RESULT_ACCEPTED attempt의 원본 발행/채택만

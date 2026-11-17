@@ -79,6 +79,14 @@ terminal run에서는 완료 source의 exact replay만 허용하고 새 publicat
 `test_kakao_collection_source_access.py`는 임시 DB에서 이 경계와 중단·경합을 검사한다.
 이 adapter는 worker/public DTO가 아니고, AUTO/collector 운영 활성화 자체도 아니다.
 
+`kakao_capture_inputs.py`는 configured local root의 exact attempt/`outputs/` member를 기존
+OS guard로 읽는다. `kakao_collection_source_composition.admit_staged_kakao_capture_source`가
+실제 accepted access와 이 lazy reader를 기존 publication/adoption에 주입한다. directory/file
+UID/GID/mode·link·변경·byte 크기/SHA를 검사한다. 완료 replay는 파일이 없어도 원 source를
+읽고, adapter는 worker/공개 요청에서 root나 authority를 받지 않는다. 일반 server import는
+optional collector/OS 구현을 eager load하지 않는다. 실제 browser dispatch/관측·운영 배치는
+별도이며, 이 소스 연결만으로 수집이 실행 중이라고 판단하지 않는다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

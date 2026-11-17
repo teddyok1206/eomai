@@ -65,7 +65,9 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_service/kakao_collection_attempt_models.py",
             "eom_catalog_service/kakao_collection_attempt_service.py",
             "eom_catalog_service/kakao_collection_source_access.py",
+            "eom_catalog_service/kakao_collection_source_composition.py",
             "eom_catalog_service/kakao_source_access.py",
+            "eom_orchestrator/kakao_capture_inputs.py",
             "eom_catalog_service/kakao_capture_publication.py",
             "eom_catalog_contracts/kakao_collection_browser.py",
             "eom_catalog_contracts/resources/kakao-archive/collection-browser-v1.schema.json",
@@ -265,6 +267,7 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
         (
             "eom_catalog_service.kakao_archive_service",
             "eom_catalog_service.kakao_collection_browser_service",
+            "eom_catalog_service.kakao_collection_source_composition",
             "eom_catalog_service.kakao_student_service",
             "eom_catalog_service.kakao_room_service",
             "eom_catalog_service.kakao_media_publication",

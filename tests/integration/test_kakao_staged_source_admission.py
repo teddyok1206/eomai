@@ -1,0 +1,186 @@
+"""Actual local C1 files→Artifact/source/task in guarded disposable PostgreSQL."""
+
+import os
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Barrier
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
+from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
+from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
+from eom_catalog_service.kakao_collection_source_composition import (
+    admit_staged_kakao_capture_source,
+)
+from eom_identity_service.models import ApiSessionRecord, OperatorRecord
+from eom_orchestrator import kakao_capture_inputs as capture_inputs
+from sqlalchemy.orm import Session
+
+from tests.integration.test_kakao_collection_source_access import attempt as attempt
+from tests.integration.test_kakao_collection_source_access import browser as browser
+from tests.integration.test_kakao_collection_source_access import cap as cap
+from tests.integration.test_kakao_collection_source_access import collection as collection
+from tests.integration.test_kakao_collection_source_access import counts, photo, result_input
+from tests.integration.test_kakao_collection_source_access import h as h
+from tests.integration.test_kakao_collection_source_access import intake as intake
+
+pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
+
+
+@pytest.fixture
+def staged(attempt):
+    data = result_input(attempt, images=(photo(), photo()))
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    with tempfile.TemporaryDirectory(
+        prefix="kakao-staged-pg-", dir=Path.home() / ".cache"
+    ) as folder:
+        root = Path(folder)
+        root.chmod(0o2750)
+        workspace = root / data.reserved.attempt_id
+        workspace.mkdir(mode=0o750)
+        workspace.chmod(0o750)
+        for name, raw in data.members.items():
+            path = workspace / name
+            path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+            path.parent.chmod(0o750)
+            path.write_bytes(raw)
+            path.chmod(0o640)
+        yield SimpleNamespace(
+            attempt=attempt,
+            data=data,
+            root=root,
+            workspace=workspace,
+            key="staged-capture-" + uuid4().hex,
+        )
+
+
+def admit(staged, *, service=None, key=None, **changes):
+    arguments = (
+        dict(
+            output_root=staged.root,
+            worker_uid=os.getuid(),
+            control_gid=os.getgid(),
+            idempotency_key=key or staged.key,
+            expected_source_revision_id=None,
+            expected_resource_version=0,
+        )
+        | changes
+    )
+    return admit_staged_kakao_capture_source(
+        service or staged.attempt.service, staged.data.reserved.attempt_id, **arguments
+    )
+
+
+def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):
+    with Session(staged.attempt.engine) as session, session.begin():
+        session.get(ApiSessionRecord, staged.attempt.actor.session_id).revoked_at = datetime.now(
+            UTC
+        )
+    sessions_before, _ = counts(staged.attempt)
+    first = admit(staged)
+    assert len(first.resolution.rows) == 2
+    assert len({row.occurrence_id for row in first.resolution.rows}) == 2
+    photos = first.resolution.admission.attachments
+    assert len(photos) == 2 and photos[0].attachment_id != photos[1].attachment_id
+    assert photos[0].original == photos[1].original
+    before = counts(staged.attempt)
+    assert before[0] == sessions_before
+    for name in staged.data.members:
+        (staged.workspace / name).unlink()
+    (staged.workspace / "outputs").rmdir()
+    staged.workspace.rmdir()
+    staged.root.rmdir()
+    again = admit(staged)
+    assert again.replayed and first.resolution == again.resolution
+    assert counts(staged.attempt) == before
+    with Session(staged.attempt.engine) as session:
+        assert session.get(Task, staged.data.reserved.task_id).state == "LOCAL_ACCEPTED"
+
+
+def test_local_composition_recovers_source_committed_before_task_adoption(staged, monkeypatch):
+    accepted = []
+
+    def stopped(_access, _attempt_id, source_revision_id):
+        accepted.append(source_revision_id)
+        raise RuntimeError("synthetic process stop after source commit")
+
+    monkeypatch.setattr(staged.attempt.service, "accept_source_revision", stopped)
+    with pytest.raises(RuntimeError, match="after source commit"):
+        admit(staged)
+    for name in staged.data.members:
+        (staged.workspace / name).unlink()
+    before = counts(staged.attempt)
+    restarted = KakaoCollectionAttemptService(
+        staged.attempt.engine,
+        artifacts=staged.attempt.artifacts,
+        profile_id=staged.attempt.service.profile_id,
+        adapter_release_sha256=staged.attempt.service.adapter_sha256,
+    )
+    recovered = admit(staged, service=restarted)
+    assert recovered.replayed and recovered.resolution.source_revision_id == accepted[0]
+    assert counts(staged.attempt) == before
+
+
+@pytest.mark.parametrize(
+    "name", ["outputs/source.csv", "outputs/normalization.json", "outputs/photo-1.png"]
+)
+def test_changed_actual_file_never_completes_source_adoption(staged, name):
+    path = staged.workspace / name
+    raw = path.read_bytes()
+    path.write_bytes(b"x" * len(raw))
+    with pytest.raises(KakaoArchiveError, match="EVIDENCE_INVALID"):
+        admit(staged)
+    with Session(staged.attempt.engine) as session:
+        assert session.get(Task, staged.data.reserved.task_id).state == "RUNNING"
+
+
+def test_configured_root_never_falls_back_to_another_directory(staged):
+    before = counts(staged.attempt)
+    with pytest.raises(KakaoArchiveError, match="EVIDENCE_INVALID"):
+        admit(staged, output_root=staged.root / "not-the-installed-root")
+    assert counts(staged.attempt) == before
+
+
+def test_current_permission_is_rechecked_after_actual_file_io(staged, monkeypatch):
+    before = counts(staged.attempt)
+    original = capture_inputs.read_protected
+
+    def read(*args, **kwargs):
+        raw = original(*args, **kwargs)
+        with Session(staged.attempt.engine) as session, session.begin():
+            session.get(OperatorRecord, staged.attempt.actor.operator_id).status = "DISABLED"
+        return raw
+
+    monkeypatch.setattr(capture_inputs, "read_protected", read)
+    with pytest.raises(KakaoArchiveError, match="PERMISSION_DENIED"):
+        admit(staged)
+    assert counts(staged.attempt) == before
+
+
+def test_two_local_consumers_publish_one_canonical_source(staged):
+    barrier = Barrier(2)
+
+    def call(_):
+        barrier.wait(timeout=15)
+        return admit(staged)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = tuple(pool.map(call, range(2)))
+    assert first.resolution == second.resolution and first.manifest == second.manifest
+    with Session(staged.attempt.engine) as session:
+        assert session.get(Task, staged.data.reserved.task_id).state == "LOCAL_ACCEPTED"
+
+
+@pytest.mark.parametrize(
+    "change", [{"expected_resource_version": 1}, {"idempotency_key": "different-original-key"}]
+)
+def test_completed_source_keeps_original_key_and_precondition(staged, change):
+    admit(staged)
+    before = counts(staged.attempt)
+    with pytest.raises(KakaoArchiveError, match="IDEMPOTENCY_CONFLICT"):
+        admit(staged, **change)
+    assert counts(staged.attempt) == before

@@ -1,5 +1,38 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 고정된 로컬 수집 파일→source/task 연결
+
+`admit_staged_kakao_capture_source`가 실제 accepted attempt의 내부 권한과 Orchestrator의
+`KakaoCaptureOutputReader`를 기존 원본 발행/채택 application에 연결한다. 기존 C1의
+`outputs/` member와 SHA를 사용한다. root/UID/GID는 trusted 설치 설정이며 worker/public
+요청에서 받지 않는다. 파일을 찾는다고 수집 권한이나 발신자·사진 대응이 생기지 않는다.
+
+- reader는 기존 OS guard로 root/attempt/출력 directory와 단일 member의 종류·소유권·
+  control group·정확한 권한·symlink/hardlink·읽기 중 변경·크기/SHA를 검사한다. 디렉터리
+  전체 스캔·재다운로드·추측 경로·NAS 쓰기·새 queue/schema/DB는 없다. 다른 attempt의 파일로
+  fallback하지 않는다. 기본 server import에서는 선택적 collector 구현을 지연 import한다.
+- actual staged CSV·정규화·PNG→기존 Artifact→source→LOCAL_ACCEPTED를 임시 DB에서
+  검증했다. 동일 bytes의 사진 두 occurrence와 동일 문장의 두 occurrence는 각각 보존한다.
+  같은 결과의 재조회·source commit 후 중단 복구는 로컬 파일이 없어도 원 revision을 사용한다.
+  현재 권한 철회·경합·파일 변조와 key/precondition 변경도 검사한다.
+- 수집/source owner 회귀 **85 PASS**(새 실제 파일 연결10건 포함)다. 별도 설치 wheel/
+  의존 방향·문맥과 OS file guard **134 PASS**다. strict mypy2개와 집중 파일 guard
+  **77 PASS**(134건에 포함)다. 입력·browser/capability 관측은 합성이다.
+- 최초 파일 검증 실패는 fixture directory가 parent의 SGID를 상속했는데 정확한 최종 mode를
+  설정하지 않아 발생했다. 기존 worker staging 방식처럼 fixture의 최종 chmod를 명시하고
+  재실행했다. 운영의 file/UID/mode 검사와 오류 로그는 유지했다.
+
+이 소스는 아직 운영 미설치이며 실제 C1 collector/periodic loop를 실행하지 않았다. 실제
+운영 browser/remote는 상태 조회 시 모두 inactive/MainPID0이었다. 실제 selector와 사진
+occurrence를 확인하려고 사용자에게 Studio의 기존 원격 로그인/한 방 열기 요청을 보냈다.
+채팅 전송·답장·차단/신고·인증정보 변경은 하지 않았다. 원본을 새로 수집했다거나 이미 있는
+로컬17쪽 샘플을 정식 Studio export로 등록했다고 주장하지 않는다.
+
+증거: `staging/kakao-staged-capture-{input-db-corrected,regression-db,input-unit-final,input-types-final,boundary-unit-final}-20261117.log`.
+다음은 실제 카카오에서 확인한 메시지 방향/CSV 범위/사진 occurrence를 원 C1에 기록하고,
+이 source 입력→저장 질문→학생 packet→Studio PDF를 연결하는 검증이다. 전체 방 주기 수집과
+공유 개념 모델 실증도 원래 목표에 남아 있다.
+
 ## 2026-11-17 수락된 수집의 로그인 만료 독립 복구
 
 `accepted_source_access`는 trusted controller가 실제 RESULT_ACCEPTED attempt에서만 얻는
