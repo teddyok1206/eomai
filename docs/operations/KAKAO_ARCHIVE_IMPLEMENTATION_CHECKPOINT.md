@@ -1,5 +1,31 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 02:13 UTC 문장 내부 나누기 호환 운영 반영
+
+1. source `66e28b36919b33179ca0af85fe615cbb51fcdc7d`를 커밋·푸시했다. 동일 source의 API/
+   Catalog/platform/QUERY owner와 Web을 호환 묶음으로 설치했다. collector/browser는 기존
+   eda2a1b0 설치본을 유지한다. 새 DB migration은 없고 실제0093 확인만 수행했다.
+2. 공식 API4-wheel/RECORD 검사, Web offline closure·service identity104개 파일·source-isolated
+   설치 검사 PASS다. API 후보는 `/tmp/eom-api-build/66e28b36919b33179ca0af85fe615cbb51fcdc7d.aR6kLM/dist`,
+   Web 후보는 `/tmp/eom-web-gui-build/66e28b36919b33179ca0af85fe615cbb51fcdc7d.qoS89n/dist`다.
+   실제 protected operator ADMIT·MIGRATION_VERIFY_0093·API_ISOLATION_VERIFY가 통과했고,
+   API 설치 member/hash와 기존 QUERY 수치 runtime/config 보존을 확인했다.
+3. Web installer 뒤 Web 프로세스를 명시적으로 재시작했다. 새 MainPID/start 시각,
+   API/Web build-info의 source 일치, 실제 HTTPS 로그인200과 새 JS SHA
+   `sha256:81b8a67680c8f7a636e2f3f6f7962b4ef7bb54fc32b87648d1e885fb36e6010d`,
+   새 edit-context 경로의 비로그인401을 확인했다. 이 검사들은 인증된 실제 질문 편집/PDF
+   성공을 대체하지 않는다. 이번 배포에 추가 로그인이나 비밀번호 변경은 없었다.
+4. 원래 실행0 확인 후 creative producer를 지원된 SIGINT로 drain했고 배포 뒤 다시 시작했다.
+   API/Web/Catalog/QUERY/chat/creative는 active다. 기존 GPU INDEX는 배포 전부터 FAILED이며
+   같은 Invocation·설정 pin을 보존했다. 이번 Kakao 배포로 정상화했다고 보고하지 않는다.
+5. 실제 카카오 browser/remote는 inactive이며 새 계정 수집을 하지 않았다. 원래 CSV/JPEG와
+   모든 실패 기록을 보존했다. **MANUAL은 유지, AUTO는 비활성**이다. 실제 한 방의 새 관측/
+   CSV·사진 occurrence 연결→학생 PDF와 전체 방의 누락 없는 주기 수집은 여전히 미완료다.
+6. 배포 증거는 `/var/lib/eom-kakao-capture-release-66e28b36/{stage.json,api/activated.json}`와
+   `staging/kakao-capture-*-66e28b36.log`다. 기존0093 호환 release와 before config를 rollback
+   근거로 보존한다. 사용자에게 이미 보낸 원격 로그인 요청을 중복 생성하지 않고 실제 관측을
+   받은 뒤 다음 수직 경로를 이어간다. 전용 Codex 수집 슬롯/프롬프트는 추가하지 않는다.
+
 ## 2026-11-17 문장 내부 나누기 공개 연결 — 소스 검증
 
 1. **사용 가능해질 범위:** 기존 질문 편집에서 `문장 안에서 나누기`를 열고 커서 위치를
