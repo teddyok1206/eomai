@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/concept-task-store-v1/1.0",
+  "title": "Private concept intent reservation and exact source pins",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/create"
+    },
+    {
+      "$ref": "#/$defs/intent"
+    },
+    {
+      "$ref": "#/$defs/task_view"
+    },
+    {
+      "$ref": "#/$defs/mutation"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "task": {
+      "type": "string",
+      "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+    },
+    "binding": {
+      "type": "string",
+      "pattern": "^kakaobinding_[0-9a-f]{32}$"
+    },
+    "room": {
+      "type": "string",
+      "pattern": "^kakaoroom_[0-9a-f]{32}$"
+    },
+    "question": {
+      "type": "string",
+      "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|\\+00:00)$"
+    },
+    "pointer": {
+      "$ref": "eom://schemas/kakao-archive/question-manifest-v1/1.0#/$defs/pointer"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot",
+        "policy"
+      ],
+      "properties": {
+        "snapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "graph_snapshot_revision_id",
+            "sha256"
+          ],
+          "properties": {
+            "graph_snapshot_revision_id": {
+              "type": "string",
+              "pattern": "^graphrev_[0-9a-f]{32}$"
+            },
+            "sha256": {
+              "$ref": "#/$defs/hash"
+            }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "access_policy_revision_id",
+            "sha256"
+          ],
+          "properties": {
+            "access_policy_revision_id": {
+              "type": "string",
+              "pattern": "^accessrev_[0-9a-f]{32}$"
+            },
+            "sha256": {
+              "$ref": "#/$defs/hash"
+            }
+          }
+        }
+      }
+    },
+    "create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "question_revision_id",
+        "expected_question_version",
+        "base_study_revision_id",
+        "additional_instructions"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-create/1.0"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "room_id": {
+          "$ref": "#/$defs/room"
+        },
+        "question_id": {
+          "$ref": "#/$defs/question"
+        },
+        "question_revision_id": {
+          "$ref": "#/$defs/revision"
+        },
+        "expected_question_version": {
+          "$ref": "#/$defs/version"
+        },
+        "base_study_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaostudyrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additional_instructions": {
+          "type": "string",
+          "maxLength": 6000,
+          "pattern": "^[^\\u0000]*$"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id",
+        "normalization_revision_id",
+        "manifest",
+        "closure"
+      ],
+      "properties": {
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^kakaosourcerev_[0-9a-f]{32}$"
+        },
+        "normalization_revision_id": {
+          "type": "string",
+          "pattern": "^kakaonormalizationrev_[0-9a-f]{32}$"
+        },
+        "manifest": {
+          "$ref": "#/$defs/pointer"
+        },
+        "closure": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/pointer"
+          }
+        }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "request",
+        "question_manifest",
+        "scope",
+        "sources"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-intent/1.0"
+        },
+        "task_id": {
+          "$ref": "#/$defs/task"
+        },
+        "request": {
+          "$ref": "#/$defs/create"
+        },
+        "question_manifest": {
+          "$ref": "#/$defs/pointer"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        }
+      }
+    },
+    "task_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "source_binding_id",
+        "room_id",
+        "question_id",
+        "question_revision_id",
+        "request_sha256",
+        "state",
+        "intent",
+        "created_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-task/1.0"
+        },
+        "task_id": {
+          "$ref": "#/$defs/task"
+        },
+        "source_binding_id": {
+          "$ref": "#/$defs/binding"
+        },
+        "room_id": {
+          "$ref": "#/$defs/room"
+        },
+        "question_id": {
+          "$ref": "#/$defs/question"
+        },
+        "question_revision_id": {
+          "$ref": "#/$defs/revision"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "state": {
+          "enum": [
+            "RESERVED",
+            "PREPARED"
+          ]
+        },
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "$ref": "#/$defs/utc"
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-mutation/1.0"
+        },
+        "task": {
+          "$ref": "#/$defs/task_view"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

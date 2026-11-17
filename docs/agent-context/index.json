@@ -4,6 +4,54 @@
   "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
   "topics": [
     {
+      "id": "kakao-concepts",
+      "note": "kakao-concepts.md",
+      "keywords": [
+        "KakaoTalk",
+        "관련 개념",
+        "교과서 그림",
+        "유휴 Codex 슬롯",
+        "PLAN",
+        "COMPOSE",
+        "추천 요청"
+      ],
+      "source_paths": [
+        "schemas/kakao-archive/concept-task-store-v1.schema.json",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_concept_tasks.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_models.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_task_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_publication.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_workflow_submission.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_knowledge.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_pages.py",
+        "services/catalog_service/eom_catalog_service/kakao_study_projection.py",
+        "migrations/versions/20261117_0094_kakao_concept_tasks.py",
+        "services/catalog_service/eom_catalog_service/runtime_privileges.py",
+        "services/workflow_runner/eom_workflow_runner/kakao_concept_admission.py",
+        "services/workflow_runner/eom_workflow_runner/kakao_concept_start.py",
+        "services/orchestrator/eom_orchestrator/kakao_concept_plan_resolution.py",
+        "packages/workflow/eom_workflow/kakao_concept_request.py",
+        "packages/workflow/eom_workflow/kakao_concept_images.py",
+        "config/control-plane/kakao-concepts-v1/instructions/kakao-concepts.md"
+      ],
+      "test_paths": [
+        "tests/unit/test_kakao_concept_tasks.py",
+        "tests/integration/test_kakao_concept_task_storage.py",
+        "tests/unit/test_kakao_concept_contracts.py",
+        "tests/unit/test_kakao_concept_workflow_contracts.py",
+        "tests/unit/test_kakao_concept_materialization.py",
+        "tests/integration/test_kakao_concept_workflow_storage.py",
+        "tests/unit/test_kakao_concept_knowledge.py",
+        "tests/unit/test_kakao_concept_pages.py",
+        "tests/unit/test_catalog_runtime_privileges.py",
+        "tests/unit/test_release_operator_migration_0094.py"
+      ],
+      "reference_paths": [
+        "docs/architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md",
+        "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
+      ]
+    },
+    {
       "id": "kakao-study-output",
       "note": "kakao-study-output.md",
       "keywords": ["KakaoTalk", "학생 사진", "조교 답변", "기록 정보", "개념 보강", "study PDF", "역할별 출력"],

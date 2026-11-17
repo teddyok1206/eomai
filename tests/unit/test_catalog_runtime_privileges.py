@@ -64,6 +64,20 @@ def test_kakao_source_grants_only_update_current_head_and_command_state() -> Non
     assert ("UPDATE", "kakao_source_revisions") not in grants
 
 
+def test_concept_task_input_and_phase_links_have_column_bounded_grants() -> None:
+    tables = {"kakao_concept_tasks", "kakao_concept_phases"}
+    assert tables <= set(READ_TABLES) & set(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+    grants = {(verb, table): set(columns) for verb, table, columns in COLUMN_PRIVILEGES}
+    assert grants["UPDATE", "kakao_concept_tasks"] == {
+        "prepared_at",
+        "intent_artifact_id",
+        "intent_artifact_revision_id",
+        "intent_sha256",
+    }
+    assert grants["UPDATE", "kakao_concept_phases"] == {"workflow_id"}
+
+
 def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity() -> None:
     tables = {"kakao_profile_runtime", "kakao_manual_sessions", "kakao_remote_commands"}
     assert tables <= set(READ_TABLES) & set(INSERT_TABLES)

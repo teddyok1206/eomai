@@ -1,5 +1,60 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 실제 질문 원본의 추천 task·PLAN 저장/Workflow 제출 — 운영 미활성
+
+직전 source `08a53219` 후속이다. 기존 실제 question/source/Artifact owner를 사용하는
+`KakaoConceptTaskService`를 추가했다. 이제 내부 application 호출로 원래 질문 revision을
+선택해 private intent와 PLAN request를 저장·재조회하고, source authority를 검사하면서
+기존 Workflow/START command에 한 번만 연결할 수 있다. 공개 API/화면·실제 모델은 아직
+연결하지 않았으며 운영은 아래 `c93f78f7` 그대로다.
+
+- behavior 전에 `concept-task-store-v1` JSON Schema2020-12와 mirror를 정의했다. SHA는
+  `sha256:3aa2f8cca2d01af138ec82e5869e6c65919cd327d21177113638dc78423c80b8`다.
+  공개 생성 입력은 exact 질문/version·사용자 지시·optional study revision뿐이며, operator/
+  session/slot/Graph/policy/Work 권한을 입력받지 않는다. 아직 저장 owner가 없는 non-null
+  study revision은 현재 adapter가 검증하지 못하므로 명시 거부한다.
+- task의 같은 owner/key는 원래 identity·Graph scope이고 다른 본문은 conflict다. question/
+  source/사진은 복제하지 않는다. private intent에는 정확한 question/source closure와 실제
+  사용자 지시·서버의 Graph/policy pins를, phase에는 작은 기존 Work를 사용한다. request와
+  intent JSON만 Artifact owner로 발행하며 원문/사진 bytes·worker 결과를 DB에 넣지 않는다.
+  `PREPARED`는 입력 준비 상태이지 모델 완료 상태가 아니다.
+- PLAN은 기존 역할별 source projector를 재사용한다. 학생/조교 text·사진 occurrence는 구분하고
+  같은 canonical 사진 pointer는 한 번 읽어 같은 local member로 참조한다. 실제 decode/media/
+  hash/길이·image bounds를 검사한다. 실제 PNG가 포함된 합성 입력도 저장한 request에서 읽었다.
+- source authority는 accepted task에서만 owner를 얻어 현재 계정/권한·binding/room·원래
+  source closure·question/Work/Artifact를 검사한다. synthetic HTTP actor나 WORKER/ADMIN
+  권한을 만들지 않는다. 최초 session ID는 변경하지 않는 감사 provenance이며 단순 HTTP
+  만료/로그아웃은 수락한 bounded 작업을 새 계산으로 만들거나 취소하지 않는다. 계정 중지·
+  권한/source 철회는 차단하고, 공개 조회/다운로드는 실제 현재 API session을 요구한다.
+- Catalog composition은 public `submit_kakao_concept_workflow`를 사용하며 Workflow/command/
+  plan의 private table mutation을 복제하지 않는다. Catalog가 자기 phase의 workflow pointer만
+  한 번 채택한다. 새 queue/전용 슬롯이 없다. Task/phase는 DB0094의 FK/unique/index·불변
+  trigger로 보호하고, 긴 I/O/발행은 lock 밖이다. 같은 발행 후 중단은 원 Artifact로 복구한다.
+- 공식 guarded 임시 DB의 Kakao 전체 **317 PASS**, source 회귀 **299 PASS**다. 신규 저장
+  검사는 실제 기존 질문/source/Artifact·동시 중복 방지·서비스 재구성·발행 후 중단/재개·
+  학생/조교 사진3 use의 binary1 참조·source authority·실제 Workflow/command 저장을 검증한다.
+  **Graph scope와 실행 preset/plan port는 합성**이며 실제 교재 검색·model run 증거가 아니다.
+  schema roundtrip은 같은 disposable DB의 rollback-only 별도 schema에서 수행했고, 비어 있을
+  때만 downgrade·이력 존재 시 거부와 기존 app head/history 보존을 확인했다.
+- strict mypy10개·Ruff/format/diff/bash syntax, wire audit1490 canonical/1134 mirror/12931 refs와
+  별도 설치 wheel10 PASS다. source/package 검사와 운영 성공은 구별한다. 초기 invocation/fixture의 actor
+  field와 immutable Artifact UPDATE 기대 오류는 수정했고, DB 보호를 완화하지 않았다.
+  같은 disposable DB에서 DDL roundtrip과 다른 pytest process를 병렬 실행해 발생한 검사
+  deadlock도 기록했다. 이후 전체 검사는 직렬317 PASS이며 이를 runtime 장애로 분류하지 않는다.
+- release context1.29/schema SHA
+  `sha256:28027d16285ddbd420d22a9d73dedbee5ef5cd3244aa4dcc587e0e2bac4f5b0f`는
+  exact0093→0094 또는 동일0094만 허용한다. predecessor bytes는 그대로다. 기존 Catalog
+  runtime에 두 표의 SELECT/INSERT와 pointer/link column UPDATE만 추가했다. 운영 migration/
+  설치·권한 갱신은 **미실행**이다. 실제 배포 전에 현재 실행 pins·0094 head 호환 release set을
+  재확인해야 하며 진행 중 GPU/slot을 source HEAD로 교체하지 않는다.
+
+**다음 한 경로:** 작은 Catalog source-authorization RPC→기존 Runner client/Orchestrator의
+실제 purpose 실행 context를 연결한다. Task source owner는 생겼지만 실행 composition이 아직
+없으므로 executor의 미활성 거부는 유지한다. 이후 PLAN→공식 GraphRAG/원본 page→COMPOSE,
+saved-study 저장/Studio 편집·새 PDF와 실제 슬롯1건을 실증한다. 마지막 실제 CSV/사진 PDF
+제작·링크와 실제 한 방→전체 방 주기 수집도 전체 goal에 그대로 남는다. 이번 source 작업의
+모델/GPU/운영 HTTP 실행은0이며 운영 데이터·기존 실행·실패 이력은 변경하지 않았다.
+
 ## 2026-11-17 원본 사진·교과서 PNG의 실제 image-input 경로 — 슬롯/운영은 미활성
 
 직전 source `0a112344` 후속이다. 선택 질문의 사진과 교과서 page PNG를 함께 private worker

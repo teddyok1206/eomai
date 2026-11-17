@@ -36,7 +36,7 @@ from .kakao_render_projection import (
 )
 
 
-def _source_content(
+def project_kakao_source_content(
     blocks: tuple[KakaoQuestionBlock, ...],
     sources: Mapping[str, ResolvedKakaoQuestionSource],
     images: Mapping[tuple[str, ...], KakaoRenderImageInput],
@@ -118,10 +118,12 @@ def project_kakao_student_study(
                 header_date=question.first_student_at_utc.astimezone(ZoneInfo("Asia/Seoul")).date()
                 if question.first_student_at_utc is not None
                 else None,
-                student=_source_content(
+                student=project_kakao_source_content(
                     tuple(groups["student"]), selected.sources, image_index, used
                 ),
-                staff=_source_content(tuple(groups["staff"]), selected.sources, image_index, used)
+                staff=project_kakao_source_content(
+                    tuple(groups["staff"]), selected.sources, image_index, used
+                )
                 if groups["staff"]
                 else None,
                 messages=tuple(metadata.values()),

@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "kakao-concept-task-store-v1": CatalogSchemaResource(
+            "schemas/kakao-archive/concept-task-store-v1.schema.json",
+            "resources/kakao-archive/concept-task-store-v1.schema.json",
+            "1.0",
+            "sha256:3aa2f8cca2d01af138ec82e5869e6c65919cd327d21177113638dc78423c80b8",
+        ),
         "kakao-question-edit-context-v1": CatalogSchemaResource(
             "schemas/kakao-archive/question-edit-context-v1.schema.json",
             "resources/kakao-archive/question-edit-context-v1.schema.json",

@@ -295,6 +295,34 @@ Work 입력에는 task/phase·binding·question revision/manifest와 **개념 re
   PNG로 바꾸는 대안은 불필요한 derivative/재해시/원본 관계를 만든다. 새 manifest successor로
   원본 bytes를 전달한다. fixed helper 교체는 기존 실행을 해치지 않는 호환 release에서 한다.
 
+### 추천 요청의 영속 저장과 source authority
+
+1. Catalog가 한 질문의 추천 task와 PLAN/COMPOSE phase를 소유한다. Workflow/command/Job/
+   claim/lease는 기존 owner가 소유하며 task 표를 별도 실행 queue로 사용하지 않는다.
+2. 정본은 exact question revision, 사용자 지시·서버가 고정한 Graph/policy의 intent Artifact,
+   phase별 canonical request Artifact다. DB에는 ID/시각/요청 hash·작은 scope/Work pointer와
+   phase workflow/result pointer만 둔다. 질문·교재·사진·모델 결과 본문을 DB에 복제하지 않는다.
+3. task는 사용자 재시도 identity, phase는 (task, PLAN|COMPOSE)의 단일 append-only identity다.
+   phase의 Work는 이미 정의한 pointer DTO를 그대로 사용한다. Catalog wire가 Workflow
+   package를 import하지 않으며, 내부 application composition에서만 public Workflow API를 쓴다.
+4. 실제 API actor/session으로 최초 요청을 수락한다. background source 검사는 그 수락한
+   task의 owner에서만 출발해 기존 current-operator·binding/room·accepted source·question/
+   Artifact 권한을 재검사한다. 최초 session ID는 감사 provenance이며, 단순 HTTP 만료/로그아웃은
+   이미 수락한 bounded 작업을 새 요청으로 만들거나 취소하지 않는다. 계정 중지/권한·source
+   철회는 계속 차단한다. 공개 조회/다운로드는 현재 실제 API session을 다시 검사한다. 임의
+   operator/role/session 입력이나 synthetic HTTP ActorContext를 만들지 않는다.
+5. 접근은 owner+idempotency key 중복 조회, task ID 조회, (task,phase) exact 조회와 bounded
+   task history다. 기존 intent advisory lock, unique(owner,key), composite FK와 B-tree index를
+   쓴다. task 수가 늘어도 key lookup은 O(log n), 한 task의 phase 해석은 최대2개다.
+6. 긴 source read/decode/Artifact 발행은 row lock 밖이다. 예약→발행→짧은 재검증·채택이며
+   같은 phase는 한 Work만 채택한다. 파일 발행 후 죽으면 같은 key로 원래 Artifact를 재사용한다.
+7. parent는 phase의 workflow identity/result pointer를 불변 연결하며 실패 Workflow를 성공으로
+   바꾸지 않는다. GET은 실행하지 않는다. 사용자 지시 변경/명시적 새 추천은 새 task다.
+8. 동시 생성·동일 phase 채택·늦은 권한 철회·응답 유실·서비스 재구성·실패 보존을 임시 DB에서
+   검사한다. 새로운 immutable row는 공식 migration으로만 추가한다.
+9. 단순히 generic Job metadata에 원문과 결과를 넣는 대안은 private source owner·멱등
+   요청·저장/실행 책임을 혼합한다. 별도 queue/framework 대신 두 작은 소유 테이블만 추가한다.
+
 ## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
 
 `worker-study-render-v1`은 기존 `worker-question-render-v1`을 변경하지 않는 별도 family다.

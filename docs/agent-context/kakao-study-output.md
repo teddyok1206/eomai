@@ -48,8 +48,10 @@ stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인�
 인자로 연결한다. 과거1–5의 해석을 변경하지 않으며 helper의 exact source hash도 pin한다.
 현재 `PlatformRoleJobExecutor`는 이 새 purpose의 **실제 source adapter가 아직 composition에
 연결되지 않았으므로 명시 거부**한다. 다른 support prompt로 fallback하지 않는다.
-이 guard는 실행 source 연결 후에만 교체한다. 프리셋·운영 실행은 미활성이며, 실제 슬롯·
-추천 parent/store·study 저장/편집·페이지/crop 발행·새 PDF 연결은 여전히 후속이다.
+이 guard는 실행 source 연결 후에만 교체한다. `KakaoConceptTaskService`의 intent/PLAN 저장과
+현재 source authority·기존 Workflow 제출 source는 [개념 추천 문맥](kakao-concepts.md)에 있다.
+프리셋·운영 실행은 미활성이며, 실제 슬롯·COMPOSE 진행·study 저장/편집·페이지/crop 발행·
+새 PDF 연결은 여전히 후속이다.
 
 ### 역할별 PDF
 

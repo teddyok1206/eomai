@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from jsonschema import Draft202012Validator
 
 from scripts.api import release_operator_runtime as operator
@@ -44,7 +45,8 @@ def test_successor_schema_mirror_admission_and_predecessor_bytes(collection_stag
         assert "MIGRATION_VERIFY_0093" in source
         assert "MIGRATION_UPGRADE_0093_FROM_0087" in source
     deploy = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0093 "${COMMIT}"' in deploy
+    current = CURRENT_MIGRATION_REVISION.rsplit("_", 1)[1]
+    assert f'run_release_operator MIGRATION_VERIFY_{current} "${{COMMIT}}"' in deploy
     assert len(context.wheels) == 4
     operator.admit(path, context, digest)
     operator.verify_admission(path, context, digest)
