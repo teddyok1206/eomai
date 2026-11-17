@@ -4,6 +4,33 @@
   "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
   "topics": [
     {
+      "id": "kakao-study-editing",
+      "note": "kakao-study-editing.md",
+      "keywords": ["KakaoTalk", "개념·설명 편집", "study-selection", "saved study", "study-exports", "설명 자료"],
+      "source_paths": [
+        "schemas/kakao-archive/catalog-kakao-study-v1.schema.json",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_delivery_rpc.py",
+        "services/catalog_service/eom_catalog_service/kakao_delivery_application.py",
+        "services/catalog_service/eom_catalog_service/kakao_delivery_dispatch.py",
+        "apps/application_api/eom_api/routers/kakao_deliveries.py",
+        "apps/web_gui/eom_web_gui/kakao_study_contracts.py",
+        "apps/web_gui/eom_web_gui/kakao_delivery_routes.py",
+        "apps/web_gui/eom_web_gui/gateways.py",
+        "apps/web_gui/eom_web_gui/static/kakao-publications.js",
+        "apps/web_gui/eom_web_gui/static/kakao-study-editor.js"
+      ],
+      "test_paths": [
+        "tests/unit/test_kakao_study_delivery_rpc.py",
+        "tests/web_gui/test_kakao_study_gateway.py",
+        "tests/integration/test_kakao_study_delivery_http.py",
+        "tests/web_gui/kakao_study_editor_browser_checks.mjs"
+      ],
+      "reference_paths": [
+        "docs/architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md",
+        "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
+      ]
+    },
+    {
       "id": "kakao-concepts",
       "note": "kakao-concepts.md",
       "keywords": [

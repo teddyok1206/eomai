@@ -1,5 +1,46 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 개념·설명 편집 화면→공개 저장·수정→PDF 연결 — source 검증, 운영 미배포
+
+source `6766c52145630b66e064983699fe350e23a81e83` 후속이다. 기존 Catalog delivery socket과
+API/BFF·Studio 학생별 PDF 화면에 저장한 개념·설명 자료를 연결했다. 실제 API와 저장소를
+통해 편집/수정본 재열람·동일 PDF 재조회/권한 검사 다운로드까지 동작한다. **실제 공유
+슬롯의 자동 추천·교재 결과 선택/그림 화면·최종 실제 교재 보강 샘플과 운영 배포는 남았다.**
+
+- 설계16절을 먼저 기록하고 `catalog-kakao-study-v1` Schema2020-12/mirror를 추가했다.
+  SHA는 `sha256:3c74e17b21e342dc98908580f0aeb31aa35d494bfba6aabaf52f9ec7e7ac31c0`다.
+  기존 delivery1/2·study-store/export bytes는 보존했다. 기존 owner의 저장/조회/목록과 study
+  PDF 요청/조회, 학생 subset의 빈 편집 양식 읽기만 공개했다. 새 DB/queue/worker는 없다.
+- API actor/current permission·If-Match·idempotency와 BFF cookie/CSRF를 그대로 쓴다. 응답의
+  operation/request/binding/student/packet/revision을 검사하며 caller의 slot/권한/path/latest를
+  받지 않는다. 기본4MiB transport 한도를 늘리거나 내용을 잘라 성공시키지 않았다.
+- 양식은 packet owner의 정확한 학생 subset에서 준비하며 가짜 study ID를 만들지 않는다.
+  UI가 전체 질문을 N+1로 다시 읽어 학생을 추측하지 않는다. 공개 read는 편집 값만 반환한다.
+  PDF 파일은 기존 export download로 받으며 GET/완료 replay가 새 렌더를 만들지 않는다.
+- Studio `개념·설명 편집`에서 메모·선택된 개념의 수정 설명을 저장/재열람하고 새 버전을 만든다.
+  저장하지 않은 수정으로 옛 PDF가 새 결과인 것처럼 출력되지 않게 막았다. 응답 유실은 같은
+  key/body 확인, 학생/채널/owner/permission 전환은 늦은 응답·타이머와 private fields 제거다.
+  원본 질문·답변·인용/crop을 제자리 수정하거나 task ID 입력칸을 추가하지 않았다.
+- source **675 PASS**, guarded disposable PostgreSQL 전체 **344 PASS**다. 신규 HTTP4는
+  전체344에 포함된다. 실제 BFF→API→UDS→저장/CAS/replay·서비스 재구성→same-user child PDF→
+  Artifact→재다운로드·source/current session 철회와 단일 렌더를 검사했다. 질문/메모는 합성이다.
+- Web/기존 Kakao 브라우저 회귀 **47 PASS**, 새 gateway16을 포함한 집중 **68 PASS**다.
+  집중 검사의 unit52는 source675와 겹치므로 합산하지 않는다. 최종 편집 화면의 실제 Chromium
+  검사도 PASS다. safe DOM·모바일 너비·응답 유실·학생 전환·완료 PDF 재조회/추가 POST 없음과
+  저장 전 PDF 차단을 확인했다. **실제 카카오/모델/교재·운영 HTTPS 증거는 아니다.**
+- 독립 설치 wheel **10 PASS**, strict mypy7개·Ruff/format/diff/bash PASS, 문맥/wire16 PASS다.
+  audit1497 canonical/1139 mirror/13082 refs다. 초기 unit의 pytest 예약 인자명, type narrowing,
+  브라우저 실행 경로는 수정·재검증했으며 로그를 보존했다. 새 dependency는 없다.
+
+증거: `staging/kakao-study-http-{full-source,full-db,web,gateway-focused,installed-wheel,
+final-types,context-wire,wire}-20261117.log`, `staging/kakao-study-editor-browser-final-20261117.log`.
+GPU/기존 슬롯·운영 DB/권한/인증 파일을 바꾸지 않았다. 새 schema와 source 공개 연결은 실제
+운영 activation이 아니다. 다음은 공유 슬롯의 preset/자동 PLAN→공식 교재 검색→COMPOSE와
+완료 결과의 화면 선택·이미지 연결을 닫아, 실제 CSV/사진/시각에 관련 있는 통합과학 개념을
+보강한 최종 PDF를 만들고 직접 확인·링크 전달하는 것이다. 교과서가 뒷받침하는 범위를 넘는
+지구과학 심화 내용은 교재 근거처럼 표시하지 않는다. 이후 README·호환 운영 배포를 진행하며
+전체 방/주기 수집도 원래 goal에 남겨 둔다. 전체 완료·AUTO 활성화를 선언하지 않는다.
+
 ## 2026-11-17 저장한 편집본→기존 PDF 실행·발행·다운로드 — source 검증, 운영 미배포
 
 source `8bed83ed`의 후속이다. 기존 Export/claim/renderer/Artifact/download owner에 저장한

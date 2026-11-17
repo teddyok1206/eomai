@@ -50,8 +50,9 @@ stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인�
 이 purpose의 실제 입력을 재인가한다. 다른 support prompt로 fallback하지 않는다. 이것을
 운영 activation이나 실제 모델 성공으로 해석하지 않는다. `KakaoConceptTaskService`의 저장·
 현재 source authority·공유 Workflow 제출과 COMPOSE provenance·로컬 보강/PDF 값 변환,
-새 saved-study owner는 [개념 추천 문맥](kakao-concepts.md)에 있다. 프리셋/자동 진행·공개 API·
-실제 슬롯·Studio 편집은 여전히 후속이다. saved-study의 PDF application 연결은 아래와 같다.
+새 saved-study owner는 [개념 추천 문맥](kakao-concepts.md), 공개 저장·편집/PDF source는
+[설명 편집](kakao-study-editing.md)에 있다. 프리셋/자동 진행·추천 API·실제 슬롯·모델 결과
+선택/이미지 UI는 후속이다. saved-study의 PDF application 연결은 아래와 같다.
 
 ### 역할별 PDF
 
@@ -98,7 +99,8 @@ layout 혼합은 실패한다. 기존 ExportService/Delivery가 원래 profile�
 현재 source의 `KakaoStudyService`/`KakaoExportService`는 저장한 exact study revision의
 출력도 지원한다. `study-export-v1` wrapper와 DB0096의 optional source link를 쓰며 기존
 plain export의 serialized DTO/schema bytes는 유지한다. non-null study bind는 그 link와
-정확히 같아야 한다. 공개 RPC/API·Studio 편집은 아직 미연결이다. worker DTO만으로 저장/출처
+정확히 같아야 한다. 공개 RPC/API·Studio source는 [설명 편집](kakao-study-editing.md)이다.
+worker DTO만으로 저장/출처
 authority를 부여하지 않는다. source 선택·crop stage와 검증은 [개념 추천 문맥](kakao-concepts.md)이다.
 
 새 policy는 기존 composition의 `EOM_KAKAO_PDF_LAYOUT_POLICY`에서 명시 선택하며 default는

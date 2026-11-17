@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-study-v1/1.0",
+  "title": "Private API-peer saved concept study editing and PDF transport",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/save"
+    },
+    {
+      "$ref": "#/$defs/read"
+    },
+    {
+      "$ref": "#/$defs/list"
+    },
+    {
+      "$ref": "#/$defs/selection"
+    },
+    {
+      "$ref": "#/$defs/create_export"
+    },
+    {
+      "$ref": "#/$defs/read_export"
+    },
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "$ref": "#/$defs/failure"
+    }
+  ],
+  "$defs": {
+    "View": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "study",
+        "questions"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-study-view/1.0"
+        },
+        "study": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/stored"
+        },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/edit"
+          }
+        }
+      }
+    },
+    "save": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "command",
+        "idempotency_key"
+      ],
+      "properties": {
+        "operation": {
+          "const": "SAVE_KAKAO_STUDY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "command": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/create"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/revise"
+            }
+          ]
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$"
+        }
+      }
+    },
+    "read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "source_binding_id",
+        "study_id",
+        "study_revision_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_STUDY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/binding"
+        },
+        "study_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/study"
+        },
+        "study_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/revision"
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "source_binding_id",
+        "limit",
+        "cursor"
+      ],
+      "properties": {
+        "operation": {
+          "const": "LIST_KAKAO_STUDIES"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/binding"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/study"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "create_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "command",
+        "idempotency_key"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CREATE_KAKAO_STUDY_EXPORT"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "command": {
+          "$ref": "eom://schemas/kakao-archive/study-export-v1/1.0#/$defs/create"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$"
+        }
+      }
+    },
+    "read_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "source_binding_id",
+        "export_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_STUDY_EXPORT"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/binding"
+        },
+        "export_id": {
+          "type": "string",
+          "pattern": "^kakaoexport_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/14/properties/error_code"
+        },
+        {
+          "enum": [
+            "KAKAO_STUDY_RUNTIME_UNAVAILABLE",
+            "KAKAO_STUDY_PACKET_CHANGED",
+            "KAKAO_STUDY_QUESTION_SET_MISMATCH",
+            "KAKAO_STUDY_CONCEPT_QUESTION_MISMATCH",
+            "KAKAO_STUDY_BLOCK_SELECTION_INVALID",
+            "KAKAO_STUDY_SOURCE_CHANGED",
+            "KAKAO_STUDY_MANIFEST_INVALID",
+            "KAKAO_STUDY_PUBLICATION_MISMATCH",
+            "KAKAO_STUDY_EXPORT_INVALID",
+            "KAKAO_STUDY_CONTRACT_INVALID",
+            "KAKAO_CONCEPT_RUNTIME_UNAVAILABLE",
+            "KAKAO_CONCEPT_RESULT_NOT_READY",
+            "KAKAO_CONCEPT_RESULT_POINTER_INVALID"
+          ]
+        }
+      ]
+    },
+    "success": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "SAVE_KAKAO_STUDY",
+            "READ_KAKAO_STUDY",
+            "LIST_KAKAO_STUDIES",
+            "CREATE_KAKAO_STUDY_EXPORT",
+            "READ_KAKAO_STUDY_EXPORT",
+            "READ_KAKAO_STUDY_SELECTION"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/mutation"
+            },
+            {
+              "$ref": "#/$defs/View"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/page"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/study-export-v1/1.0#/$defs/mutation"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/study-export-v1/1.0#/$defs/view"
+            },
+            {
+              "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/create"
+            }
+          ]
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "SAVE_KAKAO_STUDY",
+            "READ_KAKAO_STUDY",
+            "LIST_KAKAO_STUDIES",
+            "CREATE_KAKAO_STUDY_EXPORT",
+            "READ_KAKAO_STUDY_EXPORT",
+            "READ_KAKAO_STUDY_SELECTION"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "$ref": "#/$defs/error"
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "source_binding_id",
+        "packet_id",
+        "packet_revision_id",
+        "student_id"
+      ],
+      "properties": {
+        "operation": {
+          "const": "READ_KAKAO_STUDY_SELECTION"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/binding"
+        },
+        "packet_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/packet"
+        },
+        "packet_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/packet_revision"
+        },
+        "student_id": {
+          "$ref": "eom://schemas/kakao-archive/study-store-v1/1.0#/$defs/student"
+        }
+      }
+    }
+  }
+}

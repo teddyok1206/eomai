@@ -24,6 +24,17 @@ from .kakao_packet_store import (
     PacketRevisionId,
 )
 from .kakao_question import KakaoQuestionProvenance, StudentId
+from .kakao_study_export import KakaoStudyExport, KakaoStudyExportCreate, KakaoStudyExportMutation
+from .kakao_study_store import (
+    KakaoStoredStudy,
+    KakaoStudyCreate,
+    KakaoStudyMutation,
+    KakaoStudyPage,
+    KakaoStudyQuestionEdit,
+    KakaoStudyRevise,
+    StudyId,
+    StudyRevisionId,
+)
 from .models import FrozenModel, Sha256, UtcDatetime
 from .validation import validate_contract
 
@@ -35,8 +46,24 @@ type KakaoDeliveryOperation = Literal[
     "READ_KAKAO_EXPORT",
     "LIST_KAKAO_EXPORTS",
     "READ_KAKAO_EXPORT_PDF",
+    "SAVE_KAKAO_STUDY",
+    "READ_KAKAO_STUDY",
+    "LIST_KAKAO_STUDIES",
+    "CREATE_KAKAO_STUDY_EXPORT",
+    "READ_KAKAO_STUDY_EXPORT",
+    "READ_KAKAO_STUDY_SELECTION",
 ]
 KAKAO_DELIVERY_OPERATIONS = frozenset(get_args(KakaoDeliveryOperation.__value__))
+KAKAO_STUDY_OPERATIONS = frozenset(
+    {
+        "SAVE_KAKAO_STUDY",
+        "READ_KAKAO_STUDY",
+        "LIST_KAKAO_STUDIES",
+        "CREATE_KAKAO_STUDY_EXPORT",
+        "READ_KAKAO_STUDY_EXPORT",
+        "READ_KAKAO_STUDY_SELECTION",
+    }
+)
 
 type KakaoDeliveryError = Literal[
     "KAKAO_ARCHIVE_REQUEST_INVALID",
@@ -71,8 +98,54 @@ type KakaoDeliveryError = Literal[
     "KAKAO_ARCHIVE_STORED_SOURCE_INVALID",
     "CATALOG_APPLICATION_UNAVAILABLE",
     "CATALOG_APPLICATION_INTERNAL_ERROR",
+    "KAKAO_STUDY_RUNTIME_UNAVAILABLE",
+    "KAKAO_STUDY_PACKET_CHANGED",
+    "KAKAO_STUDY_QUESTION_SET_MISMATCH",
+    "KAKAO_STUDY_CONCEPT_QUESTION_MISMATCH",
+    "KAKAO_STUDY_BLOCK_SELECTION_INVALID",
+    "KAKAO_STUDY_SOURCE_CHANGED",
+    "KAKAO_STUDY_MANIFEST_INVALID",
+    "KAKAO_STUDY_PUBLICATION_MISMATCH",
+    "KAKAO_STUDY_EXPORT_INVALID",
+    "KAKAO_STUDY_CONTRACT_INVALID",
+    "KAKAO_CONCEPT_RUNTIME_UNAVAILABLE",
+    "KAKAO_CONCEPT_RESULT_NOT_READY",
+    "KAKAO_CONCEPT_RESULT_POINTER_INVALID",
 ]
 KAKAO_DELIVERY_ERRORS = frozenset(get_args(KakaoDeliveryError.__value__))
+KAKAO_STUDY_ERRORS = frozenset(
+    {
+        "KAKAO_STUDY_RUNTIME_UNAVAILABLE",
+        "KAKAO_STUDY_PACKET_CHANGED",
+        "KAKAO_STUDY_QUESTION_SET_MISMATCH",
+        "KAKAO_STUDY_CONCEPT_QUESTION_MISMATCH",
+        "KAKAO_STUDY_BLOCK_SELECTION_INVALID",
+        "KAKAO_STUDY_SOURCE_CHANGED",
+        "KAKAO_STUDY_MANIFEST_INVALID",
+        "KAKAO_STUDY_PUBLICATION_MISMATCH",
+        "KAKAO_STUDY_EXPORT_INVALID",
+        "KAKAO_STUDY_CONTRACT_INVALID",
+        "KAKAO_CONCEPT_RUNTIME_UNAVAILABLE",
+        "KAKAO_CONCEPT_RESULT_NOT_READY",
+        "KAKAO_CONCEPT_RESULT_POINTER_INVALID",
+    }
+)
+
+
+class KakaoStudyView(FrozenModel):
+    """Only editable values, not copied question/textbook/model result bodies."""
+
+    schema_version: Literal["kakao-study-view/1.0"] = "kakao-study-view/1.0"
+    study: KakaoStoredStudy
+    questions: tuple[KakaoStudyQuestionEdit, ...] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def exact_questions(self) -> "KakaoStudyView":
+        if len(self.questions) != self.study.question_count or len(
+            {q.question_revision_id for q in self.questions}
+        ) != len(self.questions):
+            raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
+        return self
 
 
 class KakaoPacketStudent(FrozenModel):
@@ -165,6 +238,44 @@ class ReadKakaoExportPdfRequest(_Identity):
     export_revision_id: ExportRevisionId
 
 
+class SaveKakaoStudyRequest(_Identity):
+    operation: Literal["SAVE_KAKAO_STUDY"] = "SAVE_KAKAO_STUDY"
+    command: Annotated[KakaoStudyCreate | KakaoStudyRevise, Field(discriminator="schema_version")]
+    idempotency_key: IdempotencyKey
+
+
+class ReadKakaoStudyRequest(_Identity):
+    operation: Literal["READ_KAKAO_STUDY"] = "READ_KAKAO_STUDY"
+    source_binding_id: KakaoBindingId
+    study_id: StudyId
+    study_revision_id: StudyRevisionId
+
+
+class ListKakaoStudiesRequest(_Page):
+    operation: Literal["LIST_KAKAO_STUDIES"] = "LIST_KAKAO_STUDIES"
+    cursor: StudyId | None = None
+
+
+class CreateKakaoStudyExportRequest(_Identity):
+    operation: Literal["CREATE_KAKAO_STUDY_EXPORT"] = "CREATE_KAKAO_STUDY_EXPORT"
+    command: KakaoStudyExportCreate
+    idempotency_key: IdempotencyKey
+
+
+class ReadKakaoStudyExportRequest(_Identity):
+    operation: Literal["READ_KAKAO_STUDY_EXPORT"] = "READ_KAKAO_STUDY_EXPORT"
+    source_binding_id: KakaoBindingId
+    export_id: ExportId
+
+
+class ReadKakaoStudySelectionRequest(_Identity):
+    operation: Literal["READ_KAKAO_STUDY_SELECTION"] = "READ_KAKAO_STUDY_SELECTION"
+    source_binding_id: KakaoBindingId
+    packet_id: PacketId
+    packet_revision_id: PacketRevisionId
+    student_id: StudentId
+
+
 type KakaoDeliveryRequest = Annotated[
     SaveKakaoPacketRequest
     | ReadKakaoPacketRequest
@@ -172,7 +283,13 @@ type KakaoDeliveryRequest = Annotated[
     | CreateKakaoExportRequest
     | ReadKakaoExportRequest
     | ListKakaoExportsRequest
-    | ReadKakaoExportPdfRequest,
+    | ReadKakaoExportPdfRequest
+    | SaveKakaoStudyRequest
+    | ReadKakaoStudyRequest
+    | ListKakaoStudiesRequest
+    | CreateKakaoStudyExportRequest
+    | ReadKakaoStudyExportRequest
+    | ReadKakaoStudySelectionRequest,
     Field(discriminator="operation"),
 ]
 type KakaoDeliveryResult = Annotated[
@@ -182,7 +299,13 @@ type KakaoDeliveryResult = Annotated[
     | KakaoExportMutation
     | KakaoExport
     | KakaoExportPage
-    | KakaoExportPdf,
+    | KakaoExportPdf
+    | KakaoStudyMutation
+    | KakaoStudyView
+    | KakaoStudyPage
+    | KakaoStudyExportMutation
+    | KakaoStudyExport
+    | KakaoStudyCreate,
     Field(discriminator="schema_version"),
 ]
 
@@ -211,11 +334,21 @@ _REPLY: TypeAdapter[KakaoDeliveryReply] = TypeAdapter(KakaoDeliveryReply)
 
 
 def parse_kakao_delivery_request(value: dict[str, object]) -> KakaoDeliveryRequest:
-    validate_contract("catalog-kakao-delivery-v1", value)
+    operation = value.get("operation")
+    validate_contract(
+        "catalog-kakao-study-v1"
+        if isinstance(operation, str) and operation in KAKAO_STUDY_OPERATIONS
+        else "catalog-kakao-delivery-v1",
+        value,
+    )
     return _REQUEST.validate_python(value)
 
 
 def parse_kakao_delivery_reply(value: dict[str, object]) -> KakaoDeliveryReply:
+    operation = value.get("operation")
+    if isinstance(operation, str) and operation in KAKAO_STUDY_OPERATIONS:
+        validate_contract("catalog-kakao-study-v1", value)
+        return _REPLY.validate_python(value)
     result = value.get("result")
     study = isinstance(result, dict) and result.get("schema_version") in {
         "kakao-export/2.0",
@@ -233,7 +366,68 @@ def check_kakao_delivery_reply(request: KakaoDeliveryRequest, reply: KakaoDelive
     if isinstance(reply, KakaoDeliveryFailure):
         return
     result = reply.result
-    if isinstance(request, SaveKakaoPacketRequest):
+    if isinstance(request, SaveKakaoStudyRequest):
+        if not isinstance(result, KakaoStudyMutation):
+            raise ValueError(invalid)
+        study, study_command = result.study, request.command
+        if any(
+            getattr(study, key) != getattr(study_command, key)
+            for key in (
+                "source_binding_id",
+                "packet_id",
+                "packet_revision_id",
+                "student_id",
+                "title",
+            )
+        ) or study.question_count != len(study_command.questions):
+            raise ValueError(invalid)
+        if isinstance(study_command, KakaoStudyRevise):
+            if (study.study_id, study.previous_revision_id, study.resource_version) != (
+                study_command.study_id,
+                study_command.parent_revision_id,
+                study_command.expected_resource_version + 1,
+            ):
+                raise ValueError(invalid)
+        elif study.previous_revision_id is not None or study.resource_version != 1:
+            raise ValueError(invalid)
+    elif isinstance(request, ReadKakaoStudyRequest):
+        if not isinstance(result, KakaoStudyView) or (
+            result.study.source_binding_id,
+            result.study.study_id,
+            result.study.study_revision_id,
+        ) != (request.source_binding_id, request.study_id, request.study_revision_id):
+            raise ValueError(invalid)
+    elif isinstance(request, ListKakaoStudiesRequest):
+        if not isinstance(result, KakaoStudyPage) or (
+            len(result.items) > request.limit
+            or any(
+                row.source_binding_id != request.source_binding_id
+                or (request.cursor is not None and row.study_id <= request.cursor)
+                for row in result.items
+            )
+            or (result.next_cursor is not None and len(result.items) != request.limit)
+        ):
+            raise ValueError(invalid)
+    elif isinstance(request, CreateKakaoStudyExportRequest):
+        if (
+            not isinstance(result, KakaoStudyExportMutation)
+            or result.result.study != request.command.study
+            or result.result.export.source_binding_id != request.command.source_binding_id
+        ):
+            raise ValueError(invalid)
+    elif isinstance(request, ReadKakaoStudyExportRequest):
+        if not isinstance(result, KakaoStudyExport) or (
+            result.export.source_binding_id,
+            result.export.export_id,
+        ) != (request.source_binding_id, request.export_id):
+            raise ValueError(invalid)
+    elif isinstance(request, ReadKakaoStudySelectionRequest):
+        if not isinstance(result, KakaoStudyCreate) or any(
+            getattr(result, key) != getattr(request, key)
+            for key in ("source_binding_id", "packet_id", "packet_revision_id", "student_id")
+        ):
+            raise ValueError(invalid)
+    elif isinstance(request, SaveKakaoPacketRequest):
         if not isinstance(result, KakaoPacketMutation):
             raise ValueError(invalid)
         packet, command = result.packet, request.command

@@ -461,6 +461,8 @@ load_catalog_schema("kakao-study-store-v1")
 from eom_catalog_contracts.kakao_study_export import KakaoStudyExportCreate
 from eom_catalog_service.kakao_study_pdf_inputs import KakaoSavedStudyPdfSource
 load_catalog_schema("kakao-study-export-v1")
+from eom_catalog_contracts.kakao_delivery_rpc import KakaoStudyView, ReadKakaoStudySelectionRequest
+load_catalog_schema("catalog-kakao-study-v1")
 KakaoConceptAuthorizationRequest(
     workflow_id="workflow_" + "1" * 32, step_run_id="steprun_" + "2" * 32,
     plan_id="execplan_" + "3" * 32, plan_sha256="sha256:" + "4" * 64,

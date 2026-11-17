@@ -207,6 +207,16 @@ from eom_web_gui.kakao_student_contracts import (
     StudentRename,
     StudentRetire,
 )
+from eom_web_gui.kakao_study_contracts import (
+    StudyCreate,
+    StudyExport,
+    StudyExportCreate,
+    StudyExportMutation,
+    StudyMutation,
+    StudyPage,
+    StudyRevise,
+    StudyView,
+)
 from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
 from eom_web_gui.material_learning_contracts import (
     MaterialItemDbEntry,
@@ -689,6 +699,25 @@ class ApplicationGateway(Protocol):
     async def kakao_export_pdf(
         self, session: WebSession, binding: str, export: str, revision: str
     ) -> KakaoPdfDownload: ...
+
+    async def kakao_study_save(
+        self, session: WebSession, value: StudyCreate | StudyRevise, idempotency_key: str
+    ) -> StudyMutation: ...
+    async def kakao_study_list(
+        self, session: WebSession, binding: str, *, limit: int = 30, cursor: str | None = None
+    ) -> StudyPage: ...
+    async def kakao_study_read(
+        self, session: WebSession, binding: str, study: str, revision: str
+    ) -> StudyView: ...
+    async def kakao_study_selection(
+        self, session: WebSession, binding: str, packet: str, revision: str, student: str
+    ) -> StudyCreate: ...
+    async def kakao_study_export_create(
+        self, session: WebSession, value: StudyExportCreate, idempotency_key: str
+    ) -> StudyExportMutation: ...
+    async def kakao_study_export_read(
+        self, session: WebSession, binding: str, export: str
+    ) -> StudyExport: ...
 
     async def kakao_student_list(
         self, session: WebSession, *, limit: int = 50, cursor: str | None = None
@@ -1872,6 +1901,184 @@ class HttpApplicationGateway:
                 result.packet.packet_revision_id,
             ) != (binding, packet, revision):
                 raise ValueError("different packet revision")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_save(
+        self, session: WebSession, value: StudyCreate | StudyRevise, idempotency_key: str
+    ) -> StudyMutation:
+        revising = isinstance(value, StudyRevise)
+        path = "/api/v1/kakao-archive/studies"
+        headers = {"Idempotency-Key": idempotency_key}
+        if isinstance(value, StudyRevise):
+            path += "/" + value.study_id
+            headers["If-Match"] = f'"v{value.expected_resource_version}"'
+        response = await self._authorized(
+            session,
+            "PATCH" if revising else "POST",
+            path,
+            json=value.model_dump(mode="json"),
+            headers=headers,
+            timeout=130.0,
+        )
+        try:
+            result = StudyMutation.model_validate(self._data(response))
+            study = result.study
+            if any(
+                getattr(study, key) != getattr(value, key)
+                for key in (
+                    "source_binding_id",
+                    "packet_id",
+                    "packet_revision_id",
+                    "student_id",
+                    "title",
+                )
+            ) or study.question_count != len(value.questions):
+                raise ValueError("different study")
+            if isinstance(value, StudyRevise):
+                if (study.study_id, study.previous_revision_id, study.resource_version) != (
+                    value.study_id,
+                    value.parent_revision_id,
+                    value.expected_resource_version + 1,
+                ):
+                    raise ValueError("different study parent")
+            elif study.previous_revision_id is not None or study.resource_version != 1:
+                raise ValueError("different initial study")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_list(
+        self, session: WebSession, binding: str, *, limit: int = 30, cursor: str | None = None
+    ) -> StudyPage:
+        _require_id(binding, "kakaobinding_")
+        if cursor is not None:
+            _require_id(cursor, "kakaostudy_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/studies",
+            params={"source_binding_id": binding, "limit": limit, "cursor": cursor},
+            timeout=130.0,
+        )
+        try:
+            result = StudyPage.model_validate(self._data(response))
+            ids = tuple(item.study_id for item in result.items)
+            if (
+                len(ids) > limit
+                or ids != tuple(sorted(set(ids)))
+                or any(
+                    item.source_binding_id != binding
+                    or (cursor is not None and item.study_id <= cursor)
+                    for item in result.items
+                )
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different study page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_read(
+        self, session: WebSession, binding: str, study: str, revision: str
+    ) -> StudyView:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (study, "kakaostudy_"),
+            (revision, "kakaostudyrev_"),
+        ):
+            _require_id(value, prefix)
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/studies/{study}/revisions/{revision}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = StudyView.model_validate(self._data(response))
+            if (
+                result.study.source_binding_id,
+                result.study.study_id,
+                result.study.study_revision_id,
+            ) != (binding, study, revision):
+                raise ValueError("different study revision")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_selection(
+        self, session: WebSession, binding: str, packet: str, revision: str, student: str
+    ) -> StudyCreate:
+        for value, prefix in (
+            (binding, "kakaobinding_"),
+            (packet, "kakaopacket_"),
+            (revision, "kakaopacketrev_"),
+            (student, "kakaostudent_"),
+        ):
+            _require_id(value, prefix)
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/question-packets/{packet}/revisions/{revision}/students/{student}/study-selection",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = StudyCreate.model_validate(self._data(response))
+            if (
+                result.source_binding_id,
+                result.packet_id,
+                result.packet_revision_id,
+                result.student_id,
+            ) != (binding, packet, revision, student):
+                raise ValueError("different student study selection")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_export_create(
+        self, session: WebSession, value: StudyExportCreate, idempotency_key: str
+    ) -> StudyExportMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/study-exports",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = StudyExportMutation.model_validate(self._data(response))
+            if (
+                result.result.study != value.study
+                or result.result.export.source_binding_id != value.source_binding_id
+            ):
+                raise ValueError("different study PDF")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_study_export_read(
+        self, session: WebSession, binding: str, export: str
+    ) -> StudyExport:
+        _require_id(binding, "kakaobinding_")
+        _require_id(export, "kakaoexport_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/study-exports/{export}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = StudyExport.model_validate(self._data(response))
+            if (result.export.source_binding_id, result.export.export_id) != (binding, export):
+                raise ValueError("different study PDF")
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error

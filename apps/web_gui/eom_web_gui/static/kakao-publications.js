@@ -1,10 +1,12 @@
 // Presentation of exact saved selections. Catalog owns grouping, approval and rendering.
+import {createKakaoStudyEditor} from "./kakao-study-editor.js";
 const BASE = "/kakao-archive", ID = /^[a-z][a-z0-9_]{1,48}_[a-f0-9]{32}$/;
 const SELECTION_REFUSALS = new Set(["KAKAO_ARCHIVE_FINAL_BLOCKED", "KAKAO_ARCHIVE_QUESTION_OUTSIDE_PERIOD", "KAKAO_ARCHIVE_STUDENT_DISPLAY_CONFLICT", "KAKAO_ARCHIVE_PERIOD_INVALID", "KAKAO_ARCHIVE_STUDENT_UNMAPPED", "KAKAO_ARCHIVE_QUESTION_EXCLUDED", "KAKAO_ARCHIVE_EMPTY_SELECTION"]);
 function identifier(value) { if (typeof value !== "string" || !ID.test(value)) throw new Error("자료 연결을 확인해 주세요."); return encodeURIComponent(value); }
 function page(value) { if (!value || !Array.isArray(value.items) || value.items.length > 100 || !(value.next_cursor === null || typeof value.next_cursor === "string")) throw new Error("목록 형식을 확인하지 못했습니다."); return value; }
 
 export function createKakaoPublications({document, api, explainError, setStateStatus, schedule = setTimeout, unschedule = clearTimeout}) {
+  const studyEditor = createKakaoStudyEditor({document, api, explainError, schedule, unschedule});
   let root = null, owner = null, active = false, binding = null, generation = 0, detailGeneration = 0, timer = null;
   let permissions = new Set(), selected = new Map(), packets = new Map(), packetIntent = null, saving = false;
   let currentPacket = null, currentStudents = new Map(), exportIntent = null, exporting = false, observed = null, observing = false;
@@ -97,6 +99,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
   }
   async function openPacket(row) {
     const token = generation, request = ++detailGeneration; if (!live(token)) return;
+    studyEditor.clear();
     stop(); currentPacket = null; currentStudents.clear(); observed = null; exportIntent = null; exporting = false; observing = false; nodes.detail.replaceChildren(el("p", "저장한 자료를 여는 중입니다."));
     const query = new URLSearchParams({source_binding_id: binding.source_binding_id});
     try {
@@ -109,6 +112,16 @@ export function createKakaoPublications({document, api, explainError, setStateSt
       nodes.export = button("학생 PDF 만들기", () => void createExport(token, request)); nodes.export.disabled = !writable();
       nodes.exportStatus = el("div"); nodes.exportStatus.setAttribute("role", "status");
       nodes.history = el("div"); nodes.detail.append(label, nodes.export, nodes.exportStatus, el("h4", "이 자료의 PDF 기록"), nodes.history);
+      const studyHost = el("section", undefined, "kakao-study-editor");
+      const openStudy = button("개념·설명 편집", () => {
+        if (!detailLive(token, request)) return;
+        const student = currentStudents.get(nodes.student.value); if (!student) return;
+        void studyEditor.open(studyHost, {binding: binding.source_binding_id, packet: row.packet_id,
+          revision: row.packet_revision_id, student: student.student_id, studentName: student.display_name,
+          canEdit: permissions.has("kakao_archive:edit") && ["DRAFT", "ACTIVE"].includes(binding.state), canExport: writable()});
+      });
+      nodes.student.addEventListener("change", () => studyEditor.clear());
+      nodes.detail.append(openStudy, studyHost);
       await loadExports(token, request);
     } catch (error) { if (live(token) && request === detailGeneration) { nodes.detail.replaceChildren(el("p", "자료를 열지 못했습니다.")); say(explainError(error), true); } }
   }
@@ -167,6 +180,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
     finally { if (detailLive(token, request)) observing = false; }
   }
   async function setBinding(value) {
+    studyEditor.clear();
     generation++; detailGeneration++; stop(); currentPacket = null; currentStudents.clear(); observed = null; binding = value; exporting = false; observing = false; saving = false;
     selected.clear(); packets.clear(); if (root) {
       if (packetIntent && value && packetIntent.binding === value.source_binding_id) {
@@ -178,9 +192,9 @@ export function createKakaoPublications({document, api, explainError, setStateSt
     if (value && value.state !== "RETIRED") await refresh();
   }
   function clearPrivateFields() { if (!root) return; nodes.title.value = "학생 질문 자료"; const date = new Intl.DateTimeFormat("sv-SE", {timeZone: "Asia/Seoul"}).format(new Date()); nodes.start.value = date; nodes.end.value = date; nodes.mode.value = "DRAFT"; nodes.replies.checked = true; say("질문 목록에서 ‘자료에 넣기’를 누른 뒤 기간을 골라 주세요."); }
-  function setOwner(value) { if (value === owner) return; owner = value; permissions = new Set(); generation++; detailGeneration++; stop(); binding = null; selected.clear(); packets.clear(); currentStudents.clear(); packetIntent = null; exportIntent = null; observed = null; currentPacket = null; saving = false; exporting = false; observing = false; if (root) { nodes.list.replaceChildren(); nodes.detail.replaceChildren(); clearPrivateFields(); renderSelection(); } }
-  function setPermissions(values) { permissions = new Set(values); generation++; detailGeneration++; stop(); if (!permissions.has("kakao_archive:read")) { void setBinding(null); clearPrivateFields(); } if (root) controls(); }
+  function setOwner(value) { if (value === owner) return; studyEditor.clear(); owner = value; permissions = new Set(); generation++; detailGeneration++; stop(); binding = null; selected.clear(); packets.clear(); currentStudents.clear(); packetIntent = null; exportIntent = null; observed = null; currentPacket = null; saving = false; exporting = false; observing = false; if (root) { nodes.list.replaceChildren(); nodes.detail.replaceChildren(); clearPrivateFields(); renderSelection(); } }
+  function setPermissions(values) { studyEditor.clear(); permissions = new Set(values); generation++; detailGeneration++; stop(); if (!permissions.has("kakao_archive:read")) { void setBinding(null); clearPrivateFields(); } if (root) controls(); }
   function open() { active = true; }
-  function close() { active = false; generation++; detailGeneration++; stop(); if (root) { nodes.list.replaceChildren(); nodes.detail.replaceChildren(); } }
+  function close() { studyEditor.clear(); active = false; generation++; detailGeneration++; stop(); if (root) { nodes.list.replaceChildren(); nodes.detail.replaceChildren(); } }
   return {install, addQuestion, setOwner, setPermissions, setBinding, open, close, refresh};
 }

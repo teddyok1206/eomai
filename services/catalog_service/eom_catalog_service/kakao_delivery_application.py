@@ -6,13 +6,18 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from eom_catalog_contracts.kakao_delivery_rpc import KakaoPacketStudent, KakaoPacketView
+from eom_catalog_contracts.kakao_delivery_rpc import (
+    KakaoPacketStudent,
+    KakaoPacketView,
+    KakaoStudyView,
+)
 from eom_catalog_contracts.kakao_export_store import KakaoExportCreate, KakaoExportMutation
 from eom_catalog_contracts.kakao_question import KakaoQuestionProvenance
 from eom_catalog_contracts.kakao_study_export import (
     KakaoStudyExportCreate,
     KakaoStudyExportMutation,
 )
+from eom_catalog_contracts.kakao_study_store import KakaoStudyCreate, KakaoStudyQuestionEdit
 from eom_operator_identity import ActorContext
 
 from .kakao_archive_authorization import KakaoArchiveError
@@ -59,6 +64,44 @@ class KakaoDeliveryApplication:
         if self.exports is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_PDF_RUNTIME_UNAVAILABLE")
         return self.exports
+
+    def study_owner(self) -> KakaoStudyService:
+        if self.studies is None:
+            raise KakaoArchiveError("KAKAO_STUDY_RUNTIME_UNAVAILABLE")
+        return self.studies
+
+    def read_study(
+        self, actor: ActorContext, binding: str, study: str, revision: str
+    ) -> KakaoStudyView:
+        accepted = self.study_owner().get_study(actor, binding, study, revision_id=revision)
+        return KakaoStudyView(
+            study=accepted.stored,
+            questions=tuple(question.edit for question in accepted.manifest.questions),
+        )
+
+    def read_study_selection(
+        self, actor: ActorContext, binding: str, packet: str, revision: str, student: str
+    ) -> KakaoStudyCreate:
+        """Read an unsaved form from the authorized subset, without inventing a study identity."""
+        accepted, selected = self.packets.resolve_student(
+            actor, binding, packet, revision_id=revision, student_id=student
+        )
+        return KakaoStudyCreate(
+            source_binding_id=binding,
+            packet_id=packet,
+            packet_revision_id=revision,
+            student_id=student,
+            title=accepted.stored.title,
+            questions=tuple(
+                KakaoStudyQuestionEdit(
+                    question_revision_id=question.stored.question_revision_id,
+                    concept_task_id=None,
+                    blocks=(),
+                    notes=(),
+                )
+                for question in selected.questions
+            ),
+        )
 
     def request_export(
         self, actor: ActorContext, command: KakaoExportCreate, *, idempotency_key: str

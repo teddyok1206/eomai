@@ -8,7 +8,10 @@ from eom_catalog_contracts.kakao_archive_rpc import RequestId
 from eom_catalog_contracts.kakao_delivery_rpc import (
     KAKAO_DELIVERY_ERRORS,
     KAKAO_DELIVERY_OPERATIONS,
+    KAKAO_STUDY_ERRORS,
+    KAKAO_STUDY_OPERATIONS,
     CreateKakaoExportRequest,
+    CreateKakaoStudyExportRequest,
     KakaoDeliveryError,
     KakaoDeliveryFailure,
     KakaoDeliveryOperation,
@@ -18,9 +21,14 @@ from eom_catalog_contracts.kakao_delivery_rpc import (
     KakaoExportPdf,
     ListKakaoExportsRequest,
     ListKakaoPacketsRequest,
+    ListKakaoStudiesRequest,
     ReadKakaoExportRequest,
     ReadKakaoPacketRequest,
+    ReadKakaoStudyExportRequest,
+    ReadKakaoStudyRequest,
+    ReadKakaoStudySelectionRequest,
     SaveKakaoPacketRequest,
+    SaveKakaoStudyRequest,
     check_kakao_delivery_reply,
     parse_kakao_delivery_reply,
     parse_kakao_delivery_request,
@@ -46,6 +54,8 @@ def dispatch_kakao_delivery(
         request_id = TypeAdapter(RequestId).validate_python(value.get("request_id"))
 
     def failure(code: str) -> KakaoDeliveryFailure:
+        if code in KAKAO_STUDY_ERRORS and operation not in KAKAO_STUDY_OPERATIONS:
+            code = "CATALOG_APPLICATION_INTERNAL_ERROR"
         return KakaoDeliveryFailure(
             operation=cast(KakaoDeliveryOperation, operation),
             request_id=request_id,
@@ -76,7 +86,38 @@ def dispatch_kakao_delivery(
             )
             try:
                 result: KakaoDeliveryResult
-                if isinstance(request, SaveKakaoPacketRequest):
+                if isinstance(request, SaveKakaoStudyRequest):
+                    result = application.study_owner().save_study(
+                        actor, request.command, idempotency_key=request.idempotency_key
+                    )
+                elif isinstance(request, ReadKakaoStudyRequest):
+                    result = application.read_study(
+                        actor,
+                        request.source_binding_id,
+                        request.study_id,
+                        request.study_revision_id,
+                    )
+                elif isinstance(request, ListKakaoStudiesRequest):
+                    result = application.study_owner().list_studies(
+                        actor, request.source_binding_id, limit=request.limit, after=request.cursor
+                    )
+                elif isinstance(request, CreateKakaoStudyExportRequest):
+                    result = application.request_study_export(
+                        actor, request.command, idempotency_key=request.idempotency_key
+                    )
+                elif isinstance(request, ReadKakaoStudyExportRequest):
+                    result = application.export_owner().read_study_export(
+                        actor, request.source_binding_id, request.export_id
+                    )
+                elif isinstance(request, ReadKakaoStudySelectionRequest):
+                    result = application.read_study_selection(
+                        actor,
+                        request.source_binding_id,
+                        request.packet_id,
+                        request.packet_revision_id,
+                        request.student_id,
+                    )
+                elif isinstance(request, SaveKakaoPacketRequest):
                     result = application.packets.save_packet(
                         actor, request.command, idempotency_key=request.idempotency_key
                     )

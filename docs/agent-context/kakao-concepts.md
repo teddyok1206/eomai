@@ -43,7 +43,8 @@ release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context
 
 - 추천 요청의 공개 API·화면 시작/상태/history와 자동 단계 진행 coordinator.
 - 실제 preset/지침 발행·공유 슬롯 model run, PLAN→GraphRAG→COMPOSE 진행 coordinator.
-- 실제 COMPOSE 완료 뒤 원본 capture 발행, saved-study의 공개 API·Studio 편집/새 PDF 연결.
+- 실제 COMPOSE 완료 뒤 추천 block/capture의 화면 선택·이미지와 원본 capture 발행.
+  saved-study 공개 저장·편집/PDF source 연결은 [설명 편집](kakao-study-editing.md)에 있다.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
 
 실제 reader/page/crop/worker input/역할별 PDF는 [자료 출력 문맥](kakao-study-output.md)을 따른다.
@@ -112,7 +113,7 @@ accepted source authority가 실제 저장 owner를 보유하므로 HTTP 만료 
 검사는 실제 Job/Artifact 결과→등록된 PNG→COMPOSE 저장/서비스 재구성·logout 뒤 동일 Workflow
 제출을 검증하지만 PLAN 출력·Graph/교재 discovery는 합성이다. 모델/실제 교재 검색 성공은 아니다.
 
-다음 구현은 **실행 preset/자동 coordinator·공개 API→실제 COMPOSE→saved-study/Studio 편집·새 PDF**에
+다음 구현은 **실행 preset/자동 coordinator·추천 공개 API→실제 COMPOSE→화면에서 선택·새 PDF**에
 집중한다. 실제 CSV/사진 샘플의 관련 교과서 보강·최종 PDF 링크도 남아 있다. 새 queue/독립
 Codex 프로세스를 만들지 않는다.
 
@@ -122,8 +123,8 @@ Codex 프로세스를 만들지 않는다.
 ID이고 실제 카카오 첨부/저장 revision이 아니다. 단순 decode로 품질 승인을 만들어내지 않아
 새 capture는 `quality_accepted=false`다. 실제 DRAFT PDF는 가능하나 FINAL 검사 규칙은 유지한다.
 
-pure projection과 임시 page/crop 준비만 연결됐으며 canonical saved-study/Studio 편집·공식
-export를 대신하지 않는다. `test_kakao_concept_study.py`는 합성 개념/교재의 실제 PNG→crop→
+이 projection은 [공개 저장·편집/PDF](kakao-study-editing.md)의 입력 adapter로 연결됐으나 실제
+모델/교재 실증을 대신하지 않는다. `test_kakao_concept_study.py`는 합성 개념/교재의 실제 PNG→crop→
 PDF 내장·출처·질문/답변/개념 순서와 layout receipt를 검사한다. 실제 카카오/교재/모델 성공이나
 사용자에게 전달할 최종 샘플이라고 보고하지 않는다.
 
@@ -141,7 +142,7 @@ JSON body를 두지 않는다. source test의 completed-concept port는 합성�
 
 Delivery composition이 같은 packet/source owner로 study service를 구성한다. 추천 runtime이
 없어도 직접 쓴 메모 저장은 가능하고 모델이 필요한 선택만 명시 거부한다. 공개 RPC/API·Studio
-편집 화면은 아직 후속이다. release context1.30은 target0095와
+편집 source는 [설명 편집](kakao-study-editing.md)이다. release context1.30은 target0095와
 정확한0093→0095 또는0094→0095/같은0095만 지원하며 predecessor bytes는 보존한다.
 운영 migration/배포는 아직 수행하지 않았다.
 
@@ -159,6 +160,7 @@ crop은 private temp에서 준비하고 선택한 고유 PNG만 최종 입력에
 `test_kakao_study_export_storage.py`는 임시 DB의 저장본→실제 same-user child PDF→Artifact→
 재조회/다운로드·단일 claim·현재 source 거절/이력 보존·학생 혼입 거부를 검사한다. 그림 경로도
 실제 PNG/crop/PDF로 검사하지만 completed-concept/교재 byte reader는 합성 port다. protected
-UID/systemd·실제 카카오·실제 모델/교재 성공으로 보고하지 않는다. 공개 API/Studio 연결과
-실제 샘플·운영 배포는 아직 후속이다. context1.31은 target0096 및 명시적0093/94/95에서만
+UID/systemd·실제 카카오·실제 모델/교재 성공으로 보고하지 않는다. 공개 API/Studio의 저장·출력
+source는 [설명 편집](kakao-study-editing.md)이며 실제 샘플·운영 배포는 후속이다.
+context1.31은 target0096 및 명시적0093/94/95에서만
 전환/동일 head 확인을 지원한다. GPU/기존 슬롯·운영 DB에는 이 source 검사로 영향을 주지 않는다.

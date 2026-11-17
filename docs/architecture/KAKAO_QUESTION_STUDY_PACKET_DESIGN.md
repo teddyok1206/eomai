@@ -566,3 +566,29 @@ capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변
 11. 기존 Export 응답 family2는 같은 renderer/layout이므로 그대로 재사용하고 작은 study-export
     wrapper가 추가 source pin을 표현한다. 기존 DTO 전체의 serializer/구형 history를 다시 만드는
     대안보다 단순하며 exact study provenance도 잃지 않는다.
+
+## 16. 저장한 개념 자료의 공개 편집·PDF transport
+
+1. 기존 API-peer Catalog delivery RPC와 API/BFF session·CSRF를 확장한다. study/PDF owner의
+   저장·권한·재실행 규칙은 transport에 복제하지 않는다. 새 service/queue/DB 표는 없다.
+2. 정본은 study manifest와 기존 question/task/packet/Export Artifact다. 공개 read는 저장한
+   revision의 작은 metadata와 편집 값만 반환하며 전체 원문/교재/사진 bytes를 복제하지 않는다.
+3. 새 catalog-kakao-study-v1 family가 저장·조회·목록·study PDF 생성/조회 envelope를 정의한다.
+   기존 delivery1/2, study-store/export schema bytes를 바꾸지 않고 해당 값을 참조한다.
+4. 실제 API actor/session은 기존 request context에서만 얻는다. worker/chat UID에는 공개 operation을
+   열지 않는다. 저장은 EDIT, PDF 생성/다운로드는 EXPORT, 조회는 READ와 source 현재 권한을 쓴다.
+5. 정확한 study revision read와 owner/binding keyset 목록이 주요 연산이다. 기존 B-tree/index와
+   immutable revision/CAS를 재사용하며 조회 비용은 선택 편집 값과 source 검증에 선형이다.
+6. 공개 입력은 기존 typed edit/pin만 받는다. slot/권한/경로/임의 source를 받아 검색 경계를
+   우회하지 않는다. 응답도 operation/request/binding/revision/student를 대조한다.
+7. 긴 편집 body는 기존 4MiB socket 한도를 따른다. 한도를 넘은 요청/응답은 명시 거부하고
+   줄이거나 잘라 성공시키지 않는다. 사진/교재 원문은 기존 권한 검사된 별도 읽기 경계다.
+8. 저장 명령의 key와 If-Match는 API/BFF가 전달하고 실제 CAS/replay는 study owner가 수행한다.
+   완료 PDF의 GET/재조회는 새 모델·렌더를 시작하지 않는다.
+9. Studio→BFF→API→Catalog delivery→study/export owner 방향이다. BFF에는 presentation DTO와
+   응답 상관 검사만 둔다. 새 편집 framework나 교재 검색기를 만들지 않는다.
+10. 서비스 재시작/HTTP timeout 뒤 같은 key는 같은 저장본/출력이며 바뀐 본문은 conflict다.
+    source 철회·틀린 revision·경쟁 수정은 안정된 오류로 반환하고 기존 history를 보존한다.
+11. UI 임시 값만으로 PDF를 만드는 대안은 새로고침·출처·재현성을 잃는다. 이미 검증한 저장
+    owner와 PDF 경로를 얇은 transport로 공개하는 것이 최소 구현이다. 실제 모델/교재·운영
+    활성화는 이 source transport 검사와 별도의 gate로 기록한다.

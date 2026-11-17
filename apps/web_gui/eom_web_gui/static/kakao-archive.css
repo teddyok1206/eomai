@@ -45,6 +45,15 @@
 .kakao-selected-questions, .kakao-packet-form > p { flex-basis: 100%; }
 .kakao-selected-question { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .kakao-packet-detail > label { display: grid; gap: 8px; max-width: 420px; margin-block: 16px; }
+.kakao-study-editor:empty { display: none; }
+.kakao-study-editor { margin-top: 20px; padding: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
+.kakao-study-form, .kakao-study-question, .kakao-study-form fieldset { display: grid; gap: 12px; min-width: 0; }
+.kakao-study-form { margin-block: 16px; }
+.kakao-study-form fieldset { border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); padding: 16px; margin: 0; }
+.kakao-study-form label { display: grid; gap: 8px; min-width: 0; }
+.kakao-study-form input, .kakao-study-form textarea { width: 100%; min-width: 0; min-height: 40px; }
+.kakao-study-form textarea { resize: vertical; }
+.kakao-study-history { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
 .kakao-students { margin: 20px 0; padding: 20px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
 .kakao-students h2, .kakao-student-detail h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
 .kakao-student-edit { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }

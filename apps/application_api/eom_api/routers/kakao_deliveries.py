@@ -15,18 +15,32 @@ from eom_api_contracts.kakao_deliveries import (
     KakaoPacketPage,
     KakaoPacketRevise,
     KakaoPacketView,
+    KakaoStudyCreate,
+    KakaoStudyExport,
+    KakaoStudyExportCreate,
+    KakaoStudyExportMutation,
+    KakaoStudyMutation,
+    KakaoStudyPage,
+    KakaoStudyRevise,
+    KakaoStudyView,
 )
 from eom_catalog_contracts.kakao_delivery_rpc import (
     KAKAO_DELIVERY_ERRORS,
     CreateKakaoExportRequest,
+    CreateKakaoStudyExportRequest,
     KakaoDeliveryRequest,
     KakaoDeliveryResult,
     ListKakaoExportsRequest,
     ListKakaoPacketsRequest,
+    ListKakaoStudiesRequest,
     ReadKakaoExportPdfRequest,
     ReadKakaoExportRequest,
     ReadKakaoPacketRequest,
+    ReadKakaoStudyExportRequest,
+    ReadKakaoStudyRequest,
+    ReadKakaoStudySelectionRequest,
     SaveKakaoPacketRequest,
+    SaveKakaoStudyRequest,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
@@ -42,8 +56,12 @@ BindingId = Annotated[str, Query(pattern=r"^kakaobinding_[0-9a-f]{32}$")]
 PacketId = Annotated[str, Path(pattern=r"^kakaopacket_[0-9a-f]{32}$")]
 PacketRevisionId = Annotated[str, Path(pattern=r"^kakaopacketrev_[0-9a-f]{32}$")]
 ExportId = Annotated[str, Path(pattern=r"^kakaoexport_[0-9a-f]{32}$")]
+StudyId = Annotated[str, Path(pattern=r"^kakaostudy_[0-9a-f]{32}$")]
+StudyRevisionId = Annotated[str, Path(pattern=r"^kakaostudyrev_[0-9a-f]{32}$")]
+StudentId = Annotated[str, Path(pattern=r"^kakaostudent_[0-9a-f]{32}$")]
 READ = require_permission(PermissionKey.KAKAO_ARCHIVE_READ)
 EXPORT = require_permission(PermissionKey.KAKAO_ARCHIVE_EXPORT)
+EDIT = require_permission(PermissionKey.KAKAO_ARCHIVE_EDIT)
 
 
 def _identity(request: Request) -> dict[str, object]:
@@ -79,6 +97,14 @@ def _boundary() -> Iterator[None]:
             "KAKAO_ARCHIVE_BINDING_RETIRED": 409,
             "KAKAO_ARCHIVE_ROOM_RETIRED": 409,
             "KAKAO_ARCHIVE_EXPORT_NOT_COMPLETED": 409,
+            "KAKAO_STUDY_PACKET_CHANGED": 409,
+            "KAKAO_STUDY_SOURCE_CHANGED": 409,
+            "KAKAO_STUDY_QUESTION_SET_MISMATCH": 422,
+            "KAKAO_STUDY_BLOCK_SELECTION_INVALID": 422,
+            "KAKAO_STUDY_CONCEPT_QUESTION_MISMATCH": 422,
+            "KAKAO_STUDY_EXPORT_INVALID": 409,
+            "KAKAO_STUDY_CONTRACT_INVALID": 422,
+            "KAKAO_CONCEPT_RESULT_NOT_READY": 409,
         }.get(code, 503)
         raise ApiError(
             status,
@@ -350,3 +376,230 @@ def download_export(
             "ETag": '"' + value.sha256 + '"',
         },
     )
+
+
+@router.post(
+    "/studies",
+    operation_id="kakao_study_create",
+    status_code=201,
+    response_model=SingleResponse[KakaoStudyMutation],
+    dependencies=[Depends(EDIT)],
+)
+def create_study(
+    request: Request,
+    response: Response,
+    body: KakaoStudyCreate,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[KakaoStudyMutation]:
+    value = cast(
+        KakaoStudyMutation,
+        _call(
+            request,
+            SaveKakaoStudyRequest.model_validate(
+                {**_identity(request), "command": body, "idempotency_key": idempotency_key}
+            ),
+        ),
+    )
+    response.headers.update(
+        {"Cache-Control": "no-store", "ETag": etag(value.study.resource_version)}
+    )
+    return one(request, value)
+
+
+@router.patch(
+    "/studies/{study_id}",
+    operation_id="kakao_study_revise",
+    response_model=SingleResponse[KakaoStudyMutation],
+    dependencies=[Depends(EDIT)],
+)
+def revise_study(
+    request: Request,
+    response: Response,
+    study_id: StudyId,
+    body: KakaoStudyRevise,
+    authentication: Auth,
+    expected: ExpectedVersion,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[KakaoStudyMutation]:
+    if body.study_id != study_id or body.expected_resource_version != expected:
+        raise ApiError(
+            412,
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "Study version differs",
+            "Select the current study revision.",
+        )
+    value = cast(
+        KakaoStudyMutation,
+        _call(
+            request,
+            SaveKakaoStudyRequest.model_validate(
+                {**_identity(request), "command": body, "idempotency_key": idempotency_key}
+            ),
+        ),
+    )
+    response.headers.update(
+        {"Cache-Control": "no-store", "ETag": etag(value.study.resource_version)}
+    )
+    return one(request, value)
+
+
+@router.get(
+    "/studies",
+    operation_id="kakao_study_list",
+    response_model=SingleResponse[KakaoStudyPage],
+    dependencies=[Depends(READ)],
+)
+def list_studies(
+    request: Request,
+    response: Response,
+    source_binding_id: BindingId,
+    authentication: Auth,
+    limit: int = Query(default=30, ge=1, le=100),
+    cursor: str | None = Query(default=None, pattern=r"^kakaostudy_[0-9a-f]{32}$"),
+) -> SingleResponse[KakaoStudyPage]:
+    value = cast(
+        KakaoStudyPage,
+        _call(
+            request,
+            ListKakaoStudiesRequest.model_validate(
+                {
+                    **_identity(request),
+                    "source_binding_id": source_binding_id,
+                    "limit": limit,
+                    "cursor": cursor,
+                }
+            ),
+        ),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, value)
+
+
+@router.get(
+    "/studies/{study_id}/revisions/{revision_id}",
+    operation_id="kakao_study_read",
+    response_model=SingleResponse[KakaoStudyView],
+    dependencies=[Depends(READ)],
+)
+def read_study(
+    request: Request,
+    response: Response,
+    study_id: StudyId,
+    revision_id: StudyRevisionId,
+    source_binding_id: BindingId,
+    authentication: Auth,
+) -> SingleResponse[KakaoStudyView]:
+    value = cast(
+        KakaoStudyView,
+        _call(
+            request,
+            ReadKakaoStudyRequest.model_validate(
+                {
+                    **_identity(request),
+                    "source_binding_id": source_binding_id,
+                    "study_id": study_id,
+                    "study_revision_id": revision_id,
+                }
+            ),
+        ),
+    )
+    response.headers.update(
+        {"Cache-Control": "no-store", "ETag": etag(value.study.resource_version)}
+    )
+    return one(request, value)
+
+
+@router.post(
+    "/study-exports",
+    operation_id="kakao_study_export_create",
+    status_code=202,
+    response_model=SingleResponse[KakaoStudyExportMutation],
+    dependencies=[Depends(EXPORT)],
+)
+def create_study_export(
+    request: Request,
+    response: Response,
+    body: KakaoStudyExportCreate,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[KakaoStudyExportMutation]:
+    value = cast(
+        KakaoStudyExportMutation,
+        _call(
+            request,
+            CreateKakaoStudyExportRequest.model_validate(
+                {
+                    **_identity(request),
+                    "command": body,
+                    "idempotency_key": idempotency_key,
+                }
+            ),
+        ),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, value)
+
+
+@router.get(
+    "/study-exports/{export_id}",
+    operation_id="kakao_study_export_read",
+    response_model=SingleResponse[KakaoStudyExport],
+    dependencies=[Depends(READ)],
+)
+def read_study_export(
+    request: Request,
+    response: Response,
+    export_id: ExportId,
+    source_binding_id: BindingId,
+    authentication: Auth,
+) -> SingleResponse[KakaoStudyExport]:
+    value = cast(
+        KakaoStudyExport,
+        _call(
+            request,
+            ReadKakaoStudyExportRequest.model_validate(
+                {
+                    **_identity(request),
+                    "source_binding_id": source_binding_id,
+                    "export_id": export_id,
+                }
+            ),
+        ),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, value)
+
+
+@router.get(
+    "/question-packets/{packet_id}/revisions/{revision_id}/students/{student_id}/study-selection",
+    operation_id="kakao_study_selection",
+    response_model=SingleResponse[KakaoStudyCreate],
+    dependencies=[Depends(READ)],
+)
+def read_study_selection(
+    request: Request,
+    response: Response,
+    packet_id: PacketId,
+    revision_id: PacketRevisionId,
+    student_id: StudentId,
+    source_binding_id: BindingId,
+    authentication: Auth,
+) -> SingleResponse[KakaoStudyCreate]:
+    value = cast(
+        KakaoStudyCreate,
+        _call(
+            request,
+            ReadKakaoStudySelectionRequest.model_validate(
+                {
+                    **_identity(request),
+                    "source_binding_id": source_binding_id,
+                    "packet_id": packet_id,
+                    "packet_revision_id": revision_id,
+                    "student_id": student_id,
+                }
+            ),
+        ),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, value)
