@@ -16,8 +16,48 @@ from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 from eom_orchestrator import kakao_runtime_os as runtime_os
 from eom_orchestrator.kakao_download_inputs import (
     KakaoDownloadInputError,
+    list_kakao_download_ids,
+    read_kakao_download_metadata,
     read_received_kakao_download,
 )
+
+
+def test_metadata_inspection_does_not_read_or_require_payload(received):
+    arguments, _, capture, _ = received
+    (capture / "payload.bin").unlink()
+    metadata = read_kakao_download_metadata(**arguments)
+    assert metadata.receipt.phase == "RECEIVED" and metadata.observation is None
+    assert "private-original-name" not in repr(metadata)
+
+
+def test_pending_metadata_does_not_fabricate_a_terminal_result(received):
+    arguments, _, capture, _ = received
+    (capture / "result.json").unlink()
+    metadata = read_kakao_download_metadata(**arguments)
+    assert metadata.receipt is None and metadata.receipt_bytes is None
+
+
+def test_discovery_only_uses_valid_capture_ids_and_retains_incomplete_flag(received):
+    arguments, run, _, _ = received
+    values, limited = list_kakao_download_ids(
+        **{key: value for key, value in arguments.items() if key != "capture_id"}
+    )
+    assert values == (arguments["capture_id"],) and not limited
+    (run / "untrusted-name").write_bytes(b"not a receipt")
+    values, limited = list_kakao_download_ids(
+        **{key: value for key, value in arguments.items() if key != "capture_id"}
+    )
+    assert values == (arguments["capture_id"],) and limited
+
+
+def test_discovery_caps_iteration_without_reading_payloads(received):
+    arguments, run, _, _ = received
+    for number in range(1002):
+        (run / ("kakaodownload_" + f"{number:032x}")).mkdir()
+    ids, limited = list_kakao_download_ids(
+        **{k: v for k, v in arguments.items() if k != "capture_id"}
+    )
+    assert limited and len(ids) <= 1000 and ids == tuple(sorted(set(ids)))
 
 
 @pytest.fixture

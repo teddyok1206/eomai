@@ -47,7 +47,7 @@ BASE = "/api/v1/kakao-archive/questions"
 
 
 @contextmanager
-def question_api(store, tmp_path, *, actor=None, delivery=None):
+def question_api(store, tmp_path, *, actor=None, delivery=None, captures=None):
     engine, original_actor, _questions, _command, sources, artifacts, _binding = store
     actor = original_actor if actor is None else actor
     runtime = tmp_path / ("kq-" + uuid4().hex[:8])
@@ -65,6 +65,7 @@ def question_api(store, tmp_path, *, actor=None, delivery=None):
             ),
         ),
         kakao_delivery=delivery,
+        kakao_captures=captures,
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid(),
         expected_uid=os.getuid(),

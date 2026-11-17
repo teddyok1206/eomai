@@ -180,5 +180,5 @@ export function createKakaoRooms({document, api, explainError, onSelect = () => 
   async function setBinding(value) { generation++; binding = value && BINDING.test(value.source_binding_id || "") ? value : null; if (root) clear(); if (binding) await refresh(); }
   function open() { active = true; generation++; }
   function close() { active = false; generation++; binding = null; if (root) clear(); }
-  return {install, setOwner, setPermissions, setBinding, open, close, refresh};
+  return {install, setOwner, setPermissions, setBinding, open, close, refresh, select};
 }

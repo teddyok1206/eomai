@@ -15,7 +15,7 @@ import stat
 import struct
 import tempfile
 from pathlib import Path
-from typing import Any, BinaryIO, Literal, cast
+from typing import TYPE_CHECKING, Any, BinaryIO, Literal, cast
 
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
@@ -125,6 +125,7 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     delivery_contract_version,
 )
 from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
+from eom_catalog_contracts.kakao_capture_rpc import KAKAO_CAPTURE_OPERATIONS
 from eom_catalog_contracts.kakao_delivery_rpc import KAKAO_DELIVERY_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
 from eom_catalog_contracts.kakao_question_compose_rpc import COMPOSE_KAKAO_QUESTIONS
@@ -242,6 +243,7 @@ from eom_catalog_service.item_similarity_publication_service import (
 )
 from eom_catalog_service.kakao_archive_dispatch import dispatch_kakao_binding
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_capture_dispatch import dispatch_kakao_capture
 from eom_catalog_service.kakao_delivery_application import KakaoDeliveryApplication
 from eom_catalog_service.kakao_delivery_dispatch import dispatch_kakao_delivery
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
@@ -309,6 +311,8 @@ from eom_catalog_service.workflow_similarity_read_service import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from eom_catalog_service.kakao_capture_intake_service import KakaoCaptureIntakeService
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
 MAX_MESSAGE_BYTES = CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 SOCKET_MODE = CATALOG_APPLICATION_SOCKET_MODE
@@ -349,6 +353,10 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 return
             if isinstance(raw_operation, str) and raw_operation in KAKAO_MANUAL_OPERATIONS:
                 self.wfile.write(dispatch_kakao_manual(self.server.kakao_manual, value))
+                self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in KAKAO_CAPTURE_OPERATIONS:
+                self.wfile.write(dispatch_kakao_capture(self.server.kakao_captures, value))
                 self.wfile.flush()
                 return
             if isinstance(raw_operation, str) and raw_operation in KAKAO_STUDENT_OPERATIONS:
@@ -2120,6 +2128,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         kakao_questions: KakaoQuestionApplication | None = None,
         kakao_delivery: KakaoDeliveryApplication | None = None,
         kakao_manual: KakaoManualApplication | None = None,
+        kakao_captures: KakaoCaptureIntakeService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -2169,6 +2178,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.kakao_questions = kakao_questions
         self.kakao_delivery = kakao_delivery
         self.kakao_manual = kakao_manual
+        self.kakao_captures = kakao_captures
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata

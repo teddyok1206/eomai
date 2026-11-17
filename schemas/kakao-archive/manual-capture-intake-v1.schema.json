@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/manual-capture-intake-v1/1.0",
+  "oneOf": [{"$ref": "#/$defs/Page"}, {"$ref": "#/$defs/Confirm"}],
+  "$defs": {
+    "Binding": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+    "Lease": {"type": "string", "pattern": "^kakaoremotelease_[0-9a-f]{32}$"},
+    "Capture": {"type": "string", "pattern": "^kakaodownload_[0-9a-f]{32}$"},
+    "Hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "Version": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "NullableUtc": {"anyOf": [{"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"}, {"type": "null"}]},
+    "Item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["manual_lease_id", "capture_id", "started_at", "completed_at", "size_bytes", "state", "preview_sha256"],
+      "properties": {
+        "manual_lease_id": {"$ref": "#/$defs/Lease"}, "capture_id": {"$ref": "#/$defs/Capture"},
+        "started_at": {"$ref": "#/$defs/NullableUtc"}, "completed_at": {"$ref": "#/$defs/NullableUtc"},
+        "size_bytes": {"type": ["integer", "null"], "minimum": 1, "maximum": 33554432},
+        "state": {"enum": ["ROOM_IDENTITY_OBSERVED", "NOT_RECEIVED", "TRANSFER_FAILED", "NO_OBSERVATION", "ROOM_IDENTITY_UNAVAILABLE", "INPUT_UNAVAILABLE"]},
+        "preview_sha256": {"anyOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]}
+      }
+    },
+    "Page": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "binding_resource_version", "scope", "items", "truncated"],
+      "properties": {
+        "schema_version": {"const": "kakao-manual-capture-page/1.0"},
+        "source_binding_id": {"$ref": "#/$defs/Binding"},
+        "binding_resource_version": {"$ref": "#/$defs/Version"},
+        "scope": {"const": "RECENT_EIGHT_MANUAL_SESSIONS"},
+        "items": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/Item"}},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "Confirm": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source_binding_id", "manual_lease_id", "capture_id", "expected_preview_sha256", "expected_binding_version", "display_name", "channel_and_room_confirmed"],
+      "properties": {
+        "schema_version": {"const": "kakao-manual-capture-confirm/1.0"},
+        "source_binding_id": {"$ref": "#/$defs/Binding"}, "manual_lease_id": {"$ref": "#/$defs/Lease"},
+        "capture_id": {"$ref": "#/$defs/Capture"}, "expected_preview_sha256": {"$ref": "#/$defs/Hash"},
+        "expected_binding_version": {"$ref": "#/$defs/Version"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?!\\s*$)[^\\u0000-\\u001f\\u007f]+$"},
+        "channel_and_room_confirmed": {"const": true}
+      }
+    }
+  }
+}

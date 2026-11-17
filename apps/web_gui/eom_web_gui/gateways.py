@@ -166,6 +166,7 @@ from eom_web_gui.kakao_archive_contracts import (
     BindingUpdatePolicy,
     SourceBinding,
 )
+from eom_web_gui.kakao_capture_contracts import CaptureConfirm, CapturePage
 from eom_web_gui.kakao_delivery_contracts import (
     ExportCreate,
     ExportMutation,
@@ -541,6 +542,14 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def kakao_capture_list(
+        self, session: WebSession, source_binding_id: str
+    ) -> CapturePage: ...
+
+    async def kakao_capture_confirm(
+        self, session: WebSession, value: CaptureConfirm, idempotency_key: str, if_match: str
+    ) -> RoomMutation: ...
+
     async def kakao_manual_start(
         self, session: WebSession, value: ManualStart, idempotency_key: str
     ) -> ManualMutation: ...
@@ -1491,6 +1500,39 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def kakao_capture_list(self, session: WebSession, source_binding_id: str) -> CapturePage:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/manual-captures",
+            params={"source_binding_id": source_binding_id},
+        )
+        try:
+            result = CapturePage.model_validate(self._data(response))
+            if result.source_binding_id != source_binding_id:
+                raise ValueError("different capture scope")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_capture_confirm(
+        self, session: WebSession, value: CaptureConfirm, idempotency_key: str, if_match: str
+    ) -> RoomMutation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/manual-captures/confirm-room",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+        )
+        try:
+            result = RoomMutation.model_validate(self._data(response))
+            if result.room.source_binding_id != value.source_binding_id:
+                raise ValueError("different capture room")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def kakao_manual_start(
         self, session: WebSession, value: ManualStart, idempotency_key: str
     ) -> ManualMutation:

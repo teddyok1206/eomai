@@ -2,6 +2,7 @@
 import {createKakaoStudents} from "./kakao-students.js";
 import {createKakaoRooms} from "./kakao-rooms.js";
 import {createKakaoManual} from "./kakao-manual.js";
+import {createKakaoCaptures} from "./kakao-captures.js";
 import {createKakaoPublications} from "./kakao-publications.js";
 import {createKakaoQuestionComposer} from "./kakao-question-composer.js";
 const BASE = "/kakao-archive";
@@ -76,6 +77,12 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
     void loadQuestions(token).catch(error => { if (live(token)) message(explainError(error), true); });
   }});
+  const captures = createKakaoCaptures({document, api, explainError, onConfirmed: async row => {
+    const token = generation;
+    if (!live(token) || row.source_binding_id !== binding?.source_binding_id) return;
+    await rooms.refresh();
+    if (live(token) && row.source_binding_id === binding?.source_binding_id) await rooms.select(row.room_id);
+  }});
 
   function node(tag, text, className = "") {
     const result = document.createElement(tag);
@@ -115,6 +122,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     binding = null; run = null; currentRoom = null; runGeneration++; questionListGeneration++;
     void rooms.setBinding(null); questionRows.clear();
     void manual.setBinding(null);
+    captures.setBinding(null);
     void publications.setBinding(null);
     composer.setBinding(null);
     nodes.connection.replaceChildren(); nodes.run.replaceChildren();
@@ -177,9 +185,10 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     publications.install(nodes.packets);
     nodes.students = node("section"); students.install(nodes.students);
     nodes.manual = node("section"); manual.install(nodes.manual);
+    nodes.captures = node("section"); captures.install(nodes.captures);
     nodes.composer = node("section", undefined, "kakao-question-composer"); composer.install(nodes.composer);
     rooms.install(nodes.rooms);
-    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.students, nodes.run, work, nodes.composer, publicationSection);
+    root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.captures, nodes.students, nodes.run, work, nodes.composer, publicationSection);
     clearDetails(); syncBootstrapControls();
   }
 
@@ -329,6 +338,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       binding = detail; nodes.bindings.value = value;
       await rooms.setBinding(detail);
       await manual.setBinding(detail);
+      captures.setBinding(detail);
       await publications.setBinding(detail);
       composer.setBinding(detail);
       if (!live(token)) return;
@@ -574,6 +584,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     students.setOwner(next);
     rooms.setOwner(next);
     manual.setOwner(next);
+    captures.setOwner(next);
     publications.setOwner(next);
     composer.setOwner(next);
     owner = next || null; permissions = new Set(); roles = new Set();
@@ -584,6 +595,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     students.setPermissions(values);
     rooms.setPermissions(values);
     manual.setPermissions(values);
+    captures.setPermissions(values);
     publications.setPermissions(values);
     composer.setPermissions(values);
     permissions = new Set(values);
@@ -593,15 +605,17 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
   }
   function setRoles(values) {
     manual.setRoles(values);
+    captures.setRoles(values);
     roles = new Set(values); generation++; listGeneration++; stopTimer();
     if (installed) clearPrivateView();
     if (active && owner && allowed("read")) void refresh();
   }
-  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); publications.open(); composer.open(); await Promise.all([refresh(), students.open()]); }
+  async function open() { install(); active = true; generation++; rooms.open(); manual.open(); captures.open(); publications.open(); composer.open(); await Promise.all([refresh(), students.open()]); }
   function close() {
     students.close();
     rooms.close();
     manual.close();
+    captures.close();
     publications.close();
     composer.close();
     active = false; generation++; listGeneration++; stopTimer();

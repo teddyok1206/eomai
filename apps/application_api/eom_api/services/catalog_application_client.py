@@ -206,6 +206,19 @@ from eom_catalog_contracts.kakao_archive_rpc import (
     parse_kakao_binding_reply,
     parse_kakao_binding_request,
 )
+from eom_catalog_contracts.kakao_capture_intake import (
+    ConfirmKakaoManualCapture,
+    KakaoManualCapturePage,
+)
+from eom_catalog_contracts.kakao_capture_rpc import (
+    ConfirmKakaoCaptureRequest,
+    KakaoCaptureFailure,
+    KakaoCaptureRequest,
+    ListKakaoCapturesRequest,
+    check_kakao_capture_reply,
+    parse_kakao_capture_reply,
+    parse_kakao_capture_request,
+)
 from eom_catalog_contracts.kakao_delivery_rpc import (
     KakaoDeliveryFailure,
     KakaoDeliveryRequest,
@@ -432,6 +445,41 @@ class CatalogApplicationClient:
             {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
         )
         return cast(KakaoBindingMutation, self._request_kakao_binding(request))
+
+    def list_kakao_manual_captures(
+        self, source_binding_id: str, *, actor: ActorContext
+    ) -> KakaoManualCapturePage:
+        request = ListKakaoCapturesRequest.model_validate(
+            {**self._kakao_identity(actor), "source_binding_id": source_binding_id}
+        )
+        return cast(KakaoManualCapturePage, self._request_kakao_capture(request))
+
+    def confirm_kakao_manual_capture(
+        self, command: ConfirmKakaoManualCapture, *, actor: ActorContext, idempotency_key: str
+    ) -> KakaoRoomMutation:
+        request = ConfirmKakaoCaptureRequest.model_validate(
+            {**self._kakao_identity(actor), "command": command, "idempotency_key": idempotency_key}
+        )
+        return cast(KakaoRoomMutation, self._request_kakao_capture(request))
+
+    def _request_kakao_capture(
+        self, request: KakaoCaptureRequest
+    ) -> KakaoManualCapturePage | KakaoRoomMutation:
+        try:
+            parsed = parse_kakao_capture_request(request.model_dump(mode="json"))
+            reply = parse_kakao_capture_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"), timeout_seconds=RESPONSE_TIMEOUT_SECONDS
+                )
+            )
+            check_kakao_capture_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private capture response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoCaptureFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private capture request failed")
+        return reply.result
 
     def command_kakao_binding(
         self,

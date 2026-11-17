@@ -3,6 +3,36 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## Studio 수신 자료 확인 — 2026-11-16
+
+기존 owner의 `KakaoRoomIntakeService.confirm_room`을 공개 경계에 연결한다. GET은 현재
+관리자의 선택 binding에 속한 최근8개 MANUAL lease의 로컬 receipt만 bounded하게 읽는다.
+각 lease 최대1,000개 directory entry, 전체50개 항목 상한을 두고 잘린 목록은 명시한다.
+이는 최근 수신물 선택 화면이지 전체 방 inventory·수집 완전성·본문 검증 증거가 아니다.
+목록은 사진/CSV bytes를 읽지 않으며 각 항목에 원래 lease/capture ID와 시각·상태만 둔다.
+
+외부 파일은 기존 Orchestrator 로컬 입력 adapter가 UID/GID/mode·종류/link·원래 fence/run
+marker·receipt/관측 identity를 검사한다. 공개 응답에는 URL·provider key·인증정보·DOM
+본문·파일 경로를 넣지 않는다. room path를 실제로 관측한 항목만 작은 preview hash를 준다.
+확인 POST는 화면의 hash·binding version·사용자의 채널/방 확인을 받고 기존 private
+confirmation을 서버에서 구성한다. hash는 권한 token이 아니며 실제 사용자 권한과 원래
+lease를 다시 검사한다. 수락 시에만 실제 payload hash를 읽어 확인한다. 파일명이 room이나
+메시지 identity가 되지 않는다. 실제 CSV/사진 source 수락·학생 연결·AUTO 활성화와 구분한다.
+
+정본은 기존 room intake proof/observation Artifact와 admission receipt다. 새 DB/queue/cache는
+추가하지 않으며 같은 key 완료 재조회는 canonical proof에서 원래 입력을 복원한다. local
+workspace가 사라져도 완료 receipt를 새로 만들지 않는다. 미완료 확인은 현재 metadata를
+다시 대조하며 준비 hash가 바뀌면 명시적으로 거부한다. 파일 I/O 동안 DB lock은 없다.
+
+주요 접근은 기존 owner index로 범위를 제한한 binding의 recent lease 조회와 bounded
+directory iteration, capture ID exact lookup다. 사용자 MANUAL 이력 M(일반적으로1,000 미만)의
+top8 정렬은 O(M log8), lease8/capture50 metadata 읽기와 작은 O(n log n) 시각 정렬이다.
+AUTO 주기 수집 이력 전체를 이 UI 조회로 스캔하지 않는다. 실측상 M이 커져 병목이면 현재
+query plan을 보고 owner/binding/시각 composite index를 검토한다. payload 복사·원문 parse·
+모델 실행은 없다. 기존 Catalog API-peer socket →
+API → Studio BFF를 사용한다. worker가 DB/NAS를 쓰거나 공용 shell/browser 명령을 받지 않는다.
+임의 경로/JSON 업로드로 기존 owner를 우회하는 더 단순한 대안은 권한·원래 수신 증거가 없다.
+
 ## 수집 attempt와 source 수락 연결 — 2026-11-16
 
 기존 run/room task와 공유 browser epoch에 최초 attempt를 하나씩 예약한다. 별도 큐나

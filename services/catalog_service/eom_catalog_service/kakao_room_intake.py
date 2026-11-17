@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eom_catalog_contracts.kakao_capture_intake import manual_capture_preview_sha256
 from eom_catalog_contracts.kakao_room_intake import (
     MANUAL_ROOM_EVIDENCE_REF,
     ConfirmKakaoManualRoom,
@@ -48,11 +50,34 @@ from .kakao_manual_capture_access import OwnedManualCaptureRun, authorize_owned_
 from .kakao_room_intake_models import KakaoManualChannelPinRecord
 from .kakao_room_models import KakaoRoomAdmissionRecord
 from .kakao_room_service import KakaoRoomService
-from .kakao_source_pointers import validate_source_pointer_metadata
+from .kakao_source_pointers import (
+    validate_source_pointer_metadata,
+    validate_source_pointer_metadata_batch,
+)
 
 DownloadReader = Callable[[ProfileFence, str], ReceivedKakaoDownload]
 _RECEIPT_REF = "eom://schemas/kakao-archive/manual-download-v1/1.0"
 _OBSERVATION_REF = "eom://schemas/kakao-archive/manual-page-observation-v1/1.0"
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedKakaoRoomConfirmation:
+    proof: KakaoManualRoomEvidence
+    observation: KakaoRoomObservation
+    evidence: ArtifactMemberPointer
+
+
+def room_confirmation_preview_sha256(proof: KakaoManualRoomEvidence) -> str:
+    command = proof.confirmation
+    return manual_capture_preview_sha256(
+        owner=proof.owner_operator_id,
+        binding=command.source_binding_id,
+        lease=command.manual_lease_id,
+        capture=command.capture_id,
+        receipt_sha256=proof.receipt_sha256,
+        observation_sha256=proof.observation_sha256,
+        room_identity_sha256=proof.source_identity_sha256,
+    )
 
 
 class KakaoRoomIntakeService:
@@ -186,22 +211,56 @@ class KakaoRoomIntakeService:
             sha256=artifact.content_hash,
         )
 
+    def get_confirmation(
+        self, actor: ActorContext, source_binding_id: str, *, idempotency_key: str
+    ) -> AcceptedKakaoRoomConfirmation | None:
+        prior = self.rooms.get_admission_evidence(
+            actor, source_binding_id, idempotency_key=idempotency_key
+        )
+        if prior is None:
+            return None
+        observation = self._read_model(prior, ROOM_OBSERVATION_REF, KakaoRoomObservation)
+        proof = self._read_model(
+            observation.source_evidence, MANUAL_ROOM_EVIDENCE_REF, KakaoManualRoomEvidence
+        )
+        with self._sessions.begin() as session:
+            current = authorize_owned_manual_capture(session, actor, proof.confirmation)
+            current.validate_evidence(proof)
+            if (
+                proof.confirmation.source_binding_id,
+                observation.source_binding_id,
+                observation.source_identity_sha256,
+                observation.display_name,
+            ) != (
+                source_binding_id,
+                source_binding_id,
+                proof.source_identity_sha256,
+                proof.confirmation.display_name,
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
+            validate_source_pointer_metadata_batch(session, (prior, observation.source_evidence))
+        return AcceptedKakaoRoomConfirmation(proof, observation, prior)
+
     def confirm_room(
-        self, actor: ActorContext, command: ConfirmKakaoManualRoom, *, idempotency_key: str
+        self,
+        actor: ActorContext,
+        command: ConfirmKakaoManualRoom,
+        *,
+        idempotency_key: str,
+        expected_preview_sha256: str | None = None,
     ) -> KakaoRoomMutation:
         command = ConfirmKakaoManualRoom.model_validate(command.model_dump(mode="json"))
         key = validate_kakao_idempotency_key(idempotency_key)
-        prior = self.rooms.get_admission_evidence(
-            actor, command.source_binding_id, idempotency_key=key
-        )
+        prior = self.get_confirmation(actor, command.source_binding_id, idempotency_key=key)
         if prior is not None:
-            observation = self._read_model(prior, ROOM_OBSERVATION_REF, KakaoRoomObservation)
-            proof = self._read_model(
-                observation.source_evidence, MANUAL_ROOM_EVIDENCE_REF, KakaoManualRoomEvidence
-            )
+            proof, observation, evidence = prior.proof, prior.observation, prior.evidence
             if proof.confirmation != command:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
-            evidence = prior
+            if (
+                expected_preview_sha256 is not None
+                and room_confirmation_preview_sha256(proof) != expected_preview_sha256
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
         else:
             context = self._context(actor, command)
             if context.binding_version != command.expected_binding_version:
@@ -211,6 +270,11 @@ class KakaoRoomIntakeService:
             except KakaoDownloadInputError:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_MANUAL_CAPTURE_UNAVAILABLE") from None
             proof = self._evidence(context, command, captured)
+            if (
+                expected_preview_sha256 is not None
+                and room_confirmation_preview_sha256(proof) != expected_preview_sha256
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
 
             def authorize() -> None:
                 current = self._context(actor, command)

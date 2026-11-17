@@ -8,6 +8,16 @@
       "note": "kakao-collection.md",
       "keywords": ["KakaoTalk", "수집", "프로필", "AUTO", "MANUAL", "epoch", "수집 재개"],
       "source_paths": [
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_capture_intake.py",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_capture_rpc.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_intake_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_dispatch.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_composition.py",
+        "services/catalog_service/eom_catalog_service/kakao_manual_capture_access.py",
+        "services/orchestrator/eom_orchestrator/kakao_download_inputs.py",
+        "apps/application_api/eom_api/routers/kakao_captures.py",
+        "apps/web_gui/eom_web_gui/kakao_capture_routes.py",
+        "apps/web_gui/eom_web_gui/static/kakao-captures.js",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_attempt.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_attempt_models.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_attempt_service.py",
@@ -28,6 +38,10 @@
         "services/orchestrator/eom_orchestrator/kakao_profile_observation.py"
       ],
       "test_paths": [
+        "tests/unit/test_kakao_capture_rpc.py",
+        "tests/integration/test_kakao_capture_intake.py",
+        "tests/unit/test_kakao_download_inputs.py",
+        "tests/web_gui/test_kakao_archive_browser.py",
         "tests/unit/test_kakao_collection_attempt_contracts.py",
         "tests/integration/test_kakao_collection_attempt_storage.py",
         "tests/unit/test_kakao_collection_browser_contracts.py",

@@ -17,6 +17,7 @@ import pytest
         ("kakao_students_browser_checks.mjs", "KAKAO_STUDENTS_BROWSER=PASS"),
         ("kakao_rooms_browser_checks.mjs", "KAKAO_ROOMS_BROWSER=PASS"),
         ("kakao_manual_browser_checks.mjs", "KAKAO_MANUAL_BROWSER=PASS"),
+        ("kakao_captures_browser_checks.mjs", "KAKAO_CAPTURES_BROWSER=PASS"),
         ("kakao_question_composer_browser_checks.mjs", "KAKAO_QUESTION_COMPOSER_BROWSER=PASS"),
     ],
 )

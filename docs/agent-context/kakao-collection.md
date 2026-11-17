@@ -4,6 +4,21 @@
 [KakaoTalk 보관](kakao-archive.md), 정본 설계는
 [수집 실행 경계](../architecture/KAKAO_COLLECTION_EXECUTION_BOUNDARY.md)를 먼저 본다.
 
+## Studio 수신물 확인
+
+`kakao_capture_intake_service.py`는 기존 room intake owner를 최근 수신물 선택에 연결한다.
+`kakao_download_inputs.py`의 metadata-only reader/list와 실제 payload materialization을
+분리한다. 목록은 최근 MANUAL8개/최대50건이고 complete inventory가 아니다. 공개 DTO에는
+provider key·경로·DOM·파일명·본문·인증정보를 넣지 않는다. `manual-capture-intake-v1`의
+preview hash와 사용자 확인은 원래 입력을 pin할 뿐 권한 token이 아니다.
+
+`kakao_capture_rpc.py`/dispatch → 기존 API-peer socket → API `kakao_captures.py` →
+Web `kakao_capture_routes.py`/gateway → `static/kakao-captures.js` 순이다. 현재 owner/admin/
+COLLECT와 원래 lease/fence를 파일 I/O 뒤에도 검사한다. 확인 POST만 payload를 읽으며
+기존 room proof·admission을 재사용한다. 완료 replay는 canonical proof를 읽어 local 파일
+삭제와 분리한다. 새 학생/질문/source 수락·capability 승격·AUTO 시작은 수행하지 않는다.
+화면은 불확실한 응답의 key/body를 유지하고 다른 owner/binding의 늦은 목록을 표시하지 않는다.
+
 ## 담당 코드
 
 `kakao_room_intake.py`와 `kakao_capability_service.py`가 실제 MANUAL 수신 관측을 기존

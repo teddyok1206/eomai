@@ -1,5 +1,41 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 Studio 수신 자료 목록 → 방 확인 저장
+
+- 최근 MANUAL 세션의 수신 receipt를 `일반 → KakaoTalk`에서 조회하고, 사용자가 채널·방을
+  명시적으로 확인한 항목을 기존 `KakaoRoomIntakeService`로 저장하는 경로를 연결했다.
+  실제 BFF → API → API-peer 전용 Catalog socket → application owner → PostgreSQL을
+  익명 합성 입력으로 검증했다. 목록은 최근8개 세션/전체50건, 세션당 directory entry1,000개
+  상한이며 잘린 목록을 표시한다. GET은 사진·CSV payload를 읽거나 카카오를 조작하지 않는다.
+- schema/mirror를 먼저 정의했고 공개 DTO에는 URL/provider key/파일 경로/원본 파일명/DOM/
+  인증정보를 넣지 않았다. preview SHA는 원래 receipt/관측/owner/binding/lease/capture를
+  고정할 뿐 실행 권한이 아니다. 현재 ADMIN/COLLECT·owner·binding과 원래 fence/관측을
+  I/O 뒤에도 다시 검사한다. 기존 room proof/Artifact와 admission을 재사용하며 새 테이블,
+  migration, queue, cache, service, dependency 또는 Codex 슬롯은 추가하지 않았다.
+- 확인 POST에서만 실제 payload를 읽어 검증한다. 완료 요청은 canonical proof를 읽으므로
+  로컬 workspace가 제거된 뒤에도 원래 room과 receipt를 재조회한다. 같은 key의 다른 입력,
+  stale preview/ETag, 확인란 false, 타 계정/late 권한 철회는 거부한다. CSRF 없이 저장하지 않는다.
+  방 저장은 CSV/사진 source 수락·학생 연결·질문 생성·capability 승격·AUTO 시작과 다르다.
+- 실제 headless Chromium의 합성 화면에서 응답 유실 뒤 동일 body/key 재확인·중복 저장 없음,
+  새로고침 후 요청 재전송 없음, 다른 owner의 늦은 응답 차단, 390px 화면을 검증했다.
+  기존 MANUAL download의 미완료/실패/보호 경로 검사도 유지한다. 과거 실제 수신3건은
+  DOM 관측 도입 전 자료이므로 이 화면에서도 `NO_OBSERVATION`이며 방 근거를 소급 생성하지 않는다.
+- 최종 guarded disposable PostgreSQL **262 PASS**(새 HTTP/owner7개 포함), 실제 Chromium/
+  새 RPC/로컬 입력 회귀 **61 PASS**, room/collection 계약·offline platform wheel 회귀
+  **141 PASS**다. 이 수치는 서로 겹치는 범위가 있으므로 합산하지 않는다. strict mypy15개,
+  Ruff/format26개, shell syntax, OpenAPI 비파괴 비교와 schema audit1475/1121/12686 PASS다.
+  기존 Starlette TestClient deprecation warning1건은 남는다. 운영 DB에 테스트하지 않았다.
+- 개발 중 HTTP fixture의 중복 임시 디렉터리, browser fixture의 새 asset 누락, false 확인란이
+  schema 예외로 빠지는 문제를 각각 fixture 재사용·asset 목록 정렬·명시적 입력 검증으로 수정했다.
+  권한 guard나 immutable trigger를 끄지 않았으며 이 실패들을 실제 카카오 장애로 분류하지 않는다.
+- **이번 체크포인트는 소스 검증이며 아직 운영 미반영**이다. source head0093과 기존 운영
+  DB0087의 차이가 있으므로 기존0087 전용 release operator로 설치하지 않는다. 새 호환 release
+  검토·설치본 검증 후 배포한다. 실제 browser/remote는 MainPID0·inactive·정상 종료를 확인했고
+  새 로그인·카카오 클릭·메시지 전송·GPU INDEX/QUERY 변경을 하지 않았다.
+- 다음은 호환 설치 준비와 새 실제 관측의 연결이다. 실제 한 방 CSV/사진 occurrence→학생 PDF,
+  전체 방 inventory·selector·주기 실행은 아직 미완료이며 합성 PASS로 대체하지 않는다.
+  실행 방식은 기존 고정 Playwright adapter, Codex는 개발/진단이라는 결정을 유지한다.
+
 ## 2026-11-16 collection command/result에서 기존 원본 등록으로 연결
 
 - `collection-attempt-v1` schema/mirror를 먼저 정의하고 기존 room task와 RUNNING browser

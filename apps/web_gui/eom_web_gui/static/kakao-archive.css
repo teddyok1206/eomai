@@ -70,4 +70,8 @@
 .kakao-room-edit input, .kakao-room-edit select { width: 100%; min-width: 0; }
 .kakao-manual { padding: 16px 0; border-block-end: 1px solid var(--eom-border); }
 .kakao-manual[hidden] { display: none; }
+.kakao-capture-intake { padding-block: 16px; border-block-end: 1px solid var(--eom-border); }
+.kakao-capture-intake[hidden], .kakao-capture-intake form[hidden] { display: none; }
+.kakao-capture-intake .kakao-retire-confirm { display: flex; align-items: center; flex-basis: 100%; max-width: none; }
+.kakao-capture-intake input[type="checkbox"] { width: 20px; min-height: 20px; flex: 0 0 20px; margin: 0; }
 .kakao-manual-viewport iframe { display: block; width: 100%; height: min(70vh, 720px); border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
