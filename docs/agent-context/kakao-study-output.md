@@ -24,9 +24,19 @@ metadata는 선택된 occurrence만 포함하며 role/kind/raw date/timezone/검
 새 projection은 임의 notes/citation 인자를 받지 않으며 저장한 원본 질문만 변환한다.
 권한·Artifact I/O·발행은 호출하는 기존 application owner가 담당한다.
 
-새 schema/DTO/projection은 아직 고정 worker entry·export profile·API/Web에 활성 연결한
-상태가 아니다. 이를 새 PDF 완성이나 실제 카카오 자동 수집 성공으로 보고하지 않는다.
-source의 source/합성 검증과 protected renderer·실제 계정 end-to-end 증거를 구분한다.
+`worker-study-layout-v1`은 기존 page geometry와 공통 `check_page_layout`을 재사용한다.
+`study_layout.build_study_sections`가 역할별 순서·기록 정보·보강 출처 표시의 순수 owner다.
+`check_study_layout`은 원문 span 범위를 순차 소비해 누락/중복·다른 질문/학생 pin을 거부한다.
+
+worker `study_pages.py`는 학생 사진/질문1쪽과11pt 답변/보강 흐름을 계획한다. `study_pdf.py`가
+기존 `question_pdf`의 이미지 cache·PDF/PNG writer·glyph/readback·로컬 commit을 재사용한다.
+`cli.py`는 exact schema family로 두 입력을 구분하며 모르는 family를 최신으로 추정하지 않는다.
+원문 crop/삭제나 질문의 임의 다중 쪽 전환 대신 검토 상태를 반환한다.
+
+새 family의 소스 CLI와 격리된 non-editable wheel PDF 검증은 가능하지만, **운영의 고정
+executor/export profile·저장/API/Web에는 아직 활성 연결하지 않았다**. 실제 카카오 자동 수집/
+운영 PDF 성공으로 보고하지 않는다. 기존 v1 의미와 bytes, 실패/완료 기록은 유지한다.
+다음은 기존 materialization/executor/publication owner에 exact family를 연결하는 것이다.
 
 ## 확인할 검사
 
@@ -35,6 +45,9 @@ source의 source/합성 검증과 protected renderer·실제 계정 end-to-end �
 - `test_kakao_study_projection.py`: 학생/조교 사진 분리, 같은 binary의 독립 use,
   exact 원문/시각·학생 격리·reply 선택·없는/잘못된 source/media pin.
 - 기존 `test_kakao_render_projection.py`/`test_kakao_question_render.py`: v1 의미·출력 회귀.
+- `test_kakao_study_pdf.py`: 실제 한글 PDF, 학생/조교 사진 분리·같은 member 재사용,
+  긴 답변의 CRLF/combining 원문 범위·11pt 흐름, 기록 정보/출처, 누락 사진·overflow,
+  stale pin·위조 coverage·순서·입력/출력 경계와 CLI family 선택.
 - `test_kakao_stored_student_pdf.py`: 공식 guarded 임시 DB의 저장/재구성된 학생 subset을
   새 projection으로 읽으며, 이미 고정한 v1 입력을 덮지 않는지 확인한다.
 

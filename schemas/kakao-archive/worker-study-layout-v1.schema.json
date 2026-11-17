@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/worker-study-layout/1.0",
+  "$defs": {
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span_id",
+        "start_codepoint",
+        "end_codepoint"
+      ],
+      "properties": {
+        "span_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "start_codepoint": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20000
+        },
+        "end_codepoint": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "supplement_id",
+        "spans",
+        "layout"
+      ],
+      "properties": {
+        "section": {
+          "enum": [
+            "STUDENT",
+            "STAFF",
+            "SUPPLEMENT"
+          ]
+        },
+        "supplement_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "spans": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/span"
+          }
+        },
+        "layout": {
+          "$ref": "eom://schemas/kakao-archive/worker-question-layout/1.0#/$defs/page"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "section": {
+                "const": "SUPPLEMENT"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "supplement_id": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "supplement_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command_sha256",
+    "manifest_sha256",
+    "font_sha256",
+    "source_binding_id",
+    "packet_revision_id",
+    "study_revision_id",
+    "student_id",
+    "subset_sha256",
+    "layout_policy",
+    "renderer_release_sha256",
+    "mode",
+    "pages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kakao-study-layout-receipt/1.0"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/sha256"
+    },
+    "manifest_sha256": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/sha256"
+    },
+    "font_sha256": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/sha256"
+    },
+    "source_binding_id": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/binding"
+    },
+    "packet_revision_id": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/packetrev"
+    },
+    "study_revision_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^kakaostudyrev_[0-9a-f]{32}$"
+    },
+    "student_id": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/student"
+    },
+    "subset_sha256": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/sha256"
+    },
+    "layout_policy": {
+      "const": "student-study-a4/1.0"
+    },
+    "renderer_release_sha256": {
+      "$ref": "eom://schemas/kakao-archive/worker-question-render/1.0#/$defs/sha256"
+    },
+    "mode": {
+      "enum": [
+        "DRAFT",
+        "FINAL"
+      ]
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    }
+  }
+}

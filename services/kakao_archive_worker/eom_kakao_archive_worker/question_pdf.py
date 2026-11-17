@@ -13,9 +13,9 @@ import math
 import os
 import unicodedata
 from contextlib import ExitStack
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pymupdf  # type: ignore[import-untyped]
 from eom_kakao_archive_contracts import (
@@ -31,7 +31,11 @@ from eom_kakao_archive_contracts import (
     canonical_bytes,
     sha256,
 )
-from eom_kakao_archive_contracts.layout import RenderLayoutReceipt, check_layout_receipt
+from eom_kakao_archive_contracts.layout import (
+    PageLayoutReceipt,
+    RenderLayoutReceipt,
+    check_layout_receipt,
+)
 from eom_kakao_archive_contracts.render import render_input_members
 from eom_kakao_archive_contracts.validation import validate_contract
 from PIL import Image, ImageOps
@@ -383,6 +387,76 @@ def render_questions(
     return result
 
 
+@dataclass(frozen=True, slots=True)
+class QuestionPagePlan:
+    question: RenderQuestion = field(repr=False)
+    header: str = field(repr=False)
+    images: tuple[tuple[bytes | None, tuple[int, int]], ...] = field(repr=False)
+    layout: PageLayout = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedQuestionPages:
+    pdf: bytes = field(repr=False)
+    previews: tuple[bytes, ...] = field(repr=False)
+    pages: tuple[PageLayoutReceipt, ...]
+
+
+@dataclass(slots=True)
+class RenderImageCache:
+    input_root: Path = field(repr=False)
+    _cache: dict[
+        tuple[LocalMember, RenderImageTransform | None], tuple[bytes, tuple[int, int], int]
+    ] = field(default_factory=dict, init=False, repr=False)
+    _pixels: int = field(default=0, init=False)
+    _display_bytes: int = field(default=0, init=False)
+
+    def load(
+        self, image: RenderImage, *, mode: Literal["DRAFT", "FINAL"], question_revision_id: str
+    ) -> tuple[bytes | None, tuple[int, int]]:
+        if image.member is None:
+            if mode == "FINAL":
+                raise LayoutReview("REQUIRED_IMAGE_UNAVAILABLE", question_revision_id)
+            return None, (400, 400)
+        if mode == "FINAL" and not image.quality_accepted:
+            raise LayoutReview("IMAGE_QUALITY_REVIEW_REQUIRED", question_revision_id)
+        key = (image.member, image.transform)
+        if key not in self._cache:
+            raw, dimensions, pixels = _image_bytes(self.input_root, image)
+            self._pixels += pixels
+            self._display_bytes += len(raw)
+            if self._pixels > MAX_TOTAL_PIXELS or self._display_bytes > MAX_DISPLAY_BYTES:
+                raise ValueError("KAKAO_RENDER_DISPLAY_BUDGET_EXCEEDED")
+            self._cache[key] = (raw, dimensions, pixels)
+        raw, dimensions, _ = self._cache[key]
+        return raw, dimensions
+
+
+def plan_question_page(
+    question: RenderQuestion,
+    header: str,
+    *,
+    mode: Literal["DRAFT", "FINAL"],
+    cache: RenderImageCache,
+    font: Any,
+) -> QuestionPagePlan:
+    _check_glyphs(font, header)
+    if font.text_length(header, fontsize=11) > PAGE_WIDTH - 2 * MARGIN:
+        raise LayoutReview("HEADER_OVERFLOW", question.question_revision_id)
+    for block in question.text_blocks:
+        try:
+            _check_glyphs(font, block.text)
+        except LayoutReview as error:
+            raise LayoutReview(error.code, question.question_revision_id) from error
+    images = tuple(
+        cache.load(image, mode=mode, question_revision_id=question.question_revision_id)
+        for image in question.images
+    )
+    layout = _layout(question, font, tuple(size for _, size in images))
+    _validate_text_coverage(question, layout)
+    return QuestionPagePlan(question, header, images, layout)
+
+
 def _render(
     command: RenderCommand,
     manifest: RenderManifest,
@@ -393,10 +467,7 @@ def _render(
 ) -> tuple[LocalMember, ...]:
     _check_glyphs(font, manifest.student_display_name + "검토용 질문 미확보 사진")
     plans = []
-    image_cache: dict[
-        tuple[LocalMember, RenderImageTransform | None], tuple[bytes, tuple[int, int], int]
-    ] = {}
-    total_pixels, total_display_bytes = 0, 0
+    cache = RenderImageCache(input_root)
     for number, question in enumerate(manifest.questions, 1):
         date_label = (
             question.header_date.isoformat()
@@ -406,41 +477,38 @@ def _render(
         header = f"{manifest.student_display_name} · 질문 {number} · {date_label}"
         if manifest.mode == "DRAFT":
             header = "[검토용] " + header
-        _check_glyphs(font, header)
-        if font.text_length(header, fontsize=11) > PAGE_WIDTH - 2 * MARGIN:
-            raise LayoutReview("HEADER_OVERFLOW", question.question_revision_id)
-        for block in question.text_blocks:
-            try:
-                _check_glyphs(font, block.text)
-            except LayoutReview as exc:
-                raise LayoutReview(exc.code, question.question_revision_id) from exc
-        images: list[tuple[bytes | None, tuple[int, int]]] = []
-        for image in question.images:
-            if image.member is None:
-                if manifest.mode == "FINAL":
-                    raise LayoutReview("REQUIRED_IMAGE_UNAVAILABLE", question.question_revision_id)
-                images.append((None, (400, 400)))
-            else:
-                if manifest.mode == "FINAL" and not image.quality_accepted:
-                    raise LayoutReview(
-                        "IMAGE_QUALITY_REVIEW_REQUIRED", question.question_revision_id
-                    )
-                cache_key = (image.member, image.transform)
-                if cache_key not in image_cache:
-                    display, dimensions, decoded_pixels = _image_bytes(input_root, image)
-                    total_pixels += decoded_pixels
-                    total_display_bytes += len(display)
-                    if total_pixels > MAX_TOTAL_PIXELS or total_display_bytes > MAX_DISPLAY_BYTES:
-                        raise ValueError("KAKAO_RENDER_DISPLAY_BUDGET_EXCEEDED")
-                    image_cache[cache_key] = (display, dimensions, decoded_pixels)
-                display, dimensions, _ = image_cache[cache_key]
-                images.append((display, dimensions))
-        layout = _layout(question, font, tuple(size for _, size in images))
-        _validate_text_coverage(question, layout)
-        plans.append((question, header, images, layout))
+        plans.append(
+            plan_question_page(question, header, mode=manifest.mode, cache=cache, font=font)
+        )
+    rendered = render_planned_question_pages(tuple(plans), font=font, font_bytes=font_bytes)
+    receipt = canonical_bytes(
+        {
+            "schema_version": "kakao-question-layout-receipt/1.0",
+            "command_sha256": sha256(canonical_bytes(command.model_dump(mode="json"))),
+            "manifest_sha256": command.manifest.sha256,
+            "font_sha256": command.font.sha256,
+            "layout_policy": command.layout_policy,
+            "renderer_release_sha256": command.renderer_release_sha256,
+            "mode": command.mode,
+            "pages": [value.model_dump(mode="json") for value in rendered.pages],
+        }
+    )
+    decoded_receipt = json.loads(receipt)
+    validate_contract("layout", decoded_receipt)
+    check_layout_receipt(command, manifest, RenderLayoutReceipt.model_validate(decoded_receipt))
+    return write_rendered_outputs(output_root, rendered, receipt)
+
+
+def render_planned_question_pages(
+    plans: tuple[QuestionPagePlan, ...], *, font: Any, font_bytes: bytes
+) -> RenderedQuestionPages:
+    """Shared PDF/PNG writer; callers validate their own complete layout family."""
     pages = []
+    display_hashes: dict[bytes, str] = {}
+    image_xrefs: dict[bytes, int] = {}
     with pymupdf.open() as document:
-        for number, (question, header, images, layout) in enumerate(plans, 1):
+        for number, plan in enumerate(plans, 1):
+            question, header, images, layout = plan.question, plan.header, plan.images, plan.layout
             page = document.new_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
             page.insert_font(fontname="KakaoFont", fontbuffer=font_bytes)
             page.insert_text((MARGIN, 52), header, fontname="KakaoFont", fontsize=11)
@@ -475,18 +543,27 @@ def _render(
                             fontsize=11,
                         )
                     else:
-                        page.insert_image(rectangle, stream=raw, keep_proportion=True)
+                        if raw in image_xrefs:
+                            page.insert_image(
+                                rectangle, xref=image_xrefs[raw], keep_proportion=True
+                            )
+                        else:
+                            image_xrefs[raw] = page.insert_image(
+                                rectangle, stream=raw, keep_proportion=True
+                            )
             image_receipts = []
             for image, (raw, dimensions), bounds in zip(
                 question.images, images, layout.image_bounds, strict=True
             ):
+                if raw is not None and raw not in display_hashes:
+                    display_hashes[raw] = sha256(raw)
                 image_receipts.append(
                     {
                         "attachment_occurrence_id": image.attachment_occurrence_id,
                         "attachment_revision_id": image.attachment_revision_id,
                         "source_sha256": image.member.sha256 if image.member else None,
                         "display_transform": "exif-rotate-crop-to-png/1.0" if raw else None,
-                        "display_sha256": sha256(raw) if raw else None,
+                        "display_sha256": display_hashes[raw] if raw else None,
                         "display_size_bytes": len(raw) if raw else None,
                         "display_width_px": dimensions[0] if raw else None,
                         "display_height_px": dimensions[1] if raw else None,
@@ -523,11 +600,10 @@ def _render(
     # No success output is published before every page has passed measured layout.
     previews = []
     with pymupdf.open(stream=pdf, filetype="pdf") as check:
-        if len(check) != len(manifest.questions):
+        if len(check) != len(plans):
             raise ValueError("KAKAO_RENDER_PAGE_COUNT_MISMATCH")
-        for number, (page, (question, header, images, _layout_receipt)) in enumerate(
-            zip(check, plans, strict=True), 1
-        ):
+        for number, (page, plan) in enumerate(zip(check, plans, strict=True), 1):
+            question, header, images = plan.question, plan.header, plan.images
             if (
                 abs(page.rect.width - PAGE_WIDTH) > 0.01
                 or abs(page.rect.height - PAGE_HEIGHT) > 0.01
@@ -569,27 +645,24 @@ def _render(
             previews.append(
                 page.get_pixmap(matrix=pymupdf.Matrix(1.0, 1.0), alpha=False).tobytes("png")
             )
-    receipt = canonical_bytes(
-        {
-            "schema_version": "kakao-question-layout-receipt/1.0",
-            "command_sha256": sha256(canonical_bytes(command.model_dump(mode="json"))),
-            "manifest_sha256": command.manifest.sha256,
-            "font_sha256": command.font.sha256,
-            "layout_policy": command.layout_policy,
-            "renderer_release_sha256": command.renderer_release_sha256,
-            "mode": command.mode,
-            "pages": pages,
-        }
+    return RenderedQuestionPages(
+        pdf, tuple(previews), tuple(PageLayoutReceipt.model_validate(value) for value in pages)
     )
-    decoded_receipt = json.loads(receipt)
-    validate_contract("layout", decoded_receipt)
-    check_layout_receipt(command, manifest, RenderLayoutReceipt.model_validate(decoded_receipt))
-    if len(pdf) + len(receipt) + sum(len(preview) for preview in previews) > 256 * 1024 * 1024:
+
+
+def write_rendered_outputs(
+    output_root: Path, rendered: RenderedQuestionPages, receipt: bytes
+) -> tuple[LocalMember, ...]:
+    """Commit only after family layout/readback succeeded; never publishes to NAS."""
+    if (
+        len(rendered.pdf) + len(receipt) + sum(len(preview) for preview in rendered.previews)
+        > 256 * 1024 * 1024
+    ):
         raise ValueError("KAKAO_RENDER_OUTPUT_BUDGET_EXCEEDED")
     outputs = [
-        write_member(output_root, "report.pdf", pdf, "application/pdf"),
+        write_member(output_root, "report.pdf", rendered.pdf, "application/pdf"),
         write_member(output_root, "layout.json", receipt, "application/json"),
     ]
-    for number, preview in enumerate(previews, 1):
+    for number, preview in enumerate(rendered.previews, 1):
         outputs.append(write_member(output_root, f"page-{number:04d}.png", preview, "image/png"))
     return tuple(outputs)

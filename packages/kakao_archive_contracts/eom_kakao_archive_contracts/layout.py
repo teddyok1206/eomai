@@ -85,70 +85,80 @@ def check_layout_receipt(
     for number, (page, question) in enumerate(
         zip(receipt.pages, manifest.questions, strict=True), 1
     ):
+        check_page_layout(question, page, number, mode=command.mode)
+
+
+def check_page_layout(
+    question: RenderQuestion,
+    page: PageLayoutReceipt,
+    number: int,
+    *,
+    mode: Literal["DRAFT", "FINAL"],
+) -> None:
+    """Common per-page coverage/geometry rule; each family owns global ordering."""
+    if (
+        page.question_revision_id != question.question_revision_id
+        or page.page_number != number
+        or page.font_size_pt not in (10.0, 11.0)
+    ):
+        raise ValueError("KAKAO_RENDER_LAYOUT_PAGE_INVALID")
+    # Ordered ranges include hard breaks, so text cannot disappear between lines.
+    lines = iter(page.text_blocks)
+    for block in question.text_blocks:
+        end = 0
+        while end < len(block.text):
+            line = next(lines, None)
+            if (
+                line is None
+                or line.span_id != block.span_id
+                or line.start_codepoint != end
+                or not end < line.end_codepoint <= len(block.text)
+            ):
+                raise ValueError("KAKAO_RENDER_LAYOUT_TEXT_MISSING")
+            _check_bounds(line.bounds_pt)
+            end = line.end_codepoint
+    if next(lines, None) is not None or len(page.image_blocks) != len(question.images):
+        raise ValueError("KAKAO_RENDER_LAYOUT_CONTENT_MISMATCH")
+    for image, rendered in zip(question.images, page.image_blocks, strict=True):
         if (
-            page.question_revision_id != question.question_revision_id
-            or page.page_number != number
-            or page.font_size_pt not in (10.0, 11.0)
+            rendered.attachment_occurrence_id != image.attachment_occurrence_id
+            or rendered.attachment_revision_id != image.attachment_revision_id
+            or rendered.source_sha256 != (image.member.sha256 if image.member else None)
+            or rendered.availability != image.availability
+            or rendered.display_transform
+            != ("exif-rotate-crop-to-png/1.0" if image.member else None)
+            or rendered.transform != image.transform
+            or rendered.crop != (image.transform.crop if image.transform else None)
+            or (mode == "FINAL" and (not image.member or not image.quality_accepted))
         ):
-            raise ValueError("KAKAO_RENDER_LAYOUT_PAGE_INVALID")
-        # Ordered ranges include hard breaks, so text cannot disappear between lines.
-        lines = iter(page.text_blocks)
-        for block in question.text_blocks:
-            end = 0
-            while end < len(block.text):
-                line = next(lines, None)
-                if (
-                    line is None
-                    or line.span_id != block.span_id
-                    or line.start_codepoint != end
-                    or not end < line.end_codepoint <= len(block.text)
-                ):
-                    raise ValueError("KAKAO_RENDER_LAYOUT_TEXT_MISSING")
-                _check_bounds(line.bounds_pt)
-                end = line.end_codepoint
-        if next(lines, None) is not None or len(page.image_blocks) != len(question.images):
-            raise ValueError("KAKAO_RENDER_LAYOUT_CONTENT_MISMATCH")
-        for image, rendered in zip(question.images, page.image_blocks, strict=True):
-            if (
-                rendered.attachment_occurrence_id != image.attachment_occurrence_id
-                or rendered.attachment_revision_id != image.attachment_revision_id
-                or rendered.source_sha256 != (image.member.sha256 if image.member else None)
-                or rendered.availability != image.availability
-                or rendered.display_transform
-                != ("exif-rotate-crop-to-png/1.0" if image.member else None)
-                or rendered.transform != image.transform
-                or rendered.crop != (image.transform.crop if image.transform else None)
-                or (command.mode == "FINAL" and (not image.member or not image.quality_accepted))
-            ):
-                raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_MISMATCH")
-            derivative_values = (
-                rendered.display_sha256,
-                rendered.display_size_bytes,
-                rendered.display_width_px,
-                rendered.display_height_px,
-            )
-            if (image.member and any(value is None for value in derivative_values)) or (
-                not image.member and any(value is not None for value in derivative_values)
-            ):
-                raise ValueError("KAKAO_RENDER_LAYOUT_DERIVATIVE_INVALID")
-            _check_bounds(rendered.bounds_pt)
-            x0, y0, x1, y1 = rendered.bounds_pt
-            if min(x1 - x0, y1 - y0) < 127.55:
-                raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_TOO_SMALL")
-            if (
-                rendered.display_width_px is not None
-                and rendered.display_height_px is not None
-                and (
-                    rendered.display_width_px * rendered.display_height_px > 40000000
-                    or abs(
-                        (x1 - x0) * rendered.display_height_px
-                        - (y1 - y0) * rendered.display_width_px
-                    )
-                    > 0.01 * max(rendered.display_width_px, rendered.display_height_px)
+            raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_MISMATCH")
+        derivative_values = (
+            rendered.display_sha256,
+            rendered.display_size_bytes,
+            rendered.display_width_px,
+            rendered.display_height_px,
+        )
+        if (image.member and any(value is None for value in derivative_values)) or (
+            not image.member and any(value is not None for value in derivative_values)
+        ):
+            raise ValueError("KAKAO_RENDER_LAYOUT_DERIVATIVE_INVALID")
+        _check_bounds(rendered.bounds_pt)
+        x0, y0, x1, y1 = rendered.bounds_pt
+        if min(x1 - x0, y1 - y0) < 127.55:
+            raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_TOO_SMALL")
+        if (
+            rendered.display_width_px is not None
+            and rendered.display_height_px is not None
+            and (
+                rendered.display_width_px * rendered.display_height_px > 40000000
+                or abs(
+                    (x1 - x0) * rendered.display_height_px - (y1 - y0) * rendered.display_width_px
                 )
-            ):
-                raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_ASPECT_INVALID")
-        _check_order(question, page)
+                > 0.01 * max(rendered.display_width_px, rendered.display_height_px)
+            )
+        ):
+            raise ValueError("KAKAO_RENDER_LAYOUT_IMAGE_ASPECT_INVALID")
+    _check_order(question, page)
 
 
 def _check_order(question: RenderQuestion, page: PageLayoutReceipt) -> None:

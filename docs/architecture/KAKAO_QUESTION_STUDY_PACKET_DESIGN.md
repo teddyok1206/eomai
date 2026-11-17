@@ -199,3 +199,27 @@ Codex 역할 지침의 개발용 초안은
   재조회·추천 실패를 새 렌더나 원문 변경으로 우회하지 않는다.
 - 원래 role 정보를 지우고 출력 시 문장을 보고 되추론하는 대안은 더 불안정하다. 한 번의
   검증된 source resolution에서 role/metadata를 보존하는 얇은 projection을 선택한다.
+
+## 8. 반복 가능한 쪽 나누기와 기존 PDF 엔진 재사용
+
+새 layout receipt는 원래 v1 page geometry DTO를 재사용하되, section 종류·보강 block ID와
+원문 span의 시작/끝을 별도 고정한다. core는 같은 input manifest에서 section을 재구성해
+순서·전체 범위·사진 use·학생/질문 pin을 확인한다. 다른 family의 성공으로 해석하지 않는다.
+
+- 학생 사진→질문은1쪽이다. 기존 measured layout의 고정 후보와45mm 이미지 최소 크기를
+  유지하며 안 들어가면 검토 상태다. 임의 축소·crop·원문 삭제는 하지 않는다.
+- 조교 사진→답변→기록 정보는 같은 section에서 흐른다. 조교 답변이 없으면 기록 정보를
+  학생 section 뒤에 붙이며 빈 답변/사진 section을 만들지 않는다. 보강 section은 그 뒤다.
+- 여러 쪽의 답변/보강은11pt 고정 line measurement로 한 번 wrap하고 순서대로 채운다.
+  이미지가 남은 공간에 온전히 안 들어가면 다음 쪽으로 넘긴다. 가능한 쪽을 찾기 위해 전체
+  원문을 반복 render하거나 탐색하지 않는다. 비용은 글자·사진 use·쪽수에 선형이다.
+- 원문 span을 나눌 때 grapheme/CRLF 경계를 유지한다. 각 쪽 receipt에 원문 offset을 남겨
+  이어진 범위가 정확히 전체가 되는지 core가 확인한다. 페이지 fragment는 같은 질문의
+  표시 범위일 뿐 새 질문 ID/revision이 아니다.
+- font/glyph·사진 EXIF/명시적 transform·decode budget, PDF write/readback·PNG와 member
+  commit은 기존 worker 함수에서 재사용한다. v1도 동일한 공통 page writer를 호출하되
+  v1 contract·one-question-one-page·기존 receipt 의미는 바꾸지 않는다.
+- 사진 decoder는 고유 member+transform별 한 번 실행하고 여러 use는 참조한다. output은
+  전체 layout/readback 검증 후에만 local commit하며 NAS/DB 발행은 기존 core owner다.
+- page count/input/output/pixel 상한을 넘으면 성공 PDF를 일부만 발행하지 않는다. 고정 entry,
+  executor, profile·API/Web 연결과 별도 설치 검증 전에는 새 family를 운영에 활성화하지 않는다.

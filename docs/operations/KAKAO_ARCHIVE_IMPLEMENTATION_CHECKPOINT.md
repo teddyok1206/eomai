@@ -1,5 +1,38 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 역할별 실제 PDF 출력 구현 — 운영 비활성
+
+질문1쪽→조교 사진/답변/기록 정보→관련 개념 쪽의 결정론적 출력을 기존 PDF worker에
+연결했다. 기존 v1 page writer·font readback·EXIF/transform·로컬 member/hash 검증을 재사용하며
+source 역할 추정·NAS 쓰기·AI 호출은 없다. 새 CLI는 exact study schema family만 선택한다.
+고정 실행기·출력 profile·저장/API/Web에는 아직 활성 연결하지 않았다. 새 수집·실제 카카오
+사진 정합·전체 방 주기 실행/Studio PDF 완료가 아니며 전체 goal도 미완료다.
+
+- JSON Schema2020-12 `worker-study-layout-v1`을 behavior보다 먼저 정의했다.
+  SHA는 `sha256:b2cb10bed3940628cd651e2c37d43eb461d2a0b3effa24217d6ec74acce615fd`다.
+  원문 offset 범위가 연속으로 전체를 덮는지, 사진 use·순서·pin·geometry/최소 크기를 core가
+  검사한다. 학생 질문은1쪽, 긴 답변/보강은11pt로 넘기며 무단 crop/원문 삭제는 하지 않는다.
+- 새/기존 관련 source253개 PASS, strict mypy7개·Ruff/format·diff 검사 PASS다. 첫 import의
+  공개 type 경로 오류와 불가능한 input order를 양성 fixture로 만든 오류는 개발 검증에서
+  수정했고 최종 전체를 다시 실행했다. 운영/이전 실패 이력은 변경하지 않았다.
+  wire audit는1480 canonical/1125 mirror/12796 refs다. DB/schema 변경이 없어 이번에는
+  새 DB mutation·임시 DB 재실행을 하지 않았으며, 이전 저장/HTTP 검증을 새 출력 PASS로
+  재해석하지 않는다.
+- 새 contracts wheel `sha256:655e59470209f29b0d044a35740bece903128687f1181c10b56faec414ab3fb7`,
+  worker wheel `sha256:ff0a6d217f37738e7288a36272ca5dab2eacb90457ebb5f76893a6b469665712`를
+  별도 non-editable venv에 설치했다. source 없는 `python -I -B`, 전체 wheel/설치 RECORD,
+  Catalog/SQLAlchemy 부재·`pip check`를 확인하고 실제 설치 Noto font로5쪽 PDF를 만들었다.
+  질문1쪽·학생/조교 사진 각각1회·긴 답변/metadata·직접 작성 보강 쪽, 원문 범위·모든 output
+  SHA가 PASS다. PNG3쪽을 직접 보았으며 합성 사례 검수이지 실제 카카오 acceptance가 아니다.
+  격리 증거는 `/tmp/eom-kakao-study-render.25kXMGQx/result.json`이다. 운영 설치본은 바꾸지 않았다.
+- 샘플1번은 CSV 첫 행에 사진 표식이 있으며 받은 사진2건에는 해당 사진이 없다.
+  **원래 사진 없음이 아니라 미수집/미확보**다. 재다운로드 가능/삭제 여부는 미확인이다.
+  상세 대조와 후속 자동 코드 샘플 요구는
+  [반복 출력 점검](../architecture/KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md#첫-질문-사진-재확인--2026-11-17)에 기록했다.
+- 다음은 기존 materialization/executor/publication의 family 연결과 저장된 CSV·사진·metadata의
+  재생 PDF다. 수동 질문 행 선택/사진 내용 대조를 자동 수집 완료로 취급하지 않는다.
+  실제 카카오 재로그인/클릭·메시지 전송·운영 service 재시작·GPU/슬롯/벡터 변경은 없었다.
+
 ## 2026-11-17 역할·시각 보존 후속 입력의 source 연결 — 운영 비활성
 
 source `e53ae0cbdb7306130f31ff21a8781a67b132fca8`를 커밋·푸시했다. 새 pure-contract wheel
