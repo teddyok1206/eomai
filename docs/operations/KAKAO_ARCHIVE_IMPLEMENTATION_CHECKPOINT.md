@@ -1,5 +1,73 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 실제 로컬 result 파일 수락과 출력 비교5종
+
+### C1 proposal→결과 Artifact→attempt→원본 source/task
+
+`admit_staged_kakao_capture_source`가 이제 COMMAND_READY의 worker `outputs/result.json`도
+직접 받는다. 기존 typed C1/canonical bytes·실제 command/capability/fence·report hash/크기를
+검증하고, `ControlFileSetPublisher`의 exact first-observation/key lookup으로 result/report를
+발행한 뒤 기존 `accept_result`에 채택한다. 그 다음 이전 원본·사진 source owner를 사용한다.
+새 DB/queue/wire/worker 실행이나 실패 이력 수정은 없다.
+
+- 결과 Artifact 발행 후 attempt 채택 직전 중단은 로컬 result/report 없이 원 발행본을
+  읽어 복구한다. 이미 수락한 작은 내부 metadata read는 source 권한을 만들지 않는다.
+  source 단계는 실제 현재 계정·권한·원 pins를 다시 검사한다. 실패/일시중지/취소 결과는
+  저장하지만 성공 source로 승격하지 않으며, 바뀐 로컬 성공 파일로 덮지 않는다.
+- 전체 guarded disposable PostgreSQL **432 PASS**, 그 안의 실제 파일 ingress 집중
+  **22 PASS**다. 기존 fixture의 결과 발행을 분리해, 이 집중 검사는 테스트가 먼저 결과
+  Artifact를 만들어 주지 않고 실제 local proposal→결과 보관→source/task를 통과한다.
+  source/wheel/OS/의존 방향 **136 PASS**, strict mypy4개·Ruff/format/diff PASS다.
+- 초기 집중 검사에서 공식 control publisher의 `control_` type 경계를 확인해 새 미출시
+  publication type을 그 계약에 맞췄다. publisher의 허용 범위나 기존 type을 넓히지 않았다.
+  실패 로그는 보존했다. root·UID·group·filesystem 권한은 완화하지 않았다.
+
+증거: `staging/kakao-result-ingress-{db-focused,full-db,unit,types}-20261117.log`와 최초 실패/
+수정 재실행 로그다. 합성 browser/capability 관측이며 실제 파일·저장·Artifact owner를 쓴다.
+이 source 변경은 아직 운영 미설치이고 기존 API/Web/DB·GPU/슬롯 pin은 변경하지 않았다.
+
+### 실제 카카오 화면의 좁은 관측
+
+사용자가 새 MANUAL에서 로그인해 채팅방을 열었다고 알렸고, read-only screenshot에서
+실제 방/대화를 확인했다. 개발 화면 관측은 입력/클릭/키보드/전송0이었다. 그 뒤 browser/
+remote가 각각 MainPID0/inactive로 정상 종료됐다. unit 기록은18:50:27/28 UTC 시작,
+18:55:51/52 종료이며 API의 마지막 실제 RENEW 완료는18:55:21이다.30초 lease와 일치한다.
+UI background timer 제한 가능성은 **추정**이며 구체적인 클라이언트 원인은 미확정이다.
+인증 실패로 단정하거나 lease/권한을 완화하지 않았다. 원래 프로필/인증·실패 이력은 보존했다.
+사용자에게 Studio를 보이는 별도 창으로 유지한 재연결을 요청했다. 그 사이 미확인 새 방의
+사진/발신 방향/범위를 추측해 source로 등록하거나 AUTO를 시작하지 않았다.
+
+### 기존 보관 입력으로 만든5개 실제 PDF 비교
+
+사용자의 추가 샘플 요청에 따라 원래17쪽 preview의 **고정 입력**을 재사용해 설치된
+`KakaoPdfExecutor`/fixed isolated worker와 기존 core Artifact publisher로 출력했다.
+수작업 PDF 합치기/새 수집/새 retrieval·model 실행은 없으며 정식 Studio export가 아니다.
+수동 사진 대응·첫 질문 사진 미확보·시간대 미확정과 관련 교재의 부분적 관련성은 그대로다.
+
+| 비교 | 쪽수 | Artifact / revision |
+| --- | ---: | --- |
+| 질문만 |3|`artifact_abc7e79963a6461f84ffe48b1459782e` / `rev_fcd01856cadf420eb63985665422d38f`|
+| 질문·조교 답변 |6|`artifact_aaf3f9b49674454cbbc2ebbfeb128fa1` / `rev_fa2c900ed72f466ca182ad97e04f6d9c`|
+| 첫 질문·기존 교재 참고 |7|`artifact_ed9240003f3d4b278f1f89718d22a9ae` / `rev_54db3034ecf14f9e8b9de1a3e0c0b77a`|
+| 둘째 질문·교재 근거 미확보 표시 |4|`artifact_ac4a23d557b746d8b305936daf85fd58` / `rev_5a880ec0e6e943b0bbca9cce7e8aaa3c`|
+| 셋째 질문·기존 교재 참고 |6|`artifact_5764111fb302457baaf99f8e121a5484` / `rev_cd568867b8a241efbdc362de57fe2a03`|
+
+각 PDF는 질문당 STUDENT1쪽·원본 사진 배치 수·본문 glyph 보존과 동일 결과 복구를 검사했다.
+대표 질문/답변/교재 페이지 PNG7개를 직접 확인했다. 첫 추가 검사에서 단순 Unicode
+substring이 CJK font의 hyphen/ellipsis/compatibility Jamo reverse-CMap alias를 오판했다.
+설치 writer의 기존 판정과 같은 **고정 font의 정확한 nonzero glyph ID**로 비교 검사를
+바로잡고, 첫 완료 worker는 재실행하지 않고 원 결과를 복구했다. source text·renderer·font
+bytes는 바꾸지 않았고 최초 검사 실패 로그도 남겼다.
+
+확인한 출력 UX 한계: 첫 교재 참고 샘플의 마지막 쪽은 출처 문구만 별도 pagination된다.
+이미지 누락/본문 잘림은 아니지만 caption과 이미지가 함께 배치되도록 기존 study pagination
+owner에서 개선할 후보로 기록한다. 이를 이유로 PDF bytes/이전 acceptance를 덮지 않는다.
+
+증거: `staging/kakao-pdf-variants-{20261117.log,summary-20261117.json}`, 첫 검사·font alias
+진단 로그와 각 immutable Artifact의 PDF/layout/PNG다. worker render5회·완료 결과 복구는
+별도이며 source 수락/새 교재 검색/model 실행0이다. 실제 새 방→질문 저장→공유 개념 추천→
+Studio PDF 및 전체 방 주기 수집은 여전히 남은 goal이다.
+
 ## 2026-11-17 고정된 로컬 수집 파일→source/task 연결
 
 `admit_staged_kakao_capture_source`가 실제 accepted attempt의 내부 권한과 Orchestrator의

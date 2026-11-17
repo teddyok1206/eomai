@@ -87,6 +87,15 @@ UID/GID/mode·link·변경·byte 크기/SHA를 검사한다. 완료 replay는 �
 optional collector/OS 구현을 eager load하지 않는다. 실제 browser dispatch/관측·운영 배치는
 별도이며, 이 소스 연결만으로 수집이 실행 중이라고 판단하지 않는다.
 
+동일 composition은 `KakaoCaptureOutputReader.read_result`의 고정32KiB proposal을 기존
+attempt의 `publish_and_accept_result`에 먼저 넘긴다. 실제 command/capability와 C1 schema/
+canonical bytes·report4MiB/hash를 검증한 뒤 `kakao_capture_result_publication.py`가 기존
+`ControlFileSetPublisher`에 result/report만 발행한다. 원본 CSV/사진은 이 Artifact에 복사하지
+않는다. 발행 후 row 채택 전 중단은 exact key의 completed publication을 읽어 `accept_result`
+만 복구한다. FAILED/PAUSED/CANCELLED는 기록하지만 source로 진행하지 않는다. 이미 수락한
+내부 metadata read는 source 권한이 아니며 그 다음 현재 accepted-source 권한 검사를 유지한다.
+설치 release commit은 trusted controller에서 전달하고 ambient Git을 사용하지 않는다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

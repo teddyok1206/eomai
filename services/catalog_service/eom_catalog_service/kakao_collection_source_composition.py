@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+
     from .kakao_collection_attempt_service import KakaoCollectionAttemptService
     from .kakao_source_service import AcceptedKakaoSource
 
@@ -17,6 +19,8 @@ def admit_staged_kakao_capture_source(
     output_root: Path,
     worker_uid: int,
     control_gid: int,
+    result_publisher: ControlFileSetPublisher,
+    source_commit: str,
     idempotency_key: str,
     expected_source_revision_id: str | None,
     expected_resource_version: int,
@@ -29,10 +33,15 @@ def admit_staged_kakao_capture_source(
     """
     from eom_orchestrator.kakao_capture_inputs import KakaoCaptureOutputReader
 
-    access = attempts.accepted_source_access(attempt_id)
-    reader = KakaoCaptureOutputReader(
-        output_root, access.attempt.attempt_id, worker_uid, control_gid
+    reader = KakaoCaptureOutputReader(output_root, attempt_id, worker_uid, control_gid)
+    attempts.publish_and_accept_result(
+        attempt_id,
+        publisher=result_publisher,
+        source_commit=source_commit,
+        read_result=reader.read_result,
+        read_member=reader,
     )
+    access = attempts.accepted_source_access(attempt_id)
     return attempts.publish_and_admit_capture_source(
         access,
         attempt_id,

@@ -80,6 +80,31 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### C1 결과 파일의 발행과 원 attempt 수락 — 2026-11-17
+
+1. 기존 attempt application이 COMMAND_READY의 실제 command/capability/현재 owner를 확인한
+   뒤 Orchestrator의 고정 `outputs/result.json` reader를 호출한다. 브라우저 실행 권한은 없다.
+2. 결과 JSON은 untrusted proposal이고, canonical command와 capability ceiling·fence·room/
+   snapshot/normalization 및 report 해시·크기를 기존 C1 validator로 검증한 뒤에만 발행한다.
+3. 기존 C1 schema·attempt/result pointer·Artifact 모델을 그대로 사용한다. 새 테이블/queue/
+   RPC는 없고, 결과 제안과 정본 source 수락의 차이를 유지한다.
+4. 결과32KiB/report4MiB 상한·canonical JSON·closed member·현재 pins를 I/O/발행 전후 확인한다.
+   FAILED/PAUSED/CANCELLED도 원 결과 그대로 보관하고 사진/source 성공으로 승격하지 않는다.
+5. 접근은 attempt PK와 공식 file-set publisher의 unique idempotency key lookup다.
+6. 기존 `ControlFileSetPublisher`의 최초 관측 시각·exact completed lookup·publication lock을
+   사용한다. 별도 Artifact 조회기·직접 Job 수정·새 결과 registry를 만들지 않는다.
+7. metadata O(1), 결과/report의 parse·hash 비용은 bounded byte 수에 선형이다. CSV/사진을
+   결과 Artifact에 복사하지 않으며, 그 원본은 다음 기존 source owner가 발행한다.
+8. 파일/NAS I/O는 DB lock 밖이다. 결과 Artifact 발행 후 원 attempt 수락 전에 중단되면
+   같은 publication key의 정본을 읽어 기존 `accept_result`만 재개한다. 새 worker 실행은 없다.
+9. Catalog application→pure C1/Artifact owner와 Orchestrator OS adapter 방향을 유지한다.
+   source commit은 설치한 controller의 실제 release 값이며 ambient Git을 읽지 않는다.
+10. 이미 RESULT_ACCEPTED인 내부 metadata 재조회는 기존 get_attempt와 같고 source 권한을
+    주지 않는다. 그 뒤 source 작업은 기존 accepted access의 현재 권한 검사로 진행한다.
+    terminal/incomplete publication은 성공/없음으로 바꾸지 않으며 supported same-key 복구만 한다.
+11. local result를 읽은 뒤 임의 caller가 Artifact를 먼저 만들어 주던 대안은 collector의
+    정상 결과 경로와 중단 복구를 연결하지 못한다. 기존 publisher/application을 조합한다.
+
 ### 고정된 로컬 수집 출력에서 source 채택까지 — 2026-11-17
 
 1. Orchestrator의 filesystem adapter는 configured root 아래 exact accepted attempt의

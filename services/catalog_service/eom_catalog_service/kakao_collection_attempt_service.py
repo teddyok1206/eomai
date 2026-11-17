@@ -4,6 +4,7 @@ File reads use the existing Artifact owner outside locks. Only trusted installed
 composition calls this application; worker DTOs and public request IDs are not grants.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -27,6 +28,7 @@ from eom_kakao_archive_contracts.capture import (
 )
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel
 from sqlalchemy import Engine, select
@@ -44,6 +46,10 @@ from .kakao_capture_publication import (
     AcceptedCapturePublication,
     CaptureMemberReader,
     publish_kakao_capture_source,
+)
+from .kakao_capture_result_publication import (
+    find_kakao_capture_result,
+    publish_kakao_capture_result,
 )
 from .kakao_collection_attempt_models import KakaoCollectionAttemptRecord as Attempt
 from .kakao_collection_authorization import (
@@ -443,6 +449,89 @@ class KakaoCollectionAttemptService:
             )
             session.flush()
             return _identity(row)
+
+    def _result_input_context(self, attempt_id: str) -> _CommandContext:
+        with self._sessions.begin() as session:
+            row = session.get(Attempt, attempt_id)
+            if row is None or row.state == "RESERVED" or row.capability_sha256 is None:
+                raise KakaoArchiveError(_INVALID)
+            return self._context(session, row, row.capability_sha256)
+
+    def publish_and_accept_result(
+        self,
+        attempt_id: str,
+        *,
+        publisher: ControlFileSetPublisher,
+        source_commit: str,
+        read_result: Callable[[], bytes],
+        read_member: CaptureMemberReader,
+    ) -> KakaoCollectionAttempt:
+        """Trusted controller ingress; no public result/authority or new worker execution.
+
+        A completed internal receipt is the same metadata-only get_attempt read,
+        not source authorization. Any following source work must still obtain the
+        actual current accepted_source_access. An orphan publication is recovered
+        through its owner's exact key before requiring local files again.
+        """
+        original = self.get_attempt(attempt_id)
+        if original.state == "RESULT_ACCEPTED":
+            return original
+        expected = self._result_input_context(attempt_id)
+        prior = find_kakao_capture_result(publisher, attempt_id)
+        if prior is not None:
+            return self.accept_result(attempt_id, prior)
+
+        def authorize() -> None:
+            current = self._result_input_context(attempt_id)
+            # RESULT_ACCEPTED is a legal concurrent completion, not a new identity.
+            # The DB pins the immutable execution fields; compare its exact inputs.
+            if (current.command, current.capability) != (expected.command, expected.capability):
+                raise KakaoArchiveError(_INVALID)
+
+        assert expected.command is not None
+        command = self._read(expected.command, CaptureCommand)
+        self._match(command, expected.attempt)
+        capability = self._read(expected.capability, CaptureCapability)
+        try:
+            authorize()
+            raw = read_result()
+            if type(raw) is not bytes or not 0 < len(raw) <= 32768:
+                raise ValueError
+            result = CaptureResult.model_validate_json(raw)
+            if canonical_json_bytes(result.model_dump(mode="json")) != raw:
+                raise ValueError
+            authorize()
+            report = None
+            if result.report is not None:
+                member = result.report
+                if member.size_bytes > 4 * 1024 * 1024:
+                    raise ValueError
+                report_raw = read_member(member)
+                if (
+                    type(report_raw) is not bytes
+                    or len(report_raw) != member.size_bytes
+                    or sha256_bytes(report_raw) != member.sha256
+                ):
+                    raise ValueError
+                report = CaptureRoomReport.model_validate_json(report_raw)
+                if canonical_json_bytes(report.model_dump(mode="json")) != report_raw:
+                    raise ValueError
+                authorize()
+            pointer = publish_kakao_capture_result(
+                publisher,
+                staging_root=self.artifacts.settings.staging_root,
+                command=command,
+                capability=capability,
+                result=result,
+                report=report,
+                source_commit=source_commit,
+                authorize=authorize,
+            )
+        except KakaoArchiveError:
+            raise
+        except (ValueError, OSError):
+            raise KakaoArchiveError(_INVALID) from None
+        return self.accept_result(attempt_id, pointer)
 
     def accept_result(
         self, attempt_id: str, pointer: ArtifactMemberPointer

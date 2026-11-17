@@ -201,7 +201,7 @@ def command_input(attempt, reserved=None, **changes):
     return reserved, command, accepted, pointer, inventory_pointer
 
 
-def result_input(attempt, *, status="PARTIAL", error=None, images=()):
+def result_proposal(attempt, *, status="PARTIAL", error=None, images=()):
     reserved, command, cap, command_pointer, inventory_pointer = command_input(attempt)
     attempt.service.pin_command(
         reserved.attempt_id, command_pointer, inventory_pointer=inventory_pointer
@@ -309,11 +309,6 @@ def result_input(attempt, *, status="PARTIAL", error=None, images=()):
         report=None if report is None else local("outputs/room-report.json", report),
         error_code=error,
     )
-    pointer = publish(
-        attempt,
-        {"result.json": result, **({"room-report.json": report} if report else {})},
-        "result.json",
-    )
     return SimpleNamespace(
         reserved=reserved,
         command=command,
@@ -321,7 +316,6 @@ def result_input(attempt, *, status="PARTIAL", error=None, images=()):
         command_pointer=command_pointer,
         result=result,
         report=report,
-        pointer=pointer,
         raw=raw,
         normalization=norm,
         snapshot=snapshot,
@@ -331,6 +325,16 @@ def result_input(attempt, *, status="PARTIAL", error=None, images=()):
             **image_members,
         },
     )
+
+
+def result_input(attempt, *, status="PARTIAL", error=None, images=()):
+    data = result_proposal(attempt, status=status, error=error, images=images)
+    data.pointer = publish(
+        attempt,
+        {"result.json": data.result, **({"room-report.json": data.report} if data.report else {})},
+        "result.json",
+    )
+    return data
 
 
 def publish_and_admit(attempt, data, *, key=None, read=None):

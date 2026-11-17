@@ -62,6 +62,16 @@ class KakaoCaptureOutputReader:
         except ValueError:
             raise KakaoCaptureInputError("KAKAO_CAPTURE_MEMBER_INVALID") from None
 
+        raw = self._read(member.relative_path, maximum=member.size_bytes)
+        if len(raw) != member.size_bytes or sha256(raw) != member.sha256:
+            raise KakaoCaptureInputError("KAKAO_CAPTURE_MEMBER_HASH_MISMATCH")
+        return raw
+
+    def read_result(self) -> bytes:
+        """Fixed bounded proposal only; the accepted command's owner validates C1."""
+        return self._read("outputs/result.json", maximum=32768)
+
+    def _read(self, relative_path: str, *, maximum: int) -> bytes:
         owners = frozenset({0, os.geteuid(), self.worker_uid})
 
         def directory(path: Path, uid: int, mode: int) -> None:
@@ -78,21 +88,19 @@ class KakaoCaptureOutputReader:
             directory(self.root, os.geteuid(), 0o2750)
             parent = self.root / self.attempt_id
             directory(parent, self.worker_uid, 0o750)
-            for component in member.relative_path.split("/")[:-1]:
+            for component in relative_path.split("/")[:-1]:
                 parent /= component
                 directory(parent, self.worker_uid, 0o750)
             raw = read_protected(
-                self.root / self.attempt_id / member.relative_path,
+                self.root / self.attempt_id / relative_path,
                 uid=self.worker_uid,
                 gid=self.control_gid,
                 mode=0o640,
-                maximum=member.size_bytes,
+                maximum=maximum,
                 owners=owners,
             )
         except FileNotFoundError:
             raise KakaoCaptureInputError("KAKAO_CAPTURE_INPUT_MISSING") from None
         except (KakaoRuntimeOsError, OSError):
             raise KakaoCaptureInputError("KAKAO_CAPTURE_STAGING_UNSAFE") from None
-        if len(raw) != member.size_bytes or sha256(raw) != member.sha256:
-            raise KakaoCaptureInputError("KAKAO_CAPTURE_MEMBER_HASH_MISMATCH")
         return raw

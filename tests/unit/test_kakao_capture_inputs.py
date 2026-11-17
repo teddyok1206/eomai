@@ -85,6 +85,23 @@ def test_csv_and_json_are_read_without_interpreting_their_content(staged):
         assert staged.reader(member) == staged.payload
 
 
+@pytest.mark.parametrize("size", [1, 32768])
+def test_fixed_result_reader_is_bounded_but_does_not_interpret_worker_json(staged, size):
+    path = staged.output / "result.json"
+    path.write_bytes(b"x" * size)
+    path.chmod(0o640)
+    assert staged.reader.read_result() == b"x" * size
+
+
+@pytest.mark.parametrize("size", [0, 32769])
+def test_result_proposal_cannot_exceed_the_fixed_budget(staged, size):
+    path = staged.output / "result.json"
+    path.write_bytes(b"x" * size)
+    path.chmod(0o640)
+    with pytest.raises(KakaoCaptureInputError, match="STAGING_UNSAFE"):
+        staged.reader.read_result()
+
+
 @pytest.mark.parametrize("value", ["../outside", "kakaoattempt_" + "a" * 32 + "/other", None])
 def test_untrusted_attempt_cannot_select_a_path(staged, value):
     with pytest.raises(KakaoCaptureInputError, match="INPUT_INVALID"):

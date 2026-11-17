@@ -11,20 +11,27 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
+from eom_catalog_service.kakao_collection_attempt_models import (
+    KakaoCollectionAttemptRecord as Attempt,
+)
 from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_collection_source_composition import (
     admit_staged_kakao_capture_source,
 )
+from eom_identifiers import canonical_json_bytes
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
 from eom_orchestrator import kakao_capture_inputs as capture_inputs
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.settings import Settings
 from sqlalchemy.orm import Session
 
+from tests.integration.test_kakao_collection_attempt_storage import result_proposal
 from tests.integration.test_kakao_collection_source_access import attempt as attempt
 from tests.integration.test_kakao_collection_source_access import browser as browser
 from tests.integration.test_kakao_collection_source_access import cap as cap
 from tests.integration.test_kakao_collection_source_access import collection as collection
-from tests.integration.test_kakao_collection_source_access import counts, photo, result_input
+from tests.integration.test_kakao_collection_source_access import counts, photo
 from tests.integration.test_kakao_collection_source_access import h as h
 from tests.integration.test_kakao_collection_source_access import intake as intake
 
@@ -33,8 +40,11 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 @pytest.fixture
 def staged(attempt):
-    data = result_input(attempt, images=(photo(), photo()))
-    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    data = result_proposal(attempt, images=(photo(), photo()))
+    files = data.members | {
+        "outputs/result.json": canonical_json_bytes(data.result.model_dump(mode="json")),
+        "outputs/room-report.json": canonical_json_bytes(data.report.model_dump(mode="json")),
+    }
     with tempfile.TemporaryDirectory(
         prefix="kakao-staged-pg-", dir=Path.home() / ".cache"
     ) as folder:
@@ -43,7 +53,7 @@ def staged(attempt):
         workspace = root / data.reserved.attempt_id
         workspace.mkdir(mode=0o750)
         workspace.chmod(0o750)
-        for name, raw in data.members.items():
+        for name, raw in files.items():
             path = workspace / name
             path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
             path.parent.chmod(0o750)
@@ -52,9 +62,17 @@ def staged(attempt):
         yield SimpleNamespace(
             attempt=attempt,
             data=data,
+            files=files,
             root=root,
             workspace=workspace,
             key="staged-capture-" + uuid4().hex,
+            publisher=ControlFileSetPublisher(
+                attempt.engine,
+                Settings(
+                    staging_root=attempt.artifacts.settings.staging_root,
+                    nas_artifact_root=attempt.artifacts.settings.nas_artifact_root,
+                ),
+            ),
         )
 
 
@@ -64,6 +82,8 @@ def admit(staged, *, service=None, key=None, **changes):
             output_root=staged.root,
             worker_uid=os.getuid(),
             control_gid=os.getgid(),
+            result_publisher=staged.publisher,
+            source_commit="a" * 40,
             idempotency_key=key or staged.key,
             expected_source_revision_id=None,
             expected_resource_version=0,
@@ -89,7 +109,7 @@ def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(s
     assert photos[0].original == photos[1].original
     before = counts(staged.attempt)
     assert before[0] == sessions_before
-    for name in staged.data.members:
+    for name in staged.files:
         (staged.workspace / name).unlink()
     (staged.workspace / "outputs").rmdir()
     staged.workspace.rmdir()
@@ -111,7 +131,7 @@ def test_local_composition_recovers_source_committed_before_task_adoption(staged
     monkeypatch.setattr(staged.attempt.service, "accept_source_revision", stopped)
     with pytest.raises(RuntimeError, match="after source commit"):
         admit(staged)
-    for name in staged.data.members:
+    for name in staged.files:
         (staged.workspace / name).unlink()
     before = counts(staged.attempt)
     restarted = KakaoCollectionAttemptService(
@@ -123,6 +143,133 @@ def test_local_composition_recovers_source_committed_before_task_adoption(staged
     recovered = admit(staged, service=restarted)
     assert recovered.replayed and recovered.resolution.source_revision_id == accepted[0]
     assert counts(staged.attempt) == before
+
+
+def test_result_publication_recovers_before_attempt_adoption_without_result_files(
+    staged, monkeypatch
+):
+    published = []
+
+    def stopped(_attempt_id, pointer):
+        published.append(pointer)
+        raise RuntimeError("synthetic process stop after result publication")
+
+    monkeypatch.setattr(staged.attempt.service, "accept_result", stopped)
+    with pytest.raises(RuntimeError, match="after result publication"):
+        admit(staged)
+    assert len(published) == 1
+    with Session(staged.attempt.engine) as session:
+        assert session.get(Attempt, staged.data.reserved.attempt_id).state == "COMMAND_READY"
+    for name in ("outputs/result.json", "outputs/room-report.json"):
+        (staged.workspace / name).unlink()
+    restarted = KakaoCollectionAttemptService(
+        staged.attempt.engine,
+        artifacts=staged.attempt.artifacts,
+        profile_id=staged.attempt.service.profile_id,
+        adapter_release_sha256=staged.attempt.service.adapter_sha256,
+    )
+    result = admit(staged, service=restarted)
+    assert result.resolution.admission.authority.capture_result == published[0]
+    before = counts(staged.attempt)
+    assert admit(staged, service=restarted).replayed
+    assert counts(staged.attempt) == before
+
+
+@pytest.mark.parametrize(
+    "status,error", [("FAILED", "UI_CHANGED"), ("PAUSED", None), ("CANCELLED", None)]
+)
+def test_non_successful_worker_result_is_stored_but_never_becomes_source(staged, status, error):
+    failed = staged.data.result.model_copy(
+        update={"status": status, "report": None, "error_code": error}
+    )
+    path = staged.workspace / "outputs/result.json"
+    path.write_bytes(canonical_json_bytes(failed.model_dump(mode="json")))
+    with pytest.raises(KakaoArchiveError, match="AUTHORITY_REQUIRED"):
+        admit(staged)
+    with Session(staged.attempt.engine) as session:
+        row = session.get(Attempt, staged.data.reserved.attempt_id)
+        assert (row.state, row.result_status, row.error_code) == ("RESULT_ACCEPTED", status, error)
+        original_pointer = (
+            row.result_artifact_id,
+            row.result_artifact_revision_id,
+            row.result_sha256,
+        )
+    before = counts(staged.attempt)
+    # A changed local success cannot overwrite an accepted FAILED/PAUSED/CANCELLED.
+    path.write_bytes(staged.files["outputs/result.json"])
+    with pytest.raises(KakaoArchiveError, match="AUTHORITY_REQUIRED"):
+        admit(staged)
+    assert counts(staged.attempt) == before
+    with Session(staged.attempt.engine) as session:
+        row = session.get(Attempt, staged.data.reserved.attempt_id)
+        assert (
+            row.result_artifact_id,
+            row.result_artifact_revision_id,
+            row.result_sha256,
+        ) == original_pointer
+        assert (row.result_status, row.error_code) == (status, error)
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        "invalid-json",
+        "noncanonical-result",
+        "wrong-execution",
+        "wrong-room",
+        "report-tamper",
+        "noncanonical-report",
+        "oversized-report",
+        "oversized-result",
+    ],
+)
+def test_invalid_result_is_rejected_before_publishing_anything(staged, corruption):
+    from eom_identifiers import sha256_bytes
+
+    result = staged.data.result
+    result_path = staged.workspace / "outputs/result.json"
+    if corruption == "invalid-json":
+        result_path.write_bytes(b"not JSON")
+    elif corruption == "noncanonical-result":
+        result_path.write_bytes(staged.files["outputs/result.json"] + b"\n")
+    elif corruption == "wrong-execution":
+        result = result.model_copy(
+            update={
+                "execution": result.execution.model_copy(
+                    update={"fence": result.execution.fence + 1}
+                )
+            }
+        )
+    elif corruption == "wrong-room":
+        result = result.model_copy(update={"room_id": "kakaoroom_" + "f" * 32})
+    elif corruption == "report-tamper":
+        path = staged.workspace / "outputs/room-report.json"
+        path.write_bytes(b"x" * path.stat().st_size)
+    elif corruption == "noncanonical-report":
+        path = staged.workspace / "outputs/room-report.json"
+        raw = path.read_bytes() + b"\n"
+        path.write_bytes(raw)
+        result = result.model_copy(
+            update={
+                "report": result.report.model_copy(
+                    update={"size_bytes": len(raw), "sha256": sha256_bytes(raw)}
+                )
+            }
+        )
+    elif corruption == "oversized-report":
+        result = result.model_copy(
+            update={"report": result.report.model_copy(update={"size_bytes": 4 * 1024 * 1024 + 1})}
+        )
+    else:
+        result_path.write_bytes(b"x" * 32769)
+    if result != staged.data.result:
+        result_path.write_bytes(canonical_json_bytes(result.model_dump(mode="json")))
+    before = counts(staged.attempt)
+    with pytest.raises(KakaoArchiveError, match="EVIDENCE_INVALID"):
+        admit(staged)
+    assert counts(staged.attempt) == before
+    with Session(staged.attempt.engine) as session:
+        assert session.get(Attempt, staged.data.reserved.attempt_id).state == "COMMAND_READY"
 
 
 @pytest.mark.parametrize(

@@ -229,6 +229,7 @@
         "services/catalog_service/eom_catalog_service/kakao_source_access.py",
         "services/orchestrator/eom_orchestrator/kakao_capture_inputs.py",
         "services/catalog_service/eom_catalog_service/kakao_capture_publication.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_result_publication.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_browser.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_models.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_service.py",

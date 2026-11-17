@@ -69,6 +69,7 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_service/kakao_source_access.py",
             "eom_orchestrator/kakao_capture_inputs.py",
             "eom_catalog_service/kakao_capture_publication.py",
+            "eom_catalog_service/kakao_capture_result_publication.py",
             "eom_catalog_contracts/kakao_collection_browser.py",
             "eom_catalog_contracts/resources/kakao-archive/collection-browser-v1.schema.json",
             "eom_catalog_service/kakao_collection_authorization.py",
