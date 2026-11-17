@@ -34,6 +34,11 @@ capture index만 편집본에 반영하며 직접 쓴 메모는 보존한다. �
 교재/경로를 입력하는 칸은 없다. saved study를 다시 열거나 새 양식을 읽으면 이전 picker의
 timer/미수신 응답도 정리한다. source 연결과 실제 운영/모델 활성화는 구별한다.
 
+API 경로/DTO 변경에는 `scripts/api/export_openapi.sh`와
+`tests/api/test_openapi_contract.py`도 실행한다. unit/브라우저/설치 import만으로 현재
+OpenAPI snapshot과 실제 경로가 같음을 대신하지 않는다. exporter는 pure Kakao contracts도
+명시적 source closure로 읽으며 운영 DB/실제 token을 사용하지 않는다.
+
 ## 검증과 남은 gate
 
 - `test_kakao_study_delivery_rpc.py`: 닫힌 envelope/mirror/hash·기존 owner 호출·상관 오류 거부.

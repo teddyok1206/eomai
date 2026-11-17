@@ -33,6 +33,7 @@
       ],
       "test_paths": [
         "tests/unit/test_kakao_study_delivery_rpc.py",
+        "tests/api/test_openapi_contract.py",
         "tests/web_gui/test_kakao_study_gateway.py",
         "tests/integration/test_kakao_study_delivery_http.py",
         "tests/web_gui/kakao_study_editor_browser_checks.mjs"

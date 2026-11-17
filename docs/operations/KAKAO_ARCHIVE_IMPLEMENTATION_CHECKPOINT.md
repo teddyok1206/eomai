@@ -1,5 +1,21 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 실제 빌드에서 API 명세 정렬
+
+`b3749ce0`의 API build-only 검사가 새 study/concept 경로와 과거 OpenAPI snapshot의 차이로
+설치 전에 거부됐다. 테스트·wheel import를 운영 readiness로 대체하지 않고 기존 exporter로
+현재 명세와 SHA를 다시 생성했다. pure Kakao contracts도 exporter의 명시적 source closure에
+포함했다. 기존 released message schema bytes는 변경하지 않았다.
+
+- API OpenAPI의 보안/멱등/결정론·현재 route 비교 **7 PASS**, 기존 snapshot 대비 지원하는
+  breaking 검사 PASS, 문맥 검사·bash/diff PASS다. 새 명세 SHA는
+  `fcb074f6f0e68b3cdce866568f79c06b3c3a9996148d92ebd66a4a9e74f99d42`다.
+- 실패한 build 로그는 `staging/kakao-concepts-api-build-b3749ce0.log`로 보존했다.
+  이 실패 과정에서 운영 설치/DB 변경/모델 실행은0이다. Web build-only는 통과했지만
+  수정된 명세와 같은 새 source commit으로 양쪽 릴리스를 다시 만든다.
+- 관련 증거는 `staging/kakao-concepts-openapi-{export,tests,breaking,context}-20261117.log`다.
+  새 릴리스 설치·실제 추천/교과서 샘플·최종 PDF와 전체 원래 goal은 여전히 진행 중이다.
+
 ## 2026-11-17 공유 추천 프리셋의 실제 운영 발행 준비
 
 source `0f15c85cc650df8cee5bf787ed52b6136355816c` 후속이다. 빠져 있던 추천 지침/프리셋
