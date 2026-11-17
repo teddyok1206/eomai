@@ -1,9 +1,9 @@
 """Bounded Studio packet/export projections; Catalog retains rules and source authority."""
 
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .contracts import UtcDatetime, WebModel
 from .kakao_archive_contracts import Label, ResourceVersion
@@ -90,7 +90,7 @@ class ExportProfile(WebModel):
     renderer_release_sha256: Sha256
     font_sha256: Sha256
     font_size_bytes: int = Field(strict=True, ge=1, le=32 * 1024 * 1024)
-    layout_policy: Literal["student-question-a4/1.0"]
+    layout_policy: Literal["student-question-a4/1.0", "student-study-a4/1.0"]
 
 
 class ExportCreate(WebModel):
@@ -102,7 +102,7 @@ class ExportCreate(WebModel):
 
 
 class StudentExport(WebModel):
-    schema_version: Literal["kakao-export/1.0"]
+    schema_version: Literal["kakao-export/1.0", "kakao-export/2.0"]
     source_binding_id: BindingId
     packet_id: PacketId
     packet_revision_id: PacketRevisionId
@@ -120,14 +120,45 @@ class StudentExport(WebModel):
     layout: KakaoArtifactPointer | None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,79}$")
 
+    @model_validator(mode="after")
+    def supported_format(self) -> Self:
+        # Wire alignment only. Current permissions, publication and content remain Catalog rules.
+        study = self.schema_version == "kakao-export/2.0"
+        expected = (
+            "eom://schemas/kakao-archive/worker-study-layout/1.0"
+            if study
+            else "eom://schemas/kakao-archive/worker-question-layout/1.0"
+        )
+        if (self.profile.layout_policy == "student-study-a4/1.0") != study or (
+            self.layout is not None and self.layout.schema_ref != expected
+        ):
+            raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
+        return self
+
 
 class ExportMutation(WebModel):
-    schema_version: Literal["kakao-export-mutation/1.0"]
+    schema_version: Literal["kakao-export-mutation/1.0", "kakao-export-mutation/2.0"]
     export: StudentExport
     replayed: bool = Field(strict=True)
 
+    @model_validator(mode="after")
+    def supported_format(self) -> Self:
+        if (self.schema_version == "kakao-export-mutation/2.0") != (
+            self.export.schema_version == "kakao-export/2.0"
+        ):
+            raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
+        return self
+
 
 class ExportPage(WebModel):
-    schema_version: Literal["kakao-export-page/1.0"]
+    schema_version: Literal["kakao-export-page/1.0", "kakao-export-page/2.0"]
     items: tuple[StudentExport, ...] = Field(max_length=100)
     next_cursor: ExportId | None
+
+    @model_validator(mode="after")
+    def supported_format(self) -> Self:
+        if self.schema_version == "kakao-export-page/1.0" and any(
+            item.schema_version == "kakao-export/2.0" for item in self.items
+        ):
+            raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
+        return self

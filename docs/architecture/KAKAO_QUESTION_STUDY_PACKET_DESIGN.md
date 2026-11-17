@@ -1,6 +1,7 @@
 # KakaoTalk 질문 자료의 개념 보강·Studio 편집
 
-상태: **2026-11-17 사용자 요구 확정, 후속 설계. 아직 구현·운영 활성화 아님.**
+상태: **2026-11-17 역할별 PDF·저장/공개 연결은 source 구현·합성 검증 중이다.
+운영 활성화·실제 수신 자료의 반복 출력·개념 보강 편집/추천은 아직 미완료다.**
 
 기존 [명세](KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md)와
 [저장/PDF 연결](KAKAO_ARCHIVE_DURABLE_CONTENT.md)을 확장한다. 수집·질문 구성·일반 PDF에
@@ -254,3 +255,33 @@ Codex 역할 지침의 개발용 초안은
   실제 설치 wheel·fixed launcher와 source owner/profile/API의 호환 활성화는 별도 gate다.
 - 복제한 두 실행기는 권한/복구 규칙이 서로 달라질 수 있다. 실제 두 출력 family가 존재하는
   지금 필요한 작은 typed 분기만 추가하는 것이 더 단순한 대안이다.
+
+## 10. 저장 export와 공개 화면의 호환 전환
+
+기존 export owner/DB를 재사용한다. 새 layout policy는 저장 profile에 이미 들어갈 작은 값이며
+기존 build hash·unique claim의 일부다. 신규 DB/queue/index는 필요 없다. request의 학생·packet
+선택 의미는 같아 `export-create/1.0`을 유지하고 runtime/font/policy는 계속 서버가 결정한다.
+
+- 기존 v1 schema bytes와 record는 보존한다. `export-store-v2`는 study profile/export/mutation과
+  v1/v2를 함께 나열할 page만 추가하며 공통 필드는 predecessor 참조로 재사용한다. RPC v2도
+  기존 요청·응답을 참조하고 세 가지 새 export 응답만 추가한다. API/Web이 모두 지원하는
+  release에서만 새 policy를 활성화한다. 같은 Python DTO가 두 명시적 tag를 읽을 수 있지만
+  tag/profile/layout 혼합은 검증 실패이며 implicit latest는 없다.
+- 저장 row의 정확한 profile로 output version/layout URI를 결정한다. 운영 profile이 바뀌어도
+  과거 완료본·같은 key replay는 원래 export revision/Artifact를 읽는다. 새 key의 새 profile은
+  다른 build identity다. 오래된 RUNNING/PENDING을 새 runtime에 자동 재핀하지 않는다.
+- 동일 row/attempt/command/current source의 짧은 CAS는 그대로다. `complete_export`는 검증된
+  publication의 실제 preview/page 수를 저장하고 원래 publication job의 layout SHA·쪽수·family
+  provenance를 대조한다. 새 record의 쪽수를 질문 개수로 덮지 않는다. v1은 기존1질문1쪽도 검사한다.
+- 이번 공개 연결은 **기존 질문/답변/기록 정보**만 출력한다. saved study owner가 연결되기 전에는
+  non-null study revision/supplement를 bind하지 못하게 한다. worker DTO의 지원을 원문/교재
+  권한으로 오인하지 않는다. 개념 편집 저장은 이 source pin에 붙는 별도 후속 단계다.
+- Studio 새 자료는 조교 답변 포함을 기본으로 제안하고 사용자가 끌 수 있다. 저장한 packet의
+  선택은 그대로이며 읽기/다운로드·상태 확인으로 새 packet/렌더를 만들지 않는다. 과거 출력과
+  새 질문/답변 출력을 쉽게 구별한다. 클라이언트는 권한·source invariant를 재구현하지 않는다.
+- 비용은 bounded page 목록+source lookup이며 기존 indexed ID·build hash·ordered tuple을 쓴다.
+  file dereference·현재 권한/생명주기·revision/hash 확인, 종료 증거와 실패/retry 보존은 기존
+  owner가 유지한다. 배포 전 임시 PostgreSQL에서 동시 요청/재전송/중단/재시작/권한 철회와
+  v1/v2 혼합 history를 검사하고 실제 source 실증과 구분한다.
+- 단순히 v1의 쪽수나 layout 의미를 바꾸는 대안은 과거 결과를 오해하게 한다. 현재 두 wire
+  family에 필요한 얇은 additive 응답만 추가하는 것이 기존 프레임워크 안의 가장 작은 변경이다.

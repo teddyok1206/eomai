@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-delivery-v2/2.0",
+  "title": "Backward-compatible delivery with study PDF responses",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/7/properties/operation"
+        },
+        "request_id": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/7/properties/request_id"
+        },
+        "status": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/7/properties/status"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v2/2.0#/$defs/Mutation"
+        },
+        "error_code": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/7/properties/error_code"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/9/properties/operation"
+        },
+        "request_id": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/9/properties/request_id"
+        },
+        "status": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/9/properties/status"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v2/2.0#/$defs/Export"
+        },
+        "error_code": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/9/properties/error_code"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/11/properties/operation"
+        },
+        "request_id": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/11/properties/request_id"
+        },
+        "status": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/11/properties/status"
+        },
+        "result": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v2/2.0#/$defs/Page"
+        },
+        "error_code": {
+          "$ref": "eom://schemas/kakao-archive/catalog-kakao-delivery-v1/1.0#/oneOf/11/properties/error_code"
+        }
+      }
+    }
+  ]
+}

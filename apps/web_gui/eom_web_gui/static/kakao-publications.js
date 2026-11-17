@@ -32,7 +32,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
     nodes.start.value = date; nodes.end.value = date; nodes.title.value = "학생 질문 자료";
     const modeLabel = el("label", "자료 상태"); nodes.mode = el("select");
     for (const [value, label] of [["DRAFT", "확인용 초안"], ["FINAL", "확인 완료 자료"]]) { const option = el("option", label); option.value = value; nodes.mode.append(option); } modeLabel.append(nodes.mode); form.append(modeLabel);
-    const replies = el("label", undefined, "kakao-review-check"); nodes.replies = el("input"); nodes.replies.type = "checkbox"; replies.append(nodes.replies, el("span", "선생님 답변도 넣기")); form.append(replies);
+    const replies = el("label", undefined, "kakao-review-check"); nodes.replies = el("input"); nodes.replies.type = "checkbox"; nodes.replies.checked = true; replies.append(nodes.replies, el("span", "조교 답변도 함께 넣기")); form.append(replies);
     nodes.selection = el("div", undefined, "kakao-selected-questions"); nodes.selection.setAttribute("aria-label", "자료에 넣을 질문");
     nodes.save = el("button", "선택한 질문으로 자료 저장", "button secondary"); nodes.save.type = "submit";
     nodes.note = el("p", "질문 목록에서 ‘자료에 넣기’를 누른 뒤 기간을 골라 주세요.", "form-message"); nodes.note.setAttribute("role", "status");
@@ -122,6 +122,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
     const student = currentStudents.get(value.student_id);
     if (value.source_binding_id !== binding.source_binding_id || value.packet_id !== currentPacket.packet.packet_id || value.packet_revision_id !== currentPacket.packet.packet_revision_id || !student) throw new Error("다른 자료의 PDF입니다.");
     const item = el("div", undefined, "kakao-export"); item.append(el("strong", student.display_name), badge(value.state));
+    item.append(el("p", value.profile?.layout_policy === "student-study-a4/1.0" ? (currentPacket.packet.include_replies ? "질문·답변과 기록 정보" : "질문과 기록 정보") : "기존 질문 자료"));
     if (value.state === "COMPLETED") { identifier(value.export_revision_id); item.append(el("p", `${value.page_count}쪽`)); if (writable()) item.append(downloadLink(value)); }
     else if (value.state === "NEEDS_LAYOUT_REVIEW") item.append(el("p", "한 페이지에 담기 어려운 질문이 있습니다. 질문을 나누거나 사진 구성을 확인해 주세요."));
     else if (value.state === "FAILED") item.append(el("p", "PDF를 만들지 못했습니다. 실패 기록은 보존됩니다."));
@@ -176,7 +177,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
     }
     if (value && value.state !== "RETIRED") await refresh();
   }
-  function clearPrivateFields() { if (!root) return; nodes.title.value = "학생 질문 자료"; const date = new Intl.DateTimeFormat("sv-SE", {timeZone: "Asia/Seoul"}).format(new Date()); nodes.start.value = date; nodes.end.value = date; nodes.mode.value = "DRAFT"; nodes.replies.checked = false; say("질문 목록에서 ‘자료에 넣기’를 누른 뒤 기간을 골라 주세요."); }
+  function clearPrivateFields() { if (!root) return; nodes.title.value = "학생 질문 자료"; const date = new Intl.DateTimeFormat("sv-SE", {timeZone: "Asia/Seoul"}).format(new Date()); nodes.start.value = date; nodes.end.value = date; nodes.mode.value = "DRAFT"; nodes.replies.checked = true; say("질문 목록에서 ‘자료에 넣기’를 누른 뒤 기간을 골라 주세요."); }
   function setOwner(value) { if (value === owner) return; owner = value; permissions = new Set(); generation++; detailGeneration++; stop(); binding = null; selected.clear(); packets.clear(); currentStudents.clear(); packetIntent = null; exportIntent = null; observed = null; currentPacket = null; saving = false; exporting = false; observing = false; if (root) { nodes.list.replaceChildren(); nodes.detail.replaceChildren(); clearPrivateFields(); renderSelection(); } }
   function setPermissions(values) { permissions = new Set(values); generation++; detailGeneration++; stop(); if (!permissions.has("kakao_archive:read")) { void setBinding(null); clearPrivateFields(); } if (root) controls(); }
   function open() { active = true; }

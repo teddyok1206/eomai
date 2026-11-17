@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/export-store-v2/2.0",
+  "title": "Study PDF exports and mixed immutable history",
+  "$defs": {
+    "Profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "renderer_release_sha256",
+        "font_sha256",
+        "font_size_bytes",
+        "layout_policy"
+      ],
+      "properties": {
+        "renderer_release_sha256": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Profile/properties/renderer_release_sha256"
+        },
+        "font_sha256": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Profile/properties/font_sha256"
+        },
+        "font_size_bytes": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Profile/properties/font_size_bytes"
+        },
+        "layout_policy": {
+          "const": "student-study-a4/1.0"
+        }
+      }
+    },
+    "Export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "packet_id",
+        "packet_revision_id",
+        "student_id",
+        "export_id",
+        "profile",
+        "subset_sha256",
+        "mode",
+        "state",
+        "created_at",
+        "completed_at",
+        "export_revision_id",
+        "page_count",
+        "pdf",
+        "layout",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export/2.0"
+        },
+        "source_binding_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/source_binding_id"
+        },
+        "packet_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/packet_id"
+        },
+        "packet_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/packet_revision_id"
+        },
+        "student_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/student_id"
+        },
+        "export_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/export_id"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "subset_sha256": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/subset_sha256"
+        },
+        "mode": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/mode"
+        },
+        "state": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/state"
+        },
+        "created_at": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/created_at"
+        },
+        "completed_at": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/completed_at"
+        },
+        "export_revision_id": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/export_revision_id"
+        },
+        "page_count": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/page_count"
+        },
+        "pdf": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/pdf"
+        },
+        "layout": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/layout"
+        },
+        "error_code": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export/properties/error_code"
+        }
+      }
+    },
+    "Mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "export",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export-mutation/2.0"
+        },
+        "export": {
+          "$ref": "#/$defs/Export"
+        },
+        "replayed": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Mutation/properties/replayed"
+        }
+      }
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-export-page/2.0"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Export"
+              },
+              {
+                "$ref": "#/$defs/Export"
+              }
+            ]
+          }
+        },
+        "next_cursor": {
+          "$ref": "eom://schemas/kakao-archive/export-store-v1/1.0#/$defs/Page/properties/next_cursor"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Export"
+    },
+    {
+      "$ref": "#/$defs/Mutation"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    }
+  ]
+}

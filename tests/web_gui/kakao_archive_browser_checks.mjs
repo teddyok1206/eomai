@@ -78,12 +78,12 @@ async function api(path, options = {}) {
       students:(saved?[row(1)]:[row(1),row(2)]).map(q=>({student_id:q.student.student_id,student_display_revision_id:q.student.student_display_revision_id,display_name:q.student.display_name,question_count:1}))};
   }
   if (url.pathname === '/kakao-archive/exports' && options.method==='POST') {
-    fixture.latestExport||={...exported,export_id:id('kakaoexport','4'),packet_id:options.body.packet_id,packet_revision_id:options.body.packet_revision_id,student_id:options.body.student_id,state:'PENDING',completed_at:null,export_revision_id:null,page_count:0,pdf:null,layout:null};
+    fixture.latestExport||={...exported,schema_version:'kakao-export/2.0',profile:{...exported.profile,layout_policy:'student-study-a4/1.0'},export_id:id('kakaoexport','4'),packet_id:options.body.packet_id,packet_revision_id:options.body.packet_revision_id,student_id:options.body.student_id,state:'PENDING',completed_at:null,export_revision_id:null,page_count:0,pdf:null,layout:null};
     if(fixture.failExport){fixture.failExport=false;throw new Error('SYNTHETIC_LOST_AFTER_REQUEST');}
-    return {schema_version:'kakao-export-mutation/1.0',export:fixture.latestExport,replayed:true};
+    return {schema_version:'kakao-export-mutation/2.0',export:fixture.latestExport,replayed:true};
   }
   if (url.pathname.startsWith('/kakao-archive/exports/')) {
-    fixture.latestExport={...fixture.latestExport,state:'COMPLETED',completed_at:'2026-11-16T00:01:00Z',export_revision_id:id('kakaoexportrev','4'),page_count:1,pdf:exported.pdf,layout:exported.layout};
+    fixture.latestExport={...fixture.latestExport,state:'COMPLETED',completed_at:'2026-11-16T00:01:00Z',export_revision_id:id('kakaoexportrev','4'),page_count:2,pdf:exported.pdf,layout:{...exported.layout,schema_ref:'eom://schemas/kakao-archive/worker-study-layout/1.0'}};
     return fixture.latestExport;
   }
   if (url.pathname === '/kakao-archive/exports') {
@@ -114,7 +114,7 @@ const server = createServer((request, response) => {
   response.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');response.end(content);
 });
 await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
-const browser = await chromium.launch({headless:true});
+const browser = await chromium.launch({headless:true,channel:process.env.EOM_WEB_PLAYWRIGHT_CHANNEL||undefined});
 try {
   const page = await browser.newPage({viewport:{width:1440,height:1000}}), errors = [], outbound = [];
   page.on('pageerror',error=>errors.push(error.message));
@@ -123,6 +123,7 @@ try {
   await page.getByRole('combobox',{name:'카카오 채널'}).selectOption({label:'합성 채널'});
   await page.getByRole('button',{name:'첫 번째 학생의 질문',exact:true}).waitFor();
   assert.equal(await page.getByRole('heading',{name:'KakaoTalk',exact:true}).count(),1,'install duplicated listeners/markup');
+  assert.equal(await page.getByRole('checkbox',{name:'조교 답변도 함께 넣기'}).isChecked(),true);
   assert.match(await page.locator('[data-kakao="rooms"]').textContent(),/학생 연결 필요/);
   await page.getByRole('button',{name:'첫 번째 학생의 질문',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-kakao="detail"]').textContent.includes('첫째 줄'));
@@ -266,6 +267,7 @@ try {
   await packetForm.getByRole('button',{name:'같은 자료 저장 요청 확인',exact:true}).click();
   await page.getByRole('heading',{name:'새 질문 자료',exact:true}).waitFor();
   const packetCalls=await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/question-packets'&&call.method==='POST'));
+  assert.equal(packetCalls[1].body.include_replies,true,'new packet omitted replies by default');
   assert.equal(packetCalls.length,3);assert.notEqual(packetCalls[0].key,packetCalls[1].key);assert.equal(packetCalls[1].key,packetCalls[2].key);assert.deepEqual(packetCalls[1].body,packetCalls[2].body);
   assert.equal(packetCalls[1].body.questions[0].question_revision_id,await page.evaluate(()=>fixture.confirmed.question_revision_id));
   await page.getByRole('button',{name:'학생 PDF 만들기',exact:true}).click();
@@ -273,6 +275,7 @@ try {
   await page.getByRole('button',{name:'같은 PDF 요청 확인',exact:true}).click();
   await page.getByRole('button',{name:'상태 확인',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.kakao-packet-detail').textContent.includes('COMPLETED'));
+  assert.match(await page.locator('.kakao-packet-detail').textContent(),/질문·답변과 기록 정보/);
   const exportCalls=await page.evaluate(()=>fixture.calls.filter(call=>call.path==='/kakao-archive/exports'&&call.method==='POST'));
   assert.equal(exportCalls.length,2);assert.equal(exportCalls[0].key,exportCalls[1].key);assert.deepEqual(exportCalls[0].body,exportCalls[1].body);
   const links=page.getByRole('link',{name:'PDF 내려받기',exact:true});

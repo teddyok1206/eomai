@@ -24,6 +24,7 @@ from tests.integration.test_kakao_stored_student_pdf import RELEASE, RenderProce
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 BASE = "/api/v1/kakao-archive"
+LAYOUTS = ("student-question-a4/1.0", "student-study-a4/1.0")
 
 
 class StoppedLocalRender(RenderProcess):
@@ -43,7 +44,7 @@ class StoppedLocalRender(RenderProcess):
 
 
 @contextmanager
-def delivery_api(question_store, tmp_path, *, launcher=None):
+def delivery_api(question_store, tmp_path, *, launcher=None, layout_policy=LAYOUTS[0]):
     engine, _actor, questions, _initial, sources, artifacts, _binding = question_store
     packets = KakaoPacketService(engine, artifacts=artifacts, questions=questions, sources=sources)
     font_path, member = font(tmp_path)
@@ -51,6 +52,7 @@ def delivery_api(question_store, tmp_path, *, launcher=None):
         renderer_release_sha256=RELEASE,
         font_sha256=member.sha256,
         font_size_bytes=member.size_bytes,
+        layout_policy=layout_policy,
     )
     exports = KakaoExportService(
         engine, artifacts=artifacts, packets=packets, sources=sources, profile=profile
@@ -78,7 +80,7 @@ def delivery_api(question_store, tmp_path, *, launcher=None):
         yield api, coordinator, launcher, exports, driver, application
 
 
-def create_packet(api, qcommand, *, final=False):
+def create_packet(api, qcommand, *, final=False, include_replies=False):
     result = api.post(
         BASE + "/questions",
         json=qcommand.model_dump(mode="json"),
@@ -109,7 +111,7 @@ def create_packet(api, qcommand, *, final=False):
         display_start_date=str(date(2026, 1, 1)),
         display_end_date_inclusive=str(date(2026, 12, 31)),
         mode="FINAL" if final else "DRAFT",
-        include_replies=False,
+        include_replies=include_replies,
     )
     headers = {"Idempotency-Key": "delivery-packet-" + uuid4().hex}
     result = api.post(BASE + "/question-packets", json=command, headers=headers)
@@ -136,11 +138,12 @@ def request_export(api, packet, student):
     return result.json()["data"]["export"], command, headers
 
 
+@pytest.mark.parametrize("layout_policy", LAYOUTS)
 def test_actual_http_photo_pdf_replay_and_current_download_authority(
-    question_store, source_store, tmp_path
+    question_store, source_store, tmp_path, layout_policy
 ):
     qcommand, _photo = photo_command(question_store, source_store)
-    with delivery_api(question_store, tmp_path) as (
+    with delivery_api(question_store, tmp_path, layout_policy=layout_policy) as (
         api,
         coordinator,
         launcher,
@@ -205,10 +208,11 @@ def test_actual_http_photo_pdf_replay_and_current_download_authority(
         )
 
 
+@pytest.mark.parametrize("layout_policy", LAYOUTS)
 def test_http_publication_interruption_recovers_same_attempt_without_render(
-    question_store, tmp_path, monkeypatch
+    question_store, tmp_path, monkeypatch, layout_policy
 ):
-    with delivery_api(question_store, tmp_path) as (
+    with delivery_api(question_store, tmp_path, layout_policy=layout_policy) as (
         api,
         coordinator,
         launcher,
@@ -237,12 +241,13 @@ def test_http_publication_interruption_recovers_same_attempt_without_render(
         ).content.startswith(b"%PDF-")
 
 
+@pytest.mark.parametrize("layout_policy", LAYOUTS)
 def test_actual_studio_packet_student_pdf_download_and_same_request_replay(
-    question_store, source_store, tmp_path
+    question_store, source_store, tmp_path, layout_policy
 ):
     qcommand, _photo = photo_command(question_store, source_store)
     with (
-        delivery_api(question_store, tmp_path) as (
+        delivery_api(question_store, tmp_path, layout_policy=layout_policy) as (
             api,
             coordinator,
             launcher,
@@ -345,3 +350,65 @@ def test_actual_studio_packet_student_pdf_download_and_same_request_replay(
         assert post("/exports", request, key).json()["export"] == value
         assert coordinator.advance_once() == "IDLE" and launcher.calls == 1
         assert web.get(root + "/exports", params=params).json()["items"] == [value]
+
+
+def test_study_export_stores_actual_reply_page_count_and_downloads_complete_source(
+    question_store, source_store, tmp_path
+):
+    _, actor, _, initial, sources, _, _ = question_store
+    previous = sources.get_source(
+        actor,
+        initial.source_binding_id,
+        initial.room_id,
+        source_revision_id=initial.source_revision_id,
+    ).resolution
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 300))
+    pixmap.clear_with(180)
+    photo = pixmap.tobytes("png")
+    admission, _ = source_store[-1](
+        previous=previous,
+        texts=("학생의 질문과 사진입니다.", "조교 원문 답변과 설명입니다.\r\n" * 90),
+        roles=("student", "staff"),
+        photos={1: (photo, 400, 300), 2: (photo, 400, 300)},
+    )
+    source = sources.admit_source(
+        actor, admission, idempotency_key="study-role-source-" + uuid4().hex
+    )
+    qcommand = initial.model_copy(
+        update={"source_revision_id": source.resolution.source_revision_id}
+    )
+    with delivery_api(question_store, tmp_path, layout_policy=LAYOUTS[1]) as (
+        api,
+        coordinator,
+        launcher,
+        exports,
+        _,
+        _,
+    ):
+        packet, question = create_packet(api, qcommand, final=True, include_replies=True)
+        assert packet["question_count"] == 1
+        pending, request, headers = request_export(api, packet, question["student"]["student_id"])
+        assert pending["schema_version"] == "kakao-export/2.0"
+        assert coordinator.advance_once() == "COMPLETED"
+        params = {"source_binding_id": packet["source_binding_id"]}
+        path = BASE + "/exports/" + pending["export_id"]
+        result = api.get(path, params=params)
+        assert result.status_code == 200, result.text
+        value = result.json()["data"]
+        assert value["page_count"] > 2
+        assert value["layout"]["schema_ref"].endswith("worker-study-layout/1.0")
+        pdf = api.get(path + "/file", params=params | {"revision_id": value["export_revision_id"]})
+        assert pdf.status_code == 200, pdf.text if pdf.status_code != 200 else ""
+        with pymupdf.open(stream=pdf.content, filetype="pdf") as document:
+            assert len(document) == value["page_count"]
+            assert sum(len(p.get_image_info()) for p in document) == 2
+            text = "".join(p.get_text() for p in document).replace("\u00a0", " ")
+            assert text.count("조교 원문 답변과 설명입니다.") == 90
+            assert "기록 정보" in text
+        same = api.post(BASE + "/exports", json=request, headers=headers)
+        assert same.json()["data"]["export"] == value
+        assert coordinator.advance_once() == "IDLE" and launcher.calls == 1
+        assert (
+            exports.get_export(actor, initial.source_binding_id, value["export_id"]).page_count
+            == value["page_count"]
+        )

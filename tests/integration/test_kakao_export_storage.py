@@ -20,6 +20,7 @@ from eom_catalog_service.kakao_pdf_inputs import prepare_kakao_pdf_inputs
 from eom_catalog_service.kakao_pdf_publication import publish_kakao_pdf
 from eom_identity_service.models import ApiSessionRecord
 from eom_kakao_archive_contracts import RenderCommand, canonical_bytes
+from eom_kakao_archive_contracts.study import StudyRenderCommand, StudyRenderManifest
 from eom_orchestrator.kakao_pdf_execution import KakaoPdfExecutor
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError
@@ -39,21 +40,25 @@ from tests.integration.test_kakao_stored_student_pdf import (
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
-@pytest.fixture
-def export_store(packet_store, tmp_path):
-    engine, actor, packets, request, selected, _questions, sources, artifacts = packet_store
-    saved = packets.save_packet(actor, request, idempotency_key="export-packet-" + uuid4().hex)
+@pytest.fixture(params=("student-question-a4/1.0", "student-study-a4/1.0"))
+def export_store(request, packet_store, tmp_path):
+    layout_policy = request.param
+    engine, actor, packets, packet_request, selected, _questions, sources, artifacts = packet_store
+    saved = packets.save_packet(
+        actor, packet_request, idempotency_key="export-packet-" + uuid4().hex
+    )
     font_path, member = font(tmp_path)
     profile = KakaoExportProfile(
         renderer_release_sha256=RELEASE,
         font_sha256=member.sha256,
         font_size_bytes=member.size_bytes,
+        layout_policy=layout_policy,
     )
     service = KakaoExportService(
         engine, artifacts=artifacts, packets=packets, sources=sources, profile=profile
     )
     command = KakaoExportCreate(
-        source_binding_id=request.source_binding_id,
+        source_binding_id=packet_request.source_binding_id,
         packet_id=saved.packet.packet_id,
         packet_revision_id=saved.packet.packet_revision_id,
         student_id=selected[0].student.student_id,
@@ -84,23 +89,29 @@ def render_export(store, tmp_path):
         font_source=font_path,
         font=member,
         authorize=current_authorizer(engine, actor, sources, packet, selected),
+        layout_policy=claim.export.profile.layout_policy,
     )
-    command = RenderCommand.model_validate(
-        dict(
-            execution=claim.execution.model_dump(mode="json"),
-            schema_version="kakao-question-render/1.0",
-            export_id=accepted.export_id,
-            source_binding_id=request.source_binding_id,
-            packet_revision_id=request.packet_revision_id,
-            student_id=request.student_id,
-            subset_sha256=prepared.manifest.subset_sha256,
-            mode=accepted.mode,
-            renderer_release_sha256=RELEASE,
-            layout_policy=claim.export.profile.layout_policy,
-            manifest=prepared.manifest_member,
-            font=prepared.font_member,
+    fields = dict(
+        execution=claim.execution.model_dump(mode="json"),
+        export_id=accepted.export_id,
+        source_binding_id=request.source_binding_id,
+        packet_revision_id=request.packet_revision_id,
+        student_id=request.student_id,
+        subset_sha256=prepared.manifest.subset_sha256,
+        mode=accepted.mode,
+        renderer_release_sha256=RELEASE,
+        layout_policy=claim.export.profile.layout_policy,
+        manifest=prepared.manifest_member,
+        font=prepared.font_member,
+    )
+    if isinstance(prepared.manifest, StudyRenderManifest):
+        command = StudyRenderCommand.model_validate(
+            fields | dict(schema_version="kakao-study-render/1.0", study_revision_id=None)
         )
-    )
+    else:
+        command = RenderCommand.model_validate(
+            fields | dict(schema_version="kakao-question-render/1.0")
+        )
     service.bind_command(actor, request.source_binding_id, accepted.export_id, command)
 
     def authorize():
@@ -438,3 +449,65 @@ def test_export_page_and_build_lookup_have_dedicated_btree_access(export_store):
     assert any("Index" in line for line in build_plan)
     assert not any("Seq Scan" in line for line in build_plan)
     assert "USING btree (owner_operator_id, build_sha256)" in build_index
+
+
+def test_changed_output_policy_preserves_old_intent_and_reads_mixed_history(export_store):
+    engine, actor, service, command, packets, sources, artifacts, profile, *_ = export_store
+    key = "exact-policy-export-" + uuid4().hex
+    old = service.request_export(actor, command, idempotency_key=key).export
+    opposite = (
+        "student-study-a4/1.0"
+        if profile.layout_policy == "student-question-a4/1.0"
+        else "student-question-a4/1.0"
+    )
+    next_service = KakaoExportService(
+        engine,
+        artifacts=artifacts,
+        packets=packets,
+        sources=sources,
+        profile=profile.model_copy(update={"layout_policy": opposite}),
+    )
+    assert next_service.request_export(actor, command, idempotency_key=key).export == old
+    new = next_service.request_export(
+        actor, command, idempotency_key="new-policy-" + uuid4().hex
+    ).export
+    assert new.export_id != old.export_id and new.schema_version != old.schema_version
+    page = next_service.list_exports(actor, command.source_binding_id)
+    assert page.schema_version == "kakao-export-page/2.0" and set(page.items) == {old, new}
+    with pytest.raises(KakaoArchiveError, match="RUNTIME_MISMATCH"):
+        next_service.claim_export(actor, command.source_binding_id, old.export_id)
+
+
+@pytest.mark.parametrize("export_store", ["student-study-a4/1.0"], indirect=True)
+def test_unsaved_study_revision_cannot_be_bound_to_original_question_export(export_store):
+    engine, actor, service, request, _, _, _, profile, _, font = export_store
+    saved = service.request_export(
+        actor, request, idempotency_key="unbound-study-" + uuid4().hex
+    ).export
+    claim = service.claim_export(actor, request.source_binding_id, saved.export_id)
+    command = StudyRenderCommand.model_validate(
+        dict(
+            schema_version="kakao-study-render/1.0",
+            execution=claim.execution,
+            export_id=saved.export_id,
+            source_binding_id=saved.source_binding_id,
+            packet_revision_id=saved.packet_revision_id,
+            student_id=saved.student_id,
+            study_revision_id="kakaostudyrev_" + uuid4().hex,
+            subset_sha256=saved.subset_sha256,
+            mode=saved.mode,
+            renderer_release_sha256=profile.renderer_release_sha256,
+            layout_policy=profile.layout_policy,
+            font=font,
+            manifest=dict(
+                relative_path="manifest.json",
+                sha256="sha256:" + "a" * 64,
+                size_bytes=1,
+                media_type="application/json",
+            ),
+        )
+    )
+    with pytest.raises(KakaoArchiveError, match="EXECUTION_MISMATCH"):
+        service.bind_command(actor, request.source_binding_id, saved.export_id, command)
+    with Session(engine) as session:
+        assert session.get(KakaoExportAttemptRecord, claim.execution.attempt_id).command is None

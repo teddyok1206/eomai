@@ -1,5 +1,55 @@
 # KakaoTalk 구현 체크포인트
 
+### 최종 사용자 PDF 산출물 — 아직 미완료
+
+사용자가 2026-11-17 재확인했다. 최종 마무리할 때 **보존 중인 실제 CSV·사진·metadata로
+PDF 한 개를 만들어 파일 링크로 제공**한다. 가능한 처리는 시스템의 원본 확인·질문 편집·
+packet/export/render/파일 발행 코드로 재생한다. 기존 수동 행 선택/답변 쪽 합치기 샘플을
+이 완료 증거로 대체하지 않는다. 학생/조교 사진·질문/답변·시기 정보·관련 자료의 구분,
+사진 미확보·정합 미확정과 교재 보강의 실제 포함 범위를 정직하게 표시한다. 새 PDF를
+직접 열고 쪽수·그림/본문 무잘림·SHA/재조회·다운로드를 확인한 뒤 해당 링크를 보고한다.
+
+## 2026-11-17 study export 저장/공개 API·Studio source 연결 — 운영 활성화 전
+
+새 질문/답변 PDF가 기존 export owner와 API/BFF/Studio에 연결됐다. 기존 요청·DB·queue·
+v1 schema bytes는 유지했고 두 additive 응답 schema만 추가했다. 운영의 설치/활성 pin은
+아직 바꾸지 않았으므로 **운영 사용자 새 PDF·실제 카카오 수집 완료로 세지 않는다**.
+
+1. `export-store-v2` SHA
+   `sha256:f02c5fd52c8680362c04811577aecee90ada6aeb638abc2a286281bd9eb0ed61`,
+   `catalog-kakao-delivery-v2` SHA
+   `sha256:f3962c527fccda6ef672ce669404ec72dab01d49db3794657d5e95acbcf0c052`를
+   behavior 전에 정의·mirror/pin했다. 공통 필드는 v1을 참조하고 같은 typed DTO가 두 정확한
+   version을 읽는다. tag/profile/layout 혼합은 Catalog와 Web에서 거부한다. raw schema의
+   전체 input을 담는 예외는 stored-export owner의 안정된 오류로 바꿔 전달한다.
+2. row의 정확한 profile이 command/output family를 결정하고 완료본의 실제 쪽수·layout SHA·
+   publication provenance를 대조한다. 같은 key는 예전 profile의 원래 결과이며 새 key/새
+   policy는 다른 build다. v1/v2 혼합 목록·재시작·동시 claim·권한 철회/FD 닫기와 실패 이력은
+   기존 owner가 보호한다. saved study owner 전에는 non-null study revision bind를 거부한다.
+3. 기존 composition의 `EOM_KAKAO_PDF_LAYOUT_POLICY=student-study-a4/1.0`을 명시해야
+   신규 출력이 전환된다. 기본값은 여전히v1이다. 새 worker/core/API/Web 호환 설치 및 고정
+   systemd 실행 검증 이전에는 flag만 바꾸지 않는다. 새로운 DB migration은 없다.
+4. source 묶음183 PASS, 최종 public contract/composition 묶음115 PASS 및 신규 설정/문맥27
+   PASS다(겹침 합산 안 함). strict mypy6개·Ruff/format/diff, wire audit1482 canonical/
+   1127 mirror/12839 refs가 통과했다. 잘못 잡은 jsonschema 예외 타입과 JobRecord 대신
+   Artifact Revision의 result를 읽어야 하는 타입 오류는 source 단계에서 수정했으며 운영
+   재시도·기록 변경은 없었다.
+5. 공식 guarded disposable PostgreSQL에서 기존/v2를 함께 실행해292 PASS다.
+   `staging/kakao-study-export-final-disposable-20261117.log`에 보존했다. 최종 Web DTO 확인
+   이후 공식 runner의 pytest 선택으로 BFF 다운로드 두 profile+긴 조교 답변을3 PASS로
+   재확인했다(`staging/kakao-study-export-web-final-20261117.log`, 나머지289개는 명시 deselect).
+   실제 HTTP/UDS/DB/worker로 학생·조교 사진과90줄 원문 답변/기록 정보를 여러 쪽 PDF로
+   저장·다운로드하고 실제 쪽수·동일 결과 replay/IDLE을 확인했다. synthetic이며 실제 계정
+   source 수락·새 release systemd 실증을 대체하지 않는다. 기존 FastAPI/httpx 경고1건은 남았다.
+6. 실제 Chromium의 익명 fixture에서 새 packet의 답변 포함 default·기존 선택 보존·새 출력
+   형식 표시·완료본 링크/조회·중복 없는 재전송과 stale 화면/권한 제거가 PASS다. host Node18은
+   설치 Playwright와 안 맞아 브라우저 시작 전에 거절됐고, 보호된 browser prefix의 기존
+   Node26/Chromium1255를 명시해 실행했다. 새 browser/패키지를 다운받거나 카카오 profile을
+   열지 않았다. 이는 실제 브라우저 fixture이지 실제 운영 HTTPS/카카오 계정 검증은 아니다.
+7. 운영 service/인증/원본·실패 이력·GPU/슬롯·벡터는 변경하지 않았다. 다음은 이 호환 source를
+   실제 설치 묶음으로 검증·활성화하고 보관 수신물을 같은 처리 경로로 재생하는 것이다.
+   선택적 개념 편집/추천과 실제 한 방→전체 방 주기 수집/사진 정합은 여전히 남아 있다.
+
 ## 2026-11-17 새 PDF family의 기존 입력·복구·발행 연결 — 운영 미활성
 
 기존 Catalog materializer·Orchestrator executor/고정 launcher·Artifact publisher가 새 study

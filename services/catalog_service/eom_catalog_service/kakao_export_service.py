@@ -19,7 +19,9 @@ from eom_catalog_contracts.kakao_export_store import (
     KakaoExportProfile,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_kakao_archive_contracts import RenderCommand, RenderExecution
+from eom_kakao_archive_contracts import RenderExecution
+from eom_kakao_archive_contracts.pdf_contracts import PdfCommand, parse_pdf_command
+from eom_kakao_archive_contracts.study import StudyRenderCommand
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import JobRecord
@@ -40,7 +42,7 @@ from .kakao_export_models import (
     KakaoExportRequestRecord,
 )
 from .kakao_packet_service import AcceptedKakaoPacket, KakaoPacketService
-from .kakao_pdf_publication import LAYOUT_REF, PDF_REF, KakaoPdfPublication
+from .kakao_pdf_publication import PDF_REF, KakaoPdfPublication
 from .kakao_question_editing import packet_student_subset
 from .kakao_question_service import ResolvedKakaoQuestions
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
@@ -65,6 +67,8 @@ def _execution(attempt: KakaoExportAttemptRecord) -> RenderExecution:
 
 
 def _view(row: KakaoExportRecord, attempt: KakaoExportAttemptRecord | None) -> KakaoExport:
+    profile = KakaoExportProfile.model_validate(row.profile)
+
     def pointer(
         name: str, media: str, schema: str, digest: str | None
     ) -> ArtifactMemberPointer | None:
@@ -81,12 +85,13 @@ def _view(row: KakaoExportRecord, attempt: KakaoExportAttemptRecord | None) -> K
 
     return KakaoExport.model_validate(
         dict(
+            schema_version=profile.export_schema_version,
             source_binding_id=row.source_binding_id,
             packet_id=row.packet_id,
             packet_revision_id=row.packet_revision_id,
             student_id=row.student_id,
             export_id=row.export_id,
-            profile=row.profile,
+            profile=profile,
             subset_sha256=row.subset_sha256,
             mode=row.mode,
             state="PENDING" if attempt is None else attempt.state,
@@ -103,7 +108,7 @@ def _view(row: KakaoExportRecord, attempt: KakaoExportAttemptRecord | None) -> K
             layout=pointer(
                 "layout.json",
                 "application/json",
-                LAYOUT_REF,
+                profile.layout_schema_ref,
                 None if attempt is None else attempt.layout_sha256,
             ),
             error_code=None if attempt is None else attempt.error_code,
@@ -247,7 +252,7 @@ class KakaoExportService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
             old_id = None if old is None else old.export_id
         if old_id is not None:
-            return KakaoExportMutation(
+            return KakaoExportMutation.for_export(
                 export=self.get_export(actor, command.source_binding_id, old_id), replayed=True
             )
         packet, selected = self._packets.resolve_student(
@@ -323,7 +328,7 @@ class KakaoExportService:
                         export_id=export_id,
                     )
                 )
-        return KakaoExportMutation(
+        return KakaoExportMutation.for_export(
             export=self.get_export(actor, command.source_binding_id, export_id), replayed=replayed
         )
 
@@ -372,7 +377,7 @@ class KakaoExportService:
 
     @staticmethod
     def _command_matches(
-        row: KakaoExportRecord, attempt: KakaoExportAttemptRecord, command: RenderCommand
+        row: KakaoExportRecord, attempt: KakaoExportAttemptRecord, command: PdfCommand
     ) -> None:
         profile = KakaoExportProfile.model_validate(row.profile)
         if (
@@ -388,6 +393,8 @@ class KakaoExportService:
             or command.font.sha256 != profile.font_sha256
             or command.font.size_bytes != profile.font_size_bytes
             or command.font.media_type != "font/otf"
+            # Supplements require the future saved-study owner, not just a worker capability.
+            or (isinstance(command, StudyRenderCommand) and command.study_revision_id is not None)
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_EXECUTION_MISMATCH")
 
@@ -396,9 +403,9 @@ class KakaoExportService:
         actor: ActorContext,
         binding: str,
         export_id: str,
-        command: RenderCommand,
+        command: PdfCommand,
     ) -> None:
-        command = RenderCommand.model_validate(command.model_dump(mode="json"))
+        command = parse_pdf_command(command.model_dump(mode="json"))
         _, packet, selected = self.resolve_inputs(actor, binding, export_id)
         with self._sessions.begin() as session:
             row, attempt = self._row(
@@ -418,7 +425,7 @@ class KakaoExportService:
         actor: ActorContext,
         binding: str,
         export_id: str,
-        command: RenderCommand,
+        command: PdfCommand,
         packet: AcceptedKakaoPacket,
         selected: ResolvedKakaoQuestions,
     ) -> None:
@@ -455,7 +462,7 @@ class KakaoExportService:
 
     def read_command(
         self, actor: ActorContext, binding: str, export_id: str, execution: RenderExecution
-    ) -> RenderCommand:
+    ) -> PdfCommand:
         """Read the original command for stopped-result recovery; never prepare a successor."""
         _, packet, selected = self.resolve_inputs(actor, binding, export_id)
         with self._sessions.begin() as session:
@@ -470,7 +477,7 @@ class KakaoExportService:
             ):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_EXPORT_NOT_RUNNING")
             self._source_check(session, actor, row, packet, selected)
-            command = RenderCommand.model_validate(attempt.command)
+            command = parse_pdf_command(attempt.command)
             self._command_matches(row, attempt, command)
             return command
 
@@ -483,12 +490,12 @@ class KakaoExportService:
     ) -> None:
         if view.pdf is None or view.layout is None or attempt.command is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_EXPORT_INVALID")
-        command = RenderCommand.model_validate(attempt.command)
+        command = parse_pdf_command(attempt.command)
         KakaoExportService._command_matches(row, attempt, command)
         metadata = validate_source_pointer_metadata_batch(session, (view.pdf, view.layout))
         logical, revision = metadata[(view.pdf.artifact_id, view.pdf.artifact_revision_id)]
         job = session.get(JobRecord, attempt.publication_job_id)
-        expected = dict(
+        expected: dict[str, object] = dict(
             export_id=row.export_id,
             source_binding_id=row.source_binding_id,
             packet_revision_id=row.packet_revision_id,
@@ -499,13 +506,28 @@ class KakaoExportService:
             command_sha256=sha256_bytes(canonical_json_bytes(command.model_dump(mode="json"))),
             renderer_release_sha256=command.renderer_release_sha256,
         )
+        if isinstance(command, StudyRenderCommand):
+            expected.update(
+                schema_version=command.schema_version,
+                study_revision_id=command.study_revision_id,
+                layout_policy=command.layout_policy,
+            )
         if (
             logical.artifact_type != "kakao-question-pdf"
             or revision.job_id != attempt.publication_job_id
             or revision.content_hash != view.layout.sha256
             or job is None
-            or any(job.request.get(key) != value for key, value in expected.items())
-            or view.page_count != row.question_count
+            or any(
+                key not in job.request or job.request[key] != value
+                for key, value in expected.items()
+            )
+            or (
+                not isinstance(command, StudyRenderCommand)
+                and view.page_count != row.question_count
+            )
+            or type(revision.result.get("page_count")) is not int
+            or revision.result.get("page_count") != view.page_count
+            or revision.result.get("layout_sha256") != view.layout.sha256
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
 
@@ -514,7 +536,7 @@ class KakaoExportService:
         actor: ActorContext,
         binding: str,
         export_id: str,
-        command: RenderCommand,
+        command: PdfCommand,
         publication: KakaoPdfPublication,
     ) -> KakaoExport:
         _, packet, selected = self.resolve_inputs(actor, binding, export_id)
@@ -552,7 +574,7 @@ class KakaoExportService:
             )
             attempt.publication_job_id, attempt.page_count = (
                 publication.publication_job_id,
-                row.question_count,
+                len(publication.previews),
             )
             view = _view(row, attempt)
             if view.pdf != publication.pdf or view.layout != publication.layout:
@@ -625,7 +647,7 @@ class KakaoExportService:
                 query.order_by(KakaoExportRecord.export_id).limit(limit + 1)
             ).all()
             items = tuple(_view(row, attempt) for row, attempt in rows[:limit])
-            return KakaoExportPage(
+            return KakaoExportPage.for_items(
                 items=items, next_cursor=items[-1].export_id if len(rows) > limit else None
             )
 

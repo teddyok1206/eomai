@@ -40,11 +40,19 @@ Catalog publisher도 두 family를 사용하고 원래의 claim/stopped proof·m
 권한을 유지한다. study의 쪽수는 전체 section receipt, v1은 기존1질문1쪽 규칙으로 검사한다.
 동일 완료본의 복구·Artifact 발행 replay는 원래 파일만 재검증하며 worker를 재실행하지 않는다.
 
-소스 backend와 별도 non-editable wheel은 연결됐지만, **운영의 저장 export profile·API/Web은
-아직 새 family로 활성 연결하지 않았다**. 현재 v1 delivery의 현재-claim callback도 다른
-family를 명시 거부한다. 실제 카카오 자동 수집/Studio PDF 성공으로 보고하지 않는다.
-기존 v1 의미와 schema bytes, 실패/완료 기록은 유지한다. 다음은 같은 저장/공개 owner의
-profile과 결과 계약을 새 family에 연결하고 실제 수신 source로 재생 PDF를 확인하는 것이다.
+저장/공개 source는 `export-store-v2`/`catalog-kakao-delivery-v2`에서 study 응답만 추가한다.
+원래 request와 v1 schema bytes는 그대로이며 같은 DTO가 두 명시적 tag를 읽는다. tag/profile/
+layout 혼합은 실패한다. 기존 ExportService/Delivery가 원래 profile의 정확한 command family를
+사용하고 실제 publication의 쪽수·layout SHA·family 증거로 채택한다. 과거 key replay는
+당시 결과이고, 새 policy의 새 key는 다른 build다. 목록은 v1/v2를 함께 열 수 있다.
+현재 public owner는 질문/답변만 지원하므로 저장되지 않은 non-null study revision bind는
+막는다. 교재 보강을 지원하는 worker DTO만으로 저장/출처 authority를 부여하지 않는다.
+
+새 policy는 기존 composition의 `EOM_KAKAO_PDF_LAYOUT_POLICY`에서 명시 선택하며 default는
+v1이다. Web은 두 출력 형식을 읽고 새 자료의 답변 포함을 기본으로 제안한다. source의
+API/UDS/임시 DB/worker/다운로드와 실제 브라우저 fixture 검증은 **운영 활성화나 실제 카카오
+실증이 아니다**. 새 profile을 호환 release로 활성화한 뒤 실제 수신 자료를 재생해야 한다.
+기존 v1 의미와 schema bytes, 실패/완료 기록은 유지한다.
 
 ## 확인할 검사
 
@@ -58,6 +66,10 @@ profile과 결과 계약을 새 family에 연결하고 실제 수신 source로 �
   stale pin·위조 coverage·순서·입력/출력 경계와 CLI family 선택.
 - `test_kakao_study_execution.py`: 실제 child process, exact family·위조 layout 거부,
   중단/권한 복구·완료본 재발행에서 동일 파일/단일 실행 유지.
+- `test_kakao_study_export_contracts.py`: v1 bytes·v2 additive 응답, tag/profile/layout 정합,
+  혼합 목록·Web DTO·상관된 기존 RPC, 명시적 policy/default/잘못된 activation 설정 거부.
+- `test_kakao_export_storage.py`/`test_kakao_delivery_http.py`: 양쪽 profile의 동시 요청/claim,
+  중단/재전송/실패 보존·재시작/권한 철회·실제 BFF 다운로드. 긴 답변은 실제 쪽수를 저장한다.
 - `test_kakao_stored_student_pdf.py`: 공식 guarded 임시 DB의 저장/재구성된 학생 subset을
   새 projection으로 읽으며, 이미 고정한 v1 입력을 덮지 않는지 확인한다. 두 출력 profile의
   학생 격리·고유 사진1회 stage·역할별 사진 use/긴 답변과 실제 Artifact 재조회도 검사한다.

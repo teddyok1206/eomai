@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import Engine
 
@@ -51,16 +51,18 @@ def build_kakao_delivery_application(
     )
     hashes = tuple(environment.get(key, "") for key in keys)
     size = environment.get("EOM_KAKAO_PDF_FONT_SIZE", "")
+    policy = environment.get("EOM_KAKAO_PDF_LAYOUT_POLICY", "student-question-a4/1.0")
     if (
         mode != "ENABLED"
         or any(re.fullmatch(r"sha256:[0-9a-f]{64}", pin) is None for pin in hashes)
         or re.fullmatch(r"[1-9][0-9]{0,7}", size) is None
+        or policy not in {"student-question-a4/1.0", "student-study-a4/1.0"}
     ):
         raise ValueError("KAKAO_PDF_CONFIGURATION_INVALID")
     import grp
     import pwd
 
-    from eom_catalog_contracts.kakao_export_store import KakaoExportProfile
+    from eom_catalog_contracts.kakao_export_store import ExportLayoutPolicy, KakaoExportProfile
     from eom_kakao_archive_contracts import LocalMember
     from eom_orchestrator.kakao_pdf_runtime import KAKAO_WORKSPACE_ROOT, FixedKakaoPdfLauncher
 
@@ -69,7 +71,10 @@ def build_kakao_delivery_application(
     from .kakao_pdf_delivery import KakaoPdfDelivery
 
     profile = KakaoExportProfile(
-        renderer_release_sha256=hashes[0], font_sha256=hashes[2], font_size_bytes=int(size)
+        renderer_release_sha256=hashes[0],
+        font_sha256=hashes[2],
+        font_size_bytes=int(size),
+        layout_policy=cast(ExportLayoutPolicy, policy),
     )
     exports = KakaoExportService(
         engine, artifacts=artifacts, packets=packets, sources=sources, profile=profile

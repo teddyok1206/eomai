@@ -216,7 +216,13 @@ def parse_kakao_delivery_request(value: dict[str, object]) -> KakaoDeliveryReque
 
 
 def parse_kakao_delivery_reply(value: dict[str, object]) -> KakaoDeliveryReply:
-    validate_contract("catalog-kakao-delivery-v1", value)
+    result = value.get("result")
+    study = isinstance(result, dict) and result.get("schema_version") in {
+        "kakao-export/2.0",
+        "kakao-export-mutation/2.0",
+        "kakao-export-page/2.0",
+    }
+    validate_contract("catalog-kakao-delivery-v2" if study else "catalog-kakao-delivery-v1", value)
     return _REPLY.validate_python(value)
 
 

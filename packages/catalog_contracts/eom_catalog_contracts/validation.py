@@ -106,6 +106,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5f08e68528420df0526c2a06882030168be6c545998fc821f805765eac7762b7",
         ),
+        "catalog-kakao-delivery-v2": CatalogSchemaResource(
+            "schemas/kakao-archive/catalog-kakao-delivery-v2.schema.json",
+            "resources/kakao-archive/catalog-kakao-delivery-v2.schema.json",
+            "2.0",
+            "sha256:f3962c527fccda6ef672ce669404ec72dab01d49db3794657d5e95acbcf0c052",
+        ),
         "catalog-kakao-question-v1": CatalogSchemaResource(
             "schemas/kakao-archive/catalog-kakao-question-v1.schema.json",
             "resources/kakao-archive/catalog-kakao-question-v1.schema.json",
@@ -117,6 +123,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/kakao-archive/export-store-v1.schema.json",
             "1.0",
             "sha256:99bed83e003cb46b523ae00ca710b73f23fa079594cc66ce3e91c03466debd8c",
+        ),
+        "kakao-export-store-v2": CatalogSchemaResource(
+            "schemas/kakao-archive/export-store-v2.schema.json",
+            "resources/kakao-archive/export-store-v2.schema.json",
+            "2.0",
+            "sha256:f02c5fd52c8680362c04811577aecee90ada6aeb638abc2a286281bd9eb0ed61",
         ),
         "kakao-packet-store-v1": CatalogSchemaResource(
             "schemas/kakao-archive/packet-store-v1.schema.json",

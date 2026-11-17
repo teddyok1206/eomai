@@ -8,6 +8,7 @@ from pathlib import Path
 from eom_catalog_contracts.kakao_export_store import KakaoExport
 from eom_kakao_archive_contracts import LocalMember, RenderCommand, RenderExecution
 from eom_kakao_archive_contracts.pdf_contracts import PdfCommand
+from eom_kakao_archive_contracts.study import StudyRenderCommand, StudyRenderManifest
 from eom_operator_identity import ActorContext
 from eom_orchestrator.kakao_pdf_execution import (
     AcceptedKakaoPdf,
@@ -46,14 +47,12 @@ class KakaoPdfDelivery:
             self.exports.check_claim(actor, binding, export_id, claim.execution, packet, selected)
 
         def authorize(command: PdfCommand) -> None:
-            # This stored export profile is still question-v1 only; no silent activation.
-            if not isinstance(command, RenderCommand):
-                raise ValueError("KAKAO_ARCHIVE_EXPORT_PROFILE_MISMATCH")
             self.exports.check_attempt(actor, binding, export_id, command, packet, selected)
 
         executor = KakaoPdfExecutor(
             self.workspace_root, self.worker_uid, self.shared_gid, self.launcher, authorize
         )
+        command: PdfCommand | None
         if not claim.acquired:
             command = self.exports.read_command(actor, binding, export_id, claim.execution)
             accepted = executor.recover_finished(command, assert_stopped=self.assert_stopped)
@@ -75,9 +74,9 @@ class KakaoPdfDelivery:
                     font_source=self.font_source,
                     font=self.font,
                     authorize=authorize_claim,
+                    layout_policy=claim.export.profile.layout_policy,
                 )
-                command = RenderCommand(
-                    schema_version="kakao-question-render/1.0",
+                fields = dict(
                     execution=claim.execution,
                     export_id=export_id,
                     source_binding_id=binding,
@@ -90,6 +89,15 @@ class KakaoPdfDelivery:
                     manifest=prepared.manifest_member,
                     font=prepared.font_member,
                 )
+                if isinstance(prepared.manifest, StudyRenderManifest):
+                    command = StudyRenderCommand.model_validate(
+                        fields
+                        | dict(schema_version="kakao-study-render/1.0", study_revision_id=None)
+                    )
+                else:
+                    command = RenderCommand.model_validate(
+                        fields | dict(schema_version="kakao-question-render/1.0")
+                    )
                 self.exports.bind_command(actor, binding, export_id, command)
                 accepted = executor.execute(command, source_root=source_root)
             except Exception:
@@ -119,7 +127,7 @@ class KakaoPdfDelivery:
         actor: ActorContext,
         binding: str,
         export_id: str,
-        command: RenderCommand,
+        command: PdfCommand,
         accepted: AcceptedKakaoPdf,
         source_root: Path,
         authorize: Callable[[PdfCommand], None],
