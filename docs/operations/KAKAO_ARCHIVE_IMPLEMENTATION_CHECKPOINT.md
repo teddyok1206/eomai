@@ -49,6 +49,9 @@ v1 schema bytes는 유지했고 두 additive 응답 schema만 추가했다. 운�
 7. 운영 service/인증/원본·실패 이력·GPU/슬롯·벡터는 변경하지 않았다. 다음은 이 호환 source를
    실제 설치 묶음으로 검증·활성화하고 보관 수신물을 같은 처리 경로로 재생하는 것이다.
    선택적 개념 편집/추천과 실제 한 방→전체 방 주기 수집/사진 정합은 여전히 남아 있다.
+8. 배포용 cached OpenAPI도 공식 exporter로 갱신했다. 변경은 export/profile/mutation/page의
+   명시적 응답 enum 네 개뿐이며 routes와 나머지 root 계약은 동일하다. predecessor breaking
+   검사와 API 계약7개가 PASS다. 이 파일 갱신 역시 운영 설치/활성화 증거는 아니다.
 
 ## 2026-11-17 새 PDF family의 기존 입력·복구·발행 연결 — 운영 미활성
 
