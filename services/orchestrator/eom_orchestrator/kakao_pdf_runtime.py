@@ -11,7 +11,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from eom_kakao_archive_contracts import RenderCommand, sha256
+from eom_kakao_archive_contracts import sha256
+from eom_kakao_archive_contracts.pdf_contracts import PdfCommand
 
 from .kakao_pdf_files import KakaoPdfExecutionError, local_directory, read_local
 from .native_exam_preparation import require_native_exam_runtime_python
@@ -29,7 +30,7 @@ class FixedKakaoPdfLauncher:
     template_sha256: str
     renderer_release_sha256: str
 
-    def run(self, command: RenderCommand, workspace: Path) -> None:
+    def run(self, command: PdfCommand, workspace: Path) -> None:
         self._installed(command, workspace)
         unit = f"eom-kakao-pdf@{command.execution.attempt_id}.service"
         before = _show(unit)
@@ -83,7 +84,7 @@ class FixedKakaoPdfLauncher:
             raise KakaoPdfExecutionError("KAKAO_PDF_EXECUTION_UNCERTAIN")
         self.assert_stopped(command, workspace)
 
-    def assert_stopped(self, command: RenderCommand, workspace: Path) -> None:
+    def assert_stopped(self, command: PdfCommand, workspace: Path) -> None:
         """Only this exact fixed unit and an absent/empty cgroup permit recovery."""
         self._installed(command, workspace)
         unit = f"eom-kakao-pdf@{command.execution.attempt_id}.service"
@@ -99,7 +100,7 @@ class FixedKakaoPdfLauncher:
             raise KakaoPdfExecutionError("KAKAO_PDF_EXECUTION_UNCERTAIN")
         _cgroup_quiescent(unit)
 
-    def close_finished(self, command: RenderCommand, workspace: Path) -> None:
+    def close_finished(self, command: PdfCommand, workspace: Path) -> None:
         """Explicit resume may close an already exited original unit, never start/kill work."""
         self._installed(command, workspace)
         unit = f"eom-kakao-pdf@{command.execution.attempt_id}.service"
@@ -132,7 +133,7 @@ class FixedKakaoPdfLauncher:
                 raise KakaoPdfExecutionError("KAKAO_PDF_EXECUTION_UNCERTAIN")
         self.assert_stopped(command, workspace)
 
-    def _installed(self, command: RenderCommand, workspace: Path) -> None:
+    def _installed(self, command: PdfCommand, workspace: Path) -> None:
         if (
             workspace != KAKAO_WORKSPACE_ROOT / command.execution.attempt_id
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", self.template_sha256)

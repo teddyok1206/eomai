@@ -7,6 +7,7 @@ from pathlib import Path
 
 from eom_catalog_contracts.kakao_export_store import KakaoExport
 from eom_kakao_archive_contracts import LocalMember, RenderCommand, RenderExecution
+from eom_kakao_archive_contracts.pdf_contracts import PdfCommand
 from eom_operator_identity import ActorContext
 from eom_orchestrator.kakao_pdf_execution import (
     AcceptedKakaoPdf,
@@ -44,7 +45,10 @@ class KakaoPdfDelivery:
         def authorize_claim() -> None:
             self.exports.check_claim(actor, binding, export_id, claim.execution, packet, selected)
 
-        def authorize(command: RenderCommand) -> None:
+        def authorize(command: PdfCommand) -> None:
+            # This stored export profile is still question-v1 only; no silent activation.
+            if not isinstance(command, RenderCommand):
+                raise ValueError("KAKAO_ARCHIVE_EXPORT_PROFILE_MISMATCH")
             self.exports.check_attempt(actor, binding, export_id, command, packet, selected)
 
         executor = KakaoPdfExecutor(
@@ -118,7 +122,7 @@ class KakaoPdfDelivery:
         command: RenderCommand,
         accepted: AcceptedKakaoPdf,
         source_root: Path,
-        authorize: Callable[[RenderCommand], None],
+        authorize: Callable[[PdfCommand], None],
     ) -> KakaoExport:
         def stopped(execution: RenderExecution) -> None:
             if execution != command.execution:

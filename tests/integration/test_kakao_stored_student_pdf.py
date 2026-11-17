@@ -20,6 +20,8 @@ from eom_catalog_service.kakao_source_pointers import validate_source_pointer_me
 from eom_catalog_service.kakao_study_projection import project_kakao_student_study
 from eom_identity_service.models import ApiSessionRecord
 from eom_kakao_archive_contracts import LocalMember, RenderCommand, canonical_bytes, sha256
+from eom_kakao_archive_contracts.study import StudyRenderCommand, StudyRenderManifest
+from eom_kakao_archive_contracts.study_layout import StudyLayoutReceipt
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.kakao_pdf_execution import KakaoPdfExecutor
 from sqlalchemy import update
@@ -109,7 +111,10 @@ def current_authorizer(engine, actor, sources, packet, selected):
     return authorize
 
 
-def staged(tmp_path, artifacts, packet, selection, student_id, authorize):
+LAYOUTS = ("student-question-a4/1.0", "student-study-a4/1.0")
+
+
+def staged(tmp_path, artifacts, packet, selection, student_id, authorize, layout_policy=LAYOUTS[0]):
     source = artifacts.settings.staging_root / ("input-" + uuid4().hex)
     source.mkdir(mode=0o700)
     font_path, member = font(tmp_path)
@@ -122,29 +127,35 @@ def staged(tmp_path, artifacts, packet, selection, student_id, authorize):
         font_source=font_path,
         font=member,
         authorize=authorize,
+        layout_policy=layout_policy,
     )
-    command = RenderCommand.model_validate(
-        dict(
-            schema_version="kakao-question-render/1.0",
-            execution=dict(
-                command_id="kakaocommand_" + uuid4().hex,
-                task_id="kakaotask_" + uuid4().hex,
-                attempt_id="kakaoattempt_" + uuid4().hex,
-                attempt_number=1,
-                fence=1,
-            ),
-            export_id="kakaoexport_" + uuid4().hex,
-            source_binding_id=prepared.manifest.source_binding_id,
-            packet_revision_id=prepared.manifest.packet_revision_id,
-            student_id=student_id,
-            subset_sha256=prepared.manifest.subset_sha256,
-            mode=prepared.manifest.mode,
-            renderer_release_sha256=RELEASE,
-            layout_policy="student-question-a4/1.0",
-            manifest=prepared.manifest_member,
-            font=prepared.font_member,
+    fields = dict(
+        execution=dict(
+            command_id="kakaocommand_" + uuid4().hex,
+            task_id="kakaotask_" + uuid4().hex,
+            attempt_id="kakaoattempt_" + uuid4().hex,
+            attempt_number=1,
+            fence=1,
+        ),
+        export_id="kakaoexport_" + uuid4().hex,
+        source_binding_id=prepared.manifest.source_binding_id,
+        packet_revision_id=prepared.manifest.packet_revision_id,
+        student_id=student_id,
+        subset_sha256=prepared.manifest.subset_sha256,
+        mode=prepared.manifest.mode,
+        renderer_release_sha256=RELEASE,
+        layout_policy=layout_policy,
+        manifest=prepared.manifest_member,
+        font=prepared.font_member,
+    )
+    if isinstance(prepared.manifest, StudyRenderManifest):
+        command = StudyRenderCommand.model_validate(
+            fields | dict(schema_version="kakao-study-render/1.0", study_revision_id=None)
         )
-    )
+    else:
+        command = RenderCommand.model_validate(
+            fields | dict(schema_version="kakao-question-render/1.0")
+        )
     return prepared, command
 
 
@@ -192,7 +203,10 @@ def test_study_projection_reopens_exact_stored_student_selection_without_hand_pi
         authorize()
 
 
-def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(packet_store, tmp_path):
+@pytest.mark.parametrize("layout_policy", LAYOUTS)
+def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(
+    packet_store, tmp_path, layout_policy
+):
     engine, actor, packets, request, stored_questions, _questions, sources, artifacts = packet_store
     saved = packets.save_packet(actor, request, idempotency_key="render-packet-" + uuid4().hex)
     launcher = RenderProcess()
@@ -206,7 +220,9 @@ def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(packet
             student_id=student_id,
         )
         authorize = current_authorizer(engine, actor, sources, accepted, selected)
-        prepared, command = staged(tmp_path, artifacts, accepted, selected, student_id, authorize)
+        prepared, command = staged(
+            tmp_path, artifacts, accepted, selected, student_id, authorize, layout_policy
+        )
         assert str(prepared.source_root) not in repr(prepared)
         assert "private question" not in repr(prepared)
         root = tmp_path / ("worker-" + uuid4().hex)
@@ -216,6 +232,7 @@ def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(packet
         )
         output = executor.execute(command, source_root=prepared.source_root)
         assert output.result.page_count == 1
+        assert isinstance(output.layout, StudyLayoutReceipt) == (layout_policy == LAYOUTS[1])
         published = publish_kakao_pdf(
             artifacts,
             command=command,
@@ -254,8 +271,9 @@ def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(packet
     assert launcher.calls == 2
 
 
+@pytest.mark.parametrize("layout_policy", LAYOUTS)
 def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
-    question_store, source_store, tmp_path, monkeypatch
+    question_store, source_store, tmp_path, monkeypatch, layout_policy
 ):
     engine, actor, questions, initial, sources, artifacts, _binding = question_store
     previous = sources.get_source(
@@ -267,10 +285,18 @@ def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
     pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 300))
     pixmap.clear_with(180)
     photo = pixmap.tobytes("png")
+    texts = ("학생이 올린 사진입니다.", "같은 사진의 별도 메시지입니다.")
+    roles = ("student", "student")
+    photos = {1: (photo, 400, 300), 2: (photo, 400, 300)}
+    if layout_policy == LAYOUTS[1]:
+        texts += ("조교의 원문 답변과 시각 기록입니다.\r\n" * 90,)
+        roles += ("staff",)
+        photos[3] = (photo, 400, 300)
     admission, _ = source_store[-1](
         previous=previous,
-        texts=("학생이 올린 사진입니다.", "같은 사진의 별도 메시지입니다."),
-        photos={1: (photo, 400, 300), 2: (photo, 400, 300)},
+        texts=texts,
+        photos=photos,
+        roles=roles,
     )
     accepted_source = sources.admit_source(
         actor, admission, idempotency_key="photo-source-" + uuid4().hex
@@ -298,7 +324,7 @@ def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
         display_start_date=date(2026, 1, 1),
         display_end_date_inclusive=date(2026, 12, 31),
         mode="FINAL",
-        include_replies=False,
+        include_replies=layout_policy == LAYOUTS[1],
     )
     packet = packets.save_packet(actor, request, idempotency_key="photo-packet-" + uuid4().hex)
     accepted, selected = packets.resolve_student(
@@ -318,21 +344,40 @@ def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
 
     monkeypatch.setattr(artifacts, "open_verified_member", observed)
     prepared, command = staged(
-        tmp_path, artifacts, accepted, selected, reviewed.question.student.student_id, authorize
+        tmp_path,
+        artifacts,
+        accepted,
+        selected,
+        reviewed.question.student.student_id,
+        authorize,
+        layout_policy,
     )
     assert opens == [sha256(photo)]
-    assert len(prepared.images) == 1 and len(prepared.manifest.questions[0].images) == 2
+    assert len(prepared.images) == 1
+    if isinstance(prepared.manifest, StudyRenderManifest):
+        q = prepared.manifest.questions[0]
+        assert len(q.student.images) == 2 and len(q.staff.images) == 1
+    else:
+        assert len(prepared.manifest.questions[0].images) == 2
     assert (prepared.source_root / prepared.images[0].member.relative_path).read_bytes() == photo
     launcher = RenderProcess()
     work = tmp_path / "photo-worker"
     work.mkdir(mode=0o700)
     executor = KakaoPdfExecutor(work, os.getuid(), os.getgid(), launcher, lambda _: authorize())
     result = executor.execute(command, source_root=prepared.source_root)
-    assert result.result.status == "COMPLETED" and result.result.page_count == 1
-    assert len(result.layout.pages[0].image_blocks) == 2
+    assert result.result.status == "COMPLETED"
+    if isinstance(result.layout, StudyLayoutReceipt):
+        assert result.result.page_count > 2
+        assert len(result.layout.pages[0].layout.image_blocks) == 2
+        assert sum(len(p.layout.image_blocks) for p in result.layout.pages) == 3
+    else:
+        assert result.result.page_count == 1
+        assert len(result.layout.pages[0].image_blocks) == 2
     with pymupdf.open(result.staging_root / "report.pdf") as document:
         assert len(document[0].get_image_info()) == 2
         assert "학생이 올린 사진입니다" in document[0].get_text()
+        if layout_policy == LAYOUTS[1]:
+            assert "조교" in "".join(p.get_text() for p in document)
     published = publish_kakao_pdf(
         artifacts,
         command=command,
@@ -341,6 +386,9 @@ def test_csv_photo_occurrences_reach_real_pdf_without_duplicate_binary_stage(
         authorize=authorize,
     )
     assert published.pdf.sha256 == sha256((result.staging_root / "report.pdf").read_bytes())
+    stopped = []
+    recovered = executor.recover_finished(command, assert_stopped=lambda *a: stopped.append(a))
+    assert stopped and recovered == result
     assert launcher.calls == 1
 
 

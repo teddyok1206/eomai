@@ -7,20 +7,23 @@ returned pointers in its own short transaction after publication.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from eom_kakao_archive_contracts import (
     LocalMember,
-    RenderCommand,
-    RenderManifest,
-    RenderResult,
     canonical_bytes,
     sha256,
 )
-from eom_kakao_archive_contracts.layout import RenderLayoutReceipt, check_layout_receipt
-from eom_kakao_archive_contracts.render import render_input_members
-from eom_kakao_archive_contracts.validation import validate_contract
+from eom_kakao_archive_contracts.pdf_contracts import (
+    PdfCommand,
+    parse_pdf_command,
+    parse_pdf_layout,
+    parse_pdf_manifest,
+    parse_pdf_result,
+)
+from eom_kakao_archive_contracts.study import StudyRenderCommand
 from eom_orchestrator.kakao_pdf_execution import AcceptedKakaoPdf
 from eom_protocol.artifact_members import ArtifactMemberPointer
 
@@ -29,6 +32,7 @@ from eom_catalog_service.artifacts import CatalogArtifactService
 PDF_REF = "eom://schemas/kakao-archive/question-pdf/1.0"
 PREVIEW_REF = "eom://schemas/kakao-archive/question-preview-png/1.0"
 LAYOUT_REF = "eom://schemas/kakao-archive/worker-question-layout/1.0"
+STUDY_LAYOUT_REF = "eom://schemas/kakao-archive/worker-study-layout/1.0"
 _MEMBER_SCHEMAS = {
     "application/pdf": PDF_REF,
     "application/json": LAYOUT_REF,
@@ -48,14 +52,14 @@ class KakaoPdfPublication:
 def publish_kakao_pdf(
     artifacts: CatalogArtifactService,
     *,
-    command: RenderCommand,
+    command: PdfCommand,
     manifest_bytes: bytes,
     accepted: AcceptedKakaoPdf,
     authorize: Callable[[], None],
 ) -> KakaoPdfPublication:
     """Same accepted attempt replays publication; it never starts another render."""
     authorize()
-    command = RenderCommand.model_validate(command.model_dump(mode="json"))
+    command = parse_pdf_command(command.model_dump(mode="json"))
     # Hash the pinned JSON bytes, not a reserialized model with newly filled
     # optional defaults. Both explicit-null and omitted optional fields are valid.
     if (
@@ -63,28 +67,22 @@ def publish_kakao_pdf(
         or sha256(manifest_bytes) != command.manifest.sha256
     ):
         raise ValueError("KAKAO_ARCHIVE_PDF_MANIFEST_HASH_MISMATCH")
-    manifest = RenderManifest.model_validate_json(manifest_bytes)
-    result = RenderResult.model_validate(accepted.result.model_dump(mode="json"))
-    # A model_copy proposal is not evidence that the schema ran.
-    validate_contract("command", command.model_dump(mode="json"))
-    validate_contract("manifest", manifest.model_dump(mode="json"))
-    validate_contract("result", result.model_dump(mode="json"))
-    render_input_members(command, manifest)
+    # Parse raw JSON and the exact input family; model_copy proposals are not schema evidence.
+    manifest = parse_pdf_manifest(command, json.loads(manifest_bytes))
+    result = parse_pdf_result(command, accepted.result.model_dump(mode="json"))
     if result.status != "COMPLETED" or accepted.layout is None or accepted.staging_root is None:
         raise ValueError("KAKAO_ARCHIVE_PDF_NOT_COMPLETED")
-    layout = RenderLayoutReceipt.model_validate(accepted.layout.model_dump(mode="json"))
-    validate_contract("layout", layout.model_dump(mode="json"))
+    layout = parse_pdf_layout(command, manifest, accepted.layout.model_dump(mode="json"))
     if (
         result.execution != command.execution
         or result.export_id != command.export_id
         or result.command_sha256 != sha256(canonical_bytes(command.model_dump(mode="json")))
         or result.manifest_sha256 != command.manifest.sha256
         or accepted.files != result.outputs
-        or result.page_count != len(manifest.questions)
+        or result.page_count != len(layout.pages)
         or sum(member.size_bytes for member in result.outputs) > 256 * 1024 * 1024
     ):
         raise ValueError("KAKAO_ARCHIVE_PDF_PUBLICATION_PINS_MISMATCH")
-    check_layout_receipt(command, manifest, layout)
     members = {member.relative_path: member for member in result.outputs}
     layout_bytes = canonical_bytes(layout.model_dump(mode="json"))
     if members["layout.json"].sha256 != sha256(layout_bytes) or members[
@@ -94,6 +92,26 @@ def publish_kakao_pdf(
     root = accepted.staging_root
     if not root.is_absolute() or ".." in root.parts:
         raise ValueError("KAKAO_ARCHIVE_PDF_STAGING_INVALID")
+    request: dict[str, object] = {
+        "export_id": command.export_id,
+        "source_binding_id": command.source_binding_id,
+        "packet_revision_id": command.packet_revision_id,
+        "student_id": command.student_id,
+        "subset_sha256": command.subset_sha256,
+        "mode": command.mode,
+        "execution": command.execution.model_dump(mode="json"),
+        "command_sha256": result.command_sha256,
+        "renderer_release_sha256": command.renderer_release_sha256,
+        "result_sha256": sha256(canonical_bytes(result.model_dump(mode="json"))),
+    }
+    member_schemas = _MEMBER_SCHEMAS
+    if isinstance(command, StudyRenderCommand):
+        request.update(
+            schema_version=command.schema_version,
+            study_revision_id=command.study_revision_id,
+            layout_policy=command.layout_policy,
+        )
+        member_schemas = _MEMBER_SCHEMAS | {"application/json": STUDY_LAYOUT_REF}
     authorize()
     artifact = artifacts.commit_file_set(
         files={name: root / name for name in members},
@@ -103,22 +121,11 @@ def publish_kakao_pdf(
             f"kakao:pdf:{command.source_binding_id}:{command.export_id}:"
             f"{command.execution.attempt_id}"
         ),
-        request={
-            "export_id": command.export_id,
-            "source_binding_id": command.source_binding_id,
-            "packet_revision_id": command.packet_revision_id,
-            "student_id": command.student_id,
-            "subset_sha256": command.subset_sha256,
-            "mode": command.mode,
-            "execution": command.execution.model_dump(mode="json"),
-            "command_sha256": result.command_sha256,
-            "renderer_release_sha256": command.renderer_release_sha256,
-            "result_sha256": sha256(canonical_bytes(result.model_dump(mode="json"))),
-        },
+        request=request,
         result={"layout_sha256": members["layout.json"].sha256, "page_count": result.page_count},
         file_metadata={
             name: {
-                "schema_ref": _MEMBER_SCHEMAS[member.media_type],
+                "schema_ref": member_schemas[member.media_type],
                 "media_type": member.media_type,
             }
             for name, member in members.items()
@@ -133,7 +140,7 @@ def publish_kakao_pdf(
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
             member_path=member.relative_path,
-            schema_ref=_MEMBER_SCHEMAS[member.media_type],
+            schema_ref=member_schemas[member.media_type],
             media_type=member.media_type,
             sha256=member.sha256,
         )

@@ -15,15 +15,20 @@ from typing import Protocol
 
 from eom_kakao_archive_contracts import (
     LocalMember,
-    RenderCommand,
-    RenderManifest,
-    RenderResult,
     canonical_bytes,
     sha256,
 )
-from eom_kakao_archive_contracts.layout import RenderLayoutReceipt, check_layout_receipt
-from eom_kakao_archive_contracts.render import render_input_members
-from eom_kakao_archive_contracts.validation import validate_contract
+from eom_kakao_archive_contracts.pdf_contracts import (
+    PdfCommand,
+    PdfLayout,
+    PdfManifest,
+    PdfResult,
+    parse_pdf_command,
+    parse_pdf_layout,
+    parse_pdf_manifest,
+    parse_pdf_result,
+    pdf_input_members,
+)
 
 from .kakao_pdf_files import (
     KakaoPdfExecutionError,
@@ -37,19 +42,19 @@ from .kakao_pdf_files import (
 
 
 class KakaoPdfLauncher(Protocol):
-    def run(self, command: RenderCommand, workspace: Path) -> None:
+    def run(self, command: PdfCommand, workspace: Path) -> None:
         """Return only after original worker has stopped; timeout is uncertain, never success."""
 
 
 class KakaoPdfStoppedCheck(Protocol):
-    def __call__(self, command: RenderCommand, workspace: Path) -> None:
+    def __call__(self, command: PdfCommand, workspace: Path) -> None:
         """Owner must prove the exact original attempt's process/cgroup is stopped."""
 
 
 @dataclass(frozen=True, slots=True)
 class AcceptedKakaoPdf:
-    result: RenderResult
-    layout: RenderLayoutReceipt | None
+    result: PdfResult
+    layout: PdfLayout | None
     files: tuple[LocalMember, ...]
     # Core-only staging location, not serializable as a public response or log value.
     staging_root: Path | None = field(repr=False)
@@ -61,9 +66,9 @@ class KakaoPdfExecutor:
     worker_uid: int
     shared_gid: int
     launcher: KakaoPdfLauncher = field(repr=False)
-    assert_current: Callable[[RenderCommand], None] = field(repr=False)
+    assert_current: Callable[[PdfCommand], None] = field(repr=False)
 
-    def execute(self, command: RenderCommand, *, source_root: Path) -> AcceptedKakaoPdf:
+    def execute(self, command: PdfCommand, *, source_root: Path) -> AcceptedKakaoPdf:
         """The source root is owner-created materialization, never a browser-supplied path."""
         try:
             return self._execute(command, source_root=source_root)
@@ -74,11 +79,11 @@ class KakaoPdfExecutor:
             raise KakaoPdfExecutionError("KAKAO_PDF_EXECUTION_INVALID") from None
 
     def recover_finished(
-        self, command: RenderCommand, *, assert_stopped: KakaoPdfStoppedCheck
+        self, command: PdfCommand, *, assert_stopped: KakaoPdfStoppedCheck
     ) -> AcceptedKakaoPdf:
         """Revalidate stopped output only. This never dispatches or overwrites staged files."""
         try:
-            validate_contract("command", command.model_dump(mode="json"))
+            command = parse_pdf_command(command.model_dump(mode="json"))
             self.assert_current(command)
             require_owner_directory(self.workspace_root, os.geteuid(), os.getgid())
             workspace = self.workspace_root / command.execution.attempt_id
@@ -88,16 +93,14 @@ class KakaoPdfExecutor:
                 inputs, "request.json", limit=32768, uid=os.geteuid(), gid=self.shared_gid
             )
             request = json.loads(raw_request)
-            validate_contract("command", request)
-            if RenderCommand.model_validate(request) != command:
+            if parse_pdf_command(request) != command:
                 raise KakaoPdfExecutionError("KAKAO_PDF_RECOVERY_PINS_MISMATCH")
             raw_manifest = read_pinned(
                 inputs, command.manifest, uid=os.geteuid(), gid=self.shared_gid
             )
             value = json.loads(raw_manifest)
-            validate_contract("manifest", value)
-            manifest = RenderManifest.model_validate(value)
-            for member in render_input_members(command, manifest):
+            manifest = parse_pdf_manifest(command, value)
+            for member in pdf_input_members(command, manifest):
                 if member != command.manifest:
                     read_pinned(inputs, member, uid=os.geteuid(), gid=self.shared_gid)
             self.assert_current(command)
@@ -107,8 +110,8 @@ class KakaoPdfExecutor:
         except (OSError, ValueError, RuntimeError):
             raise KakaoPdfExecutionError("KAKAO_PDF_RECOVERY_INVALID") from None
 
-    def _execute(self, command: RenderCommand, *, source_root: Path) -> AcceptedKakaoPdf:
-        validate_contract("command", command.model_dump(mode="json"))
+    def _execute(self, command: PdfCommand, *, source_root: Path) -> AcceptedKakaoPdf:
+        command = parse_pdf_command(command.model_dump(mode="json"))
         self.assert_current(command)
         owner_uid = os.geteuid()
         # The private parent belongs only to the Catalog identity. Only per-attempt
@@ -120,9 +123,8 @@ class KakaoPdfExecutor:
             raise KakaoPdfExecutionError("KAKAO_PDF_SOURCE_WORKSPACE_OVERLAP")
         raw_manifest = read_pinned(source_root, command.manifest, uid=owner_uid)
         decoded = json.loads(raw_manifest)
-        validate_contract("manifest", decoded)
-        manifest = RenderManifest.model_validate(decoded)
-        members = render_input_members(command, manifest)
+        manifest = parse_pdf_manifest(command, decoded)
+        members = pdf_input_members(command, manifest)
         if any(
             member.relative_path == "request.json"
             or member.relative_path.startswith("request.json/")
@@ -157,15 +159,14 @@ class KakaoPdfExecutor:
         return self._accept(command, manifest, workspace, recovery=False)
 
     def _accept(
-        self, command: RenderCommand, manifest: RenderManifest, workspace: Path, *, recovery: bool
+        self, command: PdfCommand, manifest: PdfManifest, workspace: Path, *, recovery: bool
     ) -> AcceptedKakaoPdf:
         outputs = workspace / "output"
         raw_result = read_local(
             outputs, "result.json", limit=128 * 1024, uid=self.worker_uid, gid=self.shared_gid
         )
         value = json.loads(raw_result)
-        validate_contract("result", value)
-        result = RenderResult.model_validate(value)
+        result = parse_pdf_result(command, value)
         if (
             result.execution != command.execution
             or result.export_id != command.export_id
@@ -179,10 +180,7 @@ class KakaoPdfExecutor:
             raise KakaoPdfExecutionError("KAKAO_PDF_RESULT_QUESTION_MISMATCH")
         if result.status != "COMPLETED":
             return AcceptedKakaoPdf(result, None, (), None)
-        if (
-            result.page_count != len(manifest.questions)
-            or sum(m.size_bytes for m in result.outputs) > 256 * 1024 * 1024
-        ):
+        if sum(m.size_bytes for m in result.outputs) > 256 * 1024 * 1024:
             raise KakaoPdfExecutionError("KAKAO_PDF_RESULT_SIZE_INVALID")
         with local_directory(outputs) as directory:
             if set(os.listdir(directory)) != {
@@ -195,9 +193,9 @@ class KakaoPdfExecutor:
             outputs, by_name["layout.json"], uid=self.worker_uid, gid=self.shared_gid
         )
         layout_value = json.loads(raw_layout)
-        validate_contract("layout", layout_value)
-        layout = RenderLayoutReceipt.model_validate(layout_value)
-        check_layout_receipt(command, manifest, layout)
+        layout = parse_pdf_layout(command, manifest, layout_value)
+        if result.page_count != len(layout.pages):
+            raise KakaoPdfExecutionError("KAKAO_PDF_RESULT_SIZE_INVALID")
         try:
             accepted = create_directory(workspace, "accepted", gid=self.shared_gid, mode=0o700)
         except FileExistsError:

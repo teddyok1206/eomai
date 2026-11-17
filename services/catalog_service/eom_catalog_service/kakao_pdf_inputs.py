@@ -11,7 +11,8 @@ from typing import Literal, cast
 
 from eom_catalog_contracts.kakao_question import KakaoQuestionImage
 from eom_identifiers import sha256_bytes
-from eom_kakao_archive_contracts import LocalMember, RenderManifest, canonical_bytes
+from eom_kakao_archive_contracts import LocalMember, canonical_bytes
+from eom_kakao_archive_contracts.pdf_contracts import PdfManifest
 from eom_orchestrator.kakao_pdf_files import (
     local_directory,
     read_local,
@@ -29,8 +30,10 @@ from eom_catalog_service.kakao_question_editing import (
 from eom_catalog_service.kakao_question_service import ResolvedKakaoQuestions
 from eom_catalog_service.kakao_render_projection import (
     KakaoRenderImageInput,
+    image_pointer_key,
     project_kakao_student_render,
 )
+from eom_catalog_service.kakao_study_projection import project_kakao_student_study
 
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_IMAGES_BYTES = 256 * 1024 * 1024
@@ -41,22 +44,11 @@ _EXTENSION = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 
 @dataclass(frozen=True, slots=True)
 class KakaoPreparedPdfInputs:
-    manifest: RenderManifest = field(repr=False)
+    manifest: PdfManifest = field(repr=False)
     manifest_member: LocalMember
     font_member: LocalMember
     images: tuple[KakaoRenderImageInput, ...]
     source_root: Path = field(repr=False)
-
-
-def _key(pointer: ArtifactMemberPointer) -> tuple[str, ...]:
-    return (
-        pointer.artifact_id,
-        pointer.artifact_revision_id,
-        pointer.member_path,
-        pointer.schema_ref,
-        pointer.media_type,
-        pointer.sha256,
-    )
 
 
 def _font_bytes(path: Path, member: LocalMember) -> bytes:
@@ -103,6 +95,9 @@ def prepare_kakao_pdf_inputs(
     font_source: Path,
     font: LocalMember,
     authorize: Callable[[], None],
+    layout_policy: Literal[
+        "student-question-a4/1.0", "student-study-a4/1.0"
+    ] = "student-question-a4/1.0",
 ) -> KakaoPreparedPdfInputs:
     """Only exact selected sources are staged, once per binary pointer.
 
@@ -112,6 +107,8 @@ def prepare_kakao_pdf_inputs(
     if not callable(authorize):
         raise ValueError("KAKAO_ARCHIVE_RENDER_AUTHORITY_REQUIRED")
     authorize()
+    if layout_policy not in {"student-question-a4/1.0", "student-study-a4/1.0"}:
+        raise ValueError("KAKAO_ARCHIVE_RENDER_LAYOUT_POLICY_INVALID")
     if (
         source_root == artifacts.settings.staging_root
         or not source_root.is_relative_to(artifacts.settings.staging_root)
@@ -168,7 +165,7 @@ def prepare_kakao_pdf_inputs(
                 and block.source_pointer is not None
                 and (block.role == "student" or packet.packet.include_replies)
             ):
-                pointers.setdefault(_key(block.source_pointer), block.source_pointer)
+                pointers.setdefault(image_pointer_key(block.source_pointer), block.source_pointer)
     images = []
     total = 0
     for ordinal, pointer in enumerate(pointers.values(), 1):
@@ -199,7 +196,12 @@ def prepare_kakao_pdf_inputs(
         )
         write_local(source_root, name, raw, gid=os.getgid())
         images.append(KakaoRenderImageInput(pointer, member))
-    manifest = project_kakao_student_render(
+    projector = (
+        project_kakao_student_study
+        if layout_policy == "student-study-a4/1.0"
+        else project_kakao_student_render
+    )
+    manifest = projector(
         packet=packet.packet,
         student_id=student_id,
         questions=tuple(item.published for item in selection.questions),

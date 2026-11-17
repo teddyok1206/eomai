@@ -223,3 +223,34 @@ Codex 역할 지침의 개발용 초안은
   전체 layout/readback 검증 후에만 local commit하며 NAS/DB 발행은 기존 core owner다.
 - page count/input/output/pixel 상한을 넘으면 성공 PDF를 일부만 발행하지 않는다. 고정 entry,
   executor, profile·API/Web 연결과 별도 설치 검증 전에는 새 family를 운영에 활성화하지 않는다.
+
+## 9. 동일 실행·복구·발행 경로의 두 출력 family
+
+- 책임은 기존 Orchestrator PDF executor와 Catalog PDF publisher다. 두 번째 executor/queue,
+  NAS writer나 범용 plugin framework를 만들지 않는다. pure `pdf_contracts`의 작은 exact-family
+  해석 함수가 이미 정의한 두 schema의 command/manifest/result/layout 짝을 검증한다.
+- 정본은 저장한 exact export command와 입력/출력 Artifact다. 새 자료 revision은 새 family의
+  manifest/layout에 pin하며 과거 v1 명령·결과를 재해석하지 않는다. 로컬 accepted 폴더는
+  발행 경계의 임시 materialization이지 독립 문서/정본이 아니다.
+- dominant access는 command family 분기, member path lookup, ordered page 순회와 같은
+  attempt의 append-only 채택이다. bounded map/set/tuple과 기존 indexed export/attempt 및
+  Artifact idempotency key를 그대로 쓴다. 새 DB/index/migration은 이 단계에 필요 없다.
+- 입력 materialization도 기존 `prepare_kakao_pdf_inputs`를 사용한다. 내부의 명시적 typed
+  layout policy로 두 projection을 고르고, 권한/선택 검증과 고유 사진/폰트 읽기는 공유한다.
+  기본값은 기존 v1이며 GUI 요청이나 저장된 구 profile을 새 family로 조용히 전환하지 않는다.
+- 비용은 input/output 고유 member bytes+쪽수에 선형이다. 원본 manifest JSON을 한 번
+  decode하고 receipt 검사는 기존 pure 규칙을 호출한다. family별 복사·재렌더는 없다.
+- 같은 command/attempt/fence를 staging 전에, 실행 전후와 발행 전후 재확인한다. 복구는
+  원래 프로세스가 종료됐다는 기존 OS 증거를 요구하며 원래 output을 다시 검증할 뿐 dispatch
+  하지 않는다. timeout만으로 새 실행/identity를 만들지 않는다.
+- result의 family는 입력 command로 결정한다. worker의 다른 family 주장·학생/packet/study
+  pin·텍스트/사진 누락·쪽수/파일/hash 불일치는 명시적 실패다. 새 family의 page count는
+  원문 질문 수가 아니라 검증된 section layout의 쪽수이며, v1의1질문1쪽 제한은 유지한다.
+- 파일 발행은 기존 Artifact owner와 PDF/PNG media 계약을 재사용하며 layout의 schema URI는
+  exact family를 따른다. 새 family만 request에 study revision/family/layout policy를 추가해
+  provenance를 고정한다. 기존 v1 publication의 key/request bytes 의미는 바꾸지 않는다.
+- pure contracts는 infrastructure를 import하지 않고 Orchestrator/Artifact adapter가 호출한다.
+  기존 GUI/export owner는 아직 v1만 생성하므로 새 family를 조용히 선택하거나 활성화하지 않는다.
+  실제 설치 wheel·fixed launcher와 source owner/profile/API의 호환 활성화는 별도 gate다.
+- 복제한 두 실행기는 권한/복구 규칙이 서로 달라질 수 있다. 실제 두 출력 family가 존재하는
+  지금 필요한 작은 typed 분기만 추가하는 것이 더 단순한 대안이다.

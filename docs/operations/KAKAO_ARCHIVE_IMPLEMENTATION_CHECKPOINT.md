@@ -1,5 +1,44 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 새 PDF family의 기존 입력·복구·발행 연결 — 운영 미활성
+
+기존 Catalog materializer·Orchestrator executor/고정 launcher·Artifact publisher가 새 study
+입력도 처리하도록 연결했다. 작은 pure `pdf_contracts`에서 exact command family에 맞는
+manifest/result/layout만 해석한다. 별도 executor/queue/DB/NAS writer는 만들지 않았다.
+v1의 저장 profile·공개 API/Web은 기존 의미를 유지하고 다른 family를 조용히 실행하지 않는다.
+즉 **backend source 연결이 완료된 것이며 새 Studio PDF·실제 카카오 수집 완료는 아니다**.
+
+1. `prepare_kakao_pdf_inputs`가 내부 typed layout policy로 기존 두 projection을 선택한다.
+   현재 권한·학생 subset·고유 binary/font 검사는 같은 코드이며 default는 v1이다. 기존
+   중복 pointer key 함수를 제거하고 공개 해석 함수를 재사용했다. 사진을 두 역할에서 쓰더라도
+   파일 materialization은 한 번이고 각 use/원문 pointer는 유지한다.
+2. 실행·정지 확인·복구는 원래 exact attempt/fence와 member/owner/hash 경계를 그대로 쓴다.
+   완료한 study 쪽수는 모든 section receipt로 검증하며, v1은 기존1질문1쪽 규칙을 유지한다.
+   발행의 PDF/PNG media pointer는 기존 계약, layout pointer는 exact family의 schema URI다.
+   study publication에만 family/layout policy/study revision provenance를 추가한다. 기존 v1
+   요청의 publication key/body 의미·과거 receipt는 변경하지 않았다.
+3. 직접/기존 source232 PASS, 새 실행 focused와 문맥 검증, strict mypy6개·Ruff/format·diff
+   검사를 수행했다. 공식 guarded 임시 PostgreSQL276 PASS(기존 FastAPI/httpx 경고1건)다.
+   `staging/kakao-study-execution-disposable-20261117.log`에 보존했다. 실제 저장한 source/질문/
+   packet을 다시 읽어 두 profile에서 학생 격리·사진 use·긴 조교 답변/시각 기록·PDF Artifact
+   재조회와 같은 완료 파일 복구를 검사했다. HTTP tests는 **기존 v1**이며 새 공개 API 성공을
+   대체하지 않는다. 운영 DB 테스트·새 migration은 없었다.
+4. 별도 candidate venv에서 platform/contracts/worker wheel을 non-editable 설치했다.
+   source 없는 `python -I -B`, wheel/설치 RECORD, core·publisher/worker import 위치와
+   `pip check` PASS다. 실제 Noto 합성5쪽을 child process1회로 만들고 core가 같은 파일을
+   복구했다. 이는 same-user local process 검증이지 fixed systemd/전용 UID의 새 release
+   검증이 아니다. 첫 probe는 candidate pip가 종료되기 전에 시작해 import 단계에서 거부됐다.
+   설치 완료를 같은 handle로 확인한 뒤 재검증했으며 그때까지 render/서비스 변경은 없었다.
+   증거는 `/tmp/eom-kakao-study-execution.VipQvnt4/result.json`이다.
+   - platform `sha256:3cd7dd0afecdc94ae1cf3771e831fe7cd80e020ce86d64c7eabbb0b0dc755afd`
+   - contracts `sha256:27135ac4b9028e5ae3b3e4d3adfc8d1b2ffdafb971f514dee38d28a906307bdc`
+   - worker `sha256:9939c7b6d17d74dd0b15764cce1b1b621dcfa74b06a2fe8cd466e74a4255c450`
+5. 운영 prefix/설치 pin·service·source/실패 이력·카카오 브라우저/인증·GPU/슬롯/벡터는
+   변경하지 않았다. 다음은 기존 export owner의 저장 profile/결과 계약과 공개 화면을 새 family에
+   연결하고, 보존 CSV·사진·metadata를 기존 source 확인/질문 편집 흐름으로 재생하는 것이다.
+   sample1 사진 미확보, provider 정합과 현행 turn 후보 경계의 한계는 그대로 표시한다.
+   선택적 교재 보강 편집/근거 선택과 실제 한 방→전체 방 주기 수집도 여전히 남아 있다.
+
 ## 2026-11-17 역할별 실제 PDF 출력 구현 — 운영 비활성
 
 질문1쪽→조교 사진/답변/기록 정보→관련 개념 쪽의 결정론적 출력을 기존 PDF worker에

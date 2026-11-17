@@ -33,10 +33,18 @@ worker `study_pages.py`는 학생 사진/질문1쪽과11pt 답변/보강 흐름�
 `cli.py`는 exact schema family로 두 입력을 구분하며 모르는 family를 최신으로 추정하지 않는다.
 원문 crop/삭제나 질문의 임의 다중 쪽 전환 대신 검토 상태를 반환한다.
 
-새 family의 소스 CLI와 격리된 non-editable wheel PDF 검증은 가능하지만, **운영의 고정
-executor/export profile·저장/API/Web에는 아직 활성 연결하지 않았다**. 실제 카카오 자동 수집/
-운영 PDF 성공으로 보고하지 않는다. 기존 v1 의미와 bytes, 실패/완료 기록은 유지한다.
-다음은 기존 materialization/executor/publication owner에 exact family를 연결하는 것이다.
+`pdf_contracts.py`는 두 family의 작은 exact 해석 함수이며 실행/권한을 부여하지 않는다.
+기존 `prepare_kakao_pdf_inputs`는 내부 typed layout policy로 두 projection을 고르되,
+권한·고유 사진/폰트 읽기를 공유한다. 기본값은 v1이다. 기존 Orchestrator executor/launcher와
+Catalog publisher도 두 family를 사용하고 원래의 claim/stopped proof·member closure·현재
+권한을 유지한다. study의 쪽수는 전체 section receipt, v1은 기존1질문1쪽 규칙으로 검사한다.
+동일 완료본의 복구·Artifact 발행 replay는 원래 파일만 재검증하며 worker를 재실행하지 않는다.
+
+소스 backend와 별도 non-editable wheel은 연결됐지만, **운영의 저장 export profile·API/Web은
+아직 새 family로 활성 연결하지 않았다**. 현재 v1 delivery의 현재-claim callback도 다른
+family를 명시 거부한다. 실제 카카오 자동 수집/Studio PDF 성공으로 보고하지 않는다.
+기존 v1 의미와 schema bytes, 실패/완료 기록은 유지한다. 다음은 같은 저장/공개 owner의
+profile과 결과 계약을 새 family에 연결하고 실제 수신 source로 재생 PDF를 확인하는 것이다.
 
 ## 확인할 검사
 
@@ -48,8 +56,11 @@ executor/export profile·저장/API/Web에는 아직 활성 연결하지 않았�
 - `test_kakao_study_pdf.py`: 실제 한글 PDF, 학생/조교 사진 분리·같은 member 재사용,
   긴 답변의 CRLF/combining 원문 범위·11pt 흐름, 기록 정보/출처, 누락 사진·overflow,
   stale pin·위조 coverage·순서·입력/출력 경계와 CLI family 선택.
+- `test_kakao_study_execution.py`: 실제 child process, exact family·위조 layout 거부,
+  중단/권한 복구·완료본 재발행에서 동일 파일/단일 실행 유지.
 - `test_kakao_stored_student_pdf.py`: 공식 guarded 임시 DB의 저장/재구성된 학생 subset을
-  새 projection으로 읽으며, 이미 고정한 v1 입력을 덮지 않는지 확인한다.
+  새 projection으로 읽으며, 이미 고정한 v1 입력을 덮지 않는지 확인한다. 두 출력 profile의
+  학생 격리·고유 사진1회 stage·역할별 사진 use/긴 답변과 실제 Artifact 재조회도 검사한다.
 
 샘플 제작용 staging 프로그램·수동 행 선택·사진 내용 대조는 운영 파이프라인이 아니다.
 원격 로그인/selector/사진 occurrence 미확정은 정직하게 남기고 코드 상수나 model 추정으로
