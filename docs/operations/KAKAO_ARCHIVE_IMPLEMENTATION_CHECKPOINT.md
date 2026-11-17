@@ -35,6 +35,10 @@
 - 다음은 호환 설치 준비와 새 실제 관측의 연결이다. 실제 한 방 CSV/사진 occurrence→학생 PDF,
   전체 방 inventory·selector·주기 실행은 아직 미완료이며 합성 PASS로 대체하지 않는다.
   실행 방식은 기존 고정 Playwright adapter, Codex는 개발/진단이라는 결정을 유지한다.
+- `94b69842`의 API4-wheel/RECORD 검사와 push는 완료했다. 첫 Web wheel 검사는 새 JS는
+  포함됐지만 Python DTO/route2개의 고정 파일 목록 누락으로 설치 전에 거부됐다. 두 파일을
+  명시적 inventory에 추가하며 guard를 완화하지 않는다. 실패 빌드는 보존하고 수정 commit에서
+  공식 Web build와 source-isolated 설치 검증을 다시 수행한다. 운영 설치는 실행하지 않았다.
 
 ## 2026-11-16 collection command/result에서 기존 원본 등록으로 연결
 
