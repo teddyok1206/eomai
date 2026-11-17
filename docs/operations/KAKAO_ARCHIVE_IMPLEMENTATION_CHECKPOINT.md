@@ -1,5 +1,41 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 원본 수락→수집 task 채택의 중단 복구 연결
+
+기존 `KakaoCollectionAttemptService`에 `admit_capture_source`를 추가했다. 기존 source
+admission 계약을 그대로 받아 `KakaoSourceService.admit_source`와 원 task 채택을 순서대로
+호출한다. 새 wire family·DB/queue·collector는 없다. 실제 accepted capture callback·현재
+사용자·source hash/CAS 검사는 원 owner에 남는다. 저장 직후 중단되면 같은 입력/key가 원
+revision을 읽고 task만 채택한다. 정식 source가 없는 로컬 샘플을 이 입구로 우회 등록하지 않는다.
+
+- guarded disposable PostgreSQL 전체 **365 PASS**, 해당 수집 attempt 집중 **15 PASS**
+  (전체에 포함), 경계/문맥25 PASS, strict mypy·Ruff/format/diff PASS다.
+- 새 검사는 실제 source/Artifact 저장 뒤 task 채택 전에 중단·서비스 재구성·같은 key 재조회와
+  두 호출 경합, 다른 owner/미수락 결과 거부를 검사한다. 반복된 동일 시각·동일 문장의 두
+  occurrence는 보존하고 완료 복구에서 Artifact 수는 늘지 않는다. 수집 입력/관측은 합성이다.
+- 증거: `staging/kakao-collection-source-adoption{-full-db,-types,-boundaries}-20261117.log`와
+  집중 `staging/kakao-collection-source-adoption-20261117.log`다. 이 변경은 아직 운영에
+  설치하지 않았다. 실제 collector/원본 수락·카카오/PDF 성공 증거는 아니다.
+
+### 실제 샘플 조회에서 발견한 관측 시각 문제
+
+사용자의 Studio 로그인은 성공했으나 로컬 샘플이 canonical 수락용 시간 검사를 불필요하게
+호출해 `KAKAO_ARCHIVE_MANUAL_CAPTURE_STALE`로 종료됐다. 보호된 읽기 전용 진단에서 수신
+CSV는2026-11-16 19:11:37 UTC에 완료됐고, 같은 run의 저장된 `browser_observed_at`은
+19:16:18 UTC였다. `renew_session`이 latest 관측을 이 필드에 갱신하는데 기존 intake가 이를
+first-ready 하한으로 해석한다. 다운로드/계정 오류로 단정하거나 과거 row를 고치지 않았다.
+
+로컬 preview는 기존 Orchestrator의 retained-download reader(종료된 run의 보관 bytes 읽기
+지원), 실제 현재 사용자/owner·권한, 원 fence/receipt/CSV hash와 교재 pins로 읽는다. 이
+preview에서만 canonical admission 시간 검사를 제거했고 원본 등록/운영 검사/이력은 그대로다.
+첫 실패 파일·로그와 실제 권한 조회는 보존하고 새 v2 sample materialization을 분리했다.
+이는 정식 수집 수락을 완화한 것이 아니다. 첫 검증 세션은 종료됐으며 재인증 입력을 준비했다.
+
+운영 intake의 시간 해석은 별도 후속 수정 대상이다. 최초 browser-ready 증거와 latest 관측을
+분리해 보존해야 하며, 최초 시각을 현재 timestamp·CSV 시각·추측으로 역사적 row에 backfill하지
+않는다. 새로운 정상 수집과 갱신 이후 과거 다운로드 수락을 함께 회귀 검증한다. 이 항목과
+실제 교과서 보강 PDF·공유 모델/정식 질문 출력 및 전체 방 주기 수집은 아직 미완료다.
+
 ## 2026-11-17 교과서 보강 호환 릴리스 — 설치 완료, 실제 샘플 진행 중
 
 운영 compatible set은 `4b066281b345a14ffeb6e5893b3895cc6e0f2c66`이다. 앞선 설치 전

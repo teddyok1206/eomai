@@ -371,9 +371,7 @@ def test_result_acceptance_replays_but_does_not_complete_unvalidated_source(atte
         assert session.get(Run, result.run_id).state == "COLLECTING"
 
 
-def test_real_capture_authorizer_admits_source_and_keeps_duplicate_messages(attempt):
-    data = result_input(attempt)
-    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+def source_input(attempt, data):
     publication = publish_kakao_capture(
         attempt.artifacts,
         snapshot=data.snapshot,
@@ -381,7 +379,7 @@ def test_real_capture_authorizer_admits_source_and_keeps_duplicate_messages(atte
         normalization=data.normalization,
         authorize=lambda: None,
     )
-    admission = KakaoSourceAdmission(
+    return KakaoSourceAdmission(
         source_binding_id=data.reserved.source_binding_id,
         room_id=data.reserved.room_id,
         snapshot_revision_id=data.reserved.snapshot_revision_id,
@@ -407,6 +405,12 @@ def test_real_capture_authorizer_admits_source_and_keeps_duplicate_messages(atte
         ),
         attachments=(),
     )
+
+
+def test_real_capture_authorizer_admits_source_and_keeps_duplicate_messages(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    admission = source_input(attempt, data)
     source = KakaoSourceService(
         attempt.engine,
         artifacts=attempt.artifacts,
@@ -449,6 +453,93 @@ def test_real_capture_authorizer_admits_source_and_keeps_duplicate_messages(atte
         pytest.raises(KakaoArchiveError, match="AUTHORITY_REQUIRED"),
     ):
         attempt.service.authorize_source(session, other, admission)
+
+
+def test_application_source_admission_replays_after_task_adoption_interruption(
+    attempt, monkeypatch
+):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    admission = source_input(attempt, data)
+    key = "source-adoption-interrupted-" + uuid4().hex
+    adopt = attempt.service.accept_source_revision
+    observed = []
+
+    def interrupted(actor, attempt_id, source_revision_id):
+        observed.append(source_revision_id)
+        raise RuntimeError("synthetic stop after source commit")
+
+    monkeypatch.setattr(attempt.service, "accept_source_revision", interrupted)
+    with pytest.raises(RuntimeError, match="after source commit"):
+        attempt.service.admit_capture_source(attempt.actor, admission, idempotency_key=key)
+    assert len(observed) == 1
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+        artifacts_after_commit = session.scalar(
+            select(func.count()).select_from(ArtifactRevisionRecord)
+        )
+    monkeypatch.setattr(attempt.service, "accept_source_revision", adopt)
+    restarted = KakaoCollectionAttemptService(
+        attempt.engine,
+        artifacts=attempt.artifacts,
+        profile_id=attempt.service.profile_id,
+        adapter_release_sha256=attempt.service.adapter_sha256,
+    )
+    recovered = restarted.admit_capture_source(attempt.actor, admission, idempotency_key=key)
+    assert recovered.replayed and recovered.resolution.source_revision_id == observed[0]
+    assert len(recovered.resolution.rows) == 2
+    assert len({row.occurrence_id for row in recovered.resolution.rows}) == 2
+    assert restarted.admit_capture_source(attempt.actor, admission, idempotency_key=key).replayed
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "LOCAL_ACCEPTED"
+        assert session.get(Attempt, data.reserved.attempt_id).state == "RESULT_ACCEPTED"
+        assert (
+            session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+            == artifacts_after_commit
+        )
+
+
+def test_application_source_admission_competing_calls_adopt_one_revision(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    admission = source_input(attempt, data)
+    key = "source-adoption-race-" + uuid4().hex
+    barrier = Barrier(2)
+
+    def accept(_):
+        barrier.wait(timeout=10)
+        return attempt.service.admit_capture_source(attempt.actor, admission, idempotency_key=key)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        accepted = tuple(pool.map(accept, range(2)))
+    assert accepted[0].resolution == accepted[1].resolution
+    assert accepted[0].manifest == accepted[1].manifest
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "LOCAL_ACCEPTED"
+
+
+def test_application_source_admission_rejects_other_owner_without_adopting_task(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    admission = source_input(attempt, data)
+    with pytest.raises(KakaoArchiveError):
+        attempt.service.admit_capture_source(
+            make_actor(attempt.engine), admission, idempotency_key="other-owner-" + uuid4().hex
+        )
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+
+
+def test_application_source_admission_cannot_use_an_unaccepted_result(attempt):
+    data = result_input(attempt)
+    admission = source_input(attempt, data)
+    with pytest.raises(KakaoArchiveError, match="AUTHORITY_REQUIRED"):
+        attempt.service.admit_capture_source(
+            attempt.actor, admission, idempotency_key="unaccepted-result-" + uuid4().hex
+        )
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+        assert session.get(Attempt, data.reserved.attempt_id).state == "COMMAND_READY"
 
 
 def test_failed_capture_history_cannot_be_replaced_by_success_or_restarted(attempt):

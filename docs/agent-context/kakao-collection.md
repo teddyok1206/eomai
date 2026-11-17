@@ -53,6 +53,12 @@ worker가 선언한 attempt/fence만 믿지 않는다. FAILED와 같은 요청�
 최초 attempt 저장 구현은 실제 AUTO 시작/selector/주기 실행을 활성화하지 않는다.
 inventory는 command Artifact에 복사하지 않고 별도 exact Artifact pointer로 저장·재인가한다.
 
+`admit_capture_source`는 실제 accepted capture의 기존 source admission→원 task 채택을
+하나의 application 입구로 연결한다. 원본 commit 직후 중단돼도 같은 입력/key는 저장된
+source revision을 재조회한 다음 task만 채택한다. Artifact·원본 bytes·attempt를 다시 만들지
+않는다. 기존 source callback·현재 사용자·CAS 검사는 유지하며, 이 source 연결 자체는
+collector 실행/실제 카카오 검증이나 운영 source admission 활성화가 아니다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

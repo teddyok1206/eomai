@@ -80,6 +80,25 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 원본 수락 후 task 채택의 단일 application 입구 — 2026-11-17
+
+`KakaoCollectionAttemptService.admit_capture_source`는 기존 source admission 계약과
+`KakaoSourceService.admit_source`→`accept_source_revision`을 순서대로 호출한다. 별도 wire
+schema/queue/table은 추가하지 않는다. 각 owner의 현재 권한·실제 accepted capture callback·
+raw 재파싱/hash·immutable Artifact·head CAS가 정본이며 새 입구가 authority를 만들지 않는다.
+logical source/immutable revision/Artifact/hash는 기존 계약대로 분리된다. 입력은 기존의
+exact command/capability/result/report/source pointers와 원래 idempotency key다.
+
+접근은 attempt/room/source PK·기존 unique replay key이며 추가 상태/캐시는 없다. metadata는
+indexed O(1), 원본 검증은 기존 byte/row 수에 선형이다. 긴 file I/O는 source owner의 lock
+밖이고 source 채택과 task 채택은 기존의 두 짧은 transaction이다. 이를 분산 atomic이라고
+부르지 않는다. source commit 직후 task 채택 전에 중단돼도 같은 입력/key는 원 revision을
+재조회한 뒤 원 task만 채택한다. 새 다운로드·snapshot·attempt나 FAILED 성공 변경은 없다.
+현재 사용자 철회/다른 owner/다른 pointer는 기존 경계에서 거부한다. application→기존
+application owner→계약/Artifact adapter 방향을 유지한다. caller마다 두 호출을 반복하는
+대안은 중단 후 한쪽만 재개하기 쉬워 이 작은 use case로 묶는다. 실제 collector/selector나
+운영 source admission 활성화는 별도이며 이 입구의 source 존재로 성공을 주장하지 않는다.
+
 Catalog는 현재 사용자·binding 권한과 lifecycle, capability revision, 결과 발행의
 소유자다. Orchestrator는 task/attempt/fence, 프로세스·profile 잠금과 local workspace를
 관리한다. Collector는 승인된 화면을 관측해 local CSV/첨부/작은 결과 manifest만

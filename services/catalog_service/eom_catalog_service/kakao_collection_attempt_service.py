@@ -47,6 +47,7 @@ from .kakao_collection_models import KakaoCollectionTaskRecord as Task
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
 from .kakao_source_models import KakaoSourceCommandRecord, KakaoSourceRevisionRecord
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
+from .kakao_source_service import AcceptedKakaoSource, KakaoSourceService
 
 _INVALID = "KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID"
 
@@ -121,6 +122,9 @@ class KakaoCollectionAttemptService:
         self._sessions = build_session_factory(engine)
         self.artifacts = artifacts
         self.profile_id, self.adapter_sha256 = profile_id, adapter_release_sha256
+        self._sources = KakaoSourceService(
+            engine, artifacts=artifacts, authorize_capture=self.authorize_source
+        )
 
     def _authorize(self, session: Session, run: Run) -> None:
         authorize_kakao_collection_preparation(
@@ -525,6 +529,23 @@ class KakaoCollectionAttemptService:
             )
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
+
+    def admit_capture_source(
+        self, actor: ActorContext, admission: KakaoSourceAdmission, *, idempotency_key: str
+    ) -> AcceptedKakaoSource:
+        """Resume the same source commit before marking its original task accepted.
+
+        A source commit and task adoption have separate transaction boundaries.
+        Source replay resolves the original revision if the process stopped between
+        them; neither the download nor the capture attempt is run again here.
+        """
+        source = self._sources.admit_source(actor, admission, idempotency_key=idempotency_key)
+        self.accept_source_revision(
+            actor,
+            source.resolution.admission.authority.attempt_id,
+            source.resolution.source_revision_id,
+        )
+        return source
 
     def accept_source_revision(
         self, actor: ActorContext, attempt_id: str, source_revision_id: str
