@@ -72,12 +72,14 @@ Catalog 환경 lock에도 같은 pin을 포함한다. `--no-deps` EOM wheel 설�
 검사를 함께 수행한다. feature-off import를 강제 의존으로 바꾸거나 worker의 decoder를
 API에서 임의로 원격 호출하지 않는다.
 
-설치된 Noto CJK는 ASCII hyphen(U+002D)과 nonbreaking hyphen(U+2011)을 동일 glyph로
-매핑하며 MuPDF의 ToUnicode 역매핑은 후자를 선택한다. 날짜의 ASCII hyphen을 실제로
-그렸어도 strict codepoint readback이 거부되는 것을 합성 PDF에서 재현했다. 원문이나 출력
-문자열을 치환하지 않고, readback에 한해 **이 두 문자만**, 사용한 exact font의 glyph ID가
-같고0이 아닐 때 허용한다. 수학 minus·다른 구두점·임의의 비슷한 글자·누락·중복은 여전히
-거부한다. body/header 원문과 manifest hash는 그대로이며 전체 검사를 비활성화하지 않는다.
+설치된 Noto CJK는 여러 Unicode 문자를 같은 glyph로 매핑하며 MuPDF의 ToUnicode 역매핑은
+그중 하나를 선택한다. 합성 날짜에서 hyphen, 실제 질문에서 ellipsis와 compatibility Jamo가
+이 차이로 거부되는 것을 재현했다. 문자별 예외 목록을 늘리거나 원문/출력 문자열을 치환하지
+않고, readback의 같은 위치에서 **사용한 exact font의 glyph ID가 같고0이 아닐 때만**
+동일한 출력 글리프로 인정한다. NFKC·모양 추정·다른 폰트의 fallback을 사용하지 않는다.
+실제 폰트에서 glyph가 다른 수학 minus·다른 본문·누락·중복은 계속 거부한다. 원문 codepoint의
+정본은 immutable manifest와 coverage receipt이며 PDF 역추출 문자열을 원문으로 사용하지
+않는다. glyph map은 고유 문자마다 한 번 계산해 O(문자 수+고유 문자 수)다.
 
 ## 결과·발행
 

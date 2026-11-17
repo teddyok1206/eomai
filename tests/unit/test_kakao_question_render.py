@@ -35,6 +35,8 @@ RELEASE = "sha256:" + "a" * 64
     [
         ("2026-11-17", "2026\u201111\u201117", True, True),
         ("A\u2011B", "A-B", True, True),
+        ("모르겠어요\u2026", "모르겠어요\u22ef", True, True),
+        ("질문\u3160\u3160", "질문\uffd7\uffd7", True, True),
         ("2026-11-17", "2026\u201111\u201117", False, False),
         ("A-B", "A\u2212B", True, False),
         ("A+B", "A-B", True, False),
@@ -44,11 +46,14 @@ RELEASE = "sha256:" + "a" * 64
         ("질문\n2026-11-17", "질문\u00a02026\u201111\u201117", True, True),
     ],
 )
-def test_readback_accepts_only_same_font_hyphen_cmap_alias(
+def test_readback_accepts_only_exact_nonzero_font_glyph_alias(
     expected, extracted, shared_glyph, matches
 ):
     font = Mock()
-    font.has_glyph.side_effect = lambda code, **kwargs: 14 if shared_glyph or code == 0x2D else 720
+    aliases = {0x2D: 14, 0x2011: 14, 0x2026: 735, 0x22EF: 735, 0x3160: 1739, 0xFFD7: 1739}
+    font.has_glyph.side_effect = lambda code, **kwargs: (
+        aliases.get(code, code + 100) if shared_glyph else code + 100
+    )
     assert _readback_text_matches(expected, extracted, font) is matches
 
 

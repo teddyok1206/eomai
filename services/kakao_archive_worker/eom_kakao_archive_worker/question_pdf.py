@@ -251,14 +251,16 @@ def _readback_text_matches(expected: str, extracted: str, font: Any) -> bool:
         return True
     if len(source) != len(output):
         return False
-    # Noto CJK maps U+002D and U+2011 to one glyph. MuPDF's reverse CMap
-    # chooses U+2011 even when the original text contains an ASCII date hyphen.
-    # Accept only this proven alias AND only if this exact font shares its glyph.
-    # Do not normalize mathematical minus, punctuation or arbitrary lookalikes.
-    hyphen_glyph = font.has_glyph(0x2D, fallback=False)
-    shared_hyphen = bool(hyphen_glyph) and hyphen_glyph == font.has_glyph(0x2011, fallback=False)
+    # CJK fonts map multiple Unicode characters to one glyph. MuPDF's reverse
+    # CMap can choose a different alias (hyphen, ellipsis, compatibility Jamo).
+    # Compare exact nonzero glyph IDs in this pinned font, not NFKC or visual
+    # similarity. The immutable input/coverage receipt retains the original text.
+    glyphs = {
+        character: font.has_glyph(ord(character), fallback=False)
+        for character in set(source) | set(output)
+    }
     return all(
-        a == b or (shared_hyphen and {a, b} == {"-", "\u2011"})
+        a == b or (glyphs[a] != 0 and glyphs[a] == glyphs[b])
         for a, b in zip(source, output, strict=True)
     )
 

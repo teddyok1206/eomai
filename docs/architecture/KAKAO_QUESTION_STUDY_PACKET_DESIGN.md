@@ -126,6 +126,10 @@ Catalog/Artifact/renderer owner를 확장한다. 아래는 구현 설계 기준�
 넘김 처리하며, 질문·사진을 잘라 1쪽에 맞추지 않는다. 원문 캡처가 한 쪽에 온전히 들어가지
 않으면 검토 상태로 돌린다. 원래 v1 PDF 출력과 실패 이력은 계속 열람할 수 있어야 한다.
 
+Codex 역할 지침의 개발용 초안은
+[개념 보강 프롬프트](KAKAO_QUESTION_CONCEPT_ENRICHMENT_PROMPT_DRAFT.md)에 둔다.
+해당 문서만으로 worker 도구·계약·실행을 활성화하지 않는다.
+
 ## 6. 구현·검증 순서
 
 1. 현재 PDF 전용 UID/systemd sandbox의 실제 정상 출력·네트워크/인증정보/NAS/형제 작업
