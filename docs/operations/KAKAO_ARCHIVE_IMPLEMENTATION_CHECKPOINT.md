@@ -1,5 +1,34 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 17:41 UTC 호환 설치와 개념 프리셋 복구
+
+실제 API·Web·Catalog/Runner 및 QUERY의 API-provider 호환 source는
+`7533ca8f4d699fe82dcf4925fc3d31d1849f1b38`로 반영했다. DB는0097이며 최초 관측 열의
+좁은 Catalog UPDATE 권한도 기존 role owner로 적용했다. 기존 PDF worker/template와
+MANUAL 설정·프로필 인증은 그대로다. 새 core는 source commit 직후 수집 task 채택 복구와
+최초 교재 개념 프리셋 draft 순서 수정도 포함한다.
+
+- clean API/Web build·wheel/RECORD/격리 설치 검증 후 실제 claim0을 확인하고 creative를
+  지원된 SIGINT로 drain했다. 원래 INDEX는 배포 전부터 failed/MainPID0이었으며 원래
+  invocation과 파일 pins를 보존했다. 임베딩 재개·성공을 이 릴리스의 결과로 보고하지 않는다.
+- 첫 활성화에서 API를 멈춘 채 실제 API namespace 격리 검사를 호출한 **배포 순서 오류**가
+  발생했다. wheel과 DB0097·role 적용 상태를 확인한 뒤 재설치/DDL 재실행 없이 기존 릴리스를
+  이어갔다. 이어진 HTTP 확인도 process 존재만 확인하고 너무 일찍 호출해 한 번 거절됐다.
+  실제 HTTP READY를 기다린 뒤 **같은 격리 검사 PASS**를 확인하고 나머지 서비스를 올렸다.
+  두 중단 로그·보호된 recovery receipt와 적용 전 config는 보존했다. 검사를 생략하지 않았다.
+- 현재 API/Catalog·채팅 worker/owner·QUERY·HWPX·Web/Runner·creative는 재개했고,
+  HTTPS 로그인 페이지200을 확인했다. 이는 실제 HTTPS 사용자 로그인/개념 모델 검증과 다르다.
+- 원래 `4b066281…`의 발행 시각·support baseline·지침/definition·멱등 입력을 유지한 채,
+  수정된 bootstrap owner로 원 개념 추천 프리셋 발행을 복구했다.
+  `execpresetrev_607406cb04e94650afc982882950bcb8`, 실제 발행 PASS / 새 모델 실행0이다.
+  원래 실패를 성공으로 바꾸거나 새 baseline으로 우회하지 않았다.
+
+증거: `staging/kakao-concepts-{api-build,web-build,stage,drain,activate,recovery,receiver-recovery}-7533ca8f.log`,
+`staging/kakao-concepts-control-resume-7533ca8f.log`와 보호된 deployment/activation receipt다.
+일반 AUTO 수집과 공유 개념 continuation은 아직 비활성이다. 다음 우선 경계는 실제 원본
+수락→저장 질문→공유 슬롯 PLAN/COMPOSE→Studio에서 편집·PDF 재조회/다운로드이며,
+로컬 샘플/프리셋 발행으로 그 성공을 대체하지 않는다. 전체 방 주기 수집도 미완료다.
+
 ## 2026-11-17 교과서 보강 로컬 샘플 PDF 발행 완료
 
 사용자가 요청한 실제 보관 CSV/사진을 기존 installed study renderer와 고정 PDF 실행기로

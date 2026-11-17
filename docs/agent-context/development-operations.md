@@ -64,6 +64,12 @@ Web의 `install_release.sh`는 파일 설치와 service-identity 검증까지만
 새 HTTP route를 확인해야 한다. 정적 asset은 새 파일을 즉시 읽어200/SHA 일치를 보여도 이미
 import한 Python router는 옛 상태일 수 있다. 파일 검사만으로 활성화를 선언하지 않는다.
 
+`API_ISOLATION_VERIFY`는 실제 실행 중인 `eom-api.service`의 pidfd/mount namespace에
+진입하는 검사다. 설치/DDL 동안 API를 정지한 시점에 호출하지 않는다. MainPID 존재만으로
+HTTP 준비를 가정하지 말고 기존 bounded health-ready 대기를 거친 뒤 호출한다. 중단되면
+actual package/DB/config 상태부터 대조하고 이미 적용된 wheel/migration을 반복하지 않는다.
+발생·복구 근거는 KakaoTalk 구현 체크포인트의2026-11-17 호환 설치 기록이다.
+
 Excel 콘텐츠 편성0075/0076은 같은 protected operator의 context/admission1.22를 사용한다.
 정확한0074 predecessor부터 `MIGRATION_UPGRADE_0076_FROM_0074`로 이동하며 기존 migration은
 재해석하지 않는다. 새 head에서 옛 API의 exact-head readiness는 통과하지 않으므로,
