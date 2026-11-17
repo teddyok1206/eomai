@@ -17,7 +17,17 @@
         "apps/web_gui/eom_web_gui/kakao_delivery_routes.py",
         "apps/web_gui/eom_web_gui/gateways.py",
         "apps/web_gui/eom_web_gui/static/kakao-publications.js",
-        "apps/web_gui/eom_web_gui/static/kakao-study-editor.js"
+        "apps/web_gui/eom_web_gui/static/kakao-study-editor.js",
+        "apps/web_gui/eom_web_gui/static/kakao-concept-picker.js",
+        "schemas/kakao-archive/catalog-kakao-concept-v1.schema.json",
+        "packages/catalog_contracts/eom_catalog_contracts/kakao_concept_rpc.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_dispatch.py",
+        "services/catalog_service/eom_catalog_service/kakao_concept_reads.py",
+        "services/orchestrator/eom_orchestrator/kakao_concept_artifact.py",
+        "services/orchestrator/eom_orchestrator/artifacts.py",
+        "apps/application_api/eom_api/routers/kakao_concepts.py",
+        "apps/web_gui/eom_web_gui/kakao_concept_contracts.py",
+        "apps/web_gui/eom_web_gui/kakao_concept_routes.py"
       ],
       "test_paths": [
         "tests/unit/test_kakao_study_delivery_rpc.py",
@@ -86,6 +96,10 @@
       ],
       "test_paths": [
         "tests/unit/test_kakao_concept_execution.py",
+        "tests/unit/test_kakao_concept_artifact.py",
+        "tests/unit/test_kakao_concept_rpc.py",
+        "tests/web_gui/test_kakao_concept_gateway.py",
+        "tests/integration/test_kakao_concept_http.py",
         "tests/unit/test_kakao_concept_authorization.py",
         "tests/unit/test_kakao_concept_composition.py",
         "tests/unit/test_kakao_concept_phase_results.py",

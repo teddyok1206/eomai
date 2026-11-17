@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from eom_catalog_contracts.kakao_concept_knowledge import KakaoConceptResultPin
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_identifiers import sha256_bytes
+from eom_kakao_archive_contracts import canonical_bytes
 from eom_kakao_archive_contracts.concepts import (
     ConceptComposeRequest,
     ConceptPlanRequest,
@@ -148,7 +149,7 @@ def read_kakao_concept_phase_result(
         content_hash=pin.sha256,
         max_bytes=512 * 1024,
     )
-    if sha256_bytes(canonical_json_bytes(raw)) != pin.sha256:
+    if sha256_bytes(canonical_bytes(raw)) != pin.sha256:
         raise KakaoArchiveError("KAKAO_CONCEPT_RESULT_POINTER_INVALID")
     result = validate_role_result_for_request(
         raw, "support", "kakao-concepts-result@1.0", worker_input

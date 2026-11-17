@@ -7,7 +7,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-study-editor.js", "kakao-question-composer.js", "kakao-question-candidates.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js", "kakao-captures.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-study-editor.js", "kakao-concept-picker.js", "kakao-question-composer.js", "kakao-question-candidates.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js", "kakao-captures.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const policy = {include_images:true,interval_minutes:1440,question_rule_version:"turn_v1",source_timezone:"unknown"};
 const policyHash = "sha256:" + createHash("sha256").update(JSON.stringify(policy)).digest("hex");
 const app = `

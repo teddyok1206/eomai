@@ -6,17 +6,24 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-study-editor.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-study-editor.js", "kakao-concept-picker.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const program = `
 import {createKakaoStudyEditor} from './kakao-study-editor.js';
 const id = (prefix, n='1') => prefix+'_'+n.repeat(32);
-const scope = {binding:id('kakaobinding'),packet:id('kakaopacket'),revision:id('kakaopacketrev'),student:id('kakaostudent'),studentName:'합성 학생',canEdit:true,canExport:true};
+const scope = {binding:id('kakaobinding'),packet:id('kakaopacket'),revision:id('kakaopacketrev'),student:id('kakaostudent'),studentName:'합성 학생',canEdit:true,canExport:true,questionRefs:[{question_id:id('kakaoquestion'),question_revision_id:id('kakaoquestionrev')}]};
 const fixture = window.fixture = {calls:[],saved:null,edits:null,keys:new Map(),failSave:true,held:false,release:null};
 const copy = value => structuredClone(value);
+fixture.conceptFail=true;fixture.conceptKey=null;
+const task={task_id:id('kakaoconcepttask'),source_binding_id:scope.binding,question_id:id('kakaoquestion'),question_revision_id:id('kakaoquestionrev'),created_at:'2026-11-17T00:00:00Z'};
+const concept={schema_version:'kakao-concept-view/1.0',task,state:'COMPLETED',result_sha256:'sha256:'+'b'.repeat(64),focus_summary:'관련 기초 개념',staff_checks:['원래 답변 보존'],limitations:['합성 교재 테스트'],blocks:[{title:'교재 개념',relevance:'질문과의 연결',explanation:'안전한 설명 <script>window.bad=true</script>',citations:[{title:'합성 교과서',location:'1쪽',kind:'APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE',quote:null}],captures:[{page_key:'E1P1',physical_page:1,rectangle:{x:0.1,y:0.2,width:0.6,height:0.5},reason:'관련 원본 그림',source_title:'합성 교과서'}]}]};
 const selection = {schema_version:'kakao-study-create/1.0',source_binding_id:scope.binding,packet_id:scope.packet,packet_revision_id:scope.revision,student_id:scope.student,title:'질문과 설명',questions:[{question_revision_id:id('kakaoquestionrev'),concept_task_id:null,blocks:[],notes:[]}]};
 async function api(path, options={}) {
   fixture.calls.push({path,method:options.method||'GET',key:options.headers?.['Idempotency-Key'],body:copy(options.body)});
   const url = new URL(path,'http://fixture');
+  if(url.pathname.includes('/questions/')) return {question:{source_binding_id:scope.binding,room_id:id('kakaoroom'),question_id:id('kakaoquestion'),question_revision_id:id('kakaoquestionrev'),resource_version:1,student:{student_id:scope.student}}};
+  if(url.pathname==='/kakao-archive/concepts' && options.method) {const key=options.headers['Idempotency-Key'];if(!fixture.conceptKey)fixture.conceptKey=key;if(fixture.conceptKey!==key)throw Error('duplicate concept');if(fixture.conceptFail){fixture.conceptFail=false;throw Error('synthetic lost concept response');}return {schema_version:'kakao-concept-started/1.0',task,replayed:true};}
+  if(url.pathname==='/kakao-archive/concepts')return {items:[task],next_cursor:null};
+  if(url.pathname.includes('/concepts/'))return copy(concept);
   if(url.pathname.endsWith('/study-selection')) {
     const result = copy(selection); result.student_id=url.pathname.split('/').at(-2);
     if(fixture.held){fixture.held=false;await new Promise(resolve=>fixture.release=resolve);}
@@ -64,14 +71,28 @@ try {
   await page.getByLabel('설명 제목',{exact:true}).fill('관련 개념');
   const privateText='안전한 설명 <script>window.bad=true</script> · 다른 학생에게 노출 금지';
   await page.getByLabel('설명 내용',{exact:true}).fill(privateText);
+  await page.getByLabel('찾아볼 개념이나 추가 요청 (선택)',{exact:true}).fill('기초 개념을 찾아 주세요');
+  await page.getByRole('button',{name:'교과서 개념 추천',exact:true}).click();
+  await page.getByRole('button',{name:'같은 추천 요청 확인',exact:true}).click();
+  await page.getByRole('button',{name:'추천 상태 확인',exact:true}).click();
+  await page.getByLabel('이 개념 넣기',{exact:true}).check();
+  await page.getByLabel('표시한 교과서 그림 넣기 · 관련 원본 그림',{exact:true}).check();
+  await page.getByRole('button',{name:'선택한 개념·그림 반영',exact:true}).click();
+  assert.equal(await page.getByLabel('설명 내용',{exact:true}).inputValue(),privateText,'selecting a concept must preserve private notes');
+  const concepts=await page.evaluate(()=>fixture.calls.filter(c=>c.path==='/kakao-archive/concepts'&&c.method==='POST'));
+  assert.equal(concepts.length,2);assert.equal(concepts[0].key,concepts[1].key);assert.deepEqual(concepts[0].body,concepts[1].body);
+  assert.equal(concepts[0].body.additional_instructions,'기초 개념을 찾아 주세요');
+  assert.equal(await page.locator('.kakao-concept-region').count(),1);
+  assert.match(await page.locator('.kakao-concept-page img').getAttribute('src'),/^\/studio\/api\/v1\/kakao-archive\/concepts\/kakaoconcepttask_[0-9a-f]{32}\/pages\/E1P1\?/);
   await page.getByRole('button',{name:'설명 자료 저장',exact:true}).click();
   await page.getByRole('button',{name:'같은 저장 요청 확인',exact:true}).waitFor();
   assert.equal(await page.getByLabel('설명 내용',{exact:true}).isDisabled(),true);
   await page.getByRole('button',{name:'같은 저장 요청 확인',exact:true}).click();
   await page.getByRole('button',{name:'설명 자료 저장',exact:true}).waitFor();
-  const writes=await page.evaluate(()=>fixture.calls.filter(c=>c.method==='POST'));
+  const writes=await page.evaluate(()=>fixture.calls.filter(c=>c.method==='POST'&&c.path==='/kakao-archive/studies'));
   assert.equal(writes.length,2);assert.equal(writes[0].key,writes[1].key);assert.deepEqual(writes[0].body,writes[1].body);
   assert.equal(await page.evaluate(()=>fixture.keys.size),1);
+  const edits=await page.evaluate(()=>fixture.edits[0]);assert.equal(edits.concept_task_id,'kakaoconcepttask_'+'1'.repeat(32));assert.deepEqual(edits.blocks[0].capture_indices,[0]);
   await page.getByLabel('설명 내용',{exact:true}).fill(privateText+' · 수정');
   assert.equal(await page.getByRole('button',{name:'저장한 설명으로 PDF 만들기',exact:true}).isDisabled(),true,'unsaved edits must not silently export the prior revision');
   await page.getByRole('button',{name:'설명 자료 저장',exact:true}).click();

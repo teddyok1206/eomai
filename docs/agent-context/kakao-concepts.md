@@ -39,13 +39,13 @@ DB0094의 task와 (task,phase) row는 trigger/FK/unique로 identity·이미 채�
 phase에 저장한 Work는 작은 typed pointer이고 질문/worker result body가 아니다.
 release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context/schema bytes는 보존한다.
 
-## 아직 실제로 연결되지 않은 것
+## 아직 실제 운영으로 검증되지 않은 것
 
-- 추천 요청의 공개 API·화면 시작/상태/history.
+- 공개 API/화면 source는 아래와 같으며 아직 운영 배포·실제 모델 검증 전이다.
 - 실제 preset/지침 발행·공유 슬롯 model run. 자동 continuation source는 아래와 같으며
   실제 운영 activation은 별도다.
-- 실제 COMPOSE 완료 뒤 추천 block/capture의 화면 선택·이미지와 원본 capture 발행.
-  saved-study 공개 저장·편집/PDF source 연결은 [설명 편집](kakao-study-editing.md)에 있다.
+- 실제 COMPOSE 완료 뒤 실제 교재 block/capture를 선택해 발행한 최종 사용자 PDF.
+  공개 추천 선택·saved-study 저장/편집/PDF source 연결은 [설명 편집](kakao-study-editing.md)에 있다.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
 
 실제 reader/page/crop/worker input/역할별 PDF는 [자료 출력 문맥](kakao-study-output.md)을 따른다.
@@ -114,7 +114,7 @@ accepted source authority가 실제 저장 owner를 보유하므로 HTTP 만료 
 검사는 실제 Job/Artifact 결과→등록된 PNG→COMPOSE 저장/서비스 재구성·logout 뒤 동일 Workflow
 제출을 검증하지만 PLAN 출력·Graph/교재 discovery는 합성이다. 모델/실제 교재 검색 성공은 아니다.
 
-다음 구현은 **실행 preset·추천 공개 API→실제 COMPOSE→화면에서 선택·새 PDF**에
+다음 운영 검증은 **실행 preset·공개 API→실제 COMPOSE→화면에서 선택·새 PDF**에
 집중한다. 실제 CSV/사진 샘플의 관련 교과서 보강·최종 PDF 링크도 남아 있다. 새 queue/독립
 Codex 프로세스를 만들지 않는다.
 
@@ -190,6 +190,36 @@ socket을 막지 않는다. 종료/예외에서도 stopping event를 먼저 set�
 두 phase 사이 current preset이 바뀌면 초기 구현은 원 pin과의 불일치로 명시 거부한다.
 기존 PLAN replay는 가능하지만 새 COMPOSE가 최신 설정을 묵시 채택하지 않는다. 실행 중
 preset 변경을 자유롭게 흡수하는 기능으로 보고하지 않는다. 일반 collection AUTO와 별개다.
+
+## 공개 추천 시작·읽기·원본 페이지 — source 연결
+
+새 `catalog-kakao-concept-v1`/`kakao_concept_rpc.py`는 API-peer 전용이다. 시작은 기존
+`KakaoConceptCreate`와 같은 key/body로 위 use case를 호출하며 continuation이 비활성이면
+새 작업을 받지 않는다. GET은 `kakao_concept_reads.py`의 작은 현재 권한 투영만 읽는다.
+원본 입력·분석 전체/worker path를 응답에 넣지 않고 실제 Workflow 진행/실패·완료 pin,
+설명/관련성·원문 인용과 분석 근거의 구분·실제 교재 page/crop 정보만 반환한다.
+
+목록은 기존 owner/binding/task B-tree keyset이며 UUID 순서를 최신순으로 표시하지 않는다.
+상세에서 원 source/교재를 재인가한다. 원본 PNG는 task+완료 capture page key만 받아
+기존 Artifact FD/hash/media/크기를 검증해 별도 전달한다. 모든 crop을 재생성하지 않는다.
+API/BFF session·CSRF/no-store와 exact 응답 상관 검사를 사용한다. 일반 worker/chat UID는
+공개 operation을 호출할 수 없다. 새 DB/queue/dependency는 없다.
+
+`kakao-concept-picker.js`는 [설명 편집](kakao-study-editing.md)의 질문별 추천/이전 작업/
+진행·이미지 선택을 담당한다. 선택 전 기존 메모/원문을 바꾸지 않는다. 새 화면/학생/권한
+전환은 timer/late response를 폐기하고, 불확실한 POST는 원 key/body를 재확인한다.
+
+실제 COMPOSE 저장 검사에서 normalized 소수 좌표가 메시지 serializer에 거부됨을 발견했다.
+`stage_kakao_concept_artifact`가 pure finite-number JSON을 명시적 `stage_serialized_artifact`
+입구로 전달한다. bytes canonical/identity 검사 후 공통 staging/commit을 재사용한다.
+메시지/control/manifest의 기존 integer-only 규칙은 바꾸지 않는다. 이 family의 canonical
+결과 재조회/공개 응답도 finite-number encoding을 사용하며 DB는 작은 header만 저장한다.
+
+`test_kakao_concept_http.py`는 실제 BFF→API→UDS→disposable DB·Artifact의 원 POST replay,
+GET 무실행·완료 COMPOSE 설명/원본 PNG 재조회·unknown page 거부를 확인한다. Worker 출력과
+교재 discovery는 합성이며 모델/운영 성공은 아니다. `test_kakao_concept_rpc.py`,
+`test_kakao_concept_gateway.py`, `test_kakao_concept_artifact.py`와 Chromium 편집 검사가
+상관·권한 입력 거부·소수 Artifact/정수 메시지 구분·선택/메모 보존을 보강한다.
 
 `test_kakao_concept_continuation.py`와 storage의 continuation 검사는 실제 intent/Job 결과/
 Artifact·교재 PNG→COMPOSE Workflow/command, logout/서비스 재구성·두 coordinator 경쟁과

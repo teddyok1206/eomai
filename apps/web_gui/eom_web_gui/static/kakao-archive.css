@@ -86,3 +86,13 @@
 .kakao-capture-intake .kakao-retire-confirm { display: flex; align-items: center; flex-basis: 100%; max-width: none; }
 .kakao-capture-intake input[type="checkbox"] { width: 20px; min-height: 20px; flex: 0 0 20px; margin: 0; }
 .kakao-manual-viewport iframe { display: block; width: 100%; height: min(70vh, 720px); border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
+.kakao-concept-picker { margin-block: 12px; padding: 16px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); min-width: 0; }
+.kakao-concept-picker h6 { margin: 0 0 8px; font: inherit; font-weight: 650; }
+.kakao-concept-picker p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.kakao-concept-picker fieldset { margin-block: 16px; min-width: 0; }
+.kakao-concept-picker figure { margin: 12px 0; }
+.kakao-concept-picker input[type="checkbox"] { display: inline-block; width: 20px; min-height: 20px; margin-inline-end: 8px; vertical-align: middle; }
+.kakao-concept-picker .button { margin: 4px 8px 4px 0; }
+.kakao-concept-page { position: relative; width: min(100%, 360px); }
+.kakao-concept-page img { display: block; width: 100%; height: auto; }
+.kakao-concept-region { position: absolute; border: 2px solid var(--eom-accent, #34645e); background: color-mix(in srgb, var(--eom-accent, #34645e) 12%, transparent); pointer-events: none; box-sizing: border-box; }

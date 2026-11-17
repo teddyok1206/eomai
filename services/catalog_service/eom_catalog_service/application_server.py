@@ -126,6 +126,7 @@ from eom_catalog_contracts.curated_document_delivery_application import (
 )
 from eom_catalog_contracts.kakao_archive_rpc import KAKAO_BINDING_OPERATIONS
 from eom_catalog_contracts.kakao_capture_rpc import KAKAO_CAPTURE_OPERATIONS
+from eom_catalog_contracts.kakao_concept_rpc import CONCEPT_OPERATIONS
 from eom_catalog_contracts.kakao_delivery_rpc import KAKAO_DELIVERY_OPERATIONS
 from eom_catalog_contracts.kakao_manual_rpc import KAKAO_MANUAL_OPERATIONS
 from eom_catalog_contracts.kakao_question_candidates import LIST_KAKAO_QUESTION_CANDIDATES
@@ -250,6 +251,7 @@ from eom_catalog_service.kakao_concept_authorization import (
     CatalogKakaoConceptAuthorizationService,
     dispatch_kakao_concept_authorization,
 )
+from eom_catalog_service.kakao_concept_dispatch import dispatch_kakao_concept
 from eom_catalog_service.kakao_delivery_application import KakaoDeliveryApplication
 from eom_catalog_service.kakao_delivery_dispatch import dispatch_kakao_delivery
 from eom_catalog_service.kakao_manual_dispatch import KakaoManualApplication, dispatch_kakao_manual
@@ -372,6 +374,11 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if isinstance(raw_operation, str) and raw_operation in KAKAO_ROOM_OPERATIONS:
                 self.wfile.write(dispatch_kakao_room(self.server.kakao_rooms, value))
                 self.wfile.flush()
+                return
+            if isinstance(raw_operation, str) and raw_operation in CONCEPT_OPERATIONS:
+                dispatch_kakao_concept(
+                    self.server.kakao_questions, value, cast(BinaryIO, self.wfile)
+                )
                 return
             if isinstance(raw_operation, str) and raw_operation in KAKAO_DELIVERY_OPERATIONS:
                 dispatch_kakao_delivery(

@@ -1,4 +1,5 @@
 // Saved student study edits only. Source resolution, revisions and PDF claims belong to Catalog.
+import {createKakaoConceptPicker} from "./kakao-concept-picker.js";
 const BASE = "/kakao-archive";
 const ID = /^[a-z][a-z0-9_]{1,48}_[a-f0-9]{32}$/;
 function id(value) { if (typeof value !== "string" || !ID.test(value)) throw new Error("자료 연결을 확인해 주세요."); return encodeURIComponent(value); }
@@ -7,12 +8,14 @@ export function createKakaoStudyEditor({document, api, explainError, schedule = 
   let root = null, context = null, generation = 0, timer = null, draft = null, saved = null;
   let saveIntent = null, exportIntent = null, busy = false, observed = null, dirty = false;
   const nodes = {};
+  const pickers = new Map();
+  function clearPickers() { for (const picker of pickers.values()) picker.clear(); pickers.clear(); }
   function el(tag, text, className = "") { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
   function button(text, action) { const node = el("button", text, "button quiet"); node.type = "button"; node.addEventListener("click", action); return node; }
   function live(token) { return root && context && token === generation; }
   function say(text, error = false) { nodes.note.textContent = text; nodes.note.className = `form-message${error ? " error" : ""}`; }
   function stop() { if (timer !== null) unschedule(timer); timer = null; }
-  function clear() { generation++; stop(); context = null; draft = null; saved = null; saveIntent = null; exportIntent = null; observed = null; busy = false; dirty = false; if (root) root.replaceChildren(); }
+  function clear() { generation++; stop(); clearPickers(); context = null; draft = null; saved = null; saveIntent = null; exportIntent = null; observed = null; busy = false; dirty = false; if (root) root.replaceChildren(); }
   function input(parent, labelText, value, multiline, change, maxLength) {
     const label = el("label", labelText), field = el(multiline ? "textarea" : "input"); field.value = value ?? ""; field.maxLength = maxLength; if (multiline) field.rows = 4;
     field.addEventListener("input", () => { change(field.value); dirty = true; controls(); }); label.append(field); parent.append(label); return field;
@@ -30,6 +33,15 @@ export function createKakaoStudyEditor({document, api, explainError, schedule = 
     input(nodes.form, "설명 자료 이름", draft.title, false, value => { draft.title = value; }, 128);
     draft.questions.forEach((question, index) => {
       const section = el("section", undefined, "kakao-study-question"); section.append(el("h5", `${index + 1}번째 질문의 보충 설명`));
+      const questionId = context.questionRefs?.get(question.question_revision_id);
+      if (questionId) {
+        const revision = question.question_revision_id;
+        if (!pickers.has(revision)) pickers.set(revision, createKakaoConceptPicker({document, api, explainError, schedule, unschedule,
+          canEdit: () => !!context?.canEdit && !busy && !saveIntent && !exportIntent,
+          onSelect: (task, blocks) => { const current = draft?.questions.find(value => value.question_revision_id === revision); if (!current) return; current.concept_task_id = task; current.blocks = blocks; dirty = true; renderForm(); }
+        }));
+        const host = el("section"); section.append(host); pickers.get(revision).mount(host, {binding:context.binding, questionId, revision, student:context.student, selected:question});
+      }
       question.blocks.forEach((block, blockIndex) => {
         const box = el("fieldset"), legend = el("legend", `선택한 교재 개념 ${blockIndex + 1}`); box.append(legend);
         box.append(el("p", "빈칸으로 두면 원래 추천 설명을 사용합니다. 교재 인용과 원본 그림은 변경하지 않습니다.", "field-help"));
@@ -48,7 +60,7 @@ export function createKakaoStudyEditor({document, api, explainError, schedule = 
   }
   function matches(row) { return context && row?.source_binding_id === context.binding && row.packet_id === context.packet && row.packet_revision_id === context.revision && row.student_id === context.student; }
   async function open(container, value) {
-    clear(); root = container; context = {...value}; const token = generation;
+    clear(); root = container; context = {...value, questionRefs:new Map((value.questionRefs || []).map(ref => [ref.question_revision_id, ref.question_id]))}; const token = generation;
     root.replaceChildren(el("h4", `${value.studentName} · 개념·설명 자료`), el("p", "질문·조교 답변은 보존하고, 뒤쪽에 보충 설명을 붙입니다. 저장한 버전별로 PDF를 다시 받을 수 있습니다.", "field-help"));
     nodes.note = el("p", "저장한 설명 자료를 확인하고 있습니다.", "form-message"); nodes.note.setAttribute("role", "status");
     nodes.fresh = button("새 설명 자료 시작", () => void fresh(generation));
@@ -76,7 +88,7 @@ export function createKakaoStudyEditor({document, api, explainError, schedule = 
       const result = await api(`${BASE}/question-packets/${id(context.packet)}/revisions/${id(context.revision)}/students/${id(context.student)}/study-selection?${query}`);
       if (!live(token)) return;
       if (!matches(result) || result.schema_version !== "kakao-study-create/1.0" || !Array.isArray(result.questions)) throw new Error("학생별 질문 구성이 다릅니다.");
-      saved = null; draft = structuredClone(result); dirty = true; observed = null; stop(); nodes.output.replaceChildren(); renderForm(); say("필요한 설명을 입력한 뒤 저장해 주세요.");
+      clearPickers(); saved = null; draft = structuredClone(result); dirty = true; observed = null; stop(); nodes.output.replaceChildren(); renderForm(); say("필요한 설명을 입력한 뒤 저장해 주세요.");
     } catch (error) { if (live(token)) say(explainError(error), true); }
     finally { if (live(token)) { busy = false; controls(); } }
   }
@@ -88,7 +100,7 @@ export function createKakaoStudyEditor({document, api, explainError, schedule = 
       const result = await api(`${BASE}/studies/${id(row.study_id)}/revisions/${id(row.study_revision_id)}?${query}`);
       if (!live(token)) return;
       if (!matches(result.study) || result.study.study_revision_id !== row.study_revision_id || !Array.isArray(result.questions)) throw new Error("저장한 설명 자료의 버전이 다릅니다.");
-      saved = result.study; draft = {schema_version: "kakao-study-create/1.0", source_binding_id: context.binding, packet_id: context.packet, packet_revision_id: context.revision, student_id: context.student, title: saved.title, questions: structuredClone(result.questions)};
+      clearPickers(); saved = result.study; draft = {schema_version: "kakao-study-create/1.0", source_binding_id: context.binding, packet_id: context.packet, packet_revision_id: context.revision, student_id: context.student, title: saved.title, questions: structuredClone(result.questions)};
       dirty = false; observed = null; stop(); nodes.output.replaceChildren(); renderForm(); say("저장한 설명을 열었습니다. 수정하면 새 버전으로 저장됩니다.");
     } catch (error) { if (live(token)) say(explainError(error), true); }
     finally { if (live(token)) { busy = false; controls(); } }

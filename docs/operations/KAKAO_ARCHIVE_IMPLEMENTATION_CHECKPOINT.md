@@ -1,5 +1,51 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 추천 API·교과서 원본 그림·Studio 선택 연결 — source 검증, 운영 미배포
+
+source `7bb3f6b6f42202517d1643dcb7b02adecab9e7c4` 후속이다. 질문별 개념 추천 시작,
+진행/완료 읽기·추천 작업 목록과 교과서 원본 PNG를 기존 API/BFF에 연결했다. Studio에서
+설명/근거·원본 페이지와 선택 범위를 보고 block/capture를 골라 기존 저장 편집본/PDF에
+넣을 수 있다. **실제 모델/교과서로 만든 마지막 샘플 PDF와 운영 활성화는 아직 남았다.**
+
+- 설계18절과 새 `catalog-kakao-concept-v1` Schema2020-12/mirror를 먼저 정의했다.
+  SHA는 `sha256:edc833881da8be50731d2e13e4fec4d6c33e8660626ab45fc6c19a4cddcbe644`다.
+  기존 create/stored 계약·schema bytes·DB0096을 재사용하며 새 migration/dependency/queue는 없다.
+- POST는 실제 actor와 기존 task/Workflow 제출을 사용한다. 같은 key/body는 원 작업이며
+  continuation 비활성에서는 시작을 거부한다. GET/이전 결과 조회는 모델을 실행하지 않는다.
+  목록은 기존 B-tree keyset이고 UUID 순서를 최신순으로 표시하지 않는다.
+- 완료 결과의 원문 인용/승인 분석/모델 초안을 구분하고 실제 교재 page key만 PNG로 읽는다.
+  현재 source와 권한·hash/media/크기를 다시 검사한다. 임의 source/path/slot/권한 입력과
+  다른 질문의 응답은 거부한다. 원 worker 입력/전체 분석을 공개 JSON에 복사하지 않는다.
+- 추천 선택은 기존 메모를 보존하고 작은 block/capture index만 편집본에 반영한다.
+  불확실한 POST는 같은 key/body를 재확인하며 학생/계정/권한/양식 변경은 timer와 늦은
+  응답을 폐기한다. 적합한 교재가 없으면 NO_MATCH/한계를 표시하며 가짜 그림을 만들지 않는다.
+- 새 실제 COMPOSE 저장 테스트에서 소수 crop 좌표가 기존 integer-only 메시지 serializer에
+  거부됨을 확인했다. 개념 결과 adapter의 finite-number Artifact 입구를 분리하고 공통
+  staging/commit을 재사용했다. job/artifact/revision identity와 canonical bytes·중복 key/
+  NaN을 검사하며 기존 메시지/control/manifest 규칙은 변경하지 않았다. DB는 작은 header다.
+  이는 운영 장애를 재현·복구한 증거가 아니라 활성화 전 source 통합 검사에서 잡은 오류다.
+- 최종 source **804 PASS**, guarded disposable DB 전체 **353 PASS**, 마지막 공개 HTTP
+  집중 **2 PASS/351 deselected**, 실제 Chromium 합성 화면 **11 PASS**, 독립 설치 wheel
+  **10 PASS**, strict mypy12개/Ruff/format/diff/bash PASS다. DB 두 검사는 중복이다.
+  공개 HTTP 검사는 실제 BFF→API→UDS→DB·canonical Job Artifact의 PLAN replay/진행·완료
+  COMPOSE/원본 PNG 반복 조회/잘못된 page 거부다. **모델 출력과 교재 discovery는 합성**이다.
+  별도 OS UID/systemd·실제 교재/카카오/모델 성공으로 확대하지 않는다.
+- 문맥/권한/release-boundary **41 PASS**, wire audit1498 canonical/1140 mirror/13099 refs다.
+  초기 pytest 예약 인자/fixture 속성과 문맥 index 경로 상한 오류도 수정·재검증했고,
+  최초 소수 좌표 저장 실패를 포함한 개발 로그는 보존했다. 실제 실행 실패 이력은 바꾸지 않았다.
+
+증거: `staging/kakao-concept-public-{final-source,full-db,final-http-db,final-wheel,
+final-browser,final-types-all,context-boundaries-final,wire}-20261117.log`와
+`staging/kakao-concept-picker-browser-20261117.log`.
+실제 모델/GPU 실행·운영 migration/설치/재시작·카카오 조작·로그인 요청은0이다.
+
+다음은 기존 Control owner로 실제 추천 preset/지침을 발행하고, 보호된 호환 API/platform/
+Catalog/Runner/Web 묶음과 SHARED continuation을 활성화해 실제 수신 질문·사진에 적절한
+통합과학 교과서 근거를 붙인 PDF를 만드는 것이다. 최종 PDF를 직접 확인하고 링크를
+전달한 뒤 README/운영 증거를 마무리한다. 최초 사진 미확보·원 시각/역할/첨부 연결의
+미확인 상태는 정직하게 유지한다. 원래 goal의 실제 한 방 occurrence/전체 방·주기 수집도
+남아 있으며 AUTO는 활성화하지 않았다. 이 source 체크포인트를 전체 완료로 보고하지 않는다.
+
 ## 2026-11-17 완료 PLAN→공식 교재→COMPOSE 자동 continuation — source 검증, 운영 미활성
 
 source `d0c2f513431f0051e59c952d0fd4543bf467184a` 후속이다. 실제 actor의 task 수락·PLAN

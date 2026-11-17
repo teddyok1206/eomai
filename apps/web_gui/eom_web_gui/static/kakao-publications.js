@@ -118,6 +118,7 @@ export function createKakaoPublications({document, api, explainError, setStateSt
         const student = currentStudents.get(nodes.student.value); if (!student) return;
         void studyEditor.open(studyHost, {binding: binding.source_binding_id, packet: row.packet_id,
           revision: row.packet_revision_id, student: student.student_id, studentName: student.display_name,
+          questionRefs: currentPacket.questions,
           canEdit: permissions.has("kakao_archive:edit") && ["DRAFT", "ACTIVE"].includes(binding.state), canExport: writable()});
       });
       nodes.student.addEventListener("change", () => studyEditor.clear());

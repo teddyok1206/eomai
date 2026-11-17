@@ -1738,14 +1738,30 @@ class Orchestrator:
                 manifest_document = staged_file_set.manifest
                 database_result = result.output.proposal.model_dump(mode="json")
             else:
-                staged = stage_structured_artifact(
-                    result=result_document,
-                    job_id=job_id,
-                    logical_artifact_id=artifact.logical_artifact_id,
-                    revision_id=artifact.revision_id,
-                    staging=staging,
-                    worker_slot=slot.slot_id,
-                )
+                if result_schema == "kakao-concepts-result@1.0":
+                    from eom_workflow.kakao_concept_result import KakaoConceptRoleResult
+
+                    from eom_orchestrator.kakao_concept_artifact import stage_kakao_concept_artifact
+
+                    if not isinstance(result, KakaoConceptRoleResult):
+                        raise PlatformError(
+                            ErrorCode.WORKER_RESULT_INVALID,
+                            "concept result typed boundary is inconsistent",
+                        )
+                    staged = stage_kakao_concept_artifact(
+                        result=result,
+                        staging=staging,
+                        worker_slot=slot.slot_id,
+                    )
+                else:
+                    staged = stage_structured_artifact(
+                        result=result_document,
+                        job_id=job_id,
+                        logical_artifact_id=artifact.logical_artifact_id,
+                        revision_id=artifact.revision_id,
+                        staging=staging,
+                        worker_slot=slot.slot_id,
+                    )
                 if isinstance(result, PdfDocumentReviewRoleResultV5):
                     with self.sessions() as validation_session:
                         textbook_receipt = validate_single_document_textbook_for_commit(

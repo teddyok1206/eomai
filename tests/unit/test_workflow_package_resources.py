@@ -465,6 +465,10 @@ from eom_catalog_contracts.kakao_delivery_rpc import KakaoStudyView, ReadKakaoSt
 load_catalog_schema("catalog-kakao-study-v1")
 from eom_catalog_service.kakao_concept_continuation import KakaoConceptCoordinator
 from eom_catalog_service.kakao_concept_workflow_submission import start_kakao_concept_task
+from eom_catalog_contracts.kakao_concept_rpc import ConceptView, ReadConceptRequest
+from eom_catalog_service.kakao_concept_reads import read_kakao_concept, open_kakao_concept_page
+from eom_orchestrator.kakao_concept_artifact import stage_kakao_concept_artifact
+load_catalog_schema("catalog-kakao-concept-v1")
 KakaoConceptAuthorizationRequest(
     workflow_id="workflow_" + "1" * 32, step_run_id="steprun_" + "2" * 32,
     plan_id="execplan_" + "3" * 32, plan_sha256="sha256:" + "4" * 64,

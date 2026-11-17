@@ -47,7 +47,16 @@ BASE = "/api/v1/kakao-archive/questions"
 
 
 @contextmanager
-def question_api(store, tmp_path, *, actor=None, delivery=None, captures=None):
+def question_api(
+    store,
+    tmp_path,
+    *,
+    actor=None,
+    delivery=None,
+    captures=None,
+    concepts=None,
+    concept_coordinator=None,
+):
     engine, original_actor, _questions, _command, sources, artifacts, _binding = store
     actor = original_actor if actor is None else actor
     runtime = tmp_path / ("kq-" + uuid4().hex[:8])
@@ -63,6 +72,8 @@ def question_api(store, tmp_path, *, actor=None, delivery=None, captures=None):
             KakaoQuestionComposeService(
                 engine, questions=questions, sources=sources, artifacts=artifacts
             ),
+            concepts,
+            concept_coordinator,
         ),
         kakao_delivery=delivery,
         kakao_captures=captures,

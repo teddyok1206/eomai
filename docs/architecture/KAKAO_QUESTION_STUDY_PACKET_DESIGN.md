@@ -630,3 +630,39 @@ capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변
 그 직후 변경돼도 이미 해석한 revision이 최신으로 바뀌지 않는다. 이는 설정 변경과 제출을
 하나의 atomic transaction으로 직렬화한다는 주장이 아니다. 영속 phase/Workflow의 단일
 제출·원래 preset pin 재조회는 기존 계약대로 별도로 보호한다.
+
+## 18. 추천 요청·완료 초안·교과서 그림의 공개 연결
+
+1. 기존 concept task/Workflow owner를 API-peer transport로 공개한다. 별도 실행기나
+   검색기를 만들지 않으며 시작만 POST이고 모든 GET은 읽기 전용이다.
+2. 정본은 원 질문 revision, task intent, 두 phase Work와 완료 Job Artifact다. 공개 화면에는
+   작은 task 식별·진행, 검증된 설명/인용/원본 페이지 정보만 투영한다. 원 worker 입력,
+   권한, 파일 경로와 분석 본문 전체는 반환하지 않는다.
+3. catalog-kakao-concept-v1은 별도 additive schema다. 기존 create/stored 계약은 참조하고
+   기존 schema bytes는 유지한다. 생성은 실제 API actor와 같은 key/body를 사용한다.
+4. 목록은 owner/binding/task ID의 기존 B-tree keyset, 상세는 task/phase PK, 원본 그림은
+   task ID+완료 COMPOSE의 page key로 조회한다. UUID 순서는 최신순으로 표시하지 않는다.
+5. 한 목록은 최대 100개 작은 값이며 결과 투영은 최대 6개 block/24개 capture다. 직접
+   index lookup과 bounded iteration을 쓰고 전체 history/result를 읽지 않는다. 새 DB/index는 없다.
+6. 원본 PNG는 기존 Artifact owner의 검증 stream을 통해 별도 전달한다. 실제 권한/현재
+   source·exact 교재/페이지·hash/media/크기를 재검사하며 임의 artifact/member/path를 받지 않는다.
+   썸네일 조회마다 모든 crop을 재생성하지 않는다. 최종 PDF crop은 기존 adapter 책임이다.
+7. source 읽기/모델은 긴 DB 잠금 안에서 실행하지 않는다. start의 단일 제출은 기존
+   task/phase unique·Workflow command가 보장한다. 읽기는 새 작업/실패 retry를 만들지 않는다.
+8. Studio는 packet의 질문 pointer로 선택 질문만 조회해 실제 room/version을 얻는다.
+   추천은 사용자 선택 전까지 편집본에 반영하지 않는다. 설명 메모를 보존하며 선택 block과
+   capture index만 기존 StudyQuestionEdit에 저장한다. 다른 학생/늦은 응답을 버린다.
+9. 현재 actor/session은 API context만 제공한다. 일반 worker/채팅 UID에는 이 공개 RPC를
+   허용하지 않는다. owner·질문/source 철회는 stable error이며 다른 source/latest로 대체하지 않는다.
+10. RESERVED/PREPARED는 모델 완료가 아니다. 실제 Workflow 실패/취소, PLAN의 NEEDS_INPUT,
+    COMPOSE의 NO_MATCH/DRAFT_READY를 구분한다. 완료 result pin 없이 추천을 확정하지 않는다.
+11. 매번 전체 교재나 crop을 JSON에 복사하는 대안은 비용/권한/재현성을 해친다. 작은
+    공개 projection과 기존 binary boundary를 사용하는 것이 현재 흐름의 최소 연결이다.
+
+실제 COMPOSE 저장 검증에서 normalized crop의 소수 좌표가 기존 integer-only 메시지
+serializer에 거부됨을 확인했다. 메시지/제어/manifest canonical 규칙은 변경하지 않는다.
+개념 결과 adapter만 기존 pure contract의 finite-number JSON serializer를 사용하고,
+Artifact store의 명시적 serialized-result 입구에서 canonical bytes와 job/artifact/revision
+identity를 대조한 뒤 동일 staging/commit 로직을 쓴다. 이 family의 결과 재조회와 공개 응답도
+같은 finite-number encoding을 사용한다. DB에는 여전히 작은 결과 header만 두며,
+schema/request/source 검증을 건너뛰거나 기존 실패를 성공으로 해석하지 않는다.

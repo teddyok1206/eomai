@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -71,8 +72,70 @@ def stage_structured_artifact(
     worker_slot: str,
     created_at: datetime | None = None,
 ) -> StagedArtifact:
+    return _stage_result_payload(
+        result_bytes=canonical_json_bytes(result),
+        job_id=job_id,
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
+        staging=staging,
+        worker_slot=worker_slot,
+        created_at=created_at,
+    )
+
+
+def stage_serialized_artifact(
+    *,
+    result_bytes: bytes,
+    job_id: str,
+    logical_artifact_id: str,
+    revision_id: str,
+    staging: Path,
+    worker_slot: str,
+    created_at: datetime | None = None,
+) -> StagedArtifact:
+    """Stage an already schema-validated numeric JSON result, not a protocol/control message.
+
+    Some artifact schemas (normalized image rectangles) permit finite JSON numbers.
+    Keep the shared integer-only message serializer unchanged. The caller validates
+    the result schema and request binding before this explicit artifact boundary.
+    """
+    value = json.loads(result_bytes)
+    if not isinstance(value, dict) or not isinstance(value.get("artifact"), dict):
+        raise ValueError("ARTIFACT_RESULT_PAYLOAD_INVALID")
+    if (
+        value.get("job_id"),
+        value["artifact"].get("logical_artifact_id"),
+        value["artifact"].get("revision_id"),
+    ) != (job_id, logical_artifact_id, revision_id):
+        raise ValueError("ARTIFACT_RESULT_IDENTITY_MISMATCH")
+    # Exact reserialization rejects duplicate keys, NaN, noncanonical whitespace/ordering.
+    expected = json.dumps(
+        value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if result_bytes != expected:
+        raise ValueError("ARTIFACT_RESULT_PAYLOAD_INVALID")
+    return _stage_result_payload(
+        result_bytes=result_bytes,
+        job_id=job_id,
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
+        staging=staging,
+        worker_slot=worker_slot,
+        created_at=created_at,
+    )
+
+
+def _stage_result_payload(
+    *,
+    result_bytes: bytes,
+    job_id: str,
+    logical_artifact_id: str,
+    revision_id: str,
+    staging: Path,
+    worker_slot: str,
+    created_at: datetime | None,
+) -> StagedArtifact:
     staging.mkdir(mode=0o750, parents=True, exist_ok=True)
-    result_bytes = canonical_json_bytes(result)
     result_path = staging / "result.json"
     result_temp = staging / ".result.json.tmp"
     result_temp.write_bytes(result_bytes)

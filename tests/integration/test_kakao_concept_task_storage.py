@@ -575,12 +575,13 @@ def test_actual_concept_authorization_plan_and_concurrent_shared_claim(concept_e
         authorizer.authorize(selection)
 
 
-def _complete_synthetic_concept_plan(value):
+def _complete_synthetic_concept_plan(value, *, output=None):
     """New deterministic test-double output, not reinterpretation of a failed/model execution."""
     import tempfile
     from pathlib import Path
 
-    from eom_orchestrator.artifacts import commit_artifact, stage_structured_artifact
+    from eom_orchestrator.artifacts import commit_artifact
+    from eom_orchestrator.kakao_concept_artifact import stage_kakao_concept_artifact
     from eom_orchestrator.models import JobRecord
     from eom_orchestrator.repository import create_artifact_records
     from eom_orchestrator.state_machine import JobState, transition_job
@@ -628,7 +629,7 @@ def _complete_synthetic_concept_plan(value):
             schema_version="kakao-concept-assistance-result/1.0",
             task_id=request.task_id,
             request_sha256=pointer.sha256,
-            output=plan(),
+            output=plan() if output is None else output,
         ),
     )
     result = KakaoConceptRoleResult.model_validate(body)
@@ -636,11 +637,8 @@ def _complete_synthetic_concept_plan(value):
     with tempfile.TemporaryDirectory(
         prefix="concept-fake-worker.", dir=settings.staging_root
     ) as directory:
-        staged = stage_structured_artifact(
-            result=result.model_dump(mode="json"),
-            job_id=value.worker.job_id,
-            logical_artifact_id=value.worker.artifact.logical_artifact_id,
-            revision_id=value.worker.artifact.revision_id,
+        staged = stage_kakao_concept_artifact(
+            result=result,
             staging=Path(directory),
             worker_slot="05",
         )

@@ -258,7 +258,10 @@ def test_plan_and_compose_use_existing_claim_prepare_commit_and_small_db_header(
     stored = owner_module.create_artifact_records.call_args.kwargs["result"]
     assert "output" not in stored
     assert KakaoConceptRoleResultHeader.model_validate(stored).job_id == job.job_id
-    assert "output" in owner_module.stage_structured_artifact.call_args.kwargs["result"]
+    owner_module.stage_structured_artifact.assert_not_called()
+    staged = value.commit.call_args.args[0]
+    assert "output" in json.loads(staged.result_path.read_bytes())
+    assert staged.content_hash == sha256_bytes(staged.result_path.read_bytes())
     value.orchestrator.capacity.release.assert_called_once()
 
 

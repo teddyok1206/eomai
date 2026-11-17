@@ -167,6 +167,12 @@ from eom_web_gui.kakao_archive_contracts import (
     SourceBinding,
 )
 from eom_web_gui.kakao_capture_contracts import CaptureConfirm, CapturePage
+from eom_web_gui.kakao_concept_contracts import (
+    ConceptCreate,
+    ConceptHistory,
+    ConceptStarted,
+    ConceptView,
+)
 from eom_web_gui.kakao_delivery_contracts import (
     ExportCreate,
     ExportMutation,
@@ -700,6 +706,18 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, binding: str, export: str, revision: str
     ) -> KakaoPdfDownload: ...
 
+    async def kakao_concept_start(
+        self, session: WebSession, value: ConceptCreate, idempotency_key: str
+    ) -> ConceptStarted: ...
+    async def kakao_concept_read(
+        self, session: WebSession, binding: str, task: str
+    ) -> ConceptView: ...
+    async def kakao_concept_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> ConceptHistory: ...
+    async def kakao_concept_page(
+        self, session: WebSession, binding: str, task: str, page: str
+    ) -> KakaoQuestionMedia: ...
     async def kakao_study_save(
         self, session: WebSession, value: StudyCreate | StudyRevise, idempotency_key: str
     ) -> StudyMutation: ...
@@ -1948,6 +1966,125 @@ class HttpApplicationGateway:
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_concept_start(
+        self, session: WebSession, value: ConceptCreate, idempotency_key: str
+    ) -> ConceptStarted:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/concepts",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=130.0,
+        )
+        try:
+            result = ConceptStarted.model_validate(self._data(response))
+            if any(
+                getattr(result.task, key) != getattr(value, key)
+                for key in ("source_binding_id", "question_id", "question_revision_id")
+            ):
+                raise ValueError("different concept source")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_concept_read(self, session: WebSession, binding: str, task: str) -> ConceptView:
+        _require_id(binding, "kakaobinding_")
+        _require_id(task, "kakaoconcepttask_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/concepts/{task}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        )
+        try:
+            result = ConceptView.model_validate(self._data(response))
+            if (result.task.source_binding_id, result.task.task_id) != (binding, task):
+                raise ValueError("different concept")
+            if result.blocks and (result.state != "COMPLETED" or result.result_sha256 is None):
+                raise ValueError("uncompleted concept")
+            if (result.state in {"COMPLETED", "NEEDS_INPUT"}) != (result.result_sha256 is not None):
+                raise ValueError("concept completion pin missing or unexpected")
+            for block in result.blocks:
+                if any(
+                    (cite.kind == "ORIGINAL_PASSAGE") != (cite.quote is not None)
+                    for cite in block.citations
+                ):
+                    raise ValueError("unverified citation")
+                if any(
+                    capture.rectangle.x + capture.rectangle.width > 1
+                    or capture.rectangle.y + capture.rectangle.height > 1
+                    for capture in block.captures
+                ):
+                    raise ValueError("invalid capture bounds")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_concept_list(
+        self, session: WebSession, binding: str, *, limit: int = 50, cursor: str | None = None
+    ) -> ConceptHistory:
+        _require_id(binding, "kakaobinding_")
+        if cursor is not None:
+            _require_id(cursor, "kakaoconcepttask_")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/concepts",
+            params={"source_binding_id": binding, "limit": limit, "cursor": cursor},
+            timeout=130.0,
+        )
+        try:
+            result = ConceptHistory.model_validate(self._data(response))
+            ids = tuple(item.task_id for item in result.items)
+            if (
+                len(ids) > limit
+                or ids != tuple(sorted(set(ids)))
+                or any(
+                    item.source_binding_id != binding
+                    or (cursor is not None and item.task_id <= cursor)
+                    for item in result.items
+                )
+                or (
+                    result.next_cursor is not None
+                    and (len(ids) != limit or result.next_cursor != ids[-1])
+                )
+            ):
+                raise ValueError("different concept page")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_concept_page(
+        self, session: WebSession, binding: str, task: str, page: str
+    ) -> KakaoQuestionMedia:
+        _require_id(binding, "kakaobinding_")
+        _require_id(task, "kakaoconcepttask_")
+        if re.fullmatch(r"E[1-3]P[1-9][0-9]{0,4}", page) is None:
+            raise GatewayError(status=422, code="KAKAO_ARCHIVE_REQUEST_INVALID")
+        async with self._download(
+            session,
+            f"/api/v1/kakao-archive/concepts/{task}/pages/{page}",
+            params={"source_binding_id": binding},
+            timeout=130.0,
+        ) as response:
+            etag = response.headers.get("etag", "")
+            if (
+                response.headers.get("content-type", "").split(";", 1)[0] != "image/png"
+                or response.headers.get("content-disposition") != "inline"
+                or re.fullmatch(r'"sha256:[0-9a-f]{64}"', etag) is None
+            ):
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            content = await self._verified_download_body(
+                response,
+                error_code="APPLICATION_API_RESPONSE_INVALID",
+                maximum_bytes=16 * 1024 * 1024,
+                expected_sha256=etag[1:-1],
+                prefixes=(b"\x89PNG\r\n\x1a\n",),
+            )
+            return KakaoQuestionMedia(content, "image/png", etag)
 
     async def kakao_study_list(
         self, session: WebSession, binding: str, *, limit: int = 30, cursor: str | None = None

@@ -219,6 +219,16 @@ from eom_catalog_contracts.kakao_capture_rpc import (
     parse_kakao_capture_reply,
     parse_kakao_capture_request,
 )
+from eom_catalog_contracts.kakao_concept_rpc import (
+    ConceptFailure,
+    ConceptPageView,
+    ConceptRequest,
+    ConceptResult,
+    ReadConceptPageRequest,
+    check_concept_reply,
+    parse_concept_reply,
+    parse_concept_request,
+)
 from eom_catalog_contracts.kakao_delivery_rpc import (
     KakaoDeliveryFailure,
     KakaoDeliveryRequest,
@@ -691,6 +701,60 @@ class CatalogApplicationClient:
         if isinstance(reply, KakaoRoomFailure):
             raise CatalogApplicationClientError(reply.error_code, "Private room request failed")
         return reply.result
+
+    def request_kakao_concept(self, request: ConceptRequest) -> ConceptResult:
+        if isinstance(request, ReadConceptPageRequest):
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_REQUEST_INVALID", "Use the bounded original-page boundary"
+            )
+        try:
+            parsed = parse_concept_request(request.model_dump(mode="json"))
+            reply = parse_concept_reply(
+                self._raw_request(
+                    parsed.model_dump(mode="json"),
+                    timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_concept_reply(parsed, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private concept response invalid or unavailable"
+            ) from error
+        if isinstance(reply, ConceptFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Private concept request failed")
+        return reply.result
+
+    def download_kakao_concept_page(self, request: ReadConceptPageRequest) -> ProxiedItemMedia:
+        payload = request.model_dump(mode="json")
+        parse_concept_request(payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            connection.sendall(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            )
+            connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+            value = json.loads(self._read_media_header(connection))
+            if not isinstance(value, dict):
+                raise ValueError("invalid private page header")
+            reply = parse_concept_reply(value)
+            check_concept_reply(request, reply)
+            if isinstance(reply, ConceptFailure):
+                raise CatalogApplicationClientError(reply.error_code, "Private page unavailable")
+            if not isinstance(reply.result, ConceptPageView):
+                raise ValueError("unrelated private page response")
+            page = reply.result
+            return ProxiedItemMedia(connection, page.media_type, page.content_length, page.sha256)
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            connection.close()
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Private page boundary unavailable"
+            ) from error
 
     def request_kakao_delivery(self, request: KakaoDeliveryRequest) -> KakaoDeliveryResult:
         if isinstance(request, ReadKakaoExportPdfRequest):

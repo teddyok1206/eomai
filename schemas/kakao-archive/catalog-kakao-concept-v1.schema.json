@@ -1,0 +1,681 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-concept-v1/1.0",
+  "title": "API-peer concept recommendations and exact original textbook page",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/start"
+    },
+    {
+      "$ref": "#/$defs/read"
+    },
+    {
+      "$ref": "#/$defs/list"
+    },
+    {
+      "$ref": "#/$defs/read_page"
+    },
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "$ref": "#/$defs/failure"
+    }
+  ],
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "source_binding_id",
+        "question_id",
+        "question_revision_id",
+        "created_at"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "question_id": {
+          "type": "string",
+          "pattern": "^kakaoquestion_[0-9a-f]{32}$"
+        },
+        "question_revision_id": {
+          "type": "string",
+          "pattern": "^kakaoquestionrev_[0-9a-f]{32}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "location",
+        "kind",
+        "quote"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE",
+            "ORIGINAL_PASSAGE"
+          ]
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_key",
+        "physical_page",
+        "rectangle",
+        "reason",
+        "source_title"
+      ],
+      "properties": {
+        "page_key": {
+          "type": "string",
+          "pattern": "^E[1-3]P[1-9][0-9]{0,4}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "rectangle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "source_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "relevance",
+        "explanation",
+        "citations",
+        "captures"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "relevance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/citation"
+          },
+          "maxItems": 6,
+          "minItems": 1
+        },
+        "captures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capture"
+          },
+          "maxItems": 4,
+          "minItems": 0
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task",
+        "state",
+        "result_sha256",
+        "focus_summary",
+        "blocks",
+        "staff_checks",
+        "limitations"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-view/1.0"
+        },
+        "task": {
+          "$ref": "#/$defs/summary"
+        },
+        "state": {
+          "enum": [
+            "PREPARING",
+            "PLAN_PENDING",
+            "PLAN_RUNNING",
+            "SEARCHING",
+            "COMPOSE_PENDING",
+            "COMPOSE_RUNNING",
+            "COMPLETED",
+            "NEEDS_INPUT",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "result_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "focus_summary": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 1000
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "maxItems": 6,
+          "minItems": 0
+        },
+        "staff_checks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2200
+          },
+          "maxItems": 6,
+          "minItems": 0
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 24,
+          "minItems": 0
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_binding_id",
+        "task_id",
+        "page_key",
+        "media_type",
+        "content_length",
+        "sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-page/1.0"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "page_key": {
+          "type": "string",
+          "pattern": "^E[1-3]P[1-9][0-9]{0,4}$"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "command",
+        "idempotency_key"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "const": "START_KAKAO_CONCEPT"
+        },
+        "command": {
+          "$ref": "eom://schemas/kakao-archive/concept-task-store-v1/1.0#/$defs/create"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[!-~]{16,128}$"
+        }
+      }
+    },
+    "read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "source_binding_id",
+        "task_id"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "const": "READ_KAKAO_CONCEPT"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "source_binding_id",
+        "limit",
+        "cursor"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "const": "LIST_KAKAO_CONCEPTS"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "read_page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "operation",
+        "source_binding_id",
+        "task_id",
+        "page_key"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operation": {
+          "const": "READ_KAKAO_CONCEPT_PAGE"
+        },
+        "source_binding_id": {
+          "type": "string",
+          "pattern": "^kakaobinding_[0-9a-f]{32}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+        },
+        "page_key": {
+          "type": "string",
+          "pattern": "^E[1-3]P[1-9][0-9]{0,4}$"
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task",
+        "replayed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-started/1.0"
+        },
+        "task": {
+          "$ref": "#/$defs/summary"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "kakao-concept-history/1.0"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/summary"
+          },
+          "maxItems": 100,
+          "minItems": 0
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^kakaoconcepttask_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "success": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "START_KAKAO_CONCEPT",
+            "READ_KAKAO_CONCEPT",
+            "LIST_KAKAO_CONCEPTS",
+            "READ_KAKAO_CONCEPT_PAGE"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/view"
+            },
+            {
+              "$ref": "#/$defs/page"
+            },
+            {
+              "$ref": "#/$defs/mutation"
+            },
+            {
+              "$ref": "#/$defs/history"
+            }
+          ]
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "request_id",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "START_KAKAO_CONCEPT",
+            "READ_KAKAO_CONCEPT",
+            "LIST_KAKAO_CONCEPTS",
+            "READ_KAKAO_CONCEPT_PAGE"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "enum": [
+            "KAKAO_ARCHIVE_REQUEST_INVALID",
+            "KAKAO_ARCHIVE_PERMISSION_DENIED",
+            "KAKAO_ARCHIVE_RESOURCE_NOT_FOUND",
+            "KAKAO_ARCHIVE_PRECONDITION_FAILED",
+            "KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT",
+            "KAKAO_ARCHIVE_BINDING_RETIRED",
+            "KAKAO_ARCHIVE_ROOM_RETIRED",
+            "KAKAO_ARCHIVE_RESULT_INVALID",
+            "KAKAO_ARCHIVE_RESULT_TOO_LARGE",
+            "KAKAO_CONCEPT_RUNTIME_UNAVAILABLE",
+            "KAKAO_CONCEPT_RESULT_NOT_READY",
+            "KAKAO_CONCEPT_RESULT_POINTER_INVALID",
+            "KAKAO_CONCEPT_KNOWLEDGE_NOT_CONFIGURED",
+            "KAKAO_CONCEPT_PAGE_POINTER_INVALID",
+            "CONTROL_PRESET_POINTER_STALE",
+            "CONTROL_PRESET_NOT_PUBLISHED",
+            "CATALOG_APPLICATION_UNAVAILABLE",
+            "CATALOG_APPLICATION_INTERNAL_ERROR"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -27,8 +27,12 @@ Web의 `kakao_study_contracts.py`는 presentation DTO이며 source 해석이나 
 타이머와 이전 응답을 폐기한다. 완료 PDF 재조회는 새 POST/모델/렌더를 하지 않는다.
 
 PDF 파일은 새 다운로드 endpoint를 만들지 않고 기존 `/exports/{id}/file`에서 현재 권한과
-source를 확인한다. 표시할 관련 개념의 실제 추천/선택·이미지 미리보기 UI는 후속이다.
-모델 task ID를 사용자가 직접 입력하는 칸이나 임의 교재/경로 입력을 만들지 않는다.
+source를 확인한다. `kakao-concept-picker.js`가 질문별 추천 요청·이전 추천/상태·완료 설명과
+원본 교재 페이지/선택 범위를 표시한다. packet의 질문 pointer를 map으로 만들고 사용자가
+추천을 요청할 때 해당 질문만 조회해 실제 room/version/student를 확인한다. 선택한 block과
+capture index만 편집본에 반영하며 직접 쓴 메모는 보존한다. 사용자가 모델 task ID나 임의
+교재/경로를 입력하는 칸은 없다. saved study를 다시 열거나 새 양식을 읽으면 이전 picker의
+timer/미수신 응답도 정리한다. source 연결과 실제 운영/모델 활성화는 구별한다.
 
 ## 검증과 남은 gate
 
@@ -39,5 +43,5 @@ source를 확인한다. 표시할 관련 개념의 실제 추천/선택·이미�
 - `kakao_study_editor_browser_checks.mjs`: 실제 Chromium의 편집·응답 유실 replay·새 revision·
   PDF 재조회·safe DOM·작은 화면·늦은 다른 학생 응답 폐기. 실제 Kakao/교재/모델이 아니다.
 - 자동 PLAN→COMPOSE continuation source는 [개념 추천](kakao-concepts.md)에 있고 기본 비활성이다.
-  실제 추천 preset/모델 실행·완료본의 화면 선택/이미지·최종 실제 샘플·
+  공개 추천/선택 source는 [개념 추천](kakao-concepts.md)에 있다. 실제 추천 preset/모델 실행·최종 실제 샘플·
   호환 운영 배포는 남아 있다. 일반 수집/질문 구성/PDF는 비AI 구조를 유지한다.
