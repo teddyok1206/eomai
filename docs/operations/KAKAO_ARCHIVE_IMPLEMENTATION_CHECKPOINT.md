@@ -1,5 +1,58 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 교과서 보강 로컬 샘플 PDF 발행 완료
+
+사용자가 요청한 실제 보관 CSV/사진을 기존 installed study renderer와 고정 PDF 실행기로
+출력하고 core Artifact publisher로 발행했다. worker의 NAS 쓰기나 수동 PDF 조립은 없다.
+질문3건·사진2장·CSV 조교 답변·원문 기록 정보와 교과서 기초 참고 자료2쪽을 포함한다.
+별 질량·밝기 질문의 빅뱅 검색 결과는 수동 관련성 검토에서 제외했으며, 해당 질문에 적합한
+교재 근거 미확보를 표시했다. 분석 발췌와 원본 페이지를 구별하고 실제 pin/hash를 보존했다.
+
+- 실제 보호된 worker 결과 **COMPLETED/17쪽**이며 같은 결과 복구는
+  `SAME_BYTES_NO_RELAUNCH`다. 질문은 각1쪽, 조교 답변·관련 자료는 후속 쪽에 배치했다.
+- 발행: `artifact_54bba3d8a56949d08d84978e7d0e8c59`,
+  `rev_e7bc1035319b4f43b05afc18aed73d85`,
+  PDF SHA `de6ed25a6a36d9e31f68d10254d24087f6d188e1d9d2598a90d8279c3fb1be7c`.
+  정본은 NAS Artifact의 `report.pdf`이며 이전 샘플을 덮어쓰지 않았다.
+- PDF 본문 추출과 질문 사진·교과서 전체 쪽 PNG를 직접 확인했다. 첫 질문 사진 미확보,
+  나머지 사진의 수동 대응·시간대 미확정을 표시했다. 없는 조교 사진을 만들지 않았다.
+- Artifact 형식은 명시적 `kakao-local-study-preview`다. 정식 accepted source/question/
+  packet/Studio export로 등록했다고 주장하지 않는다. 이 출력에서 새 모델 실행은0이다.
+  실제 공유 슬롯 PLAN/COMPOSE와 정식 Studio 재조회·다운로드는 별도 남은 검증이다.
+
+증거: `staging/kakao-textbook-{preview-4b066281-v2,sample-inspection-4b066281,sample-render-4b066281}.log`,
+`staging/kakao-textbook-sample-published-4b066281.jsonl`과 정본 Artifact의 layout·manifest다.
+학생 대화·사진·프롬프트·원문 분석은 Git/Slack에 복사하지 않았다.
+
+## 2026-11-17 최초 관측 보존 수정·실제 교과서 조회
+
+MANUAL의 최초 browser 관측과 최신 RENEW 관측을 분리하는 nullable 열과 DB 불변성
+보호를 추가했다. 새 첫 관측에서만 실제 observer UTC를 채택하며 기존 이력의 NULL은
+그대로 둔다. 수신 시각 하한은 최초 관측을 사용하고, 과거 미기록은 보수적인 기존 최신
+시각으로 판정한다. lease/fence/현재 권한·종료 검사는 완화하지 않았다.
+
+- guarded disposable PostgreSQL 전체 **370 PASS**다. 실제 저장 owner에서 갱신 전 수신물
+  허용·최초 전/만료 후 거부, 값 변경/삭제·역사적 추정 backfill 거부와 rollback-only 별도
+  schema의0096→0097 왕복·이력 손실 거부를 검사했다. 운영 DB에서 pytest하지 않았다.
+- release context1.32는0096→0097과 동일 head만 허용한다. 과거 context1.31 bytes와
+  callback 의미는 보존했다. release/권한/문맥/경계 집중 **110 PASS**, 새 source strict
+  mypy5개 PASS다. 첫 권한 회귀의 예상 allowlist 누락1 FAIL은 테스트에서 정확한 새 열을
+  반영한 뒤 재검증했으며 실패 로그도 보존했다. 테이블 전체 UPDATE 권한을 주지 않았다.
+- 아직 이 source 수정은 운영 미배포다. 실제 installed API/Web은 `4b066281…`, DB0096이며
+  보호된 source archive/wheel 검증·호환 배포는 후속이다.
+- 실제 사용자 재인증 후 공식 authoring Graph/policy와 accepted textbook reader로 세 질문의
+  교재 분석/원본 PNG를 읽었다. 해당 테스트 세션만 로그아웃했다. 원본을 재수집·등록하거나
+  모델을 실행하지 않았다. 이는 정식 질문/개념 task/Studio PDF export 성공이 아니다.
+- 픽셀을 직접 검토해 지구시스템/엘니뇨 자료 두 쪽은 기초 참고용으로 사용하고, 별의
+  질량·밝기 질문에 검색된 빅뱅 자료는 관련성이 부족해 샘플에서 제외했다. 이 수동 샘플
+  관련성 판단을 자동 selector나 실제 모델 검증으로 보고하지 않는다. 출력은 기존 installed
+  study PDF executor/worker와 core Artifact publisher로 진행하며 샘플 한정 상태를 유지한다.
+
+증거는 `staging/kakao-first-browser-{observation-full-db,observation-types,release-unit-final}-20261117.log`,
+`staging/kakao-textbook-preview-4b066281-v2.log`와 샘플 검사·출력 로그다. 원본 사진 미확보와
+수동 사진 대응·원문 시간대 미확정은 그대로다. 실제 개념 모델/정식 수집 수락·전체 방 주기
+수집과 최종 운영 검증은 남아 있으며 전체 goal을 완료 처리하지 않았다.
+
 ## 2026-11-17 원본 수락→수집 task 채택의 중단 복구 연결
 
 기존 `KakaoCollectionAttemptService`에 `admit_capture_source`를 추가했다. 기존 source

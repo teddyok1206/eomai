@@ -120,6 +120,7 @@ def test_kakao_manual_grants_preserve_profile_assignment_and_dispatch_identity()
         "browser_pid",
         "browser_monotonic_us",
         "browser_observed_at",
+        "browser_first_observed_at",
         "gateway_invocation_id",
     }
     assert ("UPDATE", "kakao_remote_commands") not in grants

@@ -500,6 +500,7 @@ COLUMN_PRIVILEGES: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
             "browser_pid",
             "browser_monotonic_us",
             "browser_observed_at",
+            "browser_first_observed_at",
             "gateway_invocation_id",
         ),
     ),

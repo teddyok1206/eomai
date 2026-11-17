@@ -80,6 +80,31 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 최초 browser 관측과 최신 상태 확인 분리 — 2026-11-17
+
+실제 수신물 진단에서 다운로드19:11 뒤 RENEW가 `browser_observed_at`을19:16으로 갱신해
+기존 intake의 하한 검사가 정상 과거 수신물을 거부했다. 이 필드를 최초 시각으로 재해석하거나
+latest 갱신을 멈춰 gateway 관측 시각을 거짓으로 만들지 않는다.
+
+1. 기존 MANUAL session owner에 nullable `browser_first_observed_at` 한 열을 추가한다.
+2. 정본은 실제 browser observer가 처음 확인해 `prepare_gateway`가 채택한 UTC 시각이다.
+3. lease/run/fence/command identity는 그대로이며 새 entity/revision을 만들지 않는다.
+4. 최초와 최신 시각·고정 invocation/start pin을 함께 검증한다. source/Artifact 검사는 유지한다.
+5. access는 기존 session PK/owner index lookup이다. 별도 검색·스캔·cache/index는 없다.
+6. 최초 값은 단일 nullable timestamp이고 최신 관측은 기존 필드다.
+7. time/space 증가는 row당 O(1)이며 lease별 주기 관측 횟수에 무관하다.
+8. 기존 첫 browser 채택 transaction에서 한 번 설정하며 DB trigger가 재기록/사후 추정을 막는다.
+9. domain 계약과 worker 메시지는 바꾸지 않고 Catalog persistence/application owner만 확장한다.
+10. 새 intake는 최초 값을 하한으로 쓴다. 역사적 NULL은 보존하고 기존 latest 관측의 보수적
+    하한만 사용한다. 과거 row에 created_at/CSV/현시각을 추측 backfill하지 않는다. 만료·종료·
+    잘못된 fence는 계속 거부하며 같은 요청 복구는 기존 source idempotency를 따른다.
+11. 최초 값을 latest 필드에 고정하는 대안은 복합 runtime 관측의 시각 의미를 깨고, lease 생성
+    시각으로 하한을 넓히는 대안은 실제 browser 관측 증거가 없어 사용하지 않는다.
+
+additive0097 migration과 기존 보호 release context의 successor로 검증·배포한다. 새 최초
+값이 있는 운영 이력은 downgrade로 버리지 않는다. 현재 로컬 preview 읽기는 이 migration의
+운영 적용/과거 source 수락을 대신하지 않는다.
+
 ### 원본 수락 후 task 채택의 단일 application 입구 — 2026-11-17
 
 `KakaoCollectionAttemptService.admit_capture_source`는 기존 source admission 계약과

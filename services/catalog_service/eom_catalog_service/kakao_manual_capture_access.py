@@ -31,6 +31,7 @@ class OwnedManualCaptureRun:
     browser_observed_at: datetime
     absolute_expires_at: datetime
     closed_at: datetime | None
+    browser_first_observed_at: datetime | None = None
 
     def validate_evidence(self, evidence: KakaoManualRoomEvidence) -> None:
         if evidence.owner_operator_id != self.owner or (
@@ -43,7 +44,7 @@ class OwnedManualCaptureRun:
 
     def validate_transfer_interval(self, started_at: datetime, completed_at: datetime) -> None:
         if (
-            started_at < self.browser_observed_at
+            started_at < (self.browser_first_observed_at or self.browser_observed_at)
             or started_at >= self.absolute_expires_at
             or completed_at < started_at
             or completed_at > datetime.now(UTC)
@@ -80,6 +81,7 @@ def _context(
             mode="MANUAL",
         ),
         browser_observed_at=row.browser_observed_at,
+        browser_first_observed_at=row.browser_first_observed_at,
         absolute_expires_at=row.absolute_expires_at,
         closed_at=row.closed_at,
     )

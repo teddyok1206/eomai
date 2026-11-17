@@ -597,6 +597,7 @@ class KakaoManualService:
                 observed.started_monotonic_us,
                 observed.observed_at,
             )
+            row.browser_first_observed_at = observed.observed_at
             row.authorized_at, row.expires_at = now, min(now + LEASE_TTL, row.absolute_expires_at)
             row.grant_revision, row.resource_version = 1, row.resource_version + 1
             return _intent(row)

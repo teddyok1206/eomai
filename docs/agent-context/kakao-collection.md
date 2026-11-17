@@ -63,6 +63,15 @@ MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실�
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.
 
+`browser_first_observed_at`는 DB0097의 nullable 최초 browser 관측이고,
+`browser_observed_at`은 계속 최신 관측이다. `prepare_gateway`가 실제 첫 관측을 한 번
+채택하며 DB trigger는 변경·삭제와 역사적 row의 추측 backfill을 거부한다.
+`OwnedManualCaptureRun.validate_transfer_interval`은 최초 시각이 있으면 이를 하한으로
+사용해 RENEW 이후에도 원래 정상 수신물을 읽는다. 과거 NULL은 최신 관측의 보수적 하한을
+유지한다. lease 생성 시각·CSV 시각으로 대신하지 않는다. 새 wire/queue/index는 없으며
+source 권한·fence·만료·종료와 Artifact 검증은 그대로다. context1.32의 정확한0096→0097
+전환과 임시 DB 검증은 운영 적용 증거가 아니므로 installed release를 따로 확인한다.
+
 `kakao_browser_runtime.py`·`kakao_profile_observation.py`·`kakao_manual_runtime.py`는 기존
 Orchestrator OS adapter다. profile flock·systemd boot/invocation/cgroup 실제 상태를
 관측하며 core/worker가 타 component의 DB/NAS를 직접 쓰지 않는다. source existence나

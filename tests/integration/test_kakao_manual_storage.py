@@ -1,12 +1,16 @@
 """Real guarded disposable PostgreSQL only; all runtime observations are synthetic."""
 
+import importlib.util
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Barrier
 from uuid import uuid4
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from eom_catalog_contracts.kakao_archive_binding import KakaoBindingRetire
 from eom_catalog_contracts.kakao_manual import (
     KakaoManualClosureObservation,
@@ -19,6 +23,7 @@ from eom_catalog_contracts.kakao_manual import (
 )
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_manual_capture_access import authorize_owned_manual_capture_run
 from eom_catalog_service.kakao_manual_models import (
     KakaoManualSessionRecord,
     KakaoProfileRuntimeRecord,
@@ -34,6 +39,74 @@ from sqlalchemy.orm import Session
 from tests.integration.test_kakao_archive_storage import create, make_actor
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
+
+
+def test_first_observation_migration_preserves_unknown_history_and_refuses_loss(
+    creative_engine, monkeypatch
+):
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations/versions/20261117_0097_kakao_first_browser_observation.py"
+    )
+    spec = importlib.util.spec_from_file_location("first_browser_observation_migration", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    schema = "test_kakao_first_browser_" + uuid4().hex
+    with creative_engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            head = connection.scalar(text("SELECT version_num FROM app.alembic_version"))
+            connection.execute(text(f"CREATE SCHEMA {schema}"))
+            connection.execute(text(f"SET LOCAL search_path TO {schema},pg_catalog"))
+            connection.execute(
+                text("""
+                CREATE TABLE kakao_manual_sessions (
+                    phase TEXT, browser_invocation_id TEXT,
+                    browser_observed_at TIMESTAMPTZ, created_at TIMESTAMPTZ
+                );
+                INSERT INTO kakao_manual_sessions VALUES(
+                    'ENDED','historical-browser','2026-11-16 19:16:00+00','2026-11-16 19:00:00+00'
+                );
+            """)
+            )
+            monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(connection)))
+            migration.upgrade()
+            assert (
+                connection.scalar(
+                    text("SELECT browser_first_observed_at FROM kakao_manual_sessions")
+                )
+                is None
+            )
+            migration.downgrade()
+            assert connection.scalar(text("SELECT count(*) FROM kakao_manual_sessions")) == 1
+            migration.upgrade()
+            with (
+                pytest.raises(DBAPIError, match="FIRST_OBSERVATION_IMMUTABLE"),
+                connection.begin_nested(),
+            ):
+                connection.execute(
+                    text("UPDATE kakao_manual_sessions SET browser_first_observed_at=created_at")
+                )
+            connection.execute(
+                text("""
+                INSERT INTO kakao_manual_sessions(phase,created_at)
+                  VALUES('PREPARING','2026-11-17 10:00:00+00');
+                UPDATE kakao_manual_sessions SET browser_invocation_id='new-browser',
+                  browser_observed_at='2026-11-17 10:00:01+00',
+                  browser_first_observed_at='2026-11-17 10:00:01+00'
+                  WHERE phase='PREPARING';
+            """)
+            )
+            with (
+                pytest.raises(DBAPIError, match="HISTORY_REQUIRES_REVIEW"),
+                connection.begin_nested(),
+            ):
+                migration.downgrade()
+            assert connection.scalar(text("SELECT version_num FROM app.alembic_version")) == head
+        finally:
+            transaction.rollback()
+
+
 BOOT = "12345678-1234-1234-1234-123456789abc"
 
 
@@ -297,6 +370,82 @@ def test_renewal_replay_does_not_extend_ttl_or_reobserve(h: Harness) -> None:
             KakaoManualRenew(expected_grant_revision=2),
             idempotency_key=key,
             observe_runtime=lambda _: pytest.fail("conflict invoked runtime"),
+        )
+
+
+def test_renewal_keeps_first_browser_time_for_earlier_completed_transfers(h: Harness) -> None:
+    item = h.ready()
+    first = h.now
+    started, completed = first + timedelta(milliseconds=1), first + timedelta(milliseconds=3)
+    h.now += timedelta(seconds=10)
+    h.service.renew_session(
+        h.actor,
+        item.lease_id,
+        KakaoManualRenew(expected_grant_revision=1),
+        idempotency_key="first-observation-renew-" + uuid4().hex,
+        observe_runtime=lambda before: h.observe(before, gateway=True),
+    )
+    with Session(h.engine) as session, session.begin():
+        context = authorize_owned_manual_capture_run(
+            session, h.actor, source_binding_id=h.binding, manual_lease_id=item.lease_id
+        )
+        assert context.browser_observed_at == h.now
+        assert context.browser_first_observed_at == first
+        context.validate_transfer_interval(started, completed)
+        with pytest.raises(KakaoArchiveError, match="MANUAL_CAPTURE_STALE"):
+            context.validate_transfer_interval(first - timedelta(milliseconds=1), completed)
+        with pytest.raises(KakaoArchiveError, match="MANUAL_CAPTURE_STALE"):
+            context.validate_transfer_interval(
+                context.absolute_expires_at, context.absolute_expires_at
+            )
+
+
+@pytest.mark.parametrize("clear", [False, True])
+def test_first_browser_observation_is_immutable_in_database(h: Harness, clear: bool) -> None:
+    item = h.ready()
+    with (
+        h.engine.begin() as connection,
+        pytest.raises(DBAPIError, match="FIRST_OBSERVATION_IMMUTABLE"),
+    ):
+        connection.execute(
+            update(KakaoManualSessionRecord)
+            .where(KakaoManualSessionRecord.lease_id == item.lease_id)
+            .values(browser_first_observed_at=None if clear else h.now + timedelta(seconds=1))
+        )
+
+
+def test_legacy_observation_remains_unknown_and_uses_conservative_window(h: Harness) -> None:
+    item = h.start().session
+    first = h.now
+    latest = first + timedelta(seconds=1)
+    # A historical pre0097 row has an observed browser but no recorded first time.
+    # Build that isolated fixture shape; never backfill an actual history row.
+    with h.engine.begin() as connection:
+        connection.execute(
+            update(KakaoManualSessionRecord)
+            .where(KakaoManualSessionRecord.lease_id == item.lease_id)
+            .values(
+                browser_invocation_id="a" * 32,
+                browser_pid=100,
+                browser_monotonic_us=1000,
+                browser_observed_at=latest,
+            )
+        )
+    with Session(h.engine) as session, session.begin():
+        context = authorize_owned_manual_capture_run(
+            session, h.actor, source_binding_id=h.binding, manual_lease_id=item.lease_id
+        )
+        assert context.browser_first_observed_at is None
+        with pytest.raises(KakaoArchiveError, match="MANUAL_CAPTURE_STALE"):
+            context.validate_transfer_interval(first, first + timedelta(milliseconds=1))
+    with (
+        h.engine.begin() as connection,
+        pytest.raises(DBAPIError, match="FIRST_OBSERVATION_IMMUTABLE"),
+    ):
+        connection.execute(
+            update(KakaoManualSessionRecord)
+            .where(KakaoManualSessionRecord.lease_id == item.lease_id)
+            .values(browser_first_observed_at=first)
         )
 
 

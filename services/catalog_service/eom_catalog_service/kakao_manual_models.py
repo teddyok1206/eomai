@@ -134,6 +134,12 @@ class KakaoManualSessionRecord(Base):
             "AND browser_invocation_id IS NOT NULL AND gateway_invocation_id IS NOT NULL)",
             name="ck_kakao_manual_active",
         ),
+        CheckConstraint(
+            "browser_first_observed_at IS NULL OR (browser_invocation_id IS NOT NULL "
+            "AND browser_first_observed_at >= created_at "
+            "AND browser_first_observed_at <= browser_observed_at)",
+            name="ck_kakao_manual_first_browser_observation",
+        ),
         UniqueConstraint("profile_id", "lease_id", name="uq_kakao_manual_profile"),
         UniqueConstraint("owner_operator_id", "lease_id", name="uq_kakao_manual_owner"),
         UniqueConstraint("profile_id", "fence_epoch", name="uq_kakao_manual_fence"),
@@ -182,6 +188,7 @@ class KakaoManualSessionRecord(Base):
     browser_pid: Mapped[int | None] = mapped_column(Integer)
     browser_monotonic_us: Mapped[int | None] = mapped_column(BigInteger)
     browser_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    browser_first_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     gateway_invocation_id: Mapped[str | None] = mapped_column(String(32))
 
 
