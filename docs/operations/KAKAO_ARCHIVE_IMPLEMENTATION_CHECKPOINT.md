@@ -1,5 +1,43 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 01:12 UTC 수신 자료 확인 경로 운영 반영
+
+1. **이번 운영 범위:** API/Catalog/platform/QUERY 공유 owner는
+   `eda2a1b084e95d848fea7e9369b126df21cf6b93`, Web은
+   `1da58229277f5908fa4737156a4ce89207d55b18`이다. 기존 protected operator1.28에서
+   실제0087→0093 migration, exact-head verify, API/Catalog/HWPX role 갱신을 통과했다.
+  4개 wheel의 설치 member를 대조했으며 source checkout을 runtime에 연결하지 않았다.
+   공개 수신 목록/명시적 방 확인 저장이 새 화면·API에 연결됐지만 실제 계정 성공은 아래와 구분한다.
+2. **검증:** 앞의 source/임시 DB/실제 Chromium 합성 PASS를 유지한다. 운영에서는
+   `API_ISOLATION_VERIFY`, API READY, HTTPS 로그인 페이지200, 실제 새 JS의 SHA와 설치본
+   일치, 새 수신 목록 경로의 비로그인401을 확인했다. Web104개 파일의 service-identity/
+   RECORD·offline closure 검사도 통과했다. 이 검사들은 인증된 방 저장·PDF 성공의 대체가 아니다.
+3. **실제 계정:** 이번에는 새 카카오 로그인·수집·사진 연결·PDF를 실행하지 않았다. 기존 CSV/
+   JPEG3건과 실패 이력·인증정보는 보존했다. DOM 관측이 없는 옛 자료를 새 방 근거로 만들지 않는다.
+   실제 한 방의 최신 관측과 학생별 PDF, 전체 방 inventory/주기 실행은 아직 미완료다.
+4. **수신부 후속:** source0c65a608의 event-path guard까지 포함한 같은 source의 collector/
+   pure contracts를, MANUAL·remote가 실제 종료되고 profile flock을 확보한 상태에서 갱신했다.
+   공식 installer의 stage/verify·runtime/payload fingerprint·wheel parity·pip check와
+   실제 설치 함수의 `event_path` signature 확인이 통과했다. 수신부 source 회귀96 PASS와
+   별도 opt-in 익명 실제 Chromium2 PASS, source-isolated wheel 검사 PASS다.
+   실제 카카오 방에 대한 selector/사진 정합을 검증한 것은 아니며 AUTO는 계속 비활성이다.
+5. **발견/수정:** Web 공식 installer는 파일 설치/검증까지만 담당한다. 이번 운영 instance에서
+   설치 뒤 프로세스 재시작을 빠뜨려 새 JS는200인데 새 HTTP 경로가404인 상태를 발견했다.
+   재설치하지 않고 Web만 정상 재시작해 새 MainPID/start 시각과 같은 경로401을 확인했다.
+   이후 checkpoint는 파일 SHA만으로 화면 활성화를 선언하지 않고 실제 새 route를 확인한다.
+6. **기존 작업과 다음:** 접수 중 worker/command/chat0, 수치/HWPX transient 없음 확인 후
+   기존 creative producer에 지원된 SIGINT drain을 요청해 정상 종료하고 배포 뒤 다시 시작했다.
+   API/Web/Catalog/QUERY/creative는 현재 active다. INDEX는 배포 **전부터 FAILED/MainPID0**였고
+   같은 Invocation과 설정 hash를 보존했다. 이를 배포 성공으로 정상화하거나 재개하지 않았다.
+   사용자가 Studio에서 기존 연결의 원격 로그인을 준비하고 방 하나를 열도록 한 번 요청했다.
+   해당 실제 관측을 받은 뒤 CSV/사진→질문→학생 PDF 검증을 이어간다. 전체 goal은 미완료다.
+
+배포 증거는 기존 root-private owner 형식을 사용한다.
+`/var/lib/eom-kakao-capture-release-eda2a1b0/{stage.json,api/activated.json}`와
+`/var/lib/eom-kakao-navigation-guard-release-eda2a1b0/installed.json`에 저장했고, 비밀 없는
+개발 실행 로그는 `staging/kakao-capture-*-eda2a1b0.log` /
+`staging/kakao-navigation-release-eda2a1b0.log`다. 대화 원문·사진·프로필/인증정보는 Git/Slack에 넣지 않는다.
+
 ## 2026-11-17 운영 설치 전0093 호환 callback 준비
 
 - 기존 protected release operator에 context/admission1.28을 추가했다.1.27 schema bytes/hash는

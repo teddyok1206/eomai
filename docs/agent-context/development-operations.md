@@ -59,6 +59,11 @@ bytes를 root-private staging에 검증한 뒤 빈 venv의 offline 설치·실�
 설치는 `--no-index --require-hashes`이고 dependency resolver를 생략하지 않는다. 개발 중
 dirty source의 격리 검증은 clean commit release build나 실제 운영 설치의 대체가 아니다.
 
+Web의 `install_release.sh`는 파일 설치와 service-identity 검증까지만 담당하며 실행 중 앱을
+재시작하지 않는다. 배포 owner가 기존 서비스 재시작을 명시적으로 수행하고 MainPID/start 시각과
+새 HTTP route를 확인해야 한다. 정적 asset은 새 파일을 즉시 읽어200/SHA 일치를 보여도 이미
+import한 Python router는 옛 상태일 수 있다. 파일 검사만으로 활성화를 선언하지 않는다.
+
 Excel 콘텐츠 편성0075/0076은 같은 protected operator의 context/admission1.22를 사용한다.
 정확한0074 predecessor부터 `MIGRATION_UPGRADE_0076_FROM_0074`로 이동하며 기존 migration은
 재해석하지 않는다. 새 head에서 옛 API의 exact-head readiness는 통과하지 않으므로,
