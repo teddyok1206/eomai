@@ -14,6 +14,8 @@ Studio에서 편집 후 PDF를 받으며 질문1쪽 뒤에 필요한 개념 쪽�
 샘플의 수작업과 공식 반복 기능의 차이, turn_v1 경계/기간의 알려진 한계는
 [자동 출력 점검](../architecture/KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md)에 있다.
 샘플 제작용 staging 프로그램을 운영 경로로 복사하지 않는다.
+역할/metadata를 유지하는 후속 PDF 입력과 공통 해석 owner는
+[자료 출력 문맥](kakao-study-output.md)에서 찾는다.
 
 ## 책임과 원문
 

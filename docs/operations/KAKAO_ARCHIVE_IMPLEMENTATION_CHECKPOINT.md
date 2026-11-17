@@ -1,5 +1,31 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 역할·시각 보존 후속 입력의 source 연결 — 운영 비활성
+
+1. 샘플의 수동 행/사진 선택을 운영 기능으로 복사하지 않고, 기존 exact packet/student/source
+   해석을 공통 owner로 분리했다. 새 `project_kakao_student_study`는 같은 저장 원본에서 학생/
+   조교 본문과 사진을 나누며 message occurrence·kind·raw date·timezone·UTC를 보존한다.
+   답변 포함 여부는 기존 packet 선택을 따른다. 새 채널/학생/날짜·CSV 행 번호 하드코딩은 없다.
+2. JSON Schema2020-12 `worker-study-render-v1`과 frozen DTO를 먼저 정의했다. 기존 v1의
+   schema bytes는 그대로이며 member·image·content/terminal closure 규칙을 재사용한다.
+   source role/metadata의 exact membership·시각 불일치·없는 source/image·다른 학생·같은 binary의
+   독립 photo use·중복 member/경로 충돌을 검증한다. 교재 표시 citation은 검색 권한이 아니다.
+3. 일반 질문/답변은 study revision 없이 투영할 수 있지만, 보강 block은 저장한 자료 revision을
+   요구한다. 이번 source projection은 임의 note/citation 입력을 받지 않는다. 실제 저장/근거
+   owner와 worker 실행을 연결하기 전에 모델 출력이나 사용자 원고를 교재 근거로 수락하지 않는다.
+4. predecessor 정의의 닫힌 in-memory schema registry에 기존 jsonschema의 설치 의존인
+   `referencing>=0.37,<0.38`을 명시했다. API/격리 PDF에 이미0.37.0이 있으며 이번 작업에서
+   운영 package 설치·업그레이드는 하지 않았다. schema의 네트워크 조회와 Git fallback은 없다.
+5. 새 순수 계약/projection29개와 기존 v1 관련136개 회귀가 각각 통과했고, 문맥·package 검증을
+   포함한 최종 source 묶음188 PASS다. 겹치는 수치는 합산하지 않는다. 공식 guarded
+   임시 PostgreSQL에서는 기존 HTTP→질문→packet→PDF/file GET과 저장된 학생 subset의
+   후속 projection/재구성 검증을 포함해274 PASS다. 운영 DB를 테스트하지 않았다.
+   strict mypy5개·Ruff/format과 wire audit1479 canonical/1124 mirror/12785 refs도 통과했다.
+6. **새 family의 고정 worker entry/renderer·export profile·API/Web·개념 편집은 아직 미연결**이다.
+   이 source 경계를 실제 사용자 새 PDF나 전체 자동화 성공으로 표시하지 않는다. 이번 turn에는
+   운영 service 재시작·카카오 조작·원문/실패 이력·GPU/벡터 변경이나 AI 실행을 하지 않았다.
+   다음은 이 typed 입력을 기존 PDF 엔진의 질문/답변/보강 쪽 출력으로 연결하는 것이다.
+
 ## 2026-11-17 반복 자동화 점검 — 샘플의 수작업을 완료로 세지 않음
 
 사용자가 일회성 개발 에이전트 판단을 반복 기능으로 오인하지 않도록 점검을 요청했다.

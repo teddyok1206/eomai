@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from zoneinfo import ZoneInfo
 
 from eom_catalog_contracts.kakao_question import (
+    KakaoPacketStudentSubset,
+    KakaoQuestionImage,
     KakaoQuestionManifest,
     KakaoQuestionPacket,
     KakaoQuestionText,
@@ -49,7 +53,7 @@ class KakaoRenderImageInput:
             raise ValueError("KAKAO_ARCHIVE_RENDER_IMAGE_PIN_MISMATCH")
 
 
-def _image_key(pointer: ArtifactMemberPointer) -> tuple[str, ...]:
+def image_pointer_key(pointer: ArtifactMemberPointer) -> tuple[str, ...]:
     return (
         pointer.artifact_id,
         pointer.artifact_revision_id,
@@ -60,14 +64,21 @@ def _image_key(pointer: ArtifactMemberPointer) -> tuple[str, ...]:
     )
 
 
-def project_kakao_student_render(
+@dataclass(frozen=True, slots=True)
+class ResolvedKakaoRenderSelection:
+    packet: KakaoQuestionPacket
+    subset: KakaoPacketStudentSubset
+    questions: tuple[PublishedKakaoQuestion, ...]
+    sources: Mapping[str, ResolvedKakaoQuestionSource]
+
+
+def resolve_kakao_render_selection(
     *,
     packet: KakaoQuestionPacket,
     student_id: str,
     questions: tuple[PublishedKakaoQuestion, ...],
     sources: tuple[ResolvedKakaoQuestionSource, ...],
-    images: tuple[KakaoRenderImageInput, ...],
-) -> RenderManifest:
+) -> ResolvedKakaoRenderSelection:
     """No authority is created here: caller checks source/mapping before and after I/O."""
     packet = KakaoQuestionPacket.model_validate(packet.model_dump(mode="json"))
     subset = packet_student_subset(packet, student_id)
@@ -109,19 +120,77 @@ def project_kakao_student_render(
         for reference in item.question.sources
     }:
         raise ValueError("KAKAO_ARCHIVE_RENDER_SOURCE_SET_MISMATCH")
-    image_index = {_image_key(image.pointer): image for image in images}
+    for item in ordered:
+        validate_question_sources(
+            item.question,
+            tuple(
+                source_index[reference.normalization_revision_id]
+                for reference in item.question.sources
+            ),
+        )
+    return ResolvedKakaoRenderSelection(packet, subset, ordered, MappingProxyType(source_index))
+
+
+def project_kakao_render_image(
+    block: KakaoQuestionImage,
+    inputs: Mapping[tuple[str, ...], KakaoRenderImageInput],
+) -> tuple[RenderImage, tuple[str, ...] | None]:
+    """One image-use projection; bytes and permission remain core-owner responsibilities."""
+    member = None
+    key = None
+    if block.source_pointer is not None:
+        key = image_pointer_key(block.source_pointer)
+        image = inputs.get(key)
+        if image is None:
+            raise ValueError("KAKAO_ARCHIVE_RENDER_IMAGE_MISSING")
+        member = image.member
+    transform = (
+        RenderImageTransform.model_validate(block.transform.model_dump(exclude={"reason"}))
+        if block.transform is not None
+        else None
+    )
+    return RenderImage(
+        attachment_occurrence_id=block.attachment_id,
+        attachment_revision_id=block.attachment_revision_id,
+        member=member,
+        availability=(
+            "AVAILABLE"
+            if member is not None
+            else "EXPIRED"
+            if block.availability == "expired"
+            else "MISSING"
+            if block.availability in {"not_found", "denied"}
+            else "UNRESOLVED"
+        ),
+        quality_accepted=(
+            block.association in {"SOURCE_VERIFIED", "MANUAL_CONFIRMED"}
+            and (block.source_quality == "ORIGINAL" or block.quality_acceptance is not None)
+        ),
+        transform=transform,
+    ), key
+
+
+def project_kakao_student_render(
+    *,
+    packet: KakaoQuestionPacket,
+    student_id: str,
+    questions: tuple[PublishedKakaoQuestion, ...],
+    sources: tuple[ResolvedKakaoQuestionSource, ...],
+    images: tuple[KakaoRenderImageInput, ...],
+) -> RenderManifest:
+    """Frozen v1 projection; common exact selection is also used by its successor."""
+    selected = resolve_kakao_render_selection(
+        packet=packet, student_id=student_id, questions=questions, sources=sources
+    )
+    packet, subset = selected.packet, selected.subset
+    ordered, source_index = selected.questions, selected.sources
+    image_index = {image_pointer_key(image.pointer): image for image in images}
     if len(image_index) != len(images):
         raise ValueError("KAKAO_ARCHIVE_RENDER_IMAGE_DUPLICATED")
     used_images: set[tuple[str, ...]] = set()
     rendered: list[RenderQuestion] = []
     for item in ordered:
         question = item.question
-        validate_question_sources(
-            question,
-            tuple(
-                source_index[reference.normalization_revision_id] for reference in question.sources
-            ),
-        )
         text: list[RenderText] = []
         pictures: list[RenderImage] = []
         blocks: list[RenderBlockReference] = []
@@ -138,43 +207,10 @@ def project_kakao_student_render(
                 )
                 blocks.append(RenderTextReference(kind="TEXT", span_id=block.block_id))
                 continue
-            member = None
-            if block.source_pointer is not None:
-                key = _image_key(block.source_pointer)
-                image = image_index.get(key)
-                if image is None:
-                    raise ValueError("KAKAO_ARCHIVE_RENDER_IMAGE_MISSING")
-                member = image.member
+            rendered_image, key = project_kakao_render_image(block, image_index)
+            if key is not None:
                 used_images.add(key)
-            transform = (
-                RenderImageTransform.model_validate(block.transform.model_dump(exclude={"reason"}))
-                if block.transform is not None
-                else None
-            )
-            pictures.append(
-                RenderImage(
-                    attachment_occurrence_id=block.attachment_id,
-                    attachment_revision_id=block.attachment_revision_id,
-                    member=member,
-                    availability=(
-                        "AVAILABLE"
-                        if member is not None
-                        else "EXPIRED"
-                        if block.availability == "expired"
-                        else "MISSING"
-                        if block.availability in {"not_found", "denied"}
-                        else "UNRESOLVED"
-                    ),
-                    quality_accepted=(
-                        block.association in {"SOURCE_VERIFIED", "MANUAL_CONFIRMED"}
-                        and (
-                            block.source_quality == "ORIGINAL"
-                            or block.quality_acceptance is not None
-                        )
-                    ),
-                    transform=transform,
-                )
-            )
+            pictures.append(rendered_image)
             blocks.append(
                 RenderImageReference(kind="IMAGE", attachment_occurrence_id=block.attachment_id)
             )

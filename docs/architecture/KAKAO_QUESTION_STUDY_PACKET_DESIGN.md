@@ -166,3 +166,36 @@ Codex 역할 지침의 개발용 초안은
 
 이 요구 추가가 실제 카카오 검증을 생략하거나 전체 goal을 작은 편집 기능으로 축소하는 뜻은
 아니다. 원래 전체 방 주기 수집·보관·학생별 자료 목표와 함께 완료해야 한다.
+
+## 7. 역할·기록 정보를 유지하는 후속 PDF 입력 계약
+
+`worker-study-render-v1`은 기존 `worker-question-render-v1`을 변경하지 않는 별도 family다.
+책임은 **검증된 exact 질문 subset의 출력 입력**이며 수집·질문 구분·원문 수락 권한이 아니다.
+
+- 정본은 기존 packet/question/source와 선택적으로 저장한 학습자료 revision이다. worker
+  manifest는 렌더 입력 경계의 일시 materialization이며 새로운 질문/학생 정본이 아니다.
+- binding·packet revision·student·question revision/subset hash와 optional study revision,
+  command/attempt/fence·font/renderer/hash를 각각 pin한다. 자료 revision 없이 일반 질문·답변
+  출력은 가능하지만 보강 block이 있으면 저장한 study revision을 반드시 요구한다.
+- 학생과 조교 content를 따로 보존하고, text/image use마다 원래 message occurrence를 연결한다.
+  metadata는 선택된 occurrence만 포함하며 role·raw date·timezone·resolved UTC를 유지한다.
+  원문 없는 현시각·발신자 추정은 허용하지 않는다. worker가 source의 현재 권한을 부여하지 않는다.
+- 보강 block은 별도 작은 값으로 title/content/origin과 검증된 근거의 표시용 citation을 받는다.
+  실제 Graph/policy/source/analysis/Artifact pin과 접근 검사는 Catalog의 저장·해석 owner가 맡는다.
+  worker에 원격 URL·NAS/DB path·검색 권한을 주지 않는다.
+- 접근은 ordered 질문/section 순회와 occurrence/image member lookup이다. keyed map/set과
+  immutable tuple을 사용해 O(질문+block+고유 member+입력 bytes)로 처리한다. 기존256MiB
+  입력/출력·200쪽 안전 상한을 시작점으로 유지하고 넘으면 무잘림 검토 상태로 돌린다.
+- 기존 source/질문 validation을 공통 순수 해석 함수에서 재사용한다. v1 출력과 새 출력이
+  권한/identity·학생 subset·source closure 규칙을 따로 복제하지 않는다.
+- 별도 queue·DB·scheduler를 만들지 않는다. 기존 저장/claim/짧은 CAS와 lock 밖 materialization,
+  격리 실행·Artifact 발행을 후속 application 연결에서도 그대로 사용한다.
+- 새 worker family와 이를 모르는 설치본을 혼합하지 않는다. 현재 family의 schema·DTO/projection
+  구현은 운영 활성화가 아니다. 고정 entry/executor/export profile/API/Web까지 같은 지원 범위가
+  연결된 뒤 호환 릴리스로 활성화한다. v1 실패·완료 이력은 그대로 해석한다.
+- 모듈 방향은 Catalog application→순수 worker contracts이며 pure contracts는 Catalog/SQL/NAS를
+  import하지 않는다. worker는 staged local member만 읽고 core만 최종 파일을 발행한다.
+- 같은 요청은 기존 exact 결과를 읽고, 누락/권한 철회/hash·role·timestamp 불일치는 명시적 오류다.
+  재조회·추천 실패를 새 렌더나 원문 변경으로 우회하지 않는다.
+- 원래 role 정보를 지우고 출력 시 문장을 보고 되추론하는 대안은 더 불안정하다. 한 번의
+  검증된 source resolution에서 role/metadata를 보존하는 얇은 projection을 선택한다.

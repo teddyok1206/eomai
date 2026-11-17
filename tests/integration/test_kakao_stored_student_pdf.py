@@ -17,6 +17,7 @@ from eom_catalog_service.kakao_packet_service import KakaoPacketService
 from eom_catalog_service.kakao_pdf_inputs import prepare_kakao_pdf_inputs
 from eom_catalog_service.kakao_pdf_publication import publish_kakao_pdf
 from eom_catalog_service.kakao_source_pointers import validate_source_pointer_metadata_batch
+from eom_catalog_service.kakao_study_projection import project_kakao_student_study
 from eom_identity_service.models import ApiSessionRecord
 from eom_kakao_archive_contracts import LocalMember, RenderCommand, canonical_bytes, sha256
 from eom_operator_identity import PermissionKey
@@ -145,6 +146,50 @@ def staged(tmp_path, artifacts, packet, selection, student_id, authorize):
         )
     )
     return prepared, command
+
+
+def test_study_projection_reopens_exact_stored_student_selection_without_hand_picked_rows(
+    packet_store, tmp_path
+):
+    engine, actor, packets, request, stored_questions, questions, sources, artifacts = packet_store
+    request = request.model_copy(update={"include_replies": True})
+    key = "study-packet-" + uuid4().hex
+    saved = packets.save_packet(actor, request, idempotency_key=key)
+    assert packets.save_packet(actor, request, idempotency_key=key).packet == saved.packet
+    reopened = KakaoPacketService(engine, artifacts=artifacts, questions=questions, sources=sources)
+    for stored in stored_questions:
+        student_id = stored.student.student_id
+        accepted, selection = reopened.resolve_student(
+            actor,
+            request.source_binding_id,
+            saved.packet.packet_id,
+            revision_id=saved.packet.packet_revision_id,
+            student_id=student_id,
+        )
+        authorize = current_authorizer(engine, actor, sources, accepted, selection)
+        prepared, _ = staged(tmp_path, artifacts, accepted, selection, student_id, authorize)
+        arguments = dict(
+            packet=accepted.packet,
+            student_id=student_id,
+            questions=tuple(value.published for value in selection.questions),
+            sources=tuple(value.resolved for value in selection.sources),
+            images=prepared.images,
+        )
+        projected = project_kakao_student_study(**arguments)
+        assert projected.student_id == student_id
+        assert tuple(value.question_revision_id for value in projected.questions) == (
+            stored.question_revision_id,
+        )
+        assert len(projected.questions[0].messages) > 0
+        assert all(message.raw_date for message in projected.questions[0].messages)
+        assert projected.study_revision_id is None and not projected.questions[0].supplements
+        # The new manifest is not written over the already-pinned v1 input.
+        original = (prepared.source_root / "manifest.json").read_bytes()
+        assert original == canonical_bytes(prepared.manifest.model_dump(mode="json"))
+        assert canonical_bytes(projected.model_dump(mode="json")) == canonical_bytes(
+            project_kakao_student_study(**arguments).model_dump(mode="json")
+        )
+        authorize()
 
 
 def test_actual_two_students_are_separate_pdfs_and_replay_does_not_render(packet_store, tmp_path):

@@ -16,6 +16,7 @@
 | 일반 채팅과 로그인과 슬롯 | [대화와 계정](chat-identity-slots.md) |
 | KakaoTalk 대화·질문·학생별 PDF | [KakaoTalk 보관](kakao-archive.md) |
 | KakaoTalk 수집·MANUAL/AUTO 프로필 공유 | [KakaoTalk 수집](kakao-collection.md) |
+| KakaoTalk 학생/조교 구분·기록 정보·개념 보강 출력 | [KakaoTalk 자료 출력](kakao-study-output.md) |
 | 테스트와 배포와 장애 진단 | [개발과 운영](development-operations.md) |
 | 반복하면 안 되는 접근과 후속 판단 | [유지할 판단](working-decisions.md) |
 

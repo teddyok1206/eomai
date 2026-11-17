@@ -4,6 +4,32 @@
   "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
   "topics": [
     {
+      "id": "kakao-study-output",
+      "note": "kakao-study-output.md",
+      "keywords": ["KakaoTalk", "학생 사진", "조교 답변", "기록 정보", "개념 보강", "study PDF", "역할별 출력"],
+      "source_paths": [
+        "schemas/kakao-archive/worker-study-render-v1.schema.json",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/study.py",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/study_validation.py",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/render.py",
+        "services/catalog_service/eom_catalog_service/kakao_render_projection.py",
+        "services/catalog_service/eom_catalog_service/kakao_study_projection.py"
+      ],
+      "test_paths": [
+        "tests/unit/test_kakao_study_render_contract.py",
+        "tests/unit/test_kakao_study_projection.py",
+        "tests/unit/test_kakao_render_projection.py",
+        "tests/unit/test_kakao_question_render.py",
+        "tests/integration/test_kakao_stored_student_pdf.py"
+      ],
+      "reference_paths": [
+        "docs/architecture/KAKAO_QUESTION_STUDY_PACKET_DESIGN.md",
+        "docs/architecture/KAKAO_ARCHIVE_REPEATABLE_OUTPUT_AUDIT.md",
+        "docs/architecture/KAKAO_QUESTION_CONCEPT_ENRICHMENT_PROMPT_DRAFT.md",
+        "docs/operations/KAKAO_ARCHIVE_IMPLEMENTATION_CHECKPOINT.md"
+      ]
+    },
+    {
       "id": "kakao-collection",
       "note": "kakao-collection.md",
       "keywords": ["KakaoTalk", "수집", "프로필", "AUTO", "MANUAL", "epoch", "수집 재개"],

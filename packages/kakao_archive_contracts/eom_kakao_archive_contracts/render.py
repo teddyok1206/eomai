@@ -108,6 +108,30 @@ class RenderImage(FrozenModel):
         return self
 
 
+def validate_render_content(
+    text_blocks: tuple[RenderText, ...],
+    images: tuple[RenderImage, ...],
+    ordered_blocks: tuple[RenderBlockReference, ...],
+) -> None:
+    """Shared content closure; v1 and study source/supplement values use the same rule."""
+    if not text_blocks and not images:
+        raise ValueError("KAKAO_RENDER_EMPTY_QUESTION")
+    spans = [block.span_id for block in text_blocks]
+    attachments = [image.attachment_occurrence_id for image in images]
+    if len(set(spans)) != len(spans) or len(set(attachments)) != len(attachments):
+        raise ValueError("KAKAO_RENDER_DUPLICATE_INPUT")
+    if sum(len(block.text) for block in text_blocks) > 20000:
+        raise ValueError("KAKAO_RENDER_TEXT_LIMIT")
+    ordered_spans = [ref.span_id for ref in ordered_blocks if isinstance(ref, RenderTextReference)]
+    ordered_images = [
+        ref.attachment_occurrence_id
+        for ref in ordered_blocks
+        if isinstance(ref, RenderImageReference)
+    ]
+    if ordered_spans != spans or ordered_images != attachments:
+        raise ValueError("KAKAO_RENDER_BLOCK_ORDER_INVALID")
+
+
 class RenderQuestion(FrozenModel):
     question_revision_id: QuestionRevisionId
     header_date: date | None
@@ -117,24 +141,7 @@ class RenderQuestion(FrozenModel):
 
     @model_validator(mode="after")
     def content_complete(self) -> Self:
-        if not self.text_blocks and not self.images:
-            raise ValueError("KAKAO_RENDER_EMPTY_QUESTION")
-        spans = [block.span_id for block in self.text_blocks]
-        attachments = [image.attachment_occurrence_id for image in self.images]
-        if len(set(spans)) != len(spans) or len(set(attachments)) != len(attachments):
-            raise ValueError("KAKAO_RENDER_DUPLICATE_INPUT")
-        if sum(len(block.text) for block in self.text_blocks) > 20000:
-            raise ValueError("KAKAO_RENDER_TEXT_LIMIT")
-        ordered_spans = [
-            ref.span_id for ref in self.ordered_blocks if isinstance(ref, RenderTextReference)
-        ]
-        ordered_images = [
-            ref.attachment_occurrence_id
-            for ref in self.ordered_blocks
-            if isinstance(ref, RenderImageReference)
-        ]
-        if ordered_spans != spans or ordered_images != attachments:
-            raise ValueError("KAKAO_RENDER_BLOCK_ORDER_INVALID")
+        validate_render_content(self.text_blocks, self.images, self.ordered_blocks)
         return self
 
 
@@ -198,25 +205,32 @@ class RenderResult(FrozenModel):
 
     @model_validator(mode="after")
     def terminal_shape(self) -> Self:
-        if self.status == "COMPLETED":
-            if (
-                self.error_code is not None
-                or self.question_revision_id is not None
-                or self.page_count == 0
-            ):
-                raise ValueError("KAKAO_RENDER_RESULT_INVALID")
-            if len(self.outputs) != self.page_count + 2:
-                raise ValueError("KAKAO_RENDER_RESULT_MEMBERS_INVALID")
-            expected = {"report.pdf": "application/pdf", "layout.json": "application/json"}
-            expected.update(
-                {f"page-{i:04d}.png": "image/png" for i in range(1, self.page_count + 1)}
-            )
-            actual = {member.relative_path: member.media_type for member in self.outputs}
-            if len(actual) != len(self.outputs) or actual != expected:
-                raise ValueError("KAKAO_RENDER_RESULT_MEMBERS_INVALID")
-        elif self.outputs or self.page_count or self.error_code is None:
-            raise ValueError("KAKAO_RENDER_FAILED_OUTPUT_INVALID")
+        validate_render_result_shape(
+            self.status, self.page_count, self.outputs, self.error_code, self.question_revision_id
+        )
         return self
+
+
+def validate_render_result_shape(
+    status: str,
+    page_count: int,
+    outputs: tuple[LocalMember, ...],
+    error_code: str | None,
+    question_revision_id: str | None,
+) -> None:
+    """Terminal file closure shared across explicitly different render families."""
+    if status == "COMPLETED":
+        if error_code is not None or question_revision_id is not None or page_count == 0:
+            raise ValueError("KAKAO_RENDER_RESULT_INVALID")
+        if len(outputs) != page_count + 2:
+            raise ValueError("KAKAO_RENDER_RESULT_MEMBERS_INVALID")
+        expected = {"report.pdf": "application/pdf", "layout.json": "application/json"}
+        expected.update({f"page-{i:04d}.png": "image/png" for i in range(1, page_count + 1)})
+        actual = {member.relative_path: member.media_type for member in outputs}
+        if len(actual) != len(outputs) or actual != expected:
+            raise ValueError("KAKAO_RENDER_RESULT_MEMBERS_INVALID")
+    elif outputs or page_count or error_code is None:
+        raise ValueError("KAKAO_RENDER_FAILED_OUTPUT_INVALID")
 
 
 def canonical_bytes(value: object) -> bytes:
