@@ -54,6 +54,9 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capture_composition import build_kakao_capture_intake
+from eom_catalog_service.kakao_collection_source_composition import (
+    build_configured_kakao_collection_attempts,
+)
 from eom_catalog_service.kakao_concept_authorization import CatalogKakaoConceptAuthorizationService
 from eom_catalog_service.kakao_delivery_composition import build_kakao_delivery_application
 from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
@@ -335,7 +338,9 @@ def serve() -> int:
         )
         manual = build_kakao_manual_runtime(engine, os.environ)
         questions = build_kakao_question_application(
-            engine, concept_mode=os.environ.get("EOM_KAKAO_CONCEPT_MODE", "DISABLED")
+            engine,
+            concept_mode=os.environ.get("EOM_KAKAO_CONCEPT_MODE", "DISABLED"),
+            collection_attempts=build_configured_kakao_collection_attempts(engine, os.environ),
         )
         delivery = build_kakao_delivery_application(
             engine, questions.questions, os.environ, concepts=questions.concepts

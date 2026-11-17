@@ -2,14 +2,43 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from sqlalchemy import Engine
 
 if TYPE_CHECKING:
     from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 
     from .kakao_collection_attempt_service import KakaoCollectionAttemptService
     from .kakao_source_service import AcceptedKakaoSource
+
+
+def build_configured_kakao_collection_attempts(
+    engine: Engine, environment: Mapping[str, str]
+) -> KakaoCollectionAttemptService | None:
+    """Compose an exact admission owner, without launching or admitting any work."""
+    key = "EOM_KAKAO_COLLECTION_ADAPTER_SHA256"
+    if key not in environment:
+        return None
+    adapter = environment[key]
+    profile = environment.get("EOM_KAKAO_PROFILE_ID", "")
+    if (
+        re.fullmatch(r"sha256:[0-9a-f]{64}", adapter) is None
+        or re.fullmatch(r"kakaoprofile_[0-9a-f]{32}", profile) is None
+    ):
+        raise ValueError("KAKAO_COLLECTION_CONFIGURATION_INVALID")
+    from .artifacts import CatalogArtifactService
+    from .kakao_collection_attempt_service import KakaoCollectionAttemptService
+
+    return KakaoCollectionAttemptService(
+        engine,
+        artifacts=CatalogArtifactService(engine),
+        profile_id=profile,
+        adapter_release_sha256=adapter,
+    )
 
 
 def admit_staged_kakao_capture_source(

@@ -1,5 +1,44 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 실제 수락 owner를 질문 runtime에 조립
+
+기준 source는 `132f11d4`다. 운영용 `build_kakao_question_application`이 capture admission을
+항상 거부하는 owner만 만들던 연결 공백을 보완했다. 기존 attempt owner의 공개 read-only
+`sources`를 질문·읽기·편집·개념에 함께 주입하며 별도 source 저장소를 만들지 않는다.
+`application_runner`는 명시적인 collection adapter SHA와 기존 profile ID가 있을 때만
+실제 owner를 조립한다. 미지정은 기존 비활성, 잘못 명시한 pin은 구성 오류다. browser driver
+SHA로 대신하지 않는다. 새 schema·migration·queue·dependency·모델 실행은 없다.
+
+- 구성만으로 browser/collector/source admission을 실행하지 않는다. 실제 RESULT_ACCEPTED
+  capture와 현재 owner/권한·원 policy/result/report를 기존 application에서 다시 확인한다.
+- 임시 DB에서 실제 accepted result→source 발행/채택→질문 source resolution까지 연결했다.
+  확인되지 않은 CSV 순서는 여전히 `SOURCE_ORDER_UNVERIFIED`이며 성공 fixture를 만들려고
+  capability를 승격하지 않았다. 기존 known-order 저장·질문→PDF 검사는 별도로 유지한다.
+- 정상 logout 이후 같은 원본을 완료하고 controller를 다시 만들어도 같은 key의 완료본을
+  읽는다. workspace 재독해·중복 Artifact·새 HTTP session은 없고 공개 source read에는
+  현재 로그인이 필요하다. 다른 profile의 accepted-run 접근과 변경된 adapter의 원본 발행은
+  payload 읽기 전에 거부된다.
+- source/compatibility·cold import 단위123건, 별도 설치 wheel/import3건, 의존 방향12건,
+  strict mypy4개와 개발 문맥13건이 통과했다. 기존 guarded runner에 새 DB 검사를 추가했다.
+  첫 focused 명령은 runner 목록 누락으로0건 선택돼 실패했고, 목록을 수정한 뒤2건 통과했다.
+  이 최초 실패 로그도 보존하며 실행하지 않은 검사를 PASS로 세지 않는다.
+
+최종 guarded disposable PostgreSQL 전체 **475 PASS**(439.27초)다. 이후 추가한 adapter
+pin 음성 검사를 포함한 현재 연결 집중 **3 PASS**(11.11초)도 확인했다. 이3건 중 기존2건은
+전체475건과 겹치므로 합산하지 않는다. 증거는
+`staging/kakao-admission-composition-{full-db,final-db,verified-unit,installed-wheel,dependency,final-types,verified-context}-20261117.log`다.
+
+기존 PDF6종(원17쪽+비교본3/6/7/4/6쪽)의 실제 파일을 다시 읽어 페이지 수·image use·
+페이지 밖 text/image block0을 확인했다. 기존 원17쪽 SHA도 보존됐다. 비교본 중 질문·조교
+답변/시각·참고자료 안내3쪽은 raster preview로 직접 확인했다. 이는 기존 고정 입력의 출력
+검사이지 새 카카오 수집/GraphRAG/공식 Studio export가 아니다. 별도 신규 PDF를 중복
+생성하지 않았고 앞의5종 링크·제한사항을 그대로 유지한다.
+
+**SOURCE_ONLY_NOT_DEPLOYED**다. 현재 운영 `7533ca8f…`/DB0097·인증·기존 실행 pin은
+변경하지 않았다. 원격 browser/remote는 확인 시 inactive/MainPID0이므로 새 실제 한 방
+CSV/사진 수집은 재연결 후 검증한다. AUTO/shared concept은 비활성이며 전체 방 주기 수집과
+실제 학생 PDF의 Studio 재조회/다운로드는 여전히 원래 goal의 미완료 gate다.
+
 ## 2026-11-17 늦게 받은 답변·사진의 명시적 새 검토본
 
 `refresh_question_source`는 같은 학생/방의 exact 새 수락 source/candidate를 기존 질문의

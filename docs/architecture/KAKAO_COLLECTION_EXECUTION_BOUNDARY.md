@@ -3,6 +3,27 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 기존 수락 owner의 운영 조립 — 2026-11-17
+
+1. 책임은 Catalog composition에서 이미 구현한 collection attempt/source owner를 질문
+   읽기·저장에 연결하는 것이다. 브라우저 시작·AUTO dispatch·공개 authority 입력은 추가하지 않는다.
+2. 정본은 기존 accepted run/result/report/source Artifact와 현재 DB의 권한·실행 pin이다.
+3. 기존 logical/revision/Artifact/hash 모델을 그대로 사용하며 새 wire·DB 변경은 없다.
+4. 명시적인 `EOM_KAKAO_COLLECTION_ADAPTER_SHA256`와 기존 `EOM_KAKAO_PROFILE_ID`를
+   검증한 경우에만 owner를 조립한다. browser driver hash를 adapter hash로 대신하지 않는다.
+5. 주 접근은 설정 key lookup와 기존 attempt/source의 exact indexed lookup다.
+6. 작은 environment mapping과 기존 owner/index를 재사용하며 새 cache·queue는 없다.
+7. 설정 검사는 O(1), 실제 원본 검증 비용과 크기 상한은 기존 owner가 그대로 담당한다.
+8. 구성 시 DB/파일/브라우저 변경은 없고 기존 publication·source CAS transaction을 유지한다.
+9. runner→composition→application owner 방향이며 worker/OS 구현은 필요한 실행 경계에서만
+   import한다. 질문·개념·편집은 같은 source/Artifact owner를 재사용한다.
+10. 설정 key 미지정은 기존 admission-disabled 동작이다. 명시했지만 불완전/잘못된 pin이면
+    구성 오류이며 조용히 다른 pin/권한으로 대체하지 않는다. 실제 accepted attempt·현재 권한은
+    호출마다 검사하고 source order UNKNOWN은 여전히 질문 저장을 막는다.
+11. 기존 무조건 거부 callback을 계속 쓰면 올바른 accepted result도 운영 질문 경로로
+    연결할 수 없다. 허용 boolean이나 가짜 API session 대신 실제 owner를 명시적으로 주입한다.
+    이 조립 자체는 AUTO·MANUAL source 수락이나 실제 카카오 검증의 완료 증거가 아니다.
+
 ## 호환 운영 릴리스 준비 — 2026-11-17
 
 1. 책임은 기존 release operator의 exact migration callback·설치 검증이다. 수집/브라우저

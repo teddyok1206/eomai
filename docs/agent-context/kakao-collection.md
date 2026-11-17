@@ -103,6 +103,13 @@ source는 한 번 해석하고 origin을 bounded IN lookup해 이미 편집/제�
 반환한다. 아직 실제 AUTO dispatcher 호출/운영 활성화는 아니며 unknown source order를
 승격하지 않는다. 저장/수동 편집·PDF 접근은 [보관 문맥](kakao-archive.md)을 함께 본다.
 
+`build_configured_kakao_collection_attempts`는 명시적인 collection adapter SHA와 기존 profile
+ID가 있을 때만 실제 owner를 만든다. `application_runner`가 이를 질문 composition에 넣어
+질문/읽기/편집/개념이 같은 source·Artifact owner를 사용한다. 설정 미지정은 기존 admission
+거부이며 명시한 잘못된 설정은 오류다. browser driver hash를 대신 쓰거나 source를 임의
+수락하지 않는다. 같은 owner의 public `sources` property는 trusted composition용이고
+새 권한/HTTP session을 만들지 않는다. 이 구성만으로 AUTO나 collector를 시작하지 않는다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.

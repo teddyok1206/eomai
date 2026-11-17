@@ -1,4 +1,4 @@
-"""Compose accepted-content reads; actual collection admission remains disabled here."""
+"""Compose accepted-content reads with an optional actual collection admission owner."""
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -15,6 +15,7 @@ from .kakao_question_service import KakaoQuestionService
 from .kakao_source_service import KakaoSourceService
 
 if TYPE_CHECKING:
+    from .kakao_collection_attempt_service import KakaoCollectionAttemptService
     from .kakao_concept_continuation import KakaoConceptCoordinator
 
 
@@ -25,22 +26,31 @@ class KakaoQuestionApplication:
     composer: KakaoQuestionComposeService | None = None
     concepts: KakaoConceptTaskService | None = None
     concept_coordinator: "KakaoConceptCoordinator | None" = None
+    collection_attempts: "KakaoCollectionAttemptService | None" = None
 
 
 def build_kakao_question_application(
-    engine: Engine, *, concept_mode: str = "DISABLED"
+    engine: Engine,
+    *,
+    concept_mode: str = "DISABLED",
+    collection_attempts: "KakaoCollectionAttemptService | None" = None,
 ) -> KakaoQuestionApplication:
     if concept_mode not in {"DISABLED", "SHARED"}:
         raise ValueError("KAKAO_CONCEPT_MODE_INVALID")
-    artifacts = CatalogArtifactService(engine)
+    artifacts = (
+        CatalogArtifactService(engine)
+        if collection_attempts is None
+        else collection_attempts.artifacts
+    )
 
     def capture_not_configured(*_args: object) -> None:
-        # This composition exposes no source-admission method. A future actual
-        # collection owner must inject its accepted capture authority, not a bool.
+        # No configured owner means no capture authority, never a permissive fallback.
         raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
 
-    sources = KakaoSourceService(
-        engine, artifacts=artifacts, authorize_capture=capture_not_configured
+    sources = (
+        KakaoSourceService(engine, artifacts=artifacts, authorize_capture=capture_not_configured)
+        if collection_attempts is None
+        else collection_attempts.sources
     )
     questions = KakaoQuestionService(engine, artifacts=artifacts, sources=sources)
     knowledge = KakaoConceptKnowledgeReader(engine, artifacts.settings)
@@ -65,4 +75,5 @@ def build_kakao_question_application(
         ),
         concepts,
         coordinator,
+        collection_attempts,
     )

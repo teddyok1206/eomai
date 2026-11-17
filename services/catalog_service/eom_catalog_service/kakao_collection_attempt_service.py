@@ -144,6 +144,11 @@ class KakaoCollectionAttemptService:
             engine, artifacts=artifacts, authorize_capture=self.authorize_source
         )
 
+    @property
+    def sources(self) -> KakaoSourceService:
+        """Reuse this owner's exact accepted-capture authority in trusted composition."""
+        return self._sources
+
     def _authorize(self, session: Session, run: Run) -> None:
         authorize_kakao_collection_preparation(
             session, run, adapter_release_sha256=self.adapter_sha256
