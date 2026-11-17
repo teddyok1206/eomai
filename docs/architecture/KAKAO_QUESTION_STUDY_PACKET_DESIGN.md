@@ -666,3 +666,26 @@ Artifact store의 명시적 serialized-result 입구에서 canonical bytes와 jo
 identity를 대조한 뒤 동일 staging/commit 로직을 쓴다. 이 family의 결과 재조회와 공개 응답도
 같은 finite-number encoding을 사용한다. DB에는 여전히 작은 결과 header만 두며,
 schema/request/source 검증을 건너뛰거나 기존 실패를 성공으로 해석하지 않는다.
+
+## 19. 실제 추천 지침·프리셋 발행
+
+운영 준비에서 빠진 추천 preset은 기존 Orchestrator Control 발행 owner로 추가한다.
+새 queue/model registry/auth binding/capacity는 만들지 않는다. root 운영 CLI의 입력은
+검토한 지침 파일·source commit·UTC 발행 시각과 현재 support preset의 exact revision/hash다.
+기존 프리셋의 검증된 model 후보와 PLATFORM 지침 pointer, shared1.7 capacity를 재사용하고
+추천 ROLE 지침만 새 Artifact로 발행한다. 기존 프리셋/계정/슬롯06 예약은 수정하지 않는다.
+
+정본은 기존 released preset/bundle/capacity와 새 지침 Artifact다. 주요 연산은 logical key/
+revision PK 조회와 고정 support policy 한 개 비교다. 기존 indexes·공통 짧은 Control publish
+transaction lock을 사용하며 긴 파일 읽기/Artifact 발행은 그 lock 밖이다. 비용은 지침 bytes와
+작은 preset policy에 선형이고 history 본문 전체를 스캔하지 않는다. 같은 발행 입력은 같은
+Artifact와 draft/release를 재사용하고 다른 정책의 current가 이미 있으면 명시 conflict다.
+
+기존 draft→NON_LIVE contract evaluation→release 절차를 사용한다. 평가가 증명하는 것은
+정의/프로토콜·bundle·capacity·typed policy 호환성뿐이며 모델 응답/교육 품질 PASS가 아니다.
+발행 시 실제 base current revision/hash가 바뀌면 중단한다. source model을 옛 고정 Terra
+이름으로 덮지 않는다. 실제 공유-slot canary와 교재 샘플은 발행 후 별도로 검증한다.
+
+기존 PDF/상담 preset을 그대로 다른 용도로 실행하는 대안은 지침·purpose pin이 틀린다.
+새 bootstrap framework 대신 기존 Control 함수와 발행 adapter를 조합하는 짧은 목적별
+운영 use case만 추가한다. runtime은 Git/config 파일이 아니라 발행한 exact pointer를 읽는다.

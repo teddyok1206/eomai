@@ -1,5 +1,42 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 공유 추천 프리셋의 실제 운영 발행 준비
+
+source `0f15c85cc650df8cee5bf787ed52b6136355816c` 후속이다. 빠져 있던 추천 지침/프리셋
+발행을 `eomctl control-plane bootstrap-kakao-concepts`로 연결했다. 기존 Control publisher와
+draft→NON_LIVE 계약 검사→release를 사용하며 모델/계정/slot/capacity 발행기를 새로 만들지 않는다.
+
+- 검토한 source commit/지침/UTC 시각과 current support preset의 exact revision/hash가 입력이다.
+  현재 모델 후보·PLATFORM pointer·shared1.7 capacity를 그대로 쓰고 추천 ROLE 지침만 발행한다.
+  기존 preset/슬롯06 예약·auth binding/capacity는 수정하지 않는다. admitted1.41 definition이
+  먼저 있어야 한다. runtime은 발행된 pointers를 읽으며 Git/config 파일에 의존하지 않는다.
+- 기존 process-safe publication lock과 짧은 Control adoption lock을 재사용한다. 같은 입력은
+  같은 Artifact/draft/release이며 경쟁 publisher도 하나만 채택한다. 바뀐 baseline/다른 기존
+  정책은 명시 거부한다. 이 최초 발행 도구를 임의 정책을 덮는 범용 updater로 쓰지 않는다.
+- 임시 PostgreSQL 전체 **360 PASS**, 그중 발행 집중 **7 PASS/353 deselected**, source/CLI/
+  문맥 집중 **40 PASS**, 독립 설치 wheel **10 PASS**, strict mypy2개·Ruff/format/bash/diff PASS다.
+  별도 CLI2 검사는40에 포함되므로 합산하지 않는다. 발행 경쟁·replay·stale baseline/
+  policy conflict·기존 auth/capacity 개수 보존을 검사했다. 새 target key만 fixture별 scope하며
+  이전 합성 이력을 수정하지 않았다. PLATFORM은 합성 control metadata이며 실제 모델/교재
+  성공 증거가 아니다. 평가 보고는 NON_LIVE/CONTRACT_VALIDATION이고 품질 점수가 없다.
+- 초기 발행 검사에서 지침 helper의 이중 hash key가128자 상한을 넘음과 UTC 문자열
+  정규화 전후 보고 hash 차이를 발견했다. 공개 byte publisher의 단일 key와 기존 typed
+  EvaluationReport 정규화를 사용해 고쳤다. 입력 상한/기존 serializer를 느슨하게 하지 않았다.
+
+증거: `staging/kakao-concept-bootstrap-{focused-db-final,full-db,source,cli,wheel,
+final-types,lint}-20261117.log`. 이 단계의 실제 모델/운영 migration/재시작은0이다.
+
+운영 읽기 전용 점검에서는 API/Web 모두 `c93f78f7df43ee261566c40e6a1dbf4d3f501ddf`,
+DB0093, held worker0/active command0/chat0을 확인했다. browser/remote는 inactive다.
+INDEX owner는 이 점검 전에 이미 failed/MainPID0(종료 시각2026-11-16 01:19 UTC)이었고
+현재 GPU compute process는 없었다. 이번 작업으로 재시작/실패 기록 정리는 하지 않았다.
+기존 INDEX pin·설정과 자료는 호환 배포에서도 보존한다. 세부 비밀값 없는 점검은
+`staging/kakao-concept-live-preflight-20261117.log`다.
+
+다음은 새 compatible release set의 빌드·보호된 설치/DB0096 전환·추천 활성화와 실제
+교과서/수신 질문·사진 샘플이다. 최종 PDF 링크·README와 실제 운영 사용자 경로 검증은
+아직 남아 있다. 원래 goal의 실제 한 방/전체 방 주기 수집도 남아 있으며 전체 완료가 아니다.
+
 ## 2026-11-17 추천 API·교과서 원본 그림·Studio 선택 연결 — source 검증, 운영 미배포
 
 source `7bb3f6b6f42202517d1643dcb7b02adecab9e7c4` 후속이다. 질문별 개념 추천 시작,

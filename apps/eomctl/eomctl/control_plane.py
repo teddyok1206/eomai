@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -15,6 +16,7 @@ from eom_orchestrator.customer_support_bootstrap import (
     bootstrap_customer_support_control_plane,
 )
 from eom_orchestrator.database import build_engine
+from eom_orchestrator.kakao_concept_bootstrap import bootstrap_kakao_concepts
 from eom_orchestrator.knowledge_item_bootstrap import bootstrap_knowledge_item_control_plane
 from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
     bootstrap_legacy_item_editorial_compatibility_control_plane,
@@ -35,6 +37,9 @@ control_plane_app = typer.Typer(no_args_is_help=True)
 control_plane_app.add_typer(codex_runtime_app, name="codex-runtime")
 control_plane_app.add_typer(inference_transfer_control_app, name="inference-transfer")
 control_plane_app.add_typer(shared_slots_app, name="shared-slots")
+KAKAO_CONCEPT_INSTRUCTION_OPTION = typer.Option(
+    ..., "--instruction-path", exists=True, file_okay=True, dir_okay=False, resolve_path=True
+)
 STANDARD_CONFIG_DIRECTORY_OPTION = typer.Option(
     ...,
     "--config-directory",
@@ -274,6 +279,44 @@ def bootstrap_customer_support(
             ensure_ascii=True,
             sort_keys=True,
         )
+    )
+
+
+@control_plane_app.command("bootstrap-kakao-concepts")
+def bootstrap_kakao_concept_command(
+    source_commit: str = typer.Option(..., "--source-commit"),
+    actor_id: str = typer.Option(..., "--actor-id"),
+    created_at: str = typer.Option(..., "--created-at"),
+    base_preset_revision_id: str = typer.Option(..., "--base-preset-revision-id"),
+    base_preset_sha256: str = typer.Option(..., "--base-preset-sha256"),
+    instruction_path: Path = KAKAO_CONCEPT_INSTRUCTION_OPTION,
+) -> None:
+    """Publish the source-only shared-slot concept preset; never run a model or change auth."""
+    engine = build_engine()
+    try:
+        try:
+            timestamp = datetime.fromisoformat(created_at)
+        except ValueError as error:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_INVALID", "UTC publication time required"
+            ) from error
+        result = bootstrap_kakao_concepts(
+            engine,
+            instruction_path=instruction_path,
+            source_commit=source_commit,
+            actor_id=actor_id,
+            created_at=timestamp,
+            base_preset_revision_id=base_preset_revision_id,
+            base_preset_sha256=base_preset_sha256,
+            settings=Settings.from_environment(),
+        )
+    except ControlPlaneError as error:
+        typer.echo(json.dumps({"status": "FAILED", "error_code": error.code}, sort_keys=True))
+        raise typer.Exit(1) from None
+    finally:
+        engine.dispose()
+    typer.echo(
+        json.dumps({"status": "SUCCEEDED", **result.model_dump(mode="json")}, sort_keys=True)
     )
 
 

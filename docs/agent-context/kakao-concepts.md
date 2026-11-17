@@ -226,3 +226,22 @@ Artifact·교재 PNG→COMPOSE Workflow/command, logout/서비스 재구성·두
 current preset 변경·원래 실행 replay/계정 중지·index-capable bounded query를 확인한다.
 교재 discovery/PLAN 내용은 합성이고 모델/운영 성공이 아니다. guarded DB는 이전 합성 이력을
 유지하므로 새 fixture의 query만 범위 제한하며 실제 source/adoption/claim은 우회하지 않는다.
+
+## 운영 발행 준비
+
+`kakao_concept_bootstrap.py`와 `eomctl control-plane bootstrap-kakao-concepts`는 기존 Control
+publisher/draft/evaluation/release를 쓴다. 실제 current support preset의 exact revision/hash를
+받아 모델 후보·PLATFORM 지침 pointer·shared1.7 capacity를 재사용하고 추천 ROLE만 발행한다.
+기존 프리셋·6개 슬롯·auth binding·capacity를 수정하지 않는다. admitted1.41 definition이
+먼저 필요하다. source commit·UTC 발행 시각도 같은 요청에서 고정해야 재시도가 같은
+Artifact/release를 얻는다. 다른 정책이 이미 current면 overwrite하지 않고 conflict다.
+
+기존 process-safe publication lock으로 이 bootstrap만 직렬화하고 긴 I/O는 application
+row lock 밖이다. 마지막 adoption은 기존 짧은 Control lock 아래 base current를 재검사한다.
+NON_LIVE/CONTRACT_VALIDATION 보고는 typed policy/정의·bundle/capacity 호환성만 증명하며
+모델 실행·교재 품질/실제 페이지 관측 증거가 아니다. 운영 canary는 별도다.
+
+`test_kakao_concept_bootstrap.py`의 임시 DB 검사는 독립 publisher 경쟁·같은 요청 replay,
+stale baseline·다른 정책 거부·기존 auth/capacity 개수 보존을 확인한다. 이전 합성 이력을
+보존하기 위해 새 logical key만 fixture별로 scope하며 실제 Control/Artifact 코드는 그대로다.
+base PLATFORM은 기존 합성 control fixture의 metadata라 실제 시스템/모델 성공이 아니다.
