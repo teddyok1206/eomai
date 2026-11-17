@@ -224,6 +224,7 @@
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_attempt.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_attempt_models.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_attempt_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_publication.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_browser.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_models.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_service.py",

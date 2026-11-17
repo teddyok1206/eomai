@@ -496,6 +496,42 @@ class KakaoSourceService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_STORED_SOURCE_INVALID")
             return head.current_source_revision_id
 
+    def completed_capture_source(
+        self,
+        actor: ActorContext,
+        source_binding_id: str,
+        room_id: str,
+        *,
+        capture_attempt_id: str,
+        idempotency_key: str,
+        expected_source_revision_id: str | None,
+        expected_resource_version: int,
+    ) -> AcceptedKakaoSource | None:
+        """Recover only this capture's stored result, never the mutable current head."""
+        key = validate_kakao_idempotency_key(idempotency_key)
+        with self._sessions.begin() as session:
+            owner = self._scope(session, actor, source_binding_id, room_id, mutate=True)
+            command = session.scalar(
+                select(KakaoSourceCommandRecord).where(
+                    KakaoSourceCommandRecord.source_binding_id == source_binding_id,
+                    KakaoSourceCommandRecord.capture_attempt_id == capture_attempt_id,
+                )
+            )
+            if command is None:
+                return None
+            if (
+                command.owner_operator_id,
+                command.room_id,
+                command.idempotency_key,
+                command.previous_revision_id,
+                command.expected_resource_version,
+            ) != (owner, room_id, key, expected_source_revision_id, expected_resource_version):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
+            if command.state != "COMPLETED":
+                return None
+            revision_id = command.source_revision_id
+        return self.get_source(actor, source_binding_id, room_id, source_revision_id=revision_id)
+
     def get_source(
         self, actor: ActorContext, source_binding_id: str, room_id: str, *, source_revision_id: str
     ) -> AcceptedKakaoSource:

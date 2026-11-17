@@ -21,15 +21,8 @@ from eom_catalog_contracts.kakao_concept_knowledge import (
 )
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
-from eom_identifiers import content_sha256
+from eom_identifiers import content_sha256, sha256_bytes
 from eom_identity_service.repository import active_role_assignments, effective_permissions
-from eom_kakao_archive_contracts import canonical_bytes, sha256
-from eom_kakao_archive_contracts.concepts import (
-    ConceptComposeRequest,
-    ConceptEvidenceContext,
-    ConceptPlan,
-    ConceptResult,
-)
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
 from eom_orchestrator.database import build_session_factory
@@ -56,6 +49,13 @@ from .models import ContentIntakeSourceFileRecord, EducationalDocumentRevisionRe
 from .settings import CatalogSettings
 
 if TYPE_CHECKING:
+    from eom_kakao_archive_contracts.concepts import (
+        ConceptComposeRequest,
+        ConceptEvidenceContext,
+        ConceptPlan,
+        ConceptResult,
+    )
+
     from .kakao_concept_pages import PreparedConceptCapture, PreparedConceptPages
 
 RequesterRole = Literal["ADMIN", "EDITOR", "REVIEWER"]
@@ -97,7 +97,7 @@ class ConceptTextbookMaterial:
                 self.analysis.accepted_result.model_dump(exclude={"logical_name"})
             ),
             normalized_markdown=self.analysis.normalized_markdown,
-            analysis_text_sha256=sha256(self.analysis.approved_analysis_text.encode("utf-8")),
+            analysis_text_sha256=sha256_bytes(self.analysis.approved_analysis_text.encode("utf-8")),
         )
 
 
@@ -119,6 +119,9 @@ class ResolvedConceptTextbookKnowledge:
             raise KakaoArchiveError("KAKAO_CONCEPT_KNOWLEDGE_POINTER_INVALID")
 
     def worker_context(self) -> ConceptEvidenceContext:
+        from eom_kakao_archive_contracts import canonical_bytes, sha256
+        from eom_kakao_archive_contracts.concepts import ConceptEvidenceContext
+
         value = dict(
             schema_version="kakao-concept-evidence-context/1.0",
             evidence=[

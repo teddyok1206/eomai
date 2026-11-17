@@ -250,3 +250,12 @@ draft를 만든다. 평가 저장 직전까지 이 등록을 미루지 않는다
 stale baseline·다른 정책 거부·기존 auth/capacity 개수 보존을 확인한다. 이전 합성 이력을
 보존하기 위해 새 logical key만 fixture별로 scope하며 실제 Control/Artifact 코드는 그대로다.
 base PLATFORM은 기존 합성 control fixture의 metadata라 실제 시스템/모델 성공이 아니다.
+
+## 선택적 runtime의 import 경계
+
+metadata TaskService·교재 reader 조립·saved study 저장은 PDF/개념 worker wheel을 import할 때
+요구하지 않는다. 입력 발행·PLAN 준비·worker context 변환·개념 선택 검증과 해당 RPC 실행에서만
+그 adapter를 읽는다. 분석 텍스트 hash는 기존 core SHA-256 함수로 byte-identical하게 계산한다.
+별도 plugin/DI framework나 fallback 모델은 없다. installed wheel 검사는 선택적 Kakao/
+Playwright/Pillow import를 명시 거부한 새 process에서 기본 서버 import와 DISABLED 질문·
+출력 application 생성까지 확인한다. 실제 모델/교재 품질 검증과는 별도다.

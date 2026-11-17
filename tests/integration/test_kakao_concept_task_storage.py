@@ -13,7 +13,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from eom_catalog_contracts.kakao_archive_binding import KakaoBindingRetire
 from eom_catalog_contracts.kakao_concept_tasks import KakaoConceptCreate
-from eom_catalog_service import kakao_concept_task_service as task_module
+from eom_catalog_service import kakao_concept_publication as publication
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_concept_models import KakaoConceptPhaseRecord, KakaoConceptTaskRecord
@@ -1100,9 +1100,9 @@ def test_stop_after_publication_recovers_same_identity_without_rewriting_history
     service, actor, command, store = concept_store
     key = "concept-interrupted-" + uuid4().hex
     original = (
-        task_module.publish_kakao_concept_input
+        publication.publish_kakao_concept_input
         if phase == "intent"
-        else task_module.prepare_kakao_concept_plan
+        else publication.prepare_kakao_concept_plan
     )
     saved = []
 
@@ -1113,13 +1113,13 @@ def test_stop_after_publication_recovers_same_identity_without_rewriting_history
     name = "publish_kakao_concept_input" if phase == "intent" else "prepare_kakao_concept_plan"
     if phase == "plan":
         task = service.create_task(actor, command, idempotency_key=key).task
-    monkeypatch.setattr(task_module, name, stopped)
+    monkeypatch.setattr(publication, name, stopped)
     with pytest.raises(RuntimeError, match="stopped after publication"):
         if phase == "intent":
             service.create_task(actor, command, idempotency_key=key)
         else:
             service.prepare_plan(actor, command.source_binding_id, task.task_id)
-    monkeypatch.setattr(task_module, name, original)
+    monkeypatch.setattr(publication, name, original)
     if phase == "intent":
         repaired = service.create_task(actor, command, idempotency_key=key)
         assert repaired.replayed and repaired.task.intent == saved[0]

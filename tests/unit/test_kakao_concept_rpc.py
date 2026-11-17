@@ -89,7 +89,10 @@ def test_parse_dispatch_and_correlation(req, result, monkeypatch):
             "read_kakao_concept" if isinstance(req, ReadConceptRequest) else "list_kakao_concepts"
         )
         handler = Mock(return_value=result)
-        monkeypatch.setattr(dispatch, name, handler)
+        # Optional read adapters are imported only when this RPC executes.
+        from eom_catalog_service import kakao_concept_reads
+
+        monkeypatch.setattr(kakao_concept_reads, name, handler)
     assert parse_concept_request(req.model_dump(mode="json")) == req
     dispatch.dispatch_kakao_concept(service, req.model_dump(mode="json"), out)
     reply = parse_concept_reply(json.loads(out.getvalue()))

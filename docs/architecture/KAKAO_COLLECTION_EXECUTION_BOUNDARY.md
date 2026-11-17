@@ -80,6 +80,32 @@ owner이고 browser·로컬 workspace 동작은 Orchestrator adapter에 남는�
 
 ## 책임과 정본
 
+### 수락된 수집 결과에서 원본 자료 발행까지 — 2026-11-17
+
+1. 책임은 기존 collection attempt application과 Catalog의 원본/사진 발행 adapter다.
+   브라우저를 시작하거나 worker에게 DB/NAS 권한을 주지 않는다.
+2. 정본은 실제 attempt가 채택한 command/capability/result/report Artifact와 그 report의
+   exact 로컬 출력이다. caller가 전달한 worker identity를 새 권한으로 받지 않는다.
+3. 원래 run/task/attempt/snapshot/normalization ID를 그대로 사용한다. 원본·사진 발행과
+   source revision 채택은 기존 각 owner가 맡는다. 새 entity/table/queue는 없다.
+4. 현재 actor·owner·run pins와 accepted result 포인터를 I/O 전후 확인한다. 로컬 reader는
+   trusted Orchestrator 조립 지점이 제공하며 report member 밖의 path를 받지 않는다.
+   bytes/hash/size/JSON·원문 재파싱과 media decode는 기존 발행/수락 owner가 재검증한다.
+5. 주 접근은 attempt PK·unique(binding,capture_attempt)·source revision PK다.
+6. 기존 unique index와 report member map/사진 hash map을 사용한다. DB에 원문을 복제하지 않는다.
+7. 파일 검증/발행은 bounded O(bytes+rows+pixels), metadata lookup은 indexed O(1)이다.
+   같은 이미지의 여러 occurrence는 따로 남기되 같은 bytes의 발행은 재사용한다.
+8. 파일 I/O는 DB lock 밖에서 수행한다. source와 task 채택은 기존 짧은 두 transaction이며
+   분산 atomic이라고 부르지 않는다. source head precondition은 명시적 입력으로 고정한다.
+9. application→기존 Catalog Artifact/원본/사진 adapter와 contracts 방향이다. 새 cross-service
+   wire family는 없고 기존 CaptureResult/SourceAdmission을 사용한다.
+10. 같은 key·원래 source precondition의 완료 replay는 저장한 source admission을 재인가하고
+    task 채택만 복구한다. 로컬 파일·parser·decoder를 다시 호출하지 않는다. 중간 발행 후
+    중단은 같은 snapshot/normalization/media 발행 key를 재사용한다. 실패/취소 결과·다른
+    owner/key/precondition·철회된 원본을 거부하고 역사적 실패를 성공으로 고치지 않는다.
+11. 호출자가 직접 Artifact를 조립하는 대안은 authority 확인과 중단 복구가 분산되므로
+    작은 한 use case로 연결한다. 이 연결만으로 실제 collector·selector·AUTO를 활성화하지 않는다.
+
 ### 최초 browser 관측과 최신 상태 확인 분리 — 2026-11-17
 
 실제 수신물 진단에서 다운로드19:11 뒤 RENEW가 `browser_observed_at`을19:16으로 갱신해

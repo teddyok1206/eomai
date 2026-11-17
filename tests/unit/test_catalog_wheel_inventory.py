@@ -64,6 +64,7 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_contracts/resources/kakao-archive/collection-attempt-v1.schema.json",
             "eom_catalog_service/kakao_collection_attempt_models.py",
             "eom_catalog_service/kakao_collection_attempt_service.py",
+            "eom_catalog_service/kakao_capture_publication.py",
             "eom_catalog_contracts/kakao_collection_browser.py",
             "eom_catalog_contracts/resources/kakao-archive/collection-browser-v1.schema.json",
             "eom_catalog_service/kakao_collection_authorization.py",
@@ -314,7 +315,21 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                     f"names = {modules!r}; "
                     "loaded = [importlib.import_module(name) for name in names]; "
                     "assert all(module.__file__.startswith(sys.argv[1] + '/') "
-                    "for module in loaded)"
+                    "for module in loaded); "
+                    # Feature-off construction must also work, not only imports.
+                    # SQLite creates no schema/connection here; no live DB is used.
+                    "from sqlalchemy import create_engine; "
+                    "engine = create_engine('sqlite+pysqlite://'); "
+                    "questions = importlib.import_module("
+                    "'eom_catalog_service.kakao_question_composition'"
+                    ").build_kakao_question_application(engine); "
+                    "delivery = importlib.import_module("
+                    "'eom_catalog_service.kakao_delivery_composition'"
+                    ").build_kakao_delivery_application(engine, questions.questions, {}); "
+                    "assert questions.concept_coordinator is None; "
+                    "assert delivery.coordinator is None; "
+                    "assert delivery.application.studies is not None; "
+                    "engine.dispose()"
                 ),
                 str(wheel),
             ),

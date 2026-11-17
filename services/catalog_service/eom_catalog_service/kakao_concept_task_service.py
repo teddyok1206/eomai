@@ -40,7 +40,6 @@ from .kakao_archive_commands import (
 )
 from .kakao_archive_models import KakaoChannelBindingRecord
 from .kakao_concept_models import KakaoConceptPhaseRecord, KakaoConceptTaskRecord
-from .kakao_concept_publication import prepare_kakao_concept_plan, publish_kakao_concept_input
 from .kakao_question_models import KakaoQuestionRecord, KakaoQuestionRevisionRecord
 from .kakao_question_service import KakaoQuestionService, ResolvedKakaoQuestions
 from .kakao_room_models import KakaoRoomRecord
@@ -285,6 +284,8 @@ class KakaoConceptTaskService:
                 self.sources.validate_question_source_metadata(session, actor, selected.sources)
                 self._validate_intent(session, row, intent, require_adopted=False)
 
+        from .kakao_concept_publication import publish_kakao_concept_input
+
         pointer = publish_kakao_concept_input(
             self.artifacts, task_id=task.task_id, value=intent, authorize=authorize
         )
@@ -503,6 +504,8 @@ class KakaoConceptTaskService:
                 return authority.reauthorize(
                     session, operator_id=cast(str, actor.operator_id), work=work
                 )
+        from .kakao_concept_publication import prepare_kakao_concept_plan
+
         selected = self._selected(actor, intent.request)
         work = prepare_kakao_concept_plan(
             self.artifacts, intent=intent, selected=selected, authorize=authorize

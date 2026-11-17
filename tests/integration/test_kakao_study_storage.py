@@ -306,7 +306,7 @@ def test_concept_selection_pins_the_existing_result_and_reauthorizes(
     study_store, monkeypatch, case
 ):
     """Actual study DB/Artifact/packet; the completed-concept owner is a synthetic test port."""
-    import eom_catalog_service.kakao_study_service as module
+    import eom_catalog_service.kakao_concept_phase_results as module
 
     _, actor, service, command, concepts, _ = study_store
     _packet, selected = service.packets.resolve_student(

@@ -21,7 +21,6 @@ from eom_catalog_contracts.kakao_study_store import (
     StudyId,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_kakao_archive_contracts.concepts import ConceptComposition
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -36,7 +35,6 @@ from .kakao_archive_commands import (
     lock_kakao_intent,
     validate_kakao_idempotency_key,
 )
-from .kakao_concept_phase_results import read_kakao_concept_phase_result
 from .kakao_concept_task_service import KakaoConceptTaskService
 from .kakao_packet_service import AcceptedKakaoPacket, KakaoPacketService
 from .kakao_question_editing import packet_student_subset
@@ -234,6 +232,10 @@ class KakaoStudyService:
                 continue
             if self.concepts is None:
                 raise KakaoArchiveError("KAKAO_CONCEPT_RUNTIME_UNAVAILABLE")
+            from eom_kakao_archive_contracts.concepts import ConceptComposition
+
+            from .kakao_concept_phase_results import read_kakao_concept_phase_result
+
             authority = self.concepts.source_authority(actor, binding, edit.concept_task_id)
             completed = read_kakao_concept_phase_result(authority, "COMPOSE")
             if (

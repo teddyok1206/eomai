@@ -208,8 +208,8 @@ def test_changed_hash_conflict_and_link_immutability(study_export_store):
 
 def test_selected_textbook_crop_survives_full_saved_pdf_pipeline(study_export_store, monkeypatch):
     """Actual crop/child/PDF/Artifact; completed concept and Graph source reader are synthetic."""
+    import eom_catalog_service.kakao_concept_phase_results as owner
     import eom_catalog_service.kakao_study_pdf_inputs as adapter
-    import eom_catalog_service.kakao_study_service as owner
     from eom_catalog_service.kakao_concept_pages import (
         prepare_kakao_concept_captures,
         prepare_kakao_concept_pages,

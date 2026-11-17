@@ -12,6 +12,7 @@ from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttemp
 from eom_catalog_contracts.kakao_source import (
     CAPTURE_REF,
     SOURCE_RESOLUTION_REF,
+    KakaoCaptureAuthority,
     KakaoSourceAdmission,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -35,6 +36,11 @@ from .artifacts import CatalogArtifactService
 from .kakao_archive_authorization import KakaoArchiveError, authorize_kakao_actor
 from .kakao_archive_commands import kakao_command_sha256
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord as Capability
+from .kakao_capture_publication import (
+    AcceptedCapturePublication,
+    CaptureMemberReader,
+    publish_kakao_capture_source,
+)
 from .kakao_collection_attempt_models import KakaoCollectionAttemptRecord as Attempt
 from .kakao_collection_authorization import (
     authorize_kakao_collection_preparation,
@@ -546,6 +552,118 @@ class KakaoCollectionAttemptService:
             source.resolution.source_revision_id,
         )
         return source
+
+    def _publication_context(
+        self, actor: ActorContext, attempt_id: str
+    ) -> tuple[_CommandContext, ArtifactMemberPointer, ArtifactMemberPointer]:
+        with self._sessions.begin() as session:
+            owner = authorize_kakao_actor(
+                session,
+                actor,
+                PermissionKey.KAKAO_ARCHIVE_COLLECT,
+                now=datetime.now(UTC),
+                admin_only=True,
+            )
+            row = session.get(Attempt, attempt_id)
+            run = None if row is None else session.get(Run, row.run_id)
+            if (
+                row is None
+                or run is None
+                or run.owner_operator_id != owner
+                or row.state != "RESULT_ACCEPTED"
+                or row.result_status not in {"COMPLETED", "PARTIAL"}
+                or row.capability_sha256 is None
+                or row.report_sha256 is None
+                or row.result_artifact_id is None
+                or row.result_artifact_revision_id is None
+                or row.result_sha256 is None
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
+            context = self._context(session, row, row.capability_sha256)
+            result = _pointer(
+                row.result_artifact_id,
+                row.result_artifact_revision_id,
+                "result.json",
+                row.result_sha256,
+            )
+            report = _pointer(
+                row.result_artifact_id,
+                row.result_artifact_revision_id,
+                "room-report.json",
+                row.report_sha256,
+            )
+            validate_source_pointer_metadata_batch(session, (result, report))
+            return context, result, report
+
+    def publish_and_admit_capture_source(
+        self,
+        actor: ActorContext,
+        attempt_id: str,
+        *,
+        read_member: CaptureMemberReader,
+        idempotency_key: str,
+        expected_source_revision_id: str | None,
+        expected_resource_version: int,
+    ) -> AcceptedKakaoSource:
+        """Connect actual accepted output to originals/source/task with same-request recovery.
+
+        The caller pins the source precondition and supplies the trusted local
+        input reader. A public client/worker cannot choose this composition.
+        Completed replay never requires the worker workspace to still exist.
+        """
+        attempt = self.get_attempt(attempt_id)
+        prior = self._sources.completed_capture_source(
+            actor,
+            attempt.source_binding_id,
+            attempt.room_id,
+            capture_attempt_id=attempt_id,
+            idempotency_key=idempotency_key,
+            expected_source_revision_id=expected_source_revision_id,
+            expected_resource_version=expected_resource_version,
+        )
+        if prior is not None:
+            return self.admit_capture_source(
+                actor, prior.resolution.admission, idempotency_key=idempotency_key
+            )
+        expected = self._publication_context(actor, attempt_id)
+
+        def authorize() -> None:
+            if self._publication_context(actor, attempt_id) != expected:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID")
+
+        context, result_pointer, report_pointer = expected
+        assert context.command is not None
+        command = self._read(context.command, CaptureCommand)
+        capture = AcceptedCapturePublication(
+            authority=KakaoCaptureAuthority(
+                run_id=command.run_id,
+                attempt_id=attempt_id,
+                fence=command.execution.fence,
+                command_sha256=context.command.sha256,
+                capability_revision_id=command.capability_revision_id,
+                adapter_release_sha256=command.adapter_release_sha256,
+                command=context.command,
+                capability=context.capability,
+                capture_report=report_pointer,
+                capture_result=result_pointer,
+            ),
+            command=command,
+            capability=self._read(context.capability, CaptureCapability),
+            result=self._read(result_pointer, CaptureResult),
+            report=self._read(report_pointer, CaptureRoomReport),
+        )
+        try:
+            admission = publish_kakao_capture_source(
+                self.artifacts,
+                capture=capture,
+                read_member=read_member,
+                authorize=authorize,
+                expected_source_revision_id=expected_source_revision_id,
+                expected_resource_version=expected_resource_version,
+            )
+        except (ValueError, OSError):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID") from None
+        return self.admit_capture_source(actor, admission, idempotency_key=idempotency_key)
 
     def accept_source_revision(
         self, actor: ActorContext, attempt_id: str, source_revision_id: str

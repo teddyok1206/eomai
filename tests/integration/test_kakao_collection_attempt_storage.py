@@ -2,12 +2,17 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from io import BytesIO
 from threading import Barrier
 from time import sleep
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts.kakao_archive import (
+    KakaoAttachmentObservation,
+    KakaoMessageObservation,
+)
 from eom_catalog_contracts.kakao_snapshot import KakaoRoomSnapshot
 from eom_catalog_contracts.kakao_source import CAPTURE_REF, KakaoSourceAdmission
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
@@ -23,6 +28,7 @@ from eom_catalog_service.kakao_source_service import KakaoSourceService
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service.models import OperatorRecord
 from eom_kakao_archive_contracts.capture import (
+    CaptureAttachment,
     CaptureCommand,
     CaptureInventory,
     CaptureResult,
@@ -195,7 +201,7 @@ def command_input(attempt, reserved=None, **changes):
     return reserved, command, accepted, pointer, inventory_pointer
 
 
-def result_input(attempt, *, status="PARTIAL", error=None):
+def result_input(attempt, *, status="PARTIAL", error=None, images=()):
     reserved, command, cap, command_pointer, inventory_pointer = command_input(attempt)
     attempt.service.pin_command(
         reserved.attempt_id, command_pointer, inventory_pointer=inventory_pointer
@@ -206,6 +212,39 @@ def result_input(attempt, *, status="PARTIAL", error=None):
         b"2026-11-16 12:00:00,anonymous,same question\r\n"
     )
     now = datetime.now(UTC)
+    attachments, observations, image_members = [], [], {}
+    for row, raw_image in enumerate(images, 1):
+        from PIL import Image
+
+        with Image.open(BytesIO(raw_image)) as image:
+            width, height = image.size
+        observation = KakaoAttachmentObservation(
+            attachment_id="kakaoattachment_" + uuid4().hex,
+            attachment_revision_id="kakaoattachmentrev_" + uuid4().hex,
+            album_ordinal=1,
+            availability="available",
+            association="SNAPSHOT_ONLY",
+        )
+        member = local(f"outputs/photo-{row}.png", raw_image, "image/png")
+        attachments.append(
+            CaptureAttachment(
+                **observation.model_dump(),
+                row_ordinal=row,
+                quality_level="unknown",
+                member=member,
+                width_px=width,
+                height_px=height,
+                failure_reason=None,
+            )
+        )
+        observations.append(
+            KakaoMessageObservation(
+                row_ordinal=row,
+                kind="attachment",
+                attachments=(observation,),
+            )
+        )
+        image_members[member.relative_path] = raw_image
     norm = parse_kakao_csv(
         raw,
         source_binding_id=reserved.source_binding_id,
@@ -215,6 +254,7 @@ def result_input(attempt, *, status="PARTIAL", error=None):
         observed_at_utc=now,
         source_timezone="unknown",
         source_order="unknown",
+        observations=tuple(observations),
     )
     snapshot = KakaoRoomSnapshot(
         source_binding_id=reserved.source_binding_id,
@@ -248,10 +288,10 @@ def result_input(attempt, *, status="PARTIAL", error=None):
             unknown_sender_rows=2,
             first_source_at_utc=None,
             last_source_at_utc=None,
-            attachment_bubbles_observed=0,
+            attachment_bubbles_observed=len(attachments),
             attachment_inventory_complete=False,
             unresolved_attachment_bubbles=0,
-            attachments=(),
+            attachments=tuple(attachments),
             room_complete=False,
         )
         if status == "PARTIAL"
@@ -285,7 +325,218 @@ def result_input(attempt, *, status="PARTIAL", error=None):
         raw=raw,
         normalization=norm,
         snapshot=snapshot,
+        members={
+            "outputs/source.csv": raw,
+            "outputs/normalization.json": canonical_json_bytes(norm.model_dump(mode="json")),
+            **image_members,
+        },
     )
+
+
+def publish_and_admit(attempt, data, *, key=None, read=None):
+    return attempt.service.publish_and_admit_capture_source(
+        attempt.actor,
+        data.reserved.attempt_id,
+        read_member=read or (lambda member: data.members[member.relative_path]),
+        idempotency_key=key or "published-capture-" + uuid4().hex,
+        expected_source_revision_id=None,
+        expected_resource_version=0,
+    )
+
+
+def photo():
+    from PIL import Image
+
+    stream = BytesIO()
+    Image.new("RGB", (6, 8), "white").save(stream, format="PNG")
+    return stream.getvalue()
+
+
+def test_accepted_output_publishes_source_and_replays_without_local_files(attempt):
+    data = result_input(attempt, images=(photo(), photo()))
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-publication-replay-" + uuid4().hex
+    reads = []
+
+    def read(member):
+        reads.append(member.relative_path)
+        return data.members[member.relative_path]
+
+    accepted = publish_and_admit(attempt, data, key=key, read=read)
+    assert len(reads) == len(set(reads)) == 4
+    assert len(accepted.resolution.rows) == 2
+    attached = accepted.resolution.admission.attachments
+    assert len(attached) == 2
+    assert attached[0].attachment_id != attached[1].attachment_id
+    assert attached[0].original == attached[1].original
+    assert attached[0].media_receipt == attached[1].media_receipt
+    assert all(entry.quality == "UNKNOWN" for entry in attached)
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "LOCAL_ACCEPTED"
+        before = session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+    data.members.clear()
+
+    def missing(_member):
+        pytest.fail("completed replay must not read local inputs")
+
+    replay = publish_and_admit(attempt, data, key=key, read=missing)
+    assert replay.replayed and replay.resolution == accepted.resolution
+    with Session(attempt.engine) as session:
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == before
+
+
+def test_capture_publication_recovers_committed_source_before_task_adoption(attempt, monkeypatch):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-publication-adoption-stop-" + uuid4().hex
+    adopt = attempt.service.accept_source_revision
+
+    def stopped(*_args):
+        raise RuntimeError("synthetic stop after committed source")
+
+    monkeypatch.setattr(attempt.service, "accept_source_revision", stopped)
+    with pytest.raises(RuntimeError, match="committed source"):
+        publish_and_admit(attempt, data, key=key)
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+        before = session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+    monkeypatch.setattr(attempt.service, "accept_source_revision", adopt)
+    replay = publish_and_admit(attempt, data, key=key, read=lambda _m: pytest.fail("local read"))
+    assert replay.replayed
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "LOCAL_ACCEPTED"
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == before
+
+
+def test_capture_publication_recovers_original_publications_without_duplicate_bytes(
+    attempt, monkeypatch
+):
+    from eom_catalog_service import kakao_capture_publication as publication
+
+    data = result_input(attempt, images=(photo(), photo()))
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-original-publication-stop-" + uuid4().hex
+    original = publication.publish_kakao_media
+
+    def stopped(*_args, **_kwargs):
+        raise RuntimeError("synthetic stop after originals")
+
+    monkeypatch.setattr(publication, "publish_kakao_media", stopped)
+    with pytest.raises(RuntimeError, match="after originals"):
+        publish_and_admit(attempt, data, key=key)
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+        before = session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+    monkeypatch.setattr(publication, "publish_kakao_media", original)
+    accepted = publish_and_admit(attempt, data, key=key)
+    assert len(accepted.resolution.admission.attachments) == 2
+    with Session(attempt.engine) as session:
+        # Only one deduplicated photo blob and the new source resolution were added.
+        assert (
+            session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == before + 2
+        )
+
+
+def test_capture_publication_rechecks_revocation_after_local_read(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    with Session(attempt.engine) as session:
+        before = session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+
+    def read(member):
+        with Session(attempt.engine) as session, session.begin():
+            session.get(OperatorRecord, attempt.actor.operator_id).status = "DISABLED"
+        return data.members[member.relative_path]
+
+    with pytest.raises(KakaoArchiveError):
+        publish_and_admit(attempt, data, read=read)
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == before
+
+
+def test_completed_capture_publication_does_not_bypass_current_permissions(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-completed-current-owner-" + uuid4().hex
+    publish_and_admit(attempt, data, key=key)
+    with Session(attempt.engine) as session, session.begin():
+        session.get(OperatorRecord, attempt.actor.operator_id).status = "DISABLED"
+    with pytest.raises(KakaoArchiveError):
+        publish_and_admit(attempt, data, key=key, read=lambda _m: pytest.fail("local read"))
+
+
+@pytest.mark.parametrize("state", ["unaccepted", "failed", "other-owner"])
+def test_capture_publication_rejects_before_reading_unowned_or_failed_input(attempt, state):
+    data = result_input(
+        attempt,
+        status="FAILED" if state == "failed" else "PARTIAL",
+        error="UI_CHANGED" if state == "failed" else None,
+    )
+    if state != "unaccepted":
+        attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    actor = make_actor(attempt.engine) if state == "other-owner" else attempt.actor
+    with pytest.raises(KakaoArchiveError):
+        attempt.service.publish_and_admit_capture_source(
+            actor,
+            data.reserved.attempt_id,
+            read_member=lambda _m: pytest.fail("local read"),
+            idempotency_key="invalid-publication-" + uuid4().hex,
+            expected_source_revision_id=None,
+            expected_resource_version=0,
+        )
+
+
+def test_capture_publication_rejects_hash_mismatch_without_source_adoption(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    with pytest.raises(KakaoArchiveError, match="EVIDENCE_INVALID"):
+        publish_and_admit(attempt, data, read=lambda _m: b"tampered")
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "RUNNING"
+
+
+def test_capture_publication_competing_calls_share_originals_and_one_source(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-publication-race-" + uuid4().hex
+    barrier = Barrier(2)
+
+    def call(_):
+        barrier.wait(timeout=15)
+        return publish_and_admit(attempt, data, key=key)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        accepted = tuple(pool.map(call, range(2)))
+    assert accepted[0].resolution == accepted[1].resolution
+    assert accepted[0].manifest == accepted[1].manifest
+    with Session(attempt.engine) as session:
+        assert session.get(Task, data.reserved.task_id).state == "LOCAL_ACCEPTED"
+
+
+def test_completed_capture_publication_rejects_changed_key_and_precondition(attempt):
+    data = result_input(attempt)
+    attempt.service.accept_result(data.reserved.attempt_id, data.pointer)
+    key = "capture-publication-pinned-" + uuid4().hex
+    accepted = publish_and_admit(attempt, data, key=key)
+    for changed in (
+        dict(idempotency_key=key + "-other"),
+        dict(
+            expected_source_revision_id=accepted.resolution.source_revision_id,
+            expected_resource_version=1,
+        ),
+    ):
+        arguments = (
+            dict(idempotency_key=key, expected_source_revision_id=None, expected_resource_version=0)
+            | changed
+        )
+        with pytest.raises(KakaoArchiveError, match="IDEMPOTENCY_CONFLICT"):
+            attempt.service.publish_and_admit_capture_source(
+                attempt.actor,
+                data.reserved.attempt_id,
+                read_member=lambda _m: pytest.fail("local read"),
+                **arguments,
+            )
 
 
 def test_claim_is_durable_and_replays_same_identity_under_concurrency(attempt):

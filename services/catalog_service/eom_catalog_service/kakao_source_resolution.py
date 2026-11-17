@@ -18,6 +18,17 @@ from eom_catalog_service.kakao_csv_parser import parse_kakao_csv
 from eom_catalog_service.kakao_message_alignment import align_kakao_snapshots
 
 
+def capture_attachment_quality(
+    level: Literal["original_verified", "best_available", "thumbnail_only", "unknown"],
+) -> Literal["ORIGINAL", "BEST_AVAILABLE", "UNKNOWN"]:
+    """Translate the capture observation without upgrading an unverified image."""
+    if level == "original_verified":
+        return "ORIGINAL"
+    if level == "best_available":
+        return "BEST_AVAILABLE"
+    return "UNKNOWN"
+
+
 def validate_capture_source(
     admission: KakaoSourceAdmission,
     *,
@@ -157,12 +168,7 @@ def validate_capture_source(
             raise ValueError("KAKAO_ARCHIVE_ATTACHMENT_COVERAGE_INVALID")
         if attachment.original is not None:
             receipt = media_receipts[key]
-            expected_quality = {
-                "original_verified": "ORIGINAL",
-                "best_available": "BEST_AVAILABLE",
-                "thumbnail_only": "UNKNOWN",
-                "unknown": "UNKNOWN",
-            }[actual.quality_level]
+            expected_quality = capture_attachment_quality(actual.quality_level)
             if (
                 actual.member is None
                 or receipt.source_binding_id != admission.source_binding_id

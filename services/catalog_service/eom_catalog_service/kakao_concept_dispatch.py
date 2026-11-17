@@ -24,19 +24,12 @@ from eom_catalog_contracts.kakao_concept_rpc import (
     parse_concept_reply,
     parse_concept_request,
 )
-from eom_kakao_archive_contracts import canonical_bytes
 from eom_operator_identity import ActorContext, ActorSource, ActorType
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 
 from .artifacts import VerifiedArtifactMemberStream
 from .kakao_archive_authorization import KakaoArchiveError
-from .kakao_concept_reads import (
-    concept_summary,
-    list_kakao_concepts,
-    open_kakao_concept_page,
-    read_kakao_concept,
-)
 from .kakao_concept_workflow_submission import start_kakao_concept_task
 from .kakao_question_composition import KakaoQuestionApplication
 
@@ -46,6 +39,15 @@ def dispatch_kakao_concept(
     value: dict[str, object],
     output: BinaryIO,
 ) -> None:
+    from eom_kakao_archive_contracts import canonical_bytes
+
+    from .kakao_concept_reads import (
+        concept_summary,
+        list_kakao_concepts,
+        open_kakao_concept_page,
+        read_kakao_concept,
+    )
+
     operation = value.get("operation")
     if not isinstance(operation, str) or operation not in CONCEPT_OPERATIONS:
         raise ValueError("KAKAO_ARCHIVE_REQUEST_INVALID")

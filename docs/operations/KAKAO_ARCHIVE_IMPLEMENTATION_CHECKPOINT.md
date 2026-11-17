@@ -1,5 +1,42 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 수집 결과→원본 발행→task 채택 연결
+
+`KakaoCollectionAttemptService.publish_and_admit_capture_source`가 실제 RESULT_ACCEPTED의
+command/capability/result/report를 읽고, 기존 CSV·정규화·사진 publisher와 source/task 채택을
+잇는다. caller는 고정 source precondition/key와 trusted Orchestrator local reader만 제공한다.
+worker가 제시한 actor/path/권한을 사용하거나 새 source authority를 만들어 주지 않는다.
+
+- `completed_capture_source`는 unique(binding,capture_attempt)의 exact 완료 revision을
+  읽는다. 같은 요청 replay와 source commit 뒤 task 채택 전 중단은 로컬 파일/파싱/사진
+  decoder 없이 원래 admission을 현재 권한으로 재인가하고 task 연결만 복구한다.
+- 서로 다른 사진 occurrence가 같은 bytes를 사용하면 한 canonical blob을 참조한다.
+  실제 SHA/크기·media·원문 재파싱과 source ceiling 검사는 기존 owner가 유지한다.
+  UNKNOWN 화질/발신자·미확정 시간대·PARTIAL을 검증된 전체 수집으로 승격하지 않는다.
+- 전체 disposable DB **381 PASS**, 그 안의 수집 attempt 집중 **26 PASS**로
+  중간 발행/채택 직전 중단, 두 호출 경합, 다른 계정,
+  읽기 중 권한 철회·변조와 로컬 파일 없는 완료 replay를 확인했다. 원문·사진·Artifact
+  publisher와 source/task 저장은 실제 코드이고 브라우저 관측·입력/worker는 합성이다.
+- 별도 설치 wheel의 feature-off 검사에서 기존 개념 adapter의 eager import를 발견했다.
+  실제 입력 발행/worker context·추천 RPC/개념 선택 실행 경계로 import를 옮겼다.
+  선택적 Kakao/Playwright/Pillow를 명시 거부한 새 process에서 기본 server import와
+  DISABLED 질문·출력 application 생성까지 검증했다. 별도 plugin framework는 만들지 않았다.
+- 소스/계약/PDF·개념·경계·설치본 **567 PASS**, strict mypy8개 및 Ruff/format/diff PASS다.
+  초기 실패의 잘못된 테스트 IAM 필드와 이동한 adapter의 mock 위치를 고쳤고 원래 실패
+  로그는 보존했다. 권한 검사·수락 조건·의미 있는 negative case를 제거하지 않았다.
+
+증거: `staging/kakao-capture-publication-{db-corrected,optional-db-corrected,unit-verified,types-verified,context-final}-20261117.log`,
+설치본 최초 실패/수정 로그와 전체 DB 검증 로그다. 이 소스는 아직 운영 미설치이며 실제
+운영 source는 `7533ca8f…`/DB0097이다. 기존 GPU/슬롯/원본/실패 이력은 변경하지 않았다.
+
+다음 실제 경계는 장기 collection의 **수락된 run 기반 background source 권한**이다.
+현재 foreground source application은 실제 API session을 요구한다. 자동·주기 수집을 위해
+가짜 API actor/session이나 관리자 토큰을 만들지 않고, accepted run에서 읽은 owner와
+현재 계정·역할·binding/room·policy/adapter·attempt/fence pins를 재인가하는 명시적 경계를
+기존 source 저장/멱등 owner에 연결해야 한다. 이후 trusted local output reader/collector,
+실제 발신 방향·사진 occurrence 관측과 저장 질문·Studio PDF의 수직 검증을 이어간다.
+전체 방 주기 수집·실제 공유 모델은 아직 완료되지 않았으며 AUTO/continuation도 비활성이다.
+
 ## 2026-11-17 17:41 UTC 호환 설치와 개념 프리셋 복구
 
 실제 API·Web·Catalog/Runner 및 QUERY의 API-provider 호환 source는

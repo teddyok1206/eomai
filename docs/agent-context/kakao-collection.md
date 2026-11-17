@@ -59,6 +59,16 @@ source revision을 재조회한 다음 task만 채택한다. Artifact·원본 by
 않는다. 기존 source callback·현재 사용자·CAS 검사는 유지하며, 이 source 연결 자체는
 collector 실행/실제 카카오 검증이나 운영 source admission 활성화가 아니다.
 
+`publish_and_admit_capture_source`는 같은 owner의 실제 RESULT_ACCEPTED 결과를 읽고
+`kakao_capture_publication.py`에서 기존 CSV/정규화/사진 발행기를 호출한 뒤 위 입구로 잇는다.
+로컬 member reader는 trusted Orchestrator composition이 제공하며 public path 입력이 아니다.
+원래 source precondition/key는 고정 입력이다. `KakaoSourceService.completed_capture_source`가
+unique(binding,capture_attempt)의 exact 완료 revision을 읽어, 완료/채택 직후 중단 복구에서는
+workspace·parser·decoder를 다시 요구하지 않는다. 실제 actor·현재 source 권한과 원래
+capability/result/report pins는 계속 검사한다. 사진 binary는 재사용해도 attachment occurrence는
+각각 남기며 검증되지 않은 화질/발신 방향을 승격하지 않는다. 실제 collector 실행·수락은
+여전히 별도이며 이 source 연결로 AUTO나 로컬 샘플을 운영 등록하지 않는다.
+
 MANUAL history의 profile FK와 binding FK는 분리한다. 같은 owner가 실제 STOPPED·lock
 해제를 확인한 뒤 현재 binding만 바꿀 수 있고 과거 lease/수신 proof는 수정하지 않는다.
 다른 owner로의 profile 이전은 허용하지 않는다. 실제 channel identity 검사는 별도다.
