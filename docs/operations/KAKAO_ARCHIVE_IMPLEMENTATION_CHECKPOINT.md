@@ -1,5 +1,47 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 교과서 보강 호환 릴리스 — 설치 완료, 실제 샘플 진행 중
+
+운영 compatible set은 `4b066281b345a14ffeb6e5893b3895cc6e0f2c66`이다. 앞선 설치 전
+검사에서 OpenAPI snapshot과 새 definition의 admission 검사 누락을 각각 확인·수정했다.
+실패한 build 로그는 보존했으며 검사 자체를 완화하지 않았다. admission 집중49 PASS와
+API/Web의 새 clean-commit build-only·독립 설치 검사를 통과한 뒤 반영했다.
+
+- 기존 보호된 release operator context1.31로 정확한 DB0093→0096 전환·확인과 제한된
+  API/Catalog/HWPX role 조정을 수행했다. wheel/RECORD 검증 후 API·Web·Catalog/Runner·
+  chat와 QUERY의 호환 source/config pins를 기존 절차로 인계했다. QUERY 수치 설정은 보존했다.
+- 실제 claim/작업0을 확인하고 creative를 지원된 SIGINT로 drain했다. API/Catalog→chat worker→
+  chat owner/source socket→QUERY→Web/Runner 순서로 시작하고 creative도 재개했다.
+  API READY·HTTPS 로그인 페이지200을 확인했다. 이는 실제 HTTPS 사용자 로그인 검증이 아니다.
+- 고정 worker helper는 원 hash를 검증·보존한 뒤 새 source의 `b324019c…`로 반영했다.
+  PDF renderer `d18fa035…`와 PDF 활성 설정은 바꾸지 않았다. INDEX는 배포 전부터
+  failed/MainPID0이었고 기존 Invocation `aada2a6ef82043e4a15ae68f6dd73f20`와 설정·핀을
+  그대로 보존했다. 이 배포로 GPU 재개를 주장하지 않는다.
+- 운영에서 새 추천 definition과 지침/bundle 발행까지 진행했으나 새 role protocol을
+  draft 검사보다 늦게 등록하는 첫 설치 순서 문제로 `CONTROL_PROTOCOL_POINTER_MISSING`이
+  발생했다. 새 모델 실행0이며 추천은 비활성이다. 원래 발행 시각·baseline/key와 산출물은
+  보존하고 같은 요청으로 복구한다. source에서 등록을 기존 짧은 draft transaction의 검사
+  앞으로 옮겼다. 임시 DB의 순서 재현 검사1 PASS, 발행 집중 회귀8 PASS와 strict mypy·
+  Ruff/format PASS다.1건은8건에 포함된다. 이 source 후속의 설치 반영은 별도다.
+
+설치 증거는 `staging/kakao-concepts-{api-build,web-build,stage,drain,activate}-4b066281.log`,
+프리셋 baseline/발행 실패는 `staging/kakao-concepts-control-{baseline,publish}-4b066281.log`다.
+보호된 배포 receipt와 기존 config/helper bytes도 해당 release owner 아래 보존했다.
+
+사용자 요청의 실제 CSV/사진 샘플은 아직 정식 accepted source/question으로 등록된 자료가
+아니다. 현재 production composition의 source admission은 비활성이므로, 이 샘플을 가짜
+capture authority나 synthetic question으로 등록해 모델 성공을 만들지 않는다. 원본 수락
+연결과 실제 질문→공유 슬롯→정식 PDF는 여전히 남은 gate다. 우선 실제 사용자 로그인으로
+현재 출제와 동일한 공식 Catalog Graph/policy·accepted textbook reader를 사용해 관련
+통합과학 근거와 원본 PNG를 조회하는 **명시적 로컬 샘플**을 준비했다. 세션/권한을 만들거나
+저장하지 않고 현재 인증과 원 수신 CSV hash를 확인하며 읽고 해당 검증 세션만 종료한다.
+그 결과를 정식 저장 질문/Studio export나 실제 모델 검증으로 확대 보고하지 않는다.
+
+최종 교과서 보강 샘플 PDF·링크는 아직 미완료다. 첫 질문의 사진 미확보, 두 사진의 수동 내용
+대조와 provider occurrence 미확정, 원 시각대 미확정은 보존한다. 적절한 지구과학 근거가
+없으면 통합과학의 관련 기초 개념만 제시하고 정답 근거인 것처럼 쓰지 않는다. README 최종
+정리와 실제 전체 방/주기 수집도 남아 있으며 원래 goal을 완료 처리하지 않았다.
+
 ## 2026-11-17 실제 빌드에서 API 명세 정렬
 
 `b3749ce0`의 API build-only 검사가 새 study/concept 경로와 과거 OpenAPI snapshot의 차이로

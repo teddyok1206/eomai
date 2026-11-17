@@ -241,6 +241,11 @@ row lock 밖이다. 마지막 adoption은 기존 짧은 Control lock 아래 base
 NON_LIVE/CONTRACT_VALIDATION 보고는 typed policy/정의·bundle/capacity 호환성만 증명하며
 모델 실행·교재 품질/실제 페이지 관측 증거가 아니다. 운영 canary는 별도다.
 
+첫 설치에서 draft 검사는 role protocol pointer도 해석한다. 따라서 bootstrap은 기존
+짧은 Control draft transaction에서 canonical role schema hash를 등록·대조한 **뒤**
+draft를 만든다. 평가 저장 직전까지 이 등록을 미루지 않는다. 존재하는 다른 hash를
+덮어써 통과시키지 않는다. 실제 운영 설치/발행 상태는 체크포인트와 installed receipt를 본다.
+
 `test_kakao_concept_bootstrap.py`의 임시 DB 검사는 독립 publisher 경쟁·같은 요청 replay,
 stale baseline·다른 정책 거부·기존 auth/capacity 개수 보존을 확인한다. 이전 합성 이력을
 보존하기 위해 새 logical key만 fixture별로 scope하며 실제 Control/Artifact 코드는 그대로다.

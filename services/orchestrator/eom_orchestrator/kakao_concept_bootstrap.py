@@ -123,6 +123,11 @@ def _draft(
     with sessions.begin() as session:
         session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
         base, _ = _baseline(session, base_revision_id, base_sha256)
+        # A first installation has no role registration yet. Draft validation
+        # resolves this pointer, so register it before creating the draft.
+        ensure_protocol_version(
+            session, CONCEPT_ROLE_PROTOCOL, role_schema_bundle_hash(CONCEPT_ROLE_PROTOCOL)
+        )
         source = next(policy for policy in base.role_policies if policy.role == "support")
         policies = [
             {
@@ -336,9 +341,6 @@ def _publish_kakao_concepts(
                 select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID))
             )
             _baseline(session, base_preset_revision_id, base_preset_sha256)
-            ensure_protocol_version(
-                session, CONCEPT_ROLE_PROTOCOL, role_schema_bundle_hash(CONCEPT_ROLE_PROTOCOL)
-            )
             evaluation = record_execution_preset_evaluation(
                 session, document=report, report_artifact=published.pointer, created_by=actor_id
             )

@@ -125,6 +125,34 @@ def test_independent_publishers_adopt_one_release_and_evidence(bootstrap_store):
         )
 
 
+def test_first_publication_registers_role_before_draft_validation(bootstrap_store, monkeypatch):
+    value, _key, options = bootstrap_store
+    registered = []
+    register = module.ensure_protocol_version
+    draft = module.create_execution_preset_draft
+
+    def record_registration(session, version, bundle_hash):
+        result = register(session, version, bundle_hash)
+        registered.append((version, bundle_hash))
+        return result
+
+    def require_registered_draft(session, **values):
+        # The shared fixture already has the role registered. Assert the actual
+        # first-installation ordering without deleting its retained history.
+        assert registered == [
+            (
+                module.CONCEPT_ROLE_PROTOCOL,
+                module.role_schema_bundle_hash(module.CONCEPT_ROLE_PROTOCOL),
+            )
+        ]
+        return draft(session, **values)
+
+    monkeypatch.setattr(module, "ensure_protocol_version", record_registration)
+    monkeypatch.setattr(module, "create_execution_preset_draft", require_registered_draft)
+    result = module.bootstrap_kakao_concepts(value.engine, **options)
+    assert result.preset_revision_id
+
+
 def test_stale_baseline_hash_refuses_before_artifact_publication(bootstrap_store):
     value, _key, options = bootstrap_store
     before = counts(value.engine)
