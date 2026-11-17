@@ -41,8 +41,9 @@ release context1.29는 exact0093→0094/동일 head만 허용한다. 옛 context
 
 ## 아직 실제로 연결되지 않은 것
 
-- 추천 요청의 공개 API·화면 시작/상태/history와 자동 단계 진행 coordinator.
-- 실제 preset/지침 발행·공유 슬롯 model run, PLAN→GraphRAG→COMPOSE 진행 coordinator.
+- 추천 요청의 공개 API·화면 시작/상태/history.
+- 실제 preset/지침 발행·공유 슬롯 model run. 자동 continuation source는 아래와 같으며
+  실제 운영 activation은 별도다.
 - 실제 COMPOSE 완료 뒤 추천 block/capture의 화면 선택·이미지와 원본 capture 발행.
   saved-study 공개 저장·편집/PDF source 연결은 [설명 편집](kakao-study-editing.md)에 있다.
 - 실제 카카오 occurrence 수락·전체 방 주기 수집과 마지막 실제 샘플 PDF.
@@ -113,7 +114,7 @@ accepted source authority가 실제 저장 owner를 보유하므로 HTTP 만료 
 검사는 실제 Job/Artifact 결과→등록된 PNG→COMPOSE 저장/서비스 재구성·logout 뒤 동일 Workflow
 제출을 검증하지만 PLAN 출력·Graph/교재 discovery는 합성이다. 모델/실제 교재 검색 성공은 아니다.
 
-다음 구현은 **실행 preset/자동 coordinator·추천 공개 API→실제 COMPOSE→화면에서 선택·새 PDF**에
+다음 구현은 **실행 preset·추천 공개 API→실제 COMPOSE→화면에서 선택·새 PDF**에
 집중한다. 실제 CSV/사진 샘플의 관련 교과서 보강·최종 PDF 링크도 남아 있다. 새 queue/독립
 Codex 프로세스를 만들지 않는다.
 
@@ -164,3 +165,34 @@ UID/systemd·실제 카카오·실제 모델/교재 성공으로 보고하지 �
 source는 [설명 편집](kakao-study-editing.md)이며 실제 샘플·운영 배포는 후속이다.
 context1.31은 target0096 및 명시적0093/94/95에서만
 전환/동일 head 확인을 지원한다. GPU/기존 슬롯·운영 DB에는 이 source 검사로 영향을 주지 않는다.
+
+## 완료 PLAN의 자동 continuation — source 연결, 기본 비활성
+
+`start_kakao_concept_task`는 실제 API actor의 intent→PLAN 입력 준비→기존 공개 Workflow
+제출을 한 use case로 연결한다. 같은 POST/key는 같은 phase/Workflow/command다. 제출한
+PLAN replay는 원 preset을 읽고 current로 대체하지 않는다. 공통 `validated_preset`을 재사용한다.
+새 source-owned plan은 공통 resolver의 `read_current_execution_preset`으로 읽은 released
+revision을 pin한다. Catalog에는 preset UPDATE 권한을 주지 않으며 기존 관리자/다른 실행의
+`lock_current_execution_preset`은 원 잠금을 유지한다. source read와 설정 변경을 하나의
+atomic transaction으로 직렬화하는 기능은 아니다.
+
+`KakaoConceptCoordinator`는 완료 PLAN과 아직 미제출인 COMPOSE의 작은 candidate를 읽는다.
+한 tick은 한 task이며 process-local cursor/tick lock은 영속 queue/실행 승인/실패 상태가 아니다.
+실제 next-phase 단일 제출은 기존 unique phase·Artifact idempotency·Workflow/command owner다.
+current owner/source를 재확인하고 검증된 PLANNED만 교재 reader→COMPOSE 준비·제출로 잇는다.
+NEEDS_INPUT·실패/취소를 다음 모델이나 새 task로 재실행하지 않는다. 완료 자료도 바꾸지 않는다.
+
+`EOM_KAKAO_CONCEPT_MODE=SHARED`가 명시된 composition만 별도 continuation thread를 만든다.
+기본 DISABLED이며 잘못된 mode는 거부한다. 긴 교재 I/O가 API/Runner source authorization
+socket을 막지 않는다. 종료/예외에서도 stopping event를 먼저 set하고 thread 종료를 기다린다.
+설치/발행/모델 실행 성공은 source mode의 존재와 다르다.
+
+두 phase 사이 current preset이 바뀌면 초기 구현은 원 pin과의 불일치로 명시 거부한다.
+기존 PLAN replay는 가능하지만 새 COMPOSE가 최신 설정을 묵시 채택하지 않는다. 실행 중
+preset 변경을 자유롭게 흡수하는 기능으로 보고하지 않는다. 일반 collection AUTO와 별개다.
+
+`test_kakao_concept_continuation.py`와 storage의 continuation 검사는 실제 intent/Job 결과/
+Artifact·교재 PNG→COMPOSE Workflow/command, logout/서비스 재구성·두 coordinator 경쟁과
+current preset 변경·원래 실행 replay/계정 중지·index-capable bounded query를 확인한다.
+교재 discovery/PLAN 내용은 합성이고 모델/운영 성공이 아니다. guarded DB는 이전 합성 이력을
+유지하므로 새 fixture의 query만 범위 제한하며 실제 source/adoption/claim은 우회하지 않는다.

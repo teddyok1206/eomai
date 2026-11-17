@@ -1,6 +1,7 @@
 """Compose accepted-content reads; actual collection admission remains disabled here."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Engine
 
@@ -13,6 +14,9 @@ from .kakao_question_reads import KakaoQuestionReads
 from .kakao_question_service import KakaoQuestionService
 from .kakao_source_service import KakaoSourceService
 
+if TYPE_CHECKING:
+    from .kakao_concept_continuation import KakaoConceptCoordinator
+
 
 @dataclass(frozen=True, slots=True)
 class KakaoQuestionApplication:
@@ -20,9 +24,14 @@ class KakaoQuestionApplication:
     reads: KakaoQuestionReads
     composer: KakaoQuestionComposeService | None = None
     concepts: KakaoConceptTaskService | None = None
+    concept_coordinator: "KakaoConceptCoordinator | None" = None
 
 
-def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication:
+def build_kakao_question_application(
+    engine: Engine, *, concept_mode: str = "DISABLED"
+) -> KakaoQuestionApplication:
+    if concept_mode not in {"DISABLED", "SHARED"}:
+        raise ValueError("KAKAO_CONCEPT_MODE_INVALID")
     artifacts = CatalogArtifactService(engine)
 
     def capture_not_configured(*_args: object) -> None:
@@ -35,18 +44,25 @@ def build_kakao_question_application(engine: Engine) -> KakaoQuestionApplication
     )
     questions = KakaoQuestionService(engine, artifacts=artifacts, sources=sources)
     knowledge = KakaoConceptKnowledgeReader(engine, artifacts.settings)
+    concepts = KakaoConceptTaskService(
+        engine,
+        artifacts=artifacts,
+        questions=questions,
+        sources=sources,
+        scope_provider=knowledge.capture_authoring_scope,
+        knowledge_reader=knowledge,
+    )
+    coordinator = None
+    if concept_mode == "SHARED":
+        from .kakao_concept_continuation import KakaoConceptCoordinator
+
+        coordinator = KakaoConceptCoordinator(concepts)
     return KakaoQuestionApplication(
         questions,
         KakaoQuestionReads(engine, questions=questions, sources=sources, artifacts=artifacts),
         KakaoQuestionComposeService(
             engine, questions=questions, sources=sources, artifacts=artifacts
         ),
-        KakaoConceptTaskService(
-            engine,
-            artifacts=artifacts,
-            questions=questions,
-            sources=sources,
-            scope_provider=knowledge.capture_authoring_scope,
-            knowledge_reader=knowledge,
-        ),
+        concepts,
+        coordinator,
     )

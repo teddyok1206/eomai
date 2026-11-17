@@ -38,5 +38,6 @@ source를 확인한다. 표시할 관련 개념의 실제 추천/선택·이미�
   child PDF→현재 권한 다운로드·수정/재조회/서비스 재구성·단일 렌더. 질문/메모는 합성이다.
 - `kakao_study_editor_browser_checks.mjs`: 실제 Chromium의 편집·응답 유실 replay·새 revision·
   PDF 재조회·safe DOM·작은 화면·늦은 다른 학생 응답 폐기. 실제 Kakao/교재/모델이 아니다.
-- 실제 추천 preset/자동 PLAN→COMPOSE·모델 완료본의 화면 선택/이미지·최종 실제 샘플·
+- 자동 PLAN→COMPOSE continuation source는 [개념 추천](kakao-concepts.md)에 있고 기본 비활성이다.
+  실제 추천 preset/모델 실행·완료본의 화면 선택/이미지·최종 실제 샘플·
   호환 운영 배포는 남아 있다. 일반 수집/질문 구성/PDF는 비AI 구조를 유지한다.

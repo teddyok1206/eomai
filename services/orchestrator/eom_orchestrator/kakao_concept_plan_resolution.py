@@ -16,7 +16,7 @@ from .control_models import (
     WorkerCapacityPolicyRevisionRecord,
 )
 from .control_service import ControlPlaneError, capacity_worker_role_clause
-from .execution_resolver import lock_current_execution_preset
+from .execution_resolver import read_current_execution_preset
 
 
 def validate_kakao_concept_execution_plan(
@@ -94,7 +94,7 @@ def resolve_kakao_concept_plan(
                 "CONTROL_PLAN_CONFLICT", "concept plan already pins other input"
             )
         return plan
-    preset = lock_current_execution_preset(
+    preset = read_current_execution_preset(
         session,
         preset_key="kakao-concepts",
         workflow_role_schema_version=workflow_role_schema_version,

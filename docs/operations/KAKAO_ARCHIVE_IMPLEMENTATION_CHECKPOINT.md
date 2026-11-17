@@ -1,5 +1,55 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-17 완료 PLAN→공식 교재→COMPOSE 자동 continuation — source 검증, 운영 미활성
+
+source `d0c2f513431f0051e59c952d0fd4543bf467184a` 후속이다. 실제 actor의 task 수락·PLAN
+입력 준비·기존 Workflow 제출을 하나의 start use case로 연결했고, 완료 PLAN 뒤 교재 읽기와
+COMPOSE 제출을 background continuation으로 이었다. **추천 공개 API/화면·실제 preset 발행/
+공유 모델 실행·교재 보강 최종 샘플과 운영 배포는 아직 남았다.** 전체 goal 완료가 아니다.
+
+- 설계17절을 먼저 작성했다. 새 DB/queue/worker protocol은 없고 기존 task/phase·Workflow/
+  Job/Artifact owner를 쓴다. 작은 candidate/metadata와 process-local cursor/tick lock만 추가했다.
+  긴 교재/PNG I/O는 transaction 밖이며 API/source-authorization socket과 다른 thread다.
+- 저장한 실제 owner/current 권한으로 이어가며 로그아웃한 HTTP session을 가장하지 않는다.
+  PLANNED만 다음 단계로 보낸다. NEEDS_INPUT/FAILED/CANCELLED를 새 모델/identity로 자동
+  재실행하거나 과거 결과를 고치지 않는다. GET/완료 replay도 새 계산을 시작하지 않는다.
+- 첫 PLAN replay는 원래 definition/preset을 읽고 공통 `validated_preset`을 재사용한다.
+  두 phase 사이 current preset이 달라지면 초기 구현은 명시 거부하며 최신 모델을 몰래 쓰지
+  않는다. 이 current 변경 흡수는 지원한다고 보고하지 않으며 activation 때 pin을 확인한다.
+- 운영 권한의 정적 대조에서 Catalog의 SELECT-only preset 경로가 UPDATE 권한도 요구하는
+  행 잠금을 호출함을 발견했다. 공통 resolver의 같은 검증 body에 명시적 read/lock 인터페이스를
+  두고, 이 source-owned plan만 읽은 시점의 released revision을 pin하도록 수정했다. 기존
+  관리자/다른 실행의 row lock은 그대로다. Catalog 권한·DB schema를 넓히지 않았다. SQL과
+  기존 잠금 회귀를 검사했으며 **실제 운영에서 발생한 오류를 복구했다고 보고하지 않는다**.
+- composition은 `EOM_KAKAO_CONCEPT_MODE=SHARED`에서만 continuation을 만들고 default는
+  DISABLED다. 일반 collection AUTO와 별개다. 종료/예외 시 stopping event를 먼저 set해
+  resident thread를 멈춘 뒤 engine을 정리하는 회귀도 추가했다. 실제 운영 mode는 변경하지 않았다.
+- guarded disposable DB 전체 **351 PASS**, 공통 preset reader 재사용 후 최종 집중 **8 PASS/
+  343 deselected**다. 두 검사는 중복되므로 합산하지 않는다. 실제 완료 Job/result Artifact와
+  PNG→COMPOSE 입력/Workflow/command, logout/서비스 재구성·독립 coordinator 두 개의 동시
+  DB 세션 경쟁·단일 command, 계정 중지/설정 변경 거부·원 PLAN replay와 새 PLAN start를
+  검사했다. source/Workflow/claim은 실제 DB이며 **PLAN 내용과 교재 discovery는 합성**이다.
+  별도 OS UID/systemd 프로세스·실제 모델/교재 검증이라고 확대하지 않는다.
+- 후보 조회는 결과 본문을 읽지 않는 작은 sparse join과 LIMIT1이다. 기존 PK/FK/unique
+  index를 사용하는 경로를 EXPLAIN으로 검사했다. enable_seqscan=off인 시험이므로 운영 planner
+  선택/대량 throughput을 입증한 것은 아니다. 현재 query는 history에 선형 비용을 가질 수 있다.
+- 최종 source **751 PASS**, 독립 설치 wheel **10 PASS**, strict mypy6개·Ruff/format/diff
+  PASS와 문맥/wire **16 PASS**다. 공통 resolver/모델 선택·다른 자료 학습 회귀를 포함했다.
+  최초 DB3 실패는 잘못된 계정 fixture column과 이전 합성
+  이력이 남는 DB에서 전역 IDLE/선택 task를 가정한 검사였다. fixture query만 범위 제한해
+  고쳤으며 실제 source/claim/production selector는 완화하지 않았다. read 경로 변경 후 unit13은
+  다른 purpose의 ‘FOR UPDATE 필수’ fixture를 재사용한 가정이었다. 해당 purpose fixture만
+  read/lock 양쪽을 검사하도록 고치고 최종751을 재실행했다. 초기 실패 로그도 보존했다.
+
+증거: `staging/kakao-concept-continuation-{final-regression,full-db,read-preset-db,
+read-preset-wheel,read-preset-types,final-context-wire}-20261117.log`.
+실제 모델/GPU/운영 migration·배포·카카오 조작은0이다.
+다음은 공개 추천 시작/조회·완료 개념/원본 페이지의 화면 선택을 연결하고 실제 shared slot과
+교재로 샘플을 생성하는 것이다. 사용자 수신 CSV/사진·원 시각의 미확인 상태를 유지하며,
+관련 있는 기초 개념만 붙이고 심화 내용의 근거를 발명하지 않는다. 최종 PDF를 직접 확인하고
+링크를 전달한 뒤 README·호환 운영 배포/실제 검증을 마무리한다. 전체 방 주기 수집과 실제
+카카오 occurrence 확인도 원래 goal에 남아 있고, 현재 AUTO 활성화를 선언하지 않는다.
+
 ## 2026-11-17 개념·설명 편집 화면→공개 저장·수정→PDF 연결 — source 검증, 운영 미배포
 
 source `6766c52145630b66e064983699fe350e23a81e83` 후속이다. 기존 Catalog delivery socket과

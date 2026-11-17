@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from eom_orchestrator.control_models import WorkerCapacityPolicyRevisionRecord
+from eom_orchestrator.control_models import (
+    ExecutionPresetRecord,
+    WorkerCapacityPolicyRevisionRecord,
+)
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.kakao_concept_plan_resolution import (
     resolve_kakao_concept_plan,
@@ -46,7 +49,14 @@ class Session(_Session):
     def scalar(self, statement):
         if self.existing is not None:
             return self.existing
-        return super().scalar(statement)
+        self._scalar_calls += 1
+        # This purpose uses the public read-only resolver; the other purpose's
+        # fixture deliberately requires FOR UPDATE and remains unchanged.
+        return (
+            self.logical
+            if statement.column_descriptions[0]["entity"] is ExecutionPresetRecord
+            else None
+        )
 
 
 def resolve(session, **changes):
@@ -61,7 +71,7 @@ def resolve(session, **changes):
     return resolve_kakao_concept_plan(session, **(values | changes))
 
 
-def test_actual_locked_preset_and_shared_capacity_produce_one_exact_phase_plan():
+def test_actual_published_preset_and_shared_capacity_produce_one_exact_phase_plan():
     session = Session()
     plan = resolve(session)
     assert (
@@ -79,6 +89,35 @@ def test_actual_locked_preset_and_shared_capacity_produce_one_exact_phase_plan()
     replay = resolve(replay_session)
     assert replay == plan and not replay_session.added
     assert replay_session._scalar_calls == 0  # No mutable current preset is substituted.
+
+
+def test_source_owner_reads_without_preset_mutation_privilege_and_old_lock_is_preserved():
+    from eom_orchestrator.execution_resolver import (
+        lock_current_execution_preset,
+        read_current_execution_preset,
+    )
+    from sqlalchemy.dialects import postgresql
+
+    def query_for(resolver):
+        session = Session()
+        statements = []
+        original = session.scalar
+
+        def observed(statement):
+            statements.append(str(statement.compile(dialect=postgresql.dialect())))
+            return original(statement)
+
+        session.scalar = observed
+        value = resolver(
+            session,
+            preset_key="kakao-concepts",
+            workflow_role_schema_version="workflow-role/1.41.0",
+        )
+        assert value == ExecutionPresetRevision.model_validate(session.revision.canonical_document)
+        return statements[0]
+
+    assert "FOR UPDATE" not in query_for(read_current_execution_preset)
+    assert "FOR UPDATE" in query_for(lock_current_execution_preset)
 
 
 @pytest.mark.parametrize(

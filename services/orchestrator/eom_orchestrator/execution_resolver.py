@@ -149,13 +149,45 @@ def lock_current_execution_preset(
     workflow_role_schema_version: str,
 ) -> ExecutionPresetRevision:
     """Select the standard current pin and hold it stable through workflow admission."""
+    return _current_execution_preset(
+        session,
+        preset_key=preset_key,
+        workflow_role_schema_version=workflow_role_schema_version,
+        lock=True,
+    )
 
-    logical = session.scalar(
+
+def read_current_execution_preset(
+    session: Session,
+    *,
+    preset_key: str,
+    workflow_role_schema_version: str,
+) -> ExecutionPresetRevision:
+    """Pin the released value at this read without granting a source owner preset-update rights."""
+    return _current_execution_preset(
+        session,
+        preset_key=preset_key,
+        workflow_role_schema_version=workflow_role_schema_version,
+        lock=False,
+    )
+
+
+def _current_execution_preset(
+    session: Session,
+    *,
+    preset_key: str,
+    workflow_role_schema_version: str,
+    lock: bool,
+) -> ExecutionPresetRevision:
+    query = (
         select(ExecutionPresetRecord)
         .where(ExecutionPresetRecord.preset_key == preset_key)
-        .with_for_update()
         .execution_options(populate_existing=True)
     )
+    if lock:
+        query = query.with_for_update()
+
+    logical = session.scalar(query)
     if logical is None or logical.state != "ACTIVE" or logical.current_revision_id is None:
         raise ControlPlaneError(
             "CONTROL_PRESET_NOT_PUBLISHED", "execution preset has no published revision"

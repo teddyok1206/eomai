@@ -682,9 +682,8 @@ def _complete_synthetic_concept_plan(value):
                 )
 
 
-def test_actual_phase_result_to_persisted_composition_and_restart_replay(
-    concept_execution_store, monkeypatch
-):
+@pytest.fixture
+def concept_composition_store(concept_execution_store):
     """Real DB/Artifact chain and PNG decode; Graph ports and PLAN content are synthetic."""
     import tempfile
     from dataclasses import replace
@@ -694,7 +693,6 @@ def test_actual_phase_result_to_persisted_composition_and_restart_replay(
     from eom_catalog_service.kakao_concept_knowledge import KakaoConceptKnowledgeReader
     from eom_catalog_service.kakao_concept_pages import prepare_kakao_concept_pages
     from eom_catalog_service.kakao_concept_phase_results import read_kakao_concept_phase_result
-    from eom_protocol.artifact_members import ArtifactMemberPointer
 
     from tests.unit.test_kakao_concept_pages import knowledge
 
@@ -778,6 +776,16 @@ def test_actual_phase_result_to_persisted_composition_and_restart_replay(
         )
     )
     value.service.knowledge_reader = reader
+    return value, reader, replacement
+
+
+def test_actual_phase_result_to_persisted_composition_and_restart_replay(
+    concept_composition_store,
+):
+    from eom_protocol.artifact_members import ArtifactMemberPointer
+
+    value, reader, replacement = concept_composition_store
+    artifacts = value.service.artifacts
     work = value.service.prepare_compose(
         value.actor, value.work.source_binding_id, value.work.task_id
     )
@@ -846,6 +854,245 @@ def test_actual_phase_result_to_persisted_composition_and_restart_replay(
     assert first.workflow_id == replay.workflow_id and first.command_id == replay.command_id
     assert first.workflow_id != value.submitted.workflow_id
     reader.retrieve.assert_called_once()
+
+
+@pytest.fixture
+def concept_continuation_store(concept_composition_store, monkeypatch):
+    from eom_catalog_service import kakao_concept_continuation as module
+
+    value, *_ = concept_composition_store
+    original = module.ready_kakao_concept_continuations
+    # The guarded DB retains earlier synthetic histories. Limit this run to its fixture;
+    # source authority, actual phase adoption and Workflow/command claims remain real.
+    monkeypatch.setattr(
+        module,
+        "ready_kakao_concept_continuations",
+        lambda *, after=None: original(after=after).where(
+            KakaoConceptTaskRecord.task_id == value.work.task_id
+        ),
+    )
+    return concept_composition_store
+
+
+def test_automatic_continuation_survives_logout_and_restart_without_repeating_models(
+    concept_continuation_store,
+):
+    from eom_catalog_service.kakao_concept_continuation import KakaoConceptCoordinator
+
+    value, reader, _original = concept_continuation_store
+    with Session(value.engine) as session, session.begin():
+        session.execute(
+            update(ApiSessionRecord)
+            .where(ApiSessionRecord.api_session_id == value.actor.session_id)
+            .values(revoked_at=datetime.now(UTC))
+        )
+    coordinator = KakaoConceptCoordinator(value.service)
+    result = coordinator.advance_once()
+    assert result.state == "SUBMITTED", result
+    assert (
+        result.task_id == value.work.task_id and result.workflow_id != value.submitted.workflow_id
+    )
+    assert coordinator.advance_once().state == "IDLE"
+    assert KakaoConceptCoordinator(value.service).advance_once().state == "IDLE"
+    reader.retrieve.assert_called_once()
+    reader.prepare_pages.assert_called_once()
+    with Session(value.engine) as session:
+        parent = session.get(WorkflowInstanceRecord, value.submitted.workflow_id)
+        child = session.get(WorkflowInstanceRecord, result.workflow_id)
+        phase = session.get(KakaoConceptPhaseRecord, (value.work.task_id, "COMPOSE"))
+        assert parent.state == "COMPLETED" and child.state == "REQUESTED"
+        assert phase.workflow_id == child.workflow_id
+        assert child.created_actor_id == value.actor.operator_id
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == child.workflow_id)
+            )
+            == 1
+        )
+
+
+def test_two_continuation_processes_submit_one_child_and_one_command(
+    concept_continuation_store,
+    monkeypatch,
+):
+    from eom_catalog_service import kakao_concept_continuation as module
+
+    value, _reader, _original = concept_continuation_store
+    original = module.read_kakao_concept_phase_result
+    barrier = Barrier(2)
+
+    def both_selected(*args):
+        barrier.wait(timeout=10)
+        return original(*args)
+
+    monkeypatch.setattr(module, "read_kakao_concept_phase_result", both_selected)
+    coordinators = [module.KakaoConceptCoordinator(value.service) for _ in range(2)]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(lambda coordinator: coordinator.advance_once(), coordinators))
+    assert all(result.state == "SUBMITTED" for result in results), results
+    assert results[0].workflow_id == results[1].workflow_id
+    with Session(value.engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == results[0].workflow_id)
+            )
+            == 1
+        )
+
+
+def test_inactive_owner_does_not_advance_and_keeps_original_completed_plan(
+    concept_continuation_store,
+):
+    from eom_catalog_service.kakao_concept_continuation import KakaoConceptCoordinator
+
+    value, reader, _original = concept_continuation_store
+    with Session(value.engine) as session, session.begin():
+        session.execute(
+            update(OperatorRecord)
+            .where(OperatorRecord.operator_id == value.actor.operator_id)
+            .values(status="DISABLED")
+        )
+    result = KakaoConceptCoordinator(value.service).advance_once()
+    assert result.state == "ERROR" and result.error_code == "KAKAO_ARCHIVE_PERMISSION_DENIED"
+    reader.retrieve.assert_not_called()
+    with Session(value.engine) as session:
+        assert session.get(KakaoConceptPhaseRecord, (value.work.task_id, "COMPOSE")) is None
+        assert session.get(WorkflowInstanceRecord, value.submitted.workflow_id).state == "COMPLETED"
+
+
+def publish_concept_successor(value):
+    from eom_identifiers import content_sha256
+    from eom_orchestrator.control_models import ExecutionPresetRevisionRecord
+    from eom_orchestrator.control_service import (
+        publish_execution_preset_revision,
+        record_execution_preset_revision,
+    )
+
+    with Session(value.engine) as session, session.begin():
+        previous = session.get(ExecutionPresetRevisionRecord, value.pinned.preset_revision_id)
+        document = dict(previous.canonical_document)
+        document.update(
+            preset_revision_id="execpresetrev_" + uuid4().hex,
+            revision_number=previous.revision_number + 1,
+            description="Synthetic administrator update during accepted work",
+        )
+        document["content_sha256"] = content_sha256(
+            {k: v for k, v in document.items() if k != "content_sha256"}
+        )
+        row = record_execution_preset_revision(
+            session, preset_key="kakao-concepts", document=document, created_by="disposable-test"
+        )
+        publish_execution_preset_revision(
+            session, preset_id=row.preset_id, preset_revision_id=row.preset_revision_id
+        )
+
+
+def test_start_replay_keeps_original_preset_and_workflow_after_admin_update(
+    concept_execution_store,
+):
+    from eom_catalog_service.kakao_concept_workflow_submission import start_kakao_concept_task
+
+    value = concept_execution_store
+    with Session(value.engine) as session:
+        row = session.get(KakaoConceptTaskRecord, value.work.task_id)
+        key = row.idempotency_key
+    _, intent = value.service.get_intent(
+        value.actor, value.work.source_binding_id, value.work.task_id
+    )
+    initial, first = start_kakao_concept_task(
+        value.service, actor=value.actor, command=intent.request, idempotency_key=key
+    )
+    assert initial.replayed and first.workflow_id == value.submitted.workflow_id
+    publish_concept_successor(value)
+    repeated, replay = start_kakao_concept_task(
+        value.service, actor=value.actor, command=intent.request, idempotency_key=key
+    )
+    assert (
+        repeated.replayed
+        and replay.workflow_id == first.workflow_id
+        and replay.command_id == first.command_id
+    )
+    assert not replay.workflow_created
+    with Session(value.engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == first.workflow_id)
+            )
+            == 1
+        )
+
+
+def test_start_use_case_submits_a_new_plan_once_via_existing_owners(concept_execution_store):
+    from eom_catalog_service.kakao_concept_workflow_submission import start_kakao_concept_task
+
+    value = concept_execution_store
+    _, intent = value.service.get_intent(
+        value.actor, value.work.source_binding_id, value.work.task_id
+    )
+    key = "concept-start-new-" + uuid4().hex
+    first, submitted = start_kakao_concept_task(
+        value.service, actor=value.actor, command=intent.request, idempotency_key=key
+    )
+    replay, repeated = start_kakao_concept_task(
+        value.service, actor=value.actor, command=intent.request, idempotency_key=key
+    )
+    assert not first.replayed and replay.replayed
+    assert first.task.task_id == replay.task.task_id and first.task.task_id != value.work.task_id
+    assert submitted.workflow_created and not repeated.workflow_created
+    assert (
+        submitted.workflow_id == repeated.workflow_id
+        and submitted.command_id == repeated.command_id
+    )
+    with Session(value.engine) as session:
+        phase = session.get(KakaoConceptPhaseRecord, (first.task.task_id, "PLAN"))
+        assert phase.workflow_id == submitted.workflow_id
+
+
+def test_current_change_refuses_auto_compose_without_latest_substitution(
+    concept_continuation_store,
+):
+    from eom_catalog_service.kakao_concept_continuation import KakaoConceptCoordinator
+
+    value, reader, _ = concept_continuation_store
+    publish_concept_successor(value)
+    result = KakaoConceptCoordinator(value.service).advance_once()
+    assert result.state == "ERROR" and result.error_code == "CONTROL_PRESET_POINTER_STALE"
+    reader.retrieve.assert_not_called()
+    with Session(value.engine) as session:
+        assert session.get(KakaoConceptPhaseRecord, (value.work.task_id, "COMPOSE")) is None
+        assert session.get(WorkflowInstanceRecord, value.submitted.workflow_id).state == "COMPLETED"
+
+
+def test_continuation_query_is_bounded_index_capable_and_waits_for_plan(concept_execution_store):
+    from eom_catalog_service.kakao_concept_continuation import ready_kakao_concept_continuations
+
+    value = concept_execution_store
+    query = ready_kakao_concept_continuations().where(
+        KakaoConceptTaskRecord.task_id == value.work.task_id
+    )
+    with Session(value.engine) as session, session.begin():
+        assert session.execute(query).first() is None
+        # Demonstrate the existing indexed path, not production throughput or planner preference.
+        session.execute(text("SET LOCAL enable_seqscan = off"))
+        compiled = str(
+            query.compile(dialect=value.engine.dialect, compile_kwargs={"literal_binds": True})
+        )
+        explain = session.execute(text("EXPLAIN (FORMAT JSON) " + compiled)).scalar_one()[0]["Plan"]
+        assert explain["Node Type"] == "Limit" and explain["Plan Rows"] <= 1
+        pending = [explain]
+        indexes = []
+        while pending:
+            node = pending.pop()
+            if "Index Name" in node:
+                indexes.append(node["Index Name"])
+            pending.extend(node.get("Plans", ()))
+        assert any("kakao_concept" in index for index in indexes)
 
 
 @pytest.mark.parametrize("phase", ["intent", "plan"])

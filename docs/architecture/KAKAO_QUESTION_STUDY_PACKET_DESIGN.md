@@ -592,3 +592,41 @@ capture를 기존 `StudySupplement`로 변환한다. 원본 질문/조교 답변
 11. UI 임시 값만으로 PDF를 만드는 대안은 새로고침·출처·재현성을 잃는다. 이미 검증한 저장
     owner와 PDF 경로를 얇은 transport로 공개하는 것이 최소 구현이다. 실제 모델/교재·운영
     활성화는 이 source transport 검사와 별도의 gate로 기록한다.
+
+## 17. 완료 PLAN의 자동 COMPOSE 진행
+
+1. Catalog의 선택적 continuation은 이미 수락·제출된 PLAN의 완료를 읽고 기존 공개 Workflow
+   제출 owner로 COMPOSE를 연결한다. 새 모델 실행기·실행 queue·슬롯 배정기를 만들지 않는다.
+2. 정본은 task/phase의 불변 입력·Workflow/Job/Artifact 결과다. 진행은 기존 두 phase와 실행
+   상태에서 파생한다. process-local 순회 cursor는 정본·재실행 승인·실패 상태가 아니다.
+3. task→PLAN Workflow/plan/preset revision→검증된 결과→COMPOSE Work/Workflow를 구별한다.
+   PLANNED가 아닌 완료 결과는 다음 모델로 보내지 않는다. FAILED/CANCELLED도 재실행하지 않는다.
+4. accepted task의 실제 저장 owner/current 권한을 재확인한다. 원 HTTP session이 만료돼도
+   가짜 actor를 만들지 않는다. 원 질문/사진·Graph/policy·교재 exact pin은 기존 owner가 검사한다.
+5. 주요 조회는 준비된 PLAN과 미제출 COMPOSE의 sparse join, task PK 순서의 한 건 읽기다.
+   phase PK(task,phase), workflow PK/phase의 unique workflow index를 재사용한다.
+6. 작은 continuation 값과 process-local cursor만 사용한다. history 본문/모델 결과를 DB에
+   복제하지 않는다. candidate 조회는 과거 phase 수에 선형일 수 있으며 초기 규모는 수천 task다.
+   실제 query plan/처리량을 검사하며 근거 없이 새 scheduler/index/cache를 선행하지 않는다.
+7. 한 tick은 한 task만 처리한다. process 내 tick lock은 중복 I/O를 줄일 뿐, 영속 단일 제출은
+   기존 phase unique/Artifact idempotency/Workflow command key가 보장한다. 다중 process와
+   재시작도 같은 입력/Workflow를 재사용한다. 긴 교재 읽기/crop은 transaction lock 밖이다.
+8. 첫 PLAN은 실제 API actor가 task를 수락한 요청 안에서 준비·제출한다. 그 이전 중단은 같은
+   POST/key로 복구하며, 다음 단계는 DB에서 재발견한다. GET은 모델을 시작하지 않는다.
+9. continuation은 별도 background thread로 실행해 교재 I/O가 Catalog API/Runner의 source
+   authorization socket 처리를 막지 않게 한다. worker가 worker를 호출하거나 NAS에 쓰지 않는다.
+10. COMPOSE는 원 PLAN의 definition/preset identity를 대조한다. 초기 구현에서 사이에 current
+    preset이 바뀌면 새 설정으로 대체하지 않고 명시 거부한다. 실패 기록을 성공으로 보정하거나
+    새 task identity로 우회하지 않는다. 이 한계는 실제 activation 때 운영자가 확인한다.
+11. 사용자가 계속 결과 확인을 눌러 다음 모델을 시작시키는 대안은 브라우저 종료/로그아웃에
+    종속된다. 기존 DB phase와 공개 제출을 읽는 작은 continuation이 최소 자동 진행 경계다.
+    일반 수집/질문/PDF 비AI 흐름과 기본 비활성 상태는 유지한다.
+
+새 Catalog 실행의 preset pin은 읽은 시점의 released revision이다. Catalog에는 preset 변경
+권한을 주지 않는다. `SELECT ... FOR UPDATE/SHARE`에도 UPDATE 권한이 필요하므로
+([PostgreSQL SELECT 권한](https://www.postgresql.org/docs/current/sql-select.html)), 공통 resolver의
+동일 검증 body를 쓰는 `read_current_execution_preset`으로 읽고 expected revision/hash를
+대조한다. 기존 `lock_current_execution_preset`의 관리자/기존 실행 잠금은 유지한다. 설정이
+그 직후 변경돼도 이미 해석한 revision이 최신으로 바뀌지 않는다. 이는 설정 변경과 제출을
+하나의 atomic transaction으로 직렬화한다는 주장이 아니다. 영속 phase/Workflow의 단일
+제출·원래 preset pin 재조회는 기존 계약대로 별도로 보호한다.

@@ -204,6 +204,7 @@ def serve() -> int:
     thread: threading.Thread | None = None
     manual_thread: threading.Thread | None = None
     pdf_thread: threading.Thread | None = None
+    concept_thread: threading.Thread | None = None
     stopping = threading.Event()
 
     def stop(_signum: int, _frame: object) -> None:
@@ -333,7 +334,9 @@ def serve() -> int:
             engine, profile=CHOICE_LAYOUT_OFFICE_PROFILE
         )
         manual = build_kakao_manual_runtime(engine, os.environ)
-        questions = build_kakao_question_application(engine)
+        questions = build_kakao_question_application(
+            engine, concept_mode=os.environ.get("EOM_KAKAO_CONCEPT_MODE", "DISABLED")
+        )
         delivery = build_kakao_delivery_application(
             engine, questions.questions, os.environ, concepts=questions.concepts
         )
@@ -414,6 +417,21 @@ def serve() -> int:
             daemon=True,
         )
         thread.start()
+        if questions.concept_coordinator is not None:
+            concept_coordinator = questions.concept_coordinator
+
+            def advance_concepts() -> None:
+                previous_error = None
+                while not stopping.wait(timeout=15):
+                    progress = concept_coordinator.advance_once()
+                    if progress.state == "ERROR" and progress.error_code != previous_error:
+                        print("KAKAO_CONCEPT_CONTINUATION_REQUIRES_ATTENTION", flush=True)
+                    previous_error = progress.error_code
+
+            concept_thread = threading.Thread(
+                target=advance_concepts, name="eom-kakao-concepts", daemon=True
+            )
+            concept_thread.start()
         if delivery.coordinator is not None:
             pdf_coordinator = delivery.coordinator
 
@@ -469,6 +487,8 @@ def serve() -> int:
     except Exception:
         return 1
     finally:
+        # A return/exception, not only SIGTERM, must stop resident continuations before disposal.
+        stopping.set()
         if server is not None and thread is not None and thread.is_alive():
             server.shutdown()
         if server is not None:
@@ -479,6 +499,8 @@ def serve() -> int:
             manual_thread.join(timeout=5)
         if pdf_thread is not None:
             pdf_thread.join(timeout=5)
+        if concept_thread is not None:
+            concept_thread.join(timeout=5)
         engine.dispose()
 
 

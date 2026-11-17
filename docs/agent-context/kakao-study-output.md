@@ -51,7 +51,8 @@ stdlib-only `worker_exec`가 manifest6의 private file/hash/header를 재확인�
 운영 activation이나 실제 모델 성공으로 해석하지 않는다. `KakaoConceptTaskService`의 저장·
 현재 source authority·공유 Workflow 제출과 COMPOSE provenance·로컬 보강/PDF 값 변환,
 새 saved-study owner는 [개념 추천 문맥](kakao-concepts.md), 공개 저장·편집/PDF source는
-[설명 편집](kakao-study-editing.md)에 있다. 프리셋/자동 진행·추천 API·실제 슬롯·모델 결과
+[설명 편집](kakao-study-editing.md)에 있다. 자동 continuation source는 같은 개념 추천 문맥을
+따르며 기본 비활성이다. 프리셋 발행·추천 API·실제 슬롯·모델 결과
 선택/이미지 UI는 후속이다. saved-study의 PDF application 연결은 아래와 같다.
 
 ### 역할별 PDF
