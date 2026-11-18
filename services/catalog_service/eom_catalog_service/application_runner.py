@@ -54,6 +54,7 @@ from eom_catalog_service.inference_transfer_workflow_read import (
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capture_composition import build_kakao_capture_intake
+from eom_catalog_service.kakao_collection_composition import build_kakao_collection_continuation
 from eom_catalog_service.kakao_collection_source_composition import (
     build_configured_kakao_collection_attempts,
 )
@@ -206,6 +207,7 @@ def serve() -> int:
     server: CatalogApplicationServer | None = None
     thread: threading.Thread | None = None
     manual_thread: threading.Thread | None = None
+    collection_thread: threading.Thread | None = None
     pdf_thread: threading.Thread | None = None
     concept_thread: threading.Thread | None = None
     stopping = threading.Event()
@@ -337,10 +339,14 @@ def serve() -> int:
             engine, profile=CHOICE_LAYOUT_OFFICE_PROFILE
         )
         manual = build_kakao_manual_runtime(engine, os.environ)
+        collection_attempts = build_configured_kakao_collection_attempts(engine, os.environ)
+        collection = build_kakao_collection_continuation(
+            engine, os.environ, manual=manual, attempts=collection_attempts
+        )
         questions = build_kakao_question_application(
             engine,
             concept_mode=os.environ.get("EOM_KAKAO_CONCEPT_MODE", "DISABLED"),
-            collection_attempts=build_configured_kakao_collection_attempts(engine, os.environ),
+            collection_attempts=collection_attempts,
         )
         delivery = build_kakao_delivery_application(
             engine, questions.questions, os.environ, concepts=questions.concepts
@@ -411,6 +417,7 @@ def serve() -> int:
             kakao_delivery=delivery.application,
             kakao_manual=manual.application if manual is not None else None,
             kakao_captures=build_kakao_capture_intake(engine, manual),
+            kakao_collections=collection.collection.collections if collection is not None else None,
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
                 retrieval=knowledge_retrieval,
@@ -422,6 +429,24 @@ def serve() -> int:
             daemon=True,
         )
         thread.start()
+        if collection is not None:
+            collection_coordinator = collection
+
+            def advance_collection() -> None:
+                previous = "IDLE"
+                while not stopping.wait(timeout=1):
+                    try:
+                        progress = collection_coordinator.advance_once()
+                    except Exception:
+                        progress = "ERROR"
+                    if progress == "ERROR" and previous != "ERROR":
+                        print("KAKAO_COLLECTION_RECONCILIATION_REQUIRED", flush=True)
+                    previous = progress
+
+            collection_thread = threading.Thread(
+                target=advance_collection, name="eom-kakao-collection", daemon=True
+            )
+            collection_thread.start()
         if questions.concept_coordinator is not None:
             concept_coordinator = questions.concept_coordinator
 
@@ -502,6 +527,8 @@ def serve() -> int:
             thread.join(timeout=5)
         if manual_thread is not None:
             manual_thread.join(timeout=5)
+        if collection_thread is not None:
+            collection_thread.join(timeout=25)  # The fixed startup adapter itself is bounded.
         if pdf_thread is not None:
             pdf_thread.join(timeout=5)
         if concept_thread is not None:

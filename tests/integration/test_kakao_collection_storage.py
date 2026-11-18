@@ -1,5 +1,6 @@
 """Accepted run/task identities and current-owner checks in guarded disposable PG only."""
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
@@ -12,6 +13,7 @@ from eom_catalog_contracts.kakao_collection import KakaoRoomCollectionCreate
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capability_service import KakaoCapabilityService
+from eom_catalog_service.kakao_collection_dispatch import dispatch_kakao_collection
 from eom_catalog_service.kakao_collection_models import KakaoCollectionRunRecord as Run
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_collection_service import KakaoCollectionService
@@ -58,6 +60,61 @@ def create(collection, command=None, key=None, actor=None):
         actor or collection.actor,
         command or collection.command,
         idempotency_key=key or collection.key,
+    )
+
+
+def test_collection_ingress_enqueues_once_and_status_does_not_act(collection):
+    actor = collection.actor
+    request = collection.command
+    identity = dict(
+        actor_id=actor.operator_id,
+        session_id=actor.session_id,
+        request_id="webreq_collection_fixture",
+        authentication_time=actor.authentication_time.isoformat(),
+    )
+    selected = dict(
+        **identity,
+        operation="START_KAKAO_ROOM_COLLECTION",
+        idempotency_key=collection.key,
+        expected_policy_revision_id=request.expected_policy_revision_id,
+        selection=dict(
+            schema_version="kakao-capability-confirmation/1.0",
+            source_binding_id=request.source_binding_id,
+            room_id=request.room_id,
+            expected_binding_version=request.expected_binding_version,
+        ),
+    )
+    assert (
+        json.loads(dispatch_kakao_collection(None, selected))["error_code"]
+        == "CATALOG_APPLICATION_UNAVAILABLE"
+    )
+    first = json.loads(dispatch_kakao_collection(collection.service, selected))
+    assert first["status"] == "OK" and first["result"]["state"] == "QUEUED"
+    repeated = json.loads(dispatch_kakao_collection(collection.service, selected))
+    assert repeated == first and run_count(collection) == 1
+    observe = dict(
+        **identity,
+        operation="GET_KAKAO_ROOM_COLLECTION",
+        source_binding_id=request.source_binding_id,
+        run_id=first["result"]["run_id"],
+    )
+    assert (
+        json.loads(dispatch_kakao_collection(collection.service, observe))["result"]
+        == first["result"]
+    )
+    assert (
+        json.loads(
+            dispatch_kakao_collection(
+                collection.service, observe | {"browser_url": "https://invalid.test"}
+            )
+        )["error_code"]
+        == "KAKAO_ARCHIVE_REQUEST_INVALID"
+    )
+    pending = collection.service.next_pending_room()
+    assert (
+        pending.run_id == observe["run_id"]
+        and pending.attempt_id is None
+        and pending.browser_run_id is None
     )
 
 

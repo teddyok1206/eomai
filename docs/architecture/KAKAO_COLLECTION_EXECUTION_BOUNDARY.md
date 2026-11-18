@@ -1034,3 +1034,17 @@ attempt ID, 두 member,하나의 방 lookup이다. 추가 DB/index/queue가 필�
 발행 후 DB pin 직전 중단은 같은 command/identity의 기존 발행을 재사용한다. 서로 다른 명령이나
 현재 권한이 바뀌면 기존 run을 새 방/새 profile로 재작성하지 않는다. 관리 UI에서 raw browser
 URL/자격을 선택하거나 직접 DB 입력을 만들어 넣는 대안은 이 보호 경계를 우회한다.
+
+### Studio 요청과 기존 Catalog 실행부 연결
+
+- API의 현재 operator가 기존 수락 서비스에만 실행 의도를 저장한다. 요청 재전송은 같은
+  run이며 상태 조회는 작업을 움직이지 않는다. 실행 권한은 worker나 공개 응답에 넣지 않는다.
+- 설치 pin을 모두 명시한 `ONE_ROOM`에서만 기존 Catalog process가 durable pending run을
+  순서대로 진전시킨다. MANUAL의 같은 profile은 그대로 공유한다. 이미 시작된 attempt는
+  원래 ID, 명령과 browser fence를 재관측하고, 실제 OS 종료를 확인하기 전엔 실패/완료로
+  만들지 않는다. in-process 한 ID는 반복 명령 읽기만 줄이는 힌트이며 authority가 아니다.
+- 상태/claim/동시성은 existing run/attempt PK와 pending index, 원본 idempotency/CAS를 쓴다.
+  원본 발행이 처음이면 그 시점의 head CAS, 이미 원본 명령이 있으면 처음의 predecessor와
+  version만 쓴다. 원본 revision을 latest로 재해석하지 않는다. 새 프로세스·큐·DB는 없다.
+- 보호 소켓은 closed schema를 사용하고 기존 API peer만 허용한다. 브라우저 위치·OS path·
+  권한·인증·대화는 명령/상태 API에 없다. 기능이 비활성이면 작업을 접수하지 않는다.

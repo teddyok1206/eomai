@@ -1,5 +1,21 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 단일 방 작업 접수·상태 API와 기존 Catalog 실행 연결
+
+기존 로그인/권한·binding ETag·멱등 키로 대화방 1개 수집을 접수하는 POST와 부작용 없는
+GET을 추가했다. API→기존 API-peer socket→Catalog owner로만 들어가며 URL·provider 키·
+브라우저 명령이 API를 통과하지 않는다. 동일 요청은 새 run을 만들지 않는다.
+
+설치를 명시한 `ONE_ROOM`에서만 기존 Catalog 프로세스가 pending run을 진전시킨다. 기존
+browser fence/attempt로 재개하고, 파일 없는 실제 종료는 실패를 남긴다. 원본 발행 재시도는
+같은 capture의 기존 원본 명령과 CAS를 쓴다. 별도 DB/migration/service는 추가하지 않았다.
+
+HTTP→실제 보호 Unix socket 및 읽기/권한 검사 집중22 PASS, disposable DB에서 동일 요청·
+조회·종료 후 실패·원본 재조회 확인, 변경 파일 mypy와 Ruff, JSON Schema audit, OpenAPI
+비파괴 비교 PASS. 전체 import를 따라가는 mypy에는 변경하지 않은 workflow/RAG 모듈의
+타입 오류가 있으며 이 작업에서 수정하지 않았다. 소스/명세만 반영했고 Studio 버튼,
+실제 운영 활성화·카카오 한 방·학생 PDF는 아직 검증 전이다.
+
 ## 2026-11-18 등록 방 증거의 C1 명령 발행·재조회
 
 기존 수락 run/task와 등록된 방의 capability→room proof→page observation을 exact pointer와

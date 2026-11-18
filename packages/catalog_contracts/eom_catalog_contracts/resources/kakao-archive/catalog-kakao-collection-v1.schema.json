@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-collection-v1/1.0",
+  "oneOf": [{"$ref":"#/$defs/start"},{"$ref":"#/$defs/get"},{"$ref":"#/$defs/reply"},{"$ref":"#/$defs/failure"}],
+  "$defs": {
+    "operation": {"enum":["START_KAKAO_ROOM_COLLECTION","GET_KAKAO_ROOM_COLLECTION"]},
+    "identity": {"$ref":"eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/Identity"},
+    "request-id": {"$ref":"eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/RequestId"},
+    "start": {
+      "allOf":[{"$ref":"#/$defs/identity"},{"type":"object","required":["operation","selection","expected_policy_revision_id","idempotency_key"],"properties":{
+        "operation":{"const":"START_KAKAO_ROOM_COLLECTION"},
+        "selection":{"$ref":"eom://schemas/kakao-archive/capability-verification-v1/1.0#/$defs/request"},
+        "expected_policy_revision_id":{"$ref":"eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/policy"},
+        "idempotency_key":{"type":"string","pattern":"^[!-~]{16,128}$"}
+      }}],"unevaluatedProperties":false
+    },
+    "get": {
+      "allOf":[{"$ref":"#/$defs/identity"},{"type":"object","required":["operation","source_binding_id","run_id"],"properties":{
+        "operation":{"const":"GET_KAKAO_ROOM_COLLECTION"},
+        "source_binding_id":{"$ref":"eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/binding"},
+        "run_id":{"$ref":"eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/run"}
+      }}],"unevaluatedProperties":false
+    },
+    "reply": {
+      "type":"object","additionalProperties":false,"required":["operation","request_id","status","result","error_code"],
+      "properties":{
+        "operation":{"$ref":"#/$defs/operation"},
+        "request_id":{"$ref":"#/$defs/request-id"},
+        "status":{"const":"OK"},
+        "result":{"$ref":"eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/status"},
+        "error_code":{"type":"null"}
+      }
+    },
+    "failure": {
+      "type":"object","additionalProperties":false,"required":["operation","request_id","status","result","error_code"],
+      "properties":{
+        "operation":{"$ref":"#/$defs/operation"},
+        "request_id":{"$ref":"#/$defs/request-id"},
+        "status":{"const":"ERROR"},
+        "result":{"type":"null"},
+        "error_code":{"enum":["KAKAO_ARCHIVE_REQUEST_INVALID","KAKAO_ARCHIVE_PERMISSION_DENIED","KAKAO_ARCHIVE_RESOURCE_NOT_FOUND","KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT","KAKAO_ARCHIVE_PRECONDITION_FAILED","KAKAO_ARCHIVE_BINDING_RETIRED","KAKAO_ARCHIVE_ROOM_RETIRED","KAKAO_ARCHIVE_COLLECTION_ALREADY_PENDING","KAKAO_ARCHIVE_COLLECTION_CAPABILITY_MISMATCH","KAKAO_ARCHIVE_CAPABILITY_EVIDENCE_INVALID","CATALOG_APPLICATION_UNAVAILABLE","CATALOG_APPLICATION_INTERNAL_ERROR"]}
+      }
+    }
+  }
+}

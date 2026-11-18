@@ -353,6 +353,23 @@ def test_terminal_epoch_and_original_worker_command_are_immutable(browser):
     assert browser.service.get_intent(prepared.browser_run_id) == result
 
 
+def test_missing_output_cannot_finish_a_live_browser_and_does_not_requeue(browser):
+    intent = running(browser)
+    with pytest.raises(KakaoArchiveError, match="STOP_UNCONFIRMED"):
+        browser.service.record_missing_one_room_output(intent.browser_run_id)
+    browser.service.request_stop(intent.browser_run_id)
+    browser.service.accept_closed(
+        intent.browser_run_id, observe_stopped=lambda i: closed(browser, i)
+    )
+    for _ in range(2):
+        browser.service.record_missing_one_room_output(intent.browser_run_id)
+    assert browser.collection.service.next_pending_room() is None
+    status = browser.collection.service.get_status(
+        browser.h.actor, intent.source_binding_id, intent.run_id
+    )
+    assert status.state == "FAILED"
+
+
 def test_unclean_start_exit_is_recorded_even_without_prior_owner_error(browser):
     prepared = reserve(browser)
     stop = browser.service.request_stop(prepared.browser_run_id)

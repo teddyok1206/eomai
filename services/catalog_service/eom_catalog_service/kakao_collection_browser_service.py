@@ -25,6 +25,7 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from .kakao_archive_authorization import KakaoArchiveError
+from .kakao_collection_attempt_models import KakaoCollectionAttemptRecord as Attempt
 from .kakao_collection_authorization import (
     authorize_kakao_collection_preparation,
     lock_kakao_collection_browser,
@@ -32,6 +33,7 @@ from .kakao_collection_authorization import (
 )
 from .kakao_collection_browser_models import KakaoCollectionBrowserRecord as Browser
 from .kakao_collection_models import KakaoCollectionRunRecord as Run
+from .kakao_collection_models import KakaoCollectionTaskRecord as Task
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
 
 _TERMINAL = frozenset({"COMPLETED", "PARTIAL", "FAILED", "CANCELLED"})
@@ -283,6 +285,41 @@ class KakaoCollectionBrowserService:
             profile.mode, profile.resource_version = "PAUSING", profile.resource_version + 1
             session.flush()
             return _intent(row)
+
+    def record_missing_one_room_output(self, browser: str) -> None:
+        """Record confirmed closure without output; never overwrite a worker result."""
+        with self._sessions.begin() as session:
+            row, _, run = lock_kakao_collection_browser(
+                session, browser, profile_id=self.profile_id
+            )
+            if row.phase != "CLOSED" or run.current_browser_run_id is not None:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_STOP_UNCONFIRMED")
+            if run.state == "FAILED":
+                return
+            self._authorize(session, run)
+            tasks = tuple(
+                session.scalars(
+                    select(Task)
+                    .where(Task.run_id == run.run_id)
+                    .order_by(Task.ordinal)
+                    .limit(2)
+                    .with_for_update()
+                )
+            )
+            if (
+                run.state not in {"QUEUED", "COLLECTING"}
+                or len(tasks) != 1
+                or tasks[0].room_id != run.anchor_room_id
+                or tasks[0].state not in {"QUEUED", "RUNNING"}
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            attempt = session.scalar(select(Attempt).where(Attempt.task_id == tasks[0].task_id))
+            if attempt is not None and (
+                attempt.browser_run_id != browser or attempt.state == "RESULT_ACCEPTED"
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            tasks[0].state, run.state = "FAILED", "FAILED"
+            run.updated_at, run.resource_version = self._now(), run.resource_version + 1
 
     def accept_closed(
         self, browser: str, *, observe_stopped: Callable[[Intent], Observation]

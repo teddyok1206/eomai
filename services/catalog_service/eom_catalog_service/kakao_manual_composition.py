@@ -17,6 +17,8 @@ from sqlalchemy import Engine
 from .kakao_archive_authorization import KakaoArchiveError
 
 if TYPE_CHECKING:
+    from eom_orchestrator.kakao_manual_runtime import FixedKakaoManualRuntime
+
     from .kakao_browser_history import closed_kakao_browser_pin
     from .kakao_manual_coordinator import KakaoManualCoordinator
     from .kakao_manual_dispatch import KakaoManualApplication
@@ -49,6 +51,7 @@ class ManualRuntimeConfiguration:
 class ManualRuntimeComposition:
     application: KakaoManualApplication
     coordinator: KakaoManualCoordinator
+    fixed_runtime: FixedKakaoManualRuntime | None = None
 
 
 def build_kakao_manual_runtime(
@@ -128,4 +131,5 @@ def build_kakao_manual_runtime(
     return ManualRuntimeComposition(
         KakaoManualApplication(service, observe_profile, observe_runtime),
         KakaoManualCoordinator(service, runtime),
+        runtime,
     )

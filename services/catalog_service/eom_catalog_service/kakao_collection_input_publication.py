@@ -24,8 +24,9 @@ from eom_orchestrator.file_set_control_artifacts import (
 from eom_protocol.artifact_members import ArtifactMemberPointer
 
 from .kakao_archive_authorization import KakaoArchiveError
+from .kakao_capability_service import PinnedManualRoomInput
 from .kakao_collection_attempt_service import KakaoCollectionAttemptService
-from .kakao_collection_service import KakaoCollectionService
+from .kakao_collection_service import KakaoCollectionService, StoredKakaoCollectionIntent
 
 _SCOPE = "MANUAL_SELECTED_ROOM"
 _EVIDENCE = "outputs/selected-room.json"
@@ -50,6 +51,25 @@ def _member(name: str, raw: bytes) -> LocalMember:
     )
 
 
+def read_registered_collection_room(
+    collections: KakaoCollectionService, run_id: str
+) -> tuple[StoredKakaoCollectionIntent, PinnedManualRoomInput]:
+    stored = collections.read_background_intent(run_id)
+    request = stored.accepted.request
+    resolved = collections.capabilities.read_pinned_manual_room(
+        stored.capability_manifest,
+        binding=request.source_binding_id,
+        room=request.room_id,
+        revision=request.capability_revision_id,
+    )
+    if (
+        resolved.capability.visible_scope_ids != (_SCOPE,)
+        or resolved.capability.room_identity != "manual_binding"
+    ):
+        raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_CAPABILITY_MISMATCH")
+    return stored, resolved
+
+
 def prepare_kakao_registered_room(
     collections: KakaoCollectionService,
     attempts: KakaoCollectionAttemptService,
@@ -58,7 +78,7 @@ def prepare_kakao_registered_room(
     publisher: ControlFileSetPublisher,
     source_commit: str,
 ) -> PreparedKakaoRoom:
-    stored = collections.read_background_intent(attempt.run_id)
+    stored, resolved = read_registered_collection_room(collections, attempt.run_id)
     accepted = stored.accepted
     request = accepted.request
     persisted = attempts.get_attempt(attempt.attempt_id)
@@ -70,15 +90,7 @@ def prepare_kakao_registered_room(
     ):
         raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
 
-    resolved = collections.capabilities.read_pinned_manual_room(
-        stored.capability_manifest,
-        binding=request.source_binding_id,
-        room=request.room_id,
-        revision=request.capability_revision_id,
-    )
     capability = resolved.capability
-    if capability.visible_scope_ids != (_SCOPE,) or capability.room_identity != "manual_binding":
-        raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_CAPABILITY_MISMATCH")
     proof = resolved.proof
     selection = canonical_json_bytes(stored.capability_manifest.model_dump(mode="json"))
     evidence = _member(_EVIDENCE, selection)

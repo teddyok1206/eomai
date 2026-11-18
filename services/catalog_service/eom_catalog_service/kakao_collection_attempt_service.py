@@ -72,7 +72,11 @@ from .kakao_collection_models import KakaoCollectionTaskRecord as Task
 from .kakao_collection_source_access import KakaoCollectionSourceAccess
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
 from .kakao_room_models import KakaoRoomRecord as Room
-from .kakao_source_models import KakaoSourceCommandRecord, KakaoSourceRevisionRecord
+from .kakao_source_models import (
+    KakaoSourceCommandRecord,
+    KakaoSourceHeadRecord,
+    KakaoSourceRevisionRecord,
+)
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
 from .kakao_source_service import AcceptedKakaoSource, KakaoSourceService
 
@@ -172,6 +176,34 @@ class KakaoCollectionAttemptService:
             if row is None:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
             return _identity(row)
+
+    def source_adoption_pin(self, attempt_id: str) -> tuple[str | None, int]:
+        """Resolve a new write CAS, or reuse this capture's original committed command."""
+        with self._sessions.begin() as session:
+            row = session.get(Attempt, attempt_id)
+            run = None if row is None else session.get(Run, row.run_id)
+            if row is None or run is None:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+            self._authorize(session, run)
+            prior = session.scalar(
+                select(KakaoSourceCommandRecord).where(
+                    KakaoSourceCommandRecord.source_binding_id == row.source_binding_id,
+                    KakaoSourceCommandRecord.capture_attempt_id == attempt_id,
+                )
+            )
+            if prior is not None:
+                if prior.room_id != row.room_id or prior.owner_operator_id != run.owner_operator_id:
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+                return prior.previous_revision_id, prior.expected_resource_version
+            head = session.get(KakaoSourceHeadRecord, row.room_id)
+            if head is None:
+                return None, 0
+            if (head.owner_operator_id, head.source_binding_id) != (
+                run.owner_operator_id,
+                row.source_binding_id,
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+            return head.current_source_revision_id, head.resource_version
 
     def accepted_source_access(self, attempt_id: str) -> KakaoCollectionSourceAccess:
         """Trusted controller only: bind durable source access to one actual accepted row.

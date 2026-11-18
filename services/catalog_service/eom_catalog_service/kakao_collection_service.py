@@ -9,11 +9,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from eom_catalog_contracts.kakao_capability import ConfirmKakaoCapability
 from eom_catalog_contracts.kakao_collection import (
     AcceptedKakaoRoomCollection,
     KakaoCollectionStatus,
     KakaoRoomCollectionCreate,
 )
+from eom_identifiers import sha256_bytes
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -33,10 +35,12 @@ from .kakao_archive_commands import (
 )
 from .kakao_archive_models import KakaoChannelBindingRecord, KakaoCollectionPolicyRevisionRecord
 from .kakao_capability_service import KakaoCapabilityService
+from .kakao_collection_attempt_models import KakaoCollectionAttemptRecord as Attempt
 from .kakao_collection_authorization import (
     authorize_kakao_collection_preparation,
     validate_kakao_collection_pins,
 )
+from .kakao_collection_browser_models import KakaoCollectionBrowserRecord as Browser
 from .kakao_collection_models import KakaoCollectionRunRecord as Run
 from .kakao_collection_models import KakaoCollectionTaskRecord as Task
 
@@ -52,10 +56,52 @@ class StoredKakaoCollectionIntent:
     status: KakaoCollectionStatus
 
 
+@dataclass(frozen=True, slots=True)
+class PendingKakaoRoomRun:
+    run_id: str
+    attempt_id: str | None
+    browser_run_id: str | None
+
+
 class KakaoCollectionService:
     def __init__(self, engine: Engine, *, capabilities: KakaoCapabilityService) -> None:
         self._sessions = build_session_factory(engine)
         self.capabilities = capabilities
+
+    def next_pending_room(self) -> PendingKakaoRoomRun | None:
+        """Bounded durable discovery only; every effect still rechecks the run and fence."""
+        with self._sessions.begin() as session:
+            for state in ("COLLECTING", "QUEUED"):
+                run = session.scalar(
+                    select(Run)
+                    .where(
+                        Run.state == state,
+                        Run.adapter_release_sha256 == self.capabilities.adapter_sha256,
+                    )
+                    .order_by(Run.created_at, Run.run_id)
+                    .limit(1)
+                )
+                if run is None:
+                    continue
+                attempt = session.scalar(
+                    select(Attempt)
+                    .join(Task, Task.task_id == Attempt.task_id)
+                    .where(Task.run_id == run.run_id, Task.ordinal == 1)
+                )
+                browser_id = (
+                    run.current_browser_run_id if attempt is None else attempt.browser_run_id
+                )
+                if browser_id is None:
+                    browser_id = session.scalar(
+                        select(Browser.browser_run_id)
+                        .where(Browser.run_id == run.run_id)
+                        .order_by(Browser.epoch_number.desc())
+                        .limit(1)
+                    )
+                return PendingKakaoRoomRun(
+                    run.run_id, None if attempt is None else attempt.attempt_id, browser_id
+                )
+        return None
 
     @staticmethod
     def _precondition(
@@ -114,7 +160,7 @@ class KakaoCollectionService:
 
     @staticmethod
     def _write_scope(
-        session: Session, actor: ActorContext, command: KakaoRoomCollectionCreate, *, lock: bool
+        session: Session, actor: ActorContext, binding_id: str, room_id: str, *, lock: bool
     ) -> tuple[str, KakaoChannelBindingRecord]:
         owner = authorize_kakao_actor(
             session,
@@ -126,15 +172,64 @@ class KakaoCollectionService:
         authorize_kakao_room_scope(
             session,
             actor,
-            command.source_binding_id,
-            command.room_id,
+            binding_id,
+            room_id,
             PermissionKey.KAKAO_ARCHIVE_READ,
             lock=lock,
         )
-        binding = session.get(KakaoChannelBindingRecord, command.source_binding_id)
+        binding = session.get(KakaoChannelBindingRecord, binding_id)
         if binding is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
         return owner, binding
+
+    def start_registered_room(
+        self,
+        actor: ActorContext,
+        selection: ConfirmKakaoCapability,
+        *,
+        expected_policy_revision_id: str,
+        idempotency_key: str,
+    ) -> KakaoCollectionStatus:
+        key = validate_kakao_idempotency_key(idempotency_key)
+        binding_id, room_id = selection.source_binding_id, selection.room_id
+        with self._sessions.begin() as session:
+            owner, binding = self._write_scope(session, actor, binding_id, room_id, lock=False)
+            prior = self._prior(session, owner, binding_id, key)
+            if prior is not None:
+                if (
+                    prior.anchor_room_id,
+                    prior.accepted_binding_version,
+                    prior.policy_revision_id,
+                ) != (
+                    room_id,
+                    selection.expected_binding_version,
+                    expected_policy_revision_id,
+                ):
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
+                validate_kakao_collection_pins(session, prior)
+                return self._status(prior)
+            if (binding.resource_version, binding.current_policy_revision_id) != (
+                selection.expected_binding_version,
+                expected_policy_revision_id,
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+        capability = self.capabilities.confirm_capability(
+            actor,
+            selection,
+            idempotency_key="kakao:collect-cap:" + sha256_bytes(key.encode())[7:],
+        )
+        receipt = self.create_room_collection(
+            actor,
+            KakaoRoomCollectionCreate(
+                source_binding_id=binding_id,
+                room_id=room_id,
+                capability_revision_id=capability.capability.capability_revision_id,
+                expected_binding_version=selection.expected_binding_version,
+                expected_policy_revision_id=expected_policy_revision_id,
+            ),
+            idempotency_key=key,
+        )
+        return self.get_status(actor, binding_id, receipt.run_id)
 
     def create_room_collection(
         self, actor: ActorContext, command: KakaoRoomCollectionCreate, *, idempotency_key: str
@@ -143,7 +238,9 @@ class KakaoCollectionService:
         key = validate_kakao_idempotency_key(idempotency_key)
         digest = kakao_command_sha256(command)
         with self._sessions.begin() as session:
-            owner, binding = self._write_scope(session, actor, command, lock=False)
+            owner, binding = self._write_scope(
+                session, actor, command.source_binding_id, command.room_id, lock=False
+            )
             prior = self._prior(session, owner, command.source_binding_id, key)
             if prior is not None:
                 if prior.request_sha256 != digest:
@@ -166,7 +263,9 @@ class KakaoCollectionService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_CAPABILITY_MISMATCH")
         with self._sessions.begin() as session:
             lock_kakao_intent(session, owner, "collection/" + command.source_binding_id, key)
-            owner, binding = self._write_scope(session, actor, command, lock=True)
+            owner, binding = self._write_scope(
+                session, actor, command.source_binding_id, command.room_id, lock=True
+            )
             prior = self._prior(session, owner, command.source_binding_id, key)
             if prior is not None:
                 if prior.request_sha256 != digest:

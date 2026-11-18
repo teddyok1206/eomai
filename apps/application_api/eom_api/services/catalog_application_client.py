@@ -206,6 +206,7 @@ from eom_catalog_contracts.kakao_archive_rpc import (
     parse_kakao_binding_reply,
     parse_kakao_binding_request,
 )
+from eom_catalog_contracts.kakao_capability import ConfirmKakaoCapability
 from eom_catalog_contracts.kakao_capture_intake import (
     ConfirmKakaoManualCapture,
     KakaoManualCapturePage,
@@ -221,6 +222,16 @@ from eom_catalog_contracts.kakao_capture_rpc import (
     check_kakao_capture_reply,
     parse_kakao_capture_reply,
     parse_kakao_capture_request,
+)
+from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus
+from eom_catalog_contracts.kakao_collection_rpc import (
+    CollectionRequest,
+    GetKakaoRoomCollectionRequest,
+    KakaoRoomCollectionFailure,
+    StartKakaoRoomCollectionRequest,
+    check_collection_reply,
+    parse_collection_reply,
+    parse_collection_request,
 )
 from eom_catalog_contracts.kakao_concept_rpc import (
     ConceptFailure,
@@ -490,6 +501,60 @@ class CatalogApplicationClient:
             {**self._kakao_identity(actor), "source_binding_id": source_binding_id}
         )
         return cast(KakaoManualCapturePage, self._request_kakao_capture(request))
+
+    def start_kakao_room_collection(
+        self,
+        selection: ConfirmKakaoCapability,
+        *,
+        expected_policy_revision_id: str,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> KakaoCollectionStatus:
+        return self._request_kakao_collection(
+            StartKakaoRoomCollectionRequest.model_validate(
+                {
+                    **self._kakao_identity(actor),
+                    "selection": selection,
+                    "expected_policy_revision_id": expected_policy_revision_id,
+                    "idempotency_key": idempotency_key,
+                }
+            )
+        )
+
+    def get_kakao_room_collection(
+        self,
+        source_binding_id: str,
+        run_id: str,
+        *,
+        actor: ActorContext,
+    ) -> KakaoCollectionStatus:
+        return self._request_kakao_collection(
+            GetKakaoRoomCollectionRequest.model_validate(
+                {
+                    **self._kakao_identity(actor),
+                    "source_binding_id": source_binding_id,
+                    "run_id": run_id,
+                }
+            )
+        )
+
+    def _request_kakao_collection(self, request: CollectionRequest) -> KakaoCollectionStatus:
+        try:
+            validated = parse_collection_request(request.model_dump(mode="json"))
+            reply = parse_collection_reply(
+                self._raw_request(
+                    validated.model_dump(mode="json"),
+                    timeout_seconds=RESPONSE_TIMEOUT_SECONDS,
+                )
+            )
+            check_collection_reply(validated, reply)
+        except (OSError, ValueError, JsonSchemaValidationError) as error:
+            raise CatalogApplicationClientError(
+                "KAKAO_ARCHIVE_UNAVAILABLE", "Collection response invalid or unavailable"
+            ) from error
+        if isinstance(reply, KakaoRoomCollectionFailure):
+            raise CatalogApplicationClientError(reply.error_code, "Collection request failed")
+        return reply.result
 
     def confirm_kakao_manual_capture(
         self, command: ConfirmKakaoManualCapture, *, actor: ActorContext, idempotency_key: str
