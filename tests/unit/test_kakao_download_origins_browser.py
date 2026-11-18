@@ -73,7 +73,18 @@ TEXT_ONLY = AUTO_HTML.replace(
 
 
 @pytest.mark.parametrize(
-    "receiver", ["manual", "scoped", "room", "auto", "auto-text", "auto-popup", "auto-wrong-popup"]
+    "receiver",
+    [
+        "manual",
+        "manual-direct-cdn",
+        "scoped",
+        "room",
+        "room-direct-cdn",
+        "auto",
+        "auto-text",
+        "auto-popup",
+        "auto-wrong-popup",
+    ],
 )
 def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path, receiver):
     if not PYTHON.is_file() or not BROWSERS.is_dir():
@@ -120,6 +131,14 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                     body = body.replace(
                         b"document.querySelector('.chat_popup').hidden=false",
                         f"window.open('{opened}?tracking=fixture','selected')".encode(),
+                    )
+                if route == PAGE and receiver.endswith("-direct-cdn"):
+                    body = body.replace(
+                        b"window.danger=0;",
+                        (
+                            "window.danger=0;document.getElementById('download').addEventListener("
+                            "'click',e=>{e.preventDefault();location.assign('" + CDN + "');});"
+                        ).encode(),
                     )
             elif host == "business.kakao.com" and self.path == IMAGE:
                 self.send_response(302)
@@ -183,7 +202,7 @@ async def main():
  command=CaptureCommand.model_validate_json(sys.argv[3])
  with tempfile.TemporaryDirectory(prefix='kakao-redirect-test-',dir=Path.home()/'.cache') as folder:
   root=Path(folder); root.chmod(0o2750)
-  if sys.argv[2] == 'manual':
+  if sys.argv[2].startswith('manual'):
    manager=ManualDownloads(ProfileFence(schema_version='kakao-profile-fence/1.0',
        profile_id='kakaoprofile_'+'1'*32,browser_run_id='kakaobrowserrun_'+'2'*32,
        fence_epoch=1,mode='MANUAL'),root=root)
@@ -217,8 +236,15 @@ async def main():
     raw=(paths[0].parent/'page-observation.json').read_bytes()
     value=ManualPageObservation.model_validate_json(raw)
     assert value.status=='OBSERVED'
-    assert value.target.kind=='SAME_ORIGIN_PATH'
-    assert value.target.path==image_path
+    if sys.argv[2]=='manual-direct-cdn':
+     assert value.target.kind=='UNAVAILABLE' and value.target.path is None
+     assert (paths[0].parent/'payload.bin').read_bytes()==b'synthetic download bytes'
+     decision=(paths[0].parent/'origin-diagnostic.txt').read_text()
+     assert decision==('KAKAO_DOWNLOAD_ORIGIN mode=MANUAL '
+        'code=INITIAL_PHOTO_REQUEST_NOT_OBSERVED candidates=0 '
+        'source_get=NOT_CONFIRMED final_same_page=1 final_other_page=0'+chr(10))
+    else:
+     assert value.target.kind=='SAME_ORIGIN_PATH' and value.target.path==image_path
     document=value.document
    elif sys.argv[2] == 'scoped':
     destination=outputs/'photo.png'
@@ -231,6 +257,17 @@ async def main():
     document=received.document
     assert document is not None
     raw=document.model_dump_json().encode()
+   elif sys.argv[2]=='room-direct-cdn':
+    capture=await capture_open_room_attempt(
+      page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
+    assert capture.error_code=='KAKAO_ROOM_TRANSFER_UNASSOCIATED'
+    assert not capture.photos and capture.csv is None
+    assert not (outputs/'open-room.json').exists()
+    assert not (outputs/'source.csv').exists()
+    assert await page.evaluate('window.danger')==0
+    await context.close(); await browser.close()
+    print(json.dumps({'synthetic_real_chromium_redirect':'PASS','direct_cdn':'REFUSED'}))
+    return
    else:
     if sys.argv[2].startswith('auto'):
      request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')

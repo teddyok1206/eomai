@@ -1,5 +1,16 @@
 # KakaoTalk 구현 체크포인트
 
+## 실방 사진 재검증 — 원래 요청 연결 없음으로 확인
+
+`44b643e2` MANUAL 세션에서 한 방의 사진과 CSV를 각각 한 번 수신했다. 파일 무결성과
+이전 수신과의 동일 SHA를 확인했다. 새 진단은 `INITIAL_PHOTO_REQUEST_NOT_OBSERVED`,
+같은 페이지의 최종 주소 관측, 원래 GET 연결 미확정, 후보 0건으로 나왔다. 메시지 전송·
+설정 변경·정본 등록·학생 PDF 발행은 없었다. 실제 카카오에서 CSV 행 정합은 아직 못 했다.
+격리 Chromium에 직접 CDN 다운로드 모양을 추가해 MANUAL 원본 보존과 자동 경로의
+미확정 중단을 확인했다. 집중 테스트 60건과 별도 disposable PostgreSQL의 수락·학생별
+PDF·권한 검사·재조회 회귀 9건이 통과했다.
+[진단 해석과 범위](KAKAO_PHOTO_OCCURRENCE_DIAGNOSTIC_2026-11-18.md)
+
 ## 사진 출처 거부 사유 기록 — 수집기 운영 반영, 실방 재검증 전
 
 MANUAL 수집기의 `origin-diagnostic.txt`는 보호된 원 수신 폴더에 남는 운영 진단 한 줄이다.
