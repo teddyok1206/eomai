@@ -25,6 +25,20 @@
 11. `사진` 문자열, 파일명, timestamp 근접성이나 같은 방의 첫 row만으로 연결하면 반복
     메시지 또는 앨범에서 섞일 수 있다. 불확실하면 명시적 미확정이 더 단순하고 안전하다.
 
+### 기존 수신물 owner에서 두 파일을 검증하는 경계
+
+기존 `KakaoCaptureIntakeService`가 실제 operator의 binding/lease에 속한 CSV·사진 capture
+두 ID만 선택해 검증한다. 새 API·DB model·권한·Artifact revision은 만들지 않는다. 정본은
+기존 MANUAL lease, 실제 수신 receipt/관측, 보호된 두 payload다. 이름으로 쌍을 찾거나
+정규화 revision을 꾸며내지 않는다. 기존 CSV parser의 공통 헤더/행 검증으로 raw ordinal을
+읽되, 검증 전 단계에서 role·시간대·정본 ID를 할당하지 않는다. 기존 reader가 각 payload의
+UID/GID/mode/hash/크기를 검사하고 같은 authorize를 파일 I/O 전후에 수행한다. reader는
+receipt의 전송 상태와 actual payload를 대조하고, owner는 원래 lease 시간과 관측 종류도 확인한다.
+고정 ID 두 건 lookup, 1회 payload/CSV 파싱, O(rows+bytes) 정합이고 별도 cache/queue는 없다.
+파일 I/O 중 DB lock을 잡지 않으며 늦은 세션 철회나 lease 변경은 결과 전에 감지한다. 순수
+검사는 제안 또는 미확정을 반환하고, 실패/입력 유실을 원본 수락 성공으로 바꾸지 않는다.
+목록에서 최근 자료를 자동 결합하는 대안은 범위를 넘고 다른 방을 섞을 수 있어 선택하지 않는다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나

@@ -150,6 +150,9 @@ loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영
 KMP는 같은 문구·같은 시각의 row를 합치지 않는다. 파일명·닉네임·시간 근접성은 쓰지
 않고, 더보기·앨범·잘린 DOM·복수 매치는 미확정이다. 내부 `SEQUENCE_INFERRED` 제안이며
 현재 source 권한·정본 첨부·방 전체 coverage를 증명하지 않는다. 공개 경로에는 아직 연결하지 않았다.
+수신물 owner의 `inspect_photo_occurrence`는 기존 보호된 reader와 실제 binding/lease 권한을
+I/O 전후 확인해 두 exact capture에서 이를 호출한다. CSV parser의 공통 헤더/행 검사를
+재사용하고 가짜 normalization revision을 만들지 않는다. 원본/질문/Artifact 쓰기는 없다.
 
 `scripts/api/testdb_run.sh kakao-tests`의 guarded 임시 DB에서 MANUAL/AUTO 경합·중복
 예약·늦은 권한 철회·관측 불일치·종료 실패·terminal 불변·원래 이력/다른 binding 보존을

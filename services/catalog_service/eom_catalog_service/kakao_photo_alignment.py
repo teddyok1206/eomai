@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Literal
 
-from eom_catalog_contracts.kakao_archive import KakaoMessageNormalization
 from eom_catalog_contracts.kakao_room_intake import observed_manual_room_keys
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import (
@@ -15,6 +14,8 @@ from eom_kakao_archive_contracts.manual_observation import (
     ManualDocumentNode,
     ManualPageObservation,
 )
+
+from .kakao_csv_parser import KakaoCsvMessages
 
 _PHOTO_MARKER = "사진"
 _FENCE_FIELDS = ("profile_id", "browser_run_id", "fence_epoch", "page_instance_id")
@@ -136,7 +137,7 @@ def _matching_starts(rows: Iterable[bytes], pattern: tuple[bytes, ...]) -> Itera
 
 
 def infer_kakao_photo_occurrence(
-    normalization: KakaoMessageNormalization,
+    csv: KakaoCsvMessages,
     *,
     csv_receipt: ManualDownloadResult,
     csv_observation: ManualPageObservation,
@@ -157,8 +158,7 @@ def infer_kakao_photo_occurrence(
         or csv_doc.path != photo_doc.path
         or csv_receipt.capture_id == photo_receipt.capture_id
         or csv_member is None
-        or (csv_member.sha256, csv_member.size_bytes)
-        != (normalization.source_sha256, normalization.source_bytes)
+        or (csv_member.sha256, csv_member.size_bytes) != (csv.source_sha256, csv.source_bytes)
         or csv_observation.target.kind != "BLOB"
         or photo_observation.target.kind != "SAME_ORIGIN_PATH"
         or target is None
@@ -210,16 +210,15 @@ def infer_kakao_photo_occurrence(
         (pattern[::-1], after - index),
     ):
         starts = _matching_starts(
-            (_text_key(message.text) for message in normalization.messages),
+            map(_text_key, csv.messages),
             tuple(map(_text_key, candidate)),
         )
         for start in starts:
             if not all(
-                _line_endings(normalization.messages[start + i].text) == text
-                for i, text in enumerate(candidate)
+                _line_endings(csv.messages[start + i]) == text for i, text in enumerate(candidate)
             ):
                 return None
             if found is not None:
                 return None
-            found = normalization.messages[start + offset].row_ordinal
+            found = start + offset + 1
     return None if found is None else KakaoPhotoOccurrence(found)

@@ -23,17 +23,23 @@ from eom_identifiers import sha256_bytes
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory
-from eom_orchestrator.kakao_download_inputs import KakaoDownloadInputError, KakaoDownloadMetadata
+from eom_orchestrator.kakao_download_inputs import (
+    KakaoDownloadInputError,
+    KakaoDownloadMetadata,
+    ReceivedKakaoDownload,
+)
 from sqlalchemy import Engine
 
 from .kakao_archive_authorization import KakaoArchiveError
 from .kakao_archive_commands import validate_kakao_idempotency_key
+from .kakao_csv_parser import read_kakao_csv_messages
 from .kakao_manual_capture_access import (
     OwnedManualCaptureRun,
     authorize_owned_manual_capture_run,
     recent_owned_manual_captures,
 )
-from .kakao_room_intake import KakaoRoomIntakeService
+from .kakao_photo_alignment import KakaoPhotoOccurrence, infer_kakao_photo_occurrence
+from .kakao_room_intake import DownloadReader, KakaoRoomIntakeService
 
 MetadataReader = Callable[[ProfileFence, str], KakaoDownloadMetadata]
 CaptureIdsReader = Callable[[ProfileFence], tuple[tuple[str, ...], bool]]
@@ -89,15 +95,75 @@ class KakaoCaptureIntakeService:
         engine: Engine,
         *,
         intake: KakaoRoomIntakeService,
+        read_download: DownloadReader,
         read_metadata: MetadataReader,
         list_capture_ids: CaptureIdsReader,
     ) -> None:
         self._sessions = build_session_factory(engine)
+        self._read_download = read_download
         self.intake, self.read_metadata, self.list_capture_ids = (
             intake,
             read_metadata,
             list_capture_ids,
         )
+
+    def inspect_photo_occurrence(
+        self,
+        actor: ActorContext,
+        *,
+        source_binding_id: str,
+        manual_lease_id: str,
+        csv_capture_id: str,
+        photo_capture_id: str,
+    ) -> KakaoPhotoOccurrence | None:
+        """Internal read of two exact owned captures; no source publication or workflow."""
+
+        def context() -> OwnedManualCaptureRun:
+            with self._sessions.begin() as session:
+                return authorize_owned_manual_capture_run(
+                    session,
+                    actor,
+                    source_binding_id=source_binding_id,
+                    manual_lease_id=manual_lease_id,
+                )
+
+        run = context()
+        if csv_capture_id == photo_capture_id:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+
+        def read(capture_id: str) -> ReceivedKakaoDownload:
+            try:
+                captured = self._read_download(run.fence, capture_id)
+            except KakaoDownloadInputError:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_MANUAL_CAPTURE_UNAVAILABLE") from None
+            run.validate_transfer_interval(
+                captured.receipt.started_at, captured.receipt.completed_at
+            )
+            return captured
+
+        csv = read(csv_capture_id)
+        photo = read(photo_capture_id)
+        occurrence = None
+        if (
+            csv.observation is not None
+            and photo.observation is not None
+            and csv.observation.target.kind == "BLOB"
+            and photo.observation.target.kind == "SAME_ORIGIN_PATH"
+        ):
+            try:
+                messages = read_kakao_csv_messages(csv.payload)
+            except ValueError:
+                raise KakaoArchiveError("KAKAO_ARCHIVE_MANUAL_CAPTURE_UNAVAILABLE") from None
+            occurrence = infer_kakao_photo_occurrence(
+                messages,
+                csv_receipt=csv.receipt,
+                csv_observation=csv.observation,
+                photo_receipt=photo.receipt,
+                photo_observation=photo.observation,
+            )
+        if context() != run:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+        return occurrence
 
     def list_captures(self, actor: ActorContext, source_binding_id: str) -> KakaoManualCapturePage:
         with self._sessions.begin() as session:

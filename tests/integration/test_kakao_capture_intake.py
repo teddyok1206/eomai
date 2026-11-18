@@ -14,13 +14,16 @@ from eom_orchestrator.kakao_download_inputs import (
     list_kakao_download_ids,
     read_kakao_download_metadata,
 )
-from sqlalchemy import update
+from eom_orchestrator.models import ArtifactRecord
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from tests.integration.test_kakao_archive_storage import make_actor
 from tests.integration.test_kakao_question_http import question_api, studio_api
 from tests.integration.test_kakao_room_intake import h as h
 from tests.integration.test_kakao_room_intake import intake as intake
+from tests.unit.test_kakao_archive_rules import csv_bytes
+from tests.unit.test_kakao_photo_alignment import GROUPS, document
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -46,10 +49,83 @@ def capture_intake(intake):
         service=KakaoCaptureIntakeService(
             intake.engine,
             intake=intake.service,
+            read_download=intake.reader,
             read_metadata=metadata,
             list_capture_ids=ids,
         ),
     )
+
+
+def prepare_photo_pair(store):
+    messages = ["앞의 문항", "질문\r\n이어서", "사진", "사진", "답변", "뒤의 문항"]
+    page = "kakaopage_" + uuid4().hex
+    csv = store.prepare(
+        payload=csv_bytes([["2026-11-18 20:01:00", "synthetic", body] for body in messages]),
+        page=page,
+        document=document(GROUPS),
+        target=dict(kind="BLOB", path=None),
+    )
+    photo = store.prepare(
+        channel="channel1",
+        room="room1",
+        page=page,
+        document=document(GROUPS),
+        target=dict(kind="SAME_ORIGIN_PATH", path=GROUPS[1][1]),
+    )
+    return dict(
+        source_binding_id=csv.source_binding_id,
+        manual_lease_id=csv.manual_lease_id,
+        csv_capture_id=csv.capture_id,
+        photo_capture_id=photo.capture_id,
+    )
+
+
+def test_exact_photo_pair_reads_verified_payloads_without_publishing(capture_intake):
+    h, service = capture_intake.intake, capture_intake.service
+    pair = prepare_photo_pair(h)
+    with Session(h.engine) as session:
+        before = session.scalar(select(func.count()).select_from(ArtifactRecord))
+    occurrence = service.inspect_photo_occurrence(h.actor, **pair)
+    assert occurrence is not None and occurrence.row_ordinal == 3
+    assert occurrence.association == "SEQUENCE_INFERRED"
+    assert h.calls == [pair["csv_capture_id"], pair["photo_capture_id"]]
+    assert service.inspect_photo_occurrence(h.actor, **pair) == occurrence
+    with Session(h.engine) as session:
+        assert session.scalar(select(func.count()).select_from(ArtifactRecord)) == before
+
+
+def test_photo_pair_other_operator_and_tampered_payload_fail(capture_intake):
+    h, service = capture_intake.intake, capture_intake.service
+    pair = prepare_photo_pair(h)
+    other = make_actor(h.engine)
+    with pytest.raises(KakaoArchiveError, match="RESOURCE_NOT_FOUND"):
+        service.inspect_photo_occurrence(other, **pair)
+    assert not h.calls
+    payload = h.run / pair["photo_capture_id"] / "payload.bin"
+    original = payload.read_bytes()
+    payload.write_bytes(b"!" + original[1:])
+    with pytest.raises(KakaoArchiveError, match="MANUAL_CAPTURE_UNAVAILABLE"):
+        service.inspect_photo_occurrence(h.actor, **pair)
+
+
+def test_photo_pair_rechecks_current_actor_after_payload_reads(capture_intake, monkeypatch):
+    h, service = capture_intake.intake, capture_intake.service
+    pair = prepare_photo_pair(h)
+
+    def revoked(fence, capture):
+        result = h.reader(fence, capture)
+        if capture == pair["photo_capture_id"]:
+            with Session(h.engine) as session, session.begin():
+                session.execute(
+                    update(OperatorRecord)
+                    .where(OperatorRecord.operator_id == h.actor.operator_id)
+                    .values(must_change_password=True)
+                )
+        return result
+
+    monkeypatch.setattr(service, "_read_download", revoked)
+    with pytest.raises(KakaoArchiveError, match="PERMISSION_DENIED"):
+        service.inspect_photo_occurrence(h.actor, **pair)
 
 
 def prepare_public(capture_intake):

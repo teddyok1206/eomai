@@ -1,5 +1,20 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 보호된 실제 수신물 reader와 사진 정합의 연결
+
+Catalog 내부 `inspect_photo_occurrence`가 현재 운영자의 exact binding/원 MANUAL lease로
+CSV와 사진 capture 두 건을 읽는다. 실제 보호된 reader로 UID/GID/mode/hash/크기를 확인하고,
+공통 strict CSV parser에서 새 revision을 생성하지 않고 원래 행만 읽는다. 같은 사용자/lease
+검사를 결과 반환 직전에도 다시 수행한다. 공개 API, browser 동작, 원본 등록, DB/NAS 쓰기,
+기존 실패 기록 수정, AUTO 활성화는 없다.
+
+unit 87 PASS, guarded disposable PostgreSQL 38 PASS(수신·방·PDF HTTP 회귀 포함),
+strict mypy 4개·Ruff PASS다. 새 임시 DB 사례는 검증한 두 payload의 정확한 row 1건,
+동일 입력 재조회와 Artifact 0개 추가, 타 운영자·변조 파일·늦은 권한 철회를 확인했다.
+기존 합성 경로의 사진이 있는 학생 PDF 다운로드·동일 결과 재조회도 검증했다. 실제 카카오
+재연결과 새 capture는 없었고, 이 변경은 source-only다. 실제 source 수락→Studio PDF와
+전체 방 자동 수집은 별도 미완료다.
+
 ## 2026-11-18 사진–CSV 행 정합 준비
 
 실제 한 방에서 확인한 단일 사진과 앨범의 DOM 모양을 분리했다. 정합은 기존 수신 proof의

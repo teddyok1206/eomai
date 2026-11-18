@@ -1,13 +1,15 @@
 """Synthetic occurrence fixtures shaped like the inspected channel popup."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from eom_catalog_service.kakao_csv_parser import read_kakao_csv_messages
 from eom_catalog_service.kakao_photo_alignment import infer_kakao_photo_occurrence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
 
-from tests.unit.test_kakao_archive_rules import csv_bytes, normalize
+from tests.unit.test_kakao_archive_rules import csv_bytes
 
 PATH = "/space/scope/channel/channel1/chats"
 TARGET = "/api/profiles/channel1/chats/room1/log1/attach1/image"
@@ -62,7 +64,7 @@ def document(groups, *, truncated=False, path=PATH):
 
 def inputs(messages, groups, *, csv_groups=None, photo_document=None, photo_changes=None):
     rows = [["2026-11-18 20:01:00", "synthetic", text] for text in messages]
-    normalization = normalize(csv_bytes(rows), source_order="unknown")
+    normalization = read_kakao_csv_messages(csv_bytes(rows))
 
     def observed(index, doc, target, member):
         identity = dict(
@@ -186,5 +188,5 @@ def test_fence_transfer_and_independent_csv_room_observation_are_required(kwargs
 
 def test_csv_hash_cannot_be_substituted_even_when_message_window_matches():
     parsed, evidence = inputs(["질문\n이어서", "사진", "사진", "답변"], GROUPS)
-    different = parsed.model_copy(update={"source_sha256": "sha256:" + "0" * 64})
+    different = replace(parsed, source_sha256="sha256:" + "0" * 64)
     assert infer_kakao_photo_occurrence(different, **evidence) is None

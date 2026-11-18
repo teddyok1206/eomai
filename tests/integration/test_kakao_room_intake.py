@@ -79,7 +79,16 @@ def intake(h, tmp_path):
             h.engine, artifacts=artifacts, rooms=rooms, read_download=read
         )
 
-        def prepare(channel="channel-one", room="room-one", **changes):
+        def prepare(
+            channel="channel-one",
+            room="room-one",
+            *,
+            payload=None,
+            page=None,
+            document=None,
+            target=None,
+            **changes,
+        ):
             capture = "kakaodownload_" + uuid4().hex
             directory = run / capture
             directory.mkdir(mode=0o750)
@@ -89,10 +98,12 @@ def intake(h, tmp_path):
                 profile_id=fence.profile_id,
                 browser_run_id=fence.browser_run_id,
                 fence_epoch=fence.fence_epoch,
-                page_instance_id="kakaopage_" + uuid4().hex,
+                page_instance_id=page or ("kakaopage_" + uuid4().hex),
                 started_at=h.now + timedelta(milliseconds=1),
             )
-            raw = b"synthetic captured bytes; no image-quality claim"
+            raw = (
+                b"synthetic captured bytes; no image-quality claim" if payload is None else payload
+            )
             result = ManualDownloadResult.model_validate(
                 started.model_dump()
                 | dict(
@@ -117,11 +128,12 @@ def intake(h, tmp_path):
                     observed_at=h.now + timedelta(milliseconds=2),
                     status="OBSERVED",
                     error_code=None,
-                    target=dict(
+                    target=target
+                    or dict(
                         kind="SAME_ORIGIN_PATH",
                         path=f"/api/profiles/{channel}/chats/{room}/logs/photo/image",
                     ),
-                    document=doc,
+                    document=document or doc,
                 )
             )
             for name, value in {
