@@ -1,5 +1,22 @@
 # KakaoTalk 구현 체크포인트
 
+## 보관 CSV 방 등록 운영 반영 — 선택 방 수집 준비
+
+Catalog 전용 Platform과 Studio Web을 `19030c3ce1ffb6d66f18e8e1aa4d72db2a547366`으로
+반영했다. 공유 API·QUERY는 기존 버전/PID를 유지했고, Collector `91916433`, DB head
+`20261117_0097`, 기존 INDEX·자료 학습, Kakao 브라우저/프로필·원본을 바꾸지 않았다.
+Catalog closure는 기존 공유 API/계약 wheel을 그대로 사용한다. Web 변경은 받은 자료
+확인 화면 스크립트와 빌드 식별값뿐이다.
+
+첫 회차는 Web PID 이후 실제 HTTPS가 준비되기 전에 502를 받아 기존 Catalog와 Web으로
+복구했다. 기존 HTTP 200을 확인한 뒤 실제 응답의 제한된 대기 절차를 추가해 같은 후보
+패키지로 다시 배포했다. 최종 설치 layout, Studio 로그인 200·신규 static asset 바이트 일치,
+API Ready 200·인증 없는 수신 자료 조회 401을 확인했다. 보호된 설치·복구 증거는
+`/var/lib/eom-kakao-csv-room-release-19030c3c-v2/`에 있다.
+
+관리자가 Studio에서 보관된 CSV로 방을 직접 확인하는 것이 다음 단계다. 아직 그 방을
+등록하거나 실제 수집을 실행하지 않았다. `ONE_ROOM`만 유지하고 전체 방·주기 수집은 비활성이다.
+
 ## 대화 CSV만으로 방 등록과 선택 방 수집 준비 연결
 
 명시적으로 확인된 보호 MANUAL CSV의 popup 근거를 기존 방 등록 owner에 연결했다.
