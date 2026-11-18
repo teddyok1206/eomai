@@ -155,6 +155,11 @@ loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영
 외부 selector를 받지 않는다. 모호하거나 가려진 버튼은 누르지 않으며 timeout은 자동
 재클릭 권한이 아니다. 테스트는 격리 browser의 실제 download event와 로컬 TLS302를
 검사한다. 아직 AUTO 실행에 연결하지 않았고, 클릭 요청은 원본 수신/수락 증거가 아니다.
+`room_read_transfer.py`는 그 동작 전에 exact page listener와 attempt 로컬 시작 표시를
+준비한다. 같은-origin blob 또는 exact image GET/redirect 및 실제 SDK 파일이 확인되면
+`manual_capture_files.py`의 보호된 복사·hash 경계를 사용한다. 다른 event, 중복·timeout은
+다시 누르지 않는다. 기존 `manual_download.py`도 같은 file copy를 사용하지만 이전
+MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기에 연결하지 않았다.
 
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.

@@ -7,7 +7,6 @@ The Catalog owner must separately validate the run fence and actual source assoc
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import stat
 from collections.abc import Callable
@@ -27,6 +26,7 @@ from eom_kakao_archive_contracts.manual_observation import ManualDownloadTarget
 from eom_kakao_archive_contracts.render import canonical_bytes
 
 from .download_origins import DownloadRequestOrigins
+from .manual_capture_files import commit_download_payload
 from .manual_capture_files import create_capture_directory as _directory
 from .manual_capture_files import write_capture_receipt as _write_once
 from .manual_observation import ReadOnlyPage, download_page_path, observe_download_page
@@ -54,55 +54,10 @@ class Page(ReadOnlyPage, Protocol):
 
 
 def _copy_payload(source: Path, directory: Path, incoming: Path) -> ManualDownloadMember:
-    if source.parent != incoming:
-        raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")
-    fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
-    with os.fdopen(fd, "rb") as original:
-        before = os.fstat(original.fileno())
-        if (
-            not stat.S_ISREG(before.st_mode)
-            or before.st_uid != os.geteuid()
-            or before.st_nlink != 1
-            or before.st_mode & 0o022
-        ):
-            raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")
-        if before.st_size == 0:
-            raise BrowserRuntimeError("DOWNLOAD_EMPTY")
-        if before.st_size > MAX_FILE_BYTES:
-            raise BrowserRuntimeError("DOWNLOAD_LIMIT")
-        destination = directory / "payload.partial"
-        target = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
-        digest, count = hashlib.sha256(), 0
-        with os.fdopen(target, "wb") as output:
-            os.fchown(output.fileno(), -1, directory.stat().st_gid)
-            os.fchmod(output.fileno(), 0o640)
-            while chunk := original.read(256 * 1024):
-                count += len(chunk)
-                if count > MAX_FILE_BYTES or count > before.st_size:
-                    raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")
-                digest.update(chunk)
-                output.write(chunk)
-            output.flush()
-            os.fsync(output.fileno())
-        after = os.fstat(original.fileno())
-        if (
-            before.st_dev,
-            before.st_ino,
-            before.st_size,
-            before.st_mtime_ns,
-            before.st_ctime_ns,
-        ) != (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-            after.st_ctime_ns,
-        ) or count != before.st_size:
-            raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")
-    # No replacement of an earlier payload; only this freshly created partial is unlinked.
-    os.link(destination, directory / "payload.bin", follow_symlinks=False)
-    destination.unlink()
-    return ManualDownloadMember(size_bytes=count, sha256="sha256:" + digest.hexdigest())
+    member = commit_download_payload(
+        source, incoming=incoming, destination=directory / "payload.bin", limit=MAX_FILE_BYTES
+    )
+    return ManualDownloadMember(size_bytes=member.size_bytes, sha256=member.sha256)
 
 
 class ManualDownloads:

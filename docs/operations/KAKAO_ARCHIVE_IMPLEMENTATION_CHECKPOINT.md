@@ -1,5 +1,18 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 고정 읽기 동작과 로컬 다운로드 연결
+
+작업 위치에 write-once 시작 표시를 남긴 뒤 고정 동작을 한 번 실행한다. 동일 페이지의
+CSV blob 또는 exact image GET/redirect를 실제 SDK event와 연결해, 확인된 파일만 기존
+보호된 copy의 hash/bytes와 제한된 화면 관측으로 반환한다. 중복/불확실한 이벤트는
+같은 시작 표시에서 자동 재클릭하지 않는다. 기존 MANUAL 저장·receipt는 그대로다.
+
+격리 Chromium의 실제 CSV blob 수신, loopback HTTPS302의 사진 bytes/관측, 이전
+MANUAL 수신과 timeout 재개·다른 transfer·복수 event 차단을 확인했다. 관련82 PASS,
+strict mypy/Ruff PASS다. fixture의 setgid 상속은 임시 incoming을 기존 mode0700으로
+만들어 수정했으며 운영 권한 검사는 완화하지 않았다. 소스 테스트만 수행했으며 실제
+카카오·AUTO 실행·원본 등록·학생 PDF 활성화는 이 변경으로 이루어지지 않았다.
+
 ## 2026-11-18 열린 방의 고정 읽기 동작
 
 실제 관측한 열린 방 메뉴·대화 내보내기의 내 PC 저장·단일 사진 다운로드만 실행할 수

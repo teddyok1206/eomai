@@ -32,7 +32,8 @@ HTML = b"""<!doctype html><html><head><meta charset=utf-8></head><body>
 </div><script>window.danger=0;</script></body></html>"""
 
 
-def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path):
+@pytest.mark.parametrize("receiver", ["manual", "scoped"])
+def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path, receiver):
     if not PYTHON.is_file() or not BROWSERS.is_dir():
         pytest.skip("explicit installed browser environment is unavailable")
     key, certificate = tmp_path / "fixture.key", tmp_path / "fixture.crt"
@@ -116,47 +117,69 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 from eom_kakao_archive_collector.manual_download import ManualDownloads
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
+from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
 async def main():
  with tempfile.TemporaryDirectory(prefix='kakao-redirect-test-',dir=Path.home()/'.cache') as folder:
   root=Path(folder); root.chmod(0o2750)
-  manager=ManualDownloads(ProfileFence(schema_version='kakao-profile-fence/1.0',
-      profile_id='kakaoprofile_'+'1'*32,browser_run_id='kakaobrowserrun_'+'2'*32,
-      fence_epoch=1,mode='MANUAL'),root=root)
+  if sys.argv[2] == 'manual':
+   manager=ManualDownloads(ProfileFence(schema_version='kakao-profile-fence/1.0',
+       profile_id='kakaoprofile_'+'1'*32,browser_run_id='kakaobrowserrun_'+'2'*32,
+       fence_epoch=1,mode='MANUAL'),root=root)
+   incoming=manager.incoming
+  else:
+   manager=None
+   incoming=root/'incoming'; incoming.mkdir(mode=0o700); incoming.chmod(0o700)
+   outputs=root/'outputs'; outputs.mkdir(); outputs.chmod(0o750)
   async with async_playwright() as sdk:
    browser=await sdk.chromium.launch(headless=True,channel='chromium',
-       downloads_path=str(manager.incoming),proxy={'server':sys.argv[1]},
+       downloads_path=str(incoming),proxy={'server':sys.argv[1]},
        args=['--disable-quic','--ignore-certificate-errors',
              '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'])
    context=await browser.new_context(accept_downloads=True,ignore_https_errors=True)
    page=await context.new_page()
-   manager.subscribe(page)
+   if manager: manager.subscribe(page)
    await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/room')
-   async with page.expect_download(timeout=10000) as pending:
-    assert await trigger_room_read_action(
+   image_path='/api/profiles/p/chats/r/message/photo/image'
+   if manager:
+    async with page.expect_download(timeout=10000) as pending:
+     assert await trigger_room_read_action(
+       page, RoomReadAction.DOWNLOAD_IMAGE, channel_key='p', room_key='r', image_path=image_path)
+    await pending.value
+    await asyncio.gather(*tuple(manager._tasks)); await asyncio.sleep(0)
+    assert manager.failure is None
+    paths=list(manager.run.glob('kakaodownload_*/result.json')); assert len(paths)==1
+    result=ManualDownloadResult.model_validate_json(paths[0].read_bytes())
+    assert result.phase=='RECEIVED', result.error_code
+    raw=(paths[0].parent/'page-observation.json').read_bytes()
+    value=ManualPageObservation.model_validate_json(raw)
+    assert value.status=='OBSERVED'
+    assert value.target.kind=='SAME_ORIGIN_PATH'
+    assert value.target.path==image_path
+    document=value.document
+   else:
+    destination=outputs/'photo.png'
+    received=await receive_room_transfer(
       page, RoomReadAction.DOWNLOAD_IMAGE, channel_key='p', room_key='r',
-      image_path='/api/profiles/p/chats/r/message/photo/image')
-   await pending.value
-   await asyncio.gather(*tuple(manager._tasks)); await asyncio.sleep(0)
-   assert manager.failure is None
-   paths=list(manager.run.glob('kakaodownload_*/result.json')); assert len(paths)==1
-   result=ManualDownloadResult.model_validate_json(paths[0].read_bytes())
-   assert result.phase=='RECEIVED', result.error_code
-   raw=(paths[0].parent/'page-observation.json').read_bytes()
-   value=ManualPageObservation.model_validate_json(raw)
-   assert value.status=='OBSERVED' and value.document and not value.document.truncated
-   assert value.target.kind=='SAME_ORIGIN_PATH'
-   assert value.target.path=='/api/profiles/p/chats/r/message/photo/image'
+      image_path=image_path, incoming=incoming, destination=destination)
+    assert destination.read_bytes()==b'synthetic download bytes'
+    assert received.payload.size_bytes==len(destination.read_bytes())
+    assert (outputs/'photo.started').exists()
+    document=received.document
+    assert document is not None
+    raw=document.model_dump_json().encode()
+   assert document and not document.truncated
    assert all(word not in raw for word in (
        b'NEVER_CAPTURE',b'NEVER_PERSIST_QUERY',b'k.kakaocdn.net'))
-   body=[n.text for n in value.document.nodes if 'txt_chat' in n.classes]
+   body=[n.text for n in document.nodes if 'txt_chat' in n.classes]
    assert body==['first line'+chr(10)+'second line'], repr(body)
-   assert any(n.text=='01:29' for n in value.document.nodes)
-   assert any(n.text=='time ' for n in value.document.nodes)
+   assert any(n.text=='01:29' for n in document.nodes)
+   assert any(n.text=='time ' for n in document.nodes)
    assert await page.evaluate('window.danger')==0
-   await manager.close(); await context.close(); await browser.close()
+   if manager: await manager.close()
+   await context.close(); await browser.close()
    print(json.dumps({'synthetic_real_chromium_redirect':'PASS','direct_text':'PASS',
        'private_subtrees':'EXCLUDED','dangerous_clicks':0,'live_provider':'NOT_USED'}))
 asyncio.run(main())
@@ -166,7 +189,14 @@ asyncio.run(main())
         thread.start()
         try:
             process = subprocess.run(
-                [str(PYTHON), "-B", "-c", script, f"http://127.0.0.1:{server.server_port}"],
+                [
+                    str(PYTHON),
+                    "-B",
+                    "-c",
+                    script,
+                    f"http://127.0.0.1:{server.server_port}",
+                    receiver,
+                ],
                 cwd=tmp_path,
                 env={
                     "PATH": "/usr/bin:/bin",

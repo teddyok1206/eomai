@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -42,10 +43,13 @@ def test_fixed_room_controls_in_chromium_with_no_external_network(tmp_path: Path
         pytest.skip("explicit installed Chromium fixture is unavailable")
     program = r"""
 import asyncio
+import sys
+from pathlib import Path
 from playwright.async_api import async_playwright
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction as A
 from eom_kakao_archive_collector.room_read_actions import trigger_room_read_action
+from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
 
 URL='https://business.kakao.com/space/work/channel/channel/chats'
 IMAGE='/api/profiles/channel/chats/room/msg/file/image'
@@ -90,9 +94,13 @@ document.querySelector('#photo').onclick=(event)=>{
 </script>'''
 
 async def main():
+  workspace=Path(sys.argv[1])
+  incoming=workspace/'incoming'; incoming.mkdir(mode=0o700)
+  outputs=workspace/'outputs'; outputs.mkdir(); outputs.chmod(0o750)
   async with async_playwright() as sdk:
-    chromium=await sdk.chromium.launch(headless=True, channel='chromium', args=[
-      '--disable-quic', '--host-resolver-rules=MAP * ~NOTFOUND'])
+    chromium=await sdk.chromium.launch(
+        headless=True, channel='chromium', downloads_path=str(incoming),
+        args=['--disable-quic', '--host-resolver-rules=MAP * ~NOTFOUND'])
     context=await chromium.new_context(service_workers='block', accept_downloads=True)
     async def route(request):
       if request.request.url == URL:
@@ -130,9 +138,11 @@ async def main():
         "cover.style='position:fixed;inset:0;z-index:10'; document.body.append(cover); }")
     await refuse(A.EXPORT_CSV)
     await page.locator('#cover').evaluate("(element)=>element.remove()")
-    async with page.expect_download(timeout=5000) as csv:
-      assert await act(A.EXPORT_CSV)
-    assert (await (await csv.value).path()).read_bytes() == b'DATE,USER,MESSAGE\n'
+    csv=outputs/'source.csv'
+    result=await receive_room_transfer(
+        page,A.EXPORT_CSV,channel_key='channel',room_key='room',incoming=incoming,destination=csv)
+    assert csv.read_bytes() == b'DATE,USER,MESSAGE\n' and result.payload.size_bytes == 18
+    assert result.document is not None
     await refuse(A.DOWNLOAD_IMAGE,path=IMAGE)
     await page.locator('#menu').evaluate("(node)=>node.hidden=true")
     await page.locator('#photo').evaluate("(a)=>a.href+='?signed=not-allowed'")
@@ -153,20 +163,24 @@ async def main():
     await chromium.close()
 asyncio.run(main())
 """
-    process = subprocess.run(
-        [str(PYTHON), "-B", "-c", program],
-        cwd=tmp_path,
-        env={
-            "PATH": "/usr/bin:/bin",
-            "HOME": str(Path.home()),
-            "LANG": "C.UTF-8",
-            "PYTHONNOUSERSITE": "1",
-            "PLAYWRIGHT_BROWSERS_PATH": str(BROWSERS),
-            "PYTHONPATH": str(ROOT / "services/kakao_archive_collector"),
-        },
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(
+        prefix="kakao-room-actions-", dir=Path.home() / ".cache"
+    ) as workspace:
+        process = subprocess.run(
+            [str(PYTHON), "-B", "-c", program, workspace],
+            cwd=tmp_path,
+            env={
+                "PATH": "/usr/bin:/bin",
+                "HOME": str(Path.home()),
+                "LANG": "C.UTF-8",
+                "PYTHONNOUSERSITE": "1",
+                "PLAYWRIGHT_BROWSERS_PATH": str(BROWSERS),
+                "PYTHONPATH": str(ROOT / "services/kakao_archive_collector"),
+            },
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            umask=0o077,
+        )
     assert process.returncode == 0, process.stderr

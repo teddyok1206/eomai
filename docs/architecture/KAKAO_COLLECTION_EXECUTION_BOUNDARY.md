@@ -82,6 +82,25 @@ collector 전용 adapter에서 이미 관측한 열린 방의 (1) 우측 상단 
 없다. 앨범, 텍스트 전용 방의 identity, 잦은 UI가 현재 adapter의 범위 밖이고 실제 채팅방
 UI에서 합성 동작과 자동 수집을 별도 검증하기 전 운영 연결하지 않는다.
 
+### 고정 동작에서 실제 로컬 수신으로
+
+상위 collector가 현재 page와 attempt workspace를 고른다. 이 adapter는 버튼을 누르기 전
+그 page의 SDK request/download event를 한 번 구독하며, 하나의 동작에 전송 하나만 대응한다.
+CSV는 해당 origin의 blob, 사진은 동일한 exact path의 실제 GET 또는 기존 SDK redirect
+tracker가 검증한 출발 path여야 한다. 이름과 저장 위치는 정본 identity가 아니다. 같은
+page 경로가 유지되고 검증된 SDK 임시 파일이 있어야 existing protected file copy로 hash와
+bytes를 확보한다. 파일을 다시 모두 읽거나 원본 파일을 변경하지 않는다. 결과는 작은
+내부 수신 값과 bounded DOM 관측이며 새 wire·registry·DB·NAS 쓰기는 없다.
+
+한 번의 동작/수신 동안 O(1) 이벤트 상태와 기존 최대64개 request index를 사용하고, 파일
+처리는 byte 수에 선형이다. 전송을 끝내지 못했거나 모호하면 원래 요청을 자동 반복하지
+않는다. attempt local의 내용 없는 write-once 시작 표시를 fsync한 뒤 click하며 같은
+위치의 중복/재시작은 표시가 남아 있으면 누르지 않는다. 확인한 파일도 source 수락/
+role/시간대/전체 scope로 승격하지 않는다. SDK 임시
+위치와 attempt 출력의 분리를 유지하고 기존 MANUAL receipt 형식/상한 역시 보존한다.
+Click 반환값만 확인하거나 provider 파일명을 읽는 대안은 실제 전송 손실이나 사진 연결을
+구분하지 못한다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나
