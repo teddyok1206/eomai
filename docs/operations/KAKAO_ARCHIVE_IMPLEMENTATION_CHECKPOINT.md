@@ -1,5 +1,19 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 수집기 다운로드 증거의 프로세스 인계
+
+열린 방 수집기가 command SHA와 exact CSV/사진 관측을 붙인 `open-room.json`을 고정 작업
+폴더에 한 번 기록한다. 기존 Orchestrator UID/GID/경로 guard에서 읽고 현재 등록 방과
+고정 command에 부합할 때만 Catalog의 기존 C1 발행·수락·원본 채택으로 넘긴다. 임시
+결과/정규화 파일을 중복 생성하지 않고, 완료 재조회는 영수증 없이도 작동한다.
+
+격리 Chromium에서 실제 loopback TLS 사진 다운로드, CSV blob, 고정 영수증, 중복 실행
+거부를 검사했다. 임시 PostgreSQL에서는 동일 영수증 구조로 원본 수락/재조회 및 잘못된
+방·명령 거부를 검사했다. 소스 집중131 PASS, disposable DB25 PASS, mypy/format/lint와
+canonical schema/mirror audit PASS. 운영 DB·브라우저·카카오 계정은 변경하지 않았다.
+실제 고정 AUTO browser driver가 현재 세션의 방을 열어 이 작업을 호출하는 연결과 실제
+질문→학생 PDF는 아직 검증 전이다.
+
 ## 2026-11-18 다운로드 증거에서 C1 수락까지 격리 검증
 
 Catalog의 기존 C1 제안 담당에 CSV/사진 수신 member 검증과 사진 행 연결을 붙였다.

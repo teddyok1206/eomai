@@ -9,6 +9,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from eom_kakao_archive_contracts.capture import CsvMember
+from eom_kakao_archive_contracts.open_room_download import (
+    MAX_OPEN_ROOM_RECEIPT_BYTES,
+    OPEN_ROOM_RECEIPT_NAME,
+    OpenRoomDownloadReceipt,
+    RoomPhotoReceipt,
+)
 from eom_kakao_archive_contracts.render import LocalMember, sha256
 
 from .kakao_runtime_os import KakaoRuntimeOsError, protected_directory, read_protected
@@ -70,6 +76,20 @@ class KakaoCaptureOutputReader:
     def read_result(self) -> bytes:
         """Fixed bounded proposal only; the accepted command's owner validates C1."""
         return self._read("outputs/result.json", maximum=32768)
+
+    def open_room_download(self) -> OpenRoomDownloadReceipt:
+        return OpenRoomDownloadReceipt.decode(
+            self._read(f"outputs/{OPEN_ROOM_RECEIPT_NAME}", maximum=MAX_OPEN_ROOM_RECEIPT_BYTES)
+        )
+
+    def read_open_room_photo(self, photo: RoomPhotoReceipt) -> bytes:
+        if (
+            re.fullmatch(r"outputs/photo-[1-6]\.bin", photo.relative_path) is None
+            or type(photo.size_bytes) is not int
+            or not 0 < photo.size_bytes <= 32 * 1024 * 1024
+        ):
+            raise KakaoCaptureInputError("KAKAO_CAPTURE_MEMBER_INVALID")
+        return self._read(photo.relative_path, maximum=photo.size_bytes)
 
     def _read(self, relative_path: str, *, maximum: int) -> bytes:
         owners = frozenset({0, os.geteuid(), self.worker_uid})

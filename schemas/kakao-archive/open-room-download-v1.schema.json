@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/open-room-download/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command_sha256", "started_at", "ended_at", "raw_csv", "csv_document", "photos", "unresolved_visible_bubbles"],
+  "properties": {
+    "schema_version": {"const": "kakao-open-room-download/1.0"},
+    "command_sha256": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/sha"},
+    "started_at": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/utc"},
+    "ended_at": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/utc"},
+    "raw_csv": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/csv-member", "properties": {"relative_path": {"const": "outputs/source.csv"}}},
+    "csv_document": {"$ref": "#/$defs/document"},
+    "unresolved_visible_bubbles": {"type": "integer", "minimum": 0, "maximum": 2048},
+    "photos": {"type": "array", "maxItems": 6, "items": {"$ref": "#/$defs/photo"}}
+  },
+  "$defs": {
+    "document": {"anyOf": [{"type": "null"}, {"$ref": "eom://schemas/kakao-archive/manual-page-observation-v1/1.0#/$defs/Document"}]},
+    "photo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "target", "document"],
+      "properties": {
+        "relative_path": {"type": "string", "pattern": "^outputs/photo-[1-6]\\.bin$"},
+        "sha256": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "target": {"type": "string", "pattern": "^/api/profiles/[a-zA-Z0-9_-]{1,128}/chats/[a-zA-Z0-9_-]{1,128}/[a-zA-Z0-9_-]{1,128}/[a-zA-Z0-9_-]{1,128}/image$"},
+        "document": {"$ref": "#/$defs/document"}
+      }
+    }
+  }
+}

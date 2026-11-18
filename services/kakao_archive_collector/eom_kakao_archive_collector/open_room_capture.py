@@ -5,11 +5,19 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
+from eom_kakao_archive_contracts.capture import CaptureCommand, CsvMember
 from eom_kakao_archive_contracts.manual_observation import ManualDocument
+from eom_kakao_archive_contracts.open_room_download import (
+    OPEN_ROOM_RECEIPT_NAME,
+    OpenRoomDownloadReceipt,
+    RoomPhotoReceipt,
+)
+from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 
-from .manual_capture_files import reserve_download_payload
+from .manual_capture_files import reserve_download_payload, write_capture_receipt
 from .profile import BrowserRuntimeError
 from .room_read_actions import RoomReadAction, trigger_room_read_action
 from .room_read_transfer import (
@@ -144,3 +152,52 @@ async def capture_open_room(
             None, tuple(photos), unresolved + len(targets) - len(photos), error.code
         )
     return OpenRoomCapture(csv, tuple(photos), unresolved, None)
+
+
+async def capture_open_room_attempt(
+    page: RoomTransferPage,
+    command: CaptureCommand,
+    *,
+    channel_key: str,
+    room_key: str,
+    incoming: Path,
+    outputs: Path,
+) -> OpenRoomCapture:
+    """Capture under a controller-staged command and hand off verified downloads once."""
+    started_at = datetime.now(UTC)
+    if (
+        command.operation != "CAPTURE_ROOM"
+        or command.issued_at > started_at
+        or outputs.name != "outputs"
+        or outputs.parent.name != command.execution.attempt_id
+    ):
+        raise BrowserRuntimeError("KAKAO_OPEN_ROOM_COMMAND_INVALID")
+    capture = await capture_open_room(
+        page, channel_key=channel_key, room_key=room_key, incoming=incoming, outputs=outputs
+    )
+    if capture.error_code is not None or capture.csv is None:
+        return capture
+    receipt = OpenRoomDownloadReceipt(
+        command_sha256=sha256(canonical_bytes(command.model_dump(mode="json"))),
+        started_at=started_at,
+        ended_at=datetime.now(UTC),
+        raw_csv=CsvMember(
+            relative_path="outputs/source.csv",
+            sha256=capture.csv.payload.sha256,
+            size_bytes=capture.csv.payload.size_bytes,
+        ),
+        csv_document=capture.csv.document,
+        photos=tuple(
+            RoomPhotoReceipt(
+                relative_path=f"outputs/{photo.member_name}",
+                sha256=photo.transfer.payload.sha256,
+                size_bytes=photo.transfer.payload.size_bytes,
+                target=photo.image_path,
+                document=photo.transfer.document,
+            )
+            for photo in capture.photos
+        ),
+        unresolved_visible_bubbles=capture.unresolved_visible_bubbles,
+    )
+    write_capture_receipt(outputs / OPEN_ROOM_RECEIPT_NAME, receipt.encoded())
+    return capture

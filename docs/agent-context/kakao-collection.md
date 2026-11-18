@@ -168,6 +168,11 @@ MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기
 받아 exact CSV/사진 member·scope·텍스트 앵커를 확인한다. 유일하지 않은 행은 미연결로
 남기고, 실제 이미지 bytes만 기존 C1 제안에 넣는다. worker wire나 수락 권한은 추가하지
 않는다. 실제 local 파일→기존 source owner의 PostgreSQL 통합 검사는 합성 입력으로 한다.
+`capture_open_room_attempt`는 수신 뒤 같은 attempt에 고정 `open-room.json`을 한 번만 쓴다.
+`KakaoCaptureOutputReader`가 보호된 member를 열면 `admit_staged_kakao_open_room`이 해당
+command SHA와 실제 등록 방의 scope를 확인한 후 C1 문서를 기존 발행기에 넘긴다. 결과가
+이미 수락된 재조회는 영수증을 다시 요구하지 않는다. 이 경로는 실제 AUTO 브라우저를
+시작하거나 방을 여는 launcher가 아니다.
 
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit.test_kakao_capture_contracts import command, inventory
+
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 BROWSERS = Path("/opt/eom/kakao-browser/playwright-1.65.2")
@@ -134,14 +136,18 @@ import asyncio, json, sys, tempfile
 from pathlib import Path
 from playwright.async_api import async_playwright
 from eom_kakao_archive_collector.manual_download import ManualDownloads
-from eom_kakao_archive_collector.open_room_capture import capture_open_room
+from eom_kakao_archive_collector.open_room_capture import capture_open_room_attempt
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
 from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
+from eom_kakao_archive_contracts.capture import CaptureCommand
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
+from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadReceipt
+from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 async def main():
+ command=CaptureCommand.model_validate_json(sys.argv[3])
  with tempfile.TemporaryDirectory(prefix='kakao-redirect-test-',dir=Path.home()/'.cache') as folder:
   root=Path(folder); root.chmod(0o2750)
   if sys.argv[2] == 'manual':
@@ -152,7 +158,8 @@ async def main():
   else:
    manager=None
    incoming=root/'incoming'; incoming.mkdir(mode=0o700); incoming.chmod(0o700)
-   outputs=root/'outputs'; outputs.mkdir(); outputs.chmod(0o750)
+   outputs=root/command.execution.attempt_id/'outputs'; outputs.mkdir(parents=True)
+   outputs.chmod(0o750)
   async with async_playwright() as sdk:
    browser=await sdk.chromium.launch(headless=True,channel='chromium',
        downloads_path=str(incoming),proxy={'server':sys.argv[1]},
@@ -191,8 +198,8 @@ async def main():
     assert document is not None
     raw=document.model_dump_json().encode()
    else:
-    capture=await capture_open_room(
-      page,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
+    capture=await capture_open_room_attempt(
+      page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
     assert capture.error_code is None and capture.csv and len(capture.photos)==1
     assert capture.unresolved_visible_bubbles==0
     assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
@@ -202,12 +209,19 @@ async def main():
     document=photo.transfer.document
     assert document is not None
     raw=document.model_dump_json().encode()
+    evidence=(outputs/'open-room.json').read_bytes()
+    proof=OpenRoomDownloadReceipt.decode(evidence)
+    assert proof.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
+    assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
+    assert proof.photos[0].sha256==sha256((outputs/photo.member_name).read_bytes())
     try:
-     await capture_open_room(page,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
+     await capture_open_room_attempt(
+       page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
     except BrowserRuntimeError as e:
      assert e.code=='KAKAO_ROOM_TRANSFER_ALREADY_STARTED'
     else:
      raise AssertionError('a prior attempt cannot run twice')
+    assert (outputs/'open-room.json').read_bytes()==evidence
    assert document and not document.truncated
    assert all(word not in raw for word in (
        b'NEVER_CAPTURE',b'NEVER_PERSIST_QUERY',b'k.kakaocdn.net'))
@@ -234,6 +248,7 @@ asyncio.run(main())
                     script,
                     f"http://127.0.0.1:{server.server_port}",
                     receiver,
+                    command(inventory=inventory()).model_dump_json(),
                 ],
                 cwd=tmp_path,
                 env={

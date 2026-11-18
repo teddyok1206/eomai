@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttempt
+from eom_catalog_contracts.kakao_room_intake import manual_room_identity_sha256
 from eom_catalog_contracts.kakao_source import (
     CAPTURE_REF,
     SOURCE_RESOLUTION_REF,
@@ -23,9 +24,11 @@ from eom_kakao_archive_contracts.capture import (
     CaptureInventory,
     CaptureResult,
     CaptureRoomReport,
+    CsvMember,
     validate_capture_inputs,
     validate_capture_result,
 )
+from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadReceipt, RoomPhotoReceipt
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -42,6 +45,11 @@ from .kakao_archive_authorization import (
 )
 from .kakao_archive_commands import kakao_command_sha256
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord as Capability
+from .kakao_capture_proposal import (
+    OpenRoomDownloadEvidence,
+    RoomCaptureDocuments,
+    build_open_room_proposal,
+)
 from .kakao_capture_publication import (
     AcceptedCapturePublication,
     CaptureMemberReader,
@@ -62,6 +70,7 @@ from .kakao_collection_models import KakaoCollectionRunRecord as Run
 from .kakao_collection_models import KakaoCollectionTaskRecord as Task
 from .kakao_collection_source_access import KakaoCollectionSourceAccess
 from .kakao_manual_models import KakaoProfileRuntimeRecord as Profile
+from .kakao_room_models import KakaoRoomRecord as Room
 from .kakao_source_models import KakaoSourceCommandRecord, KakaoSourceRevisionRecord
 from .kakao_source_pointers import validate_source_pointer_metadata_batch
 from .kakao_source_service import AcceptedKakaoSource, KakaoSourceService
@@ -111,6 +120,7 @@ class _CommandContext:
     attempt: KakaoCollectionAttempt
     capability: ArtifactMemberPointer
     command: ArtifactMemberPointer | None
+    inventory: ArtifactMemberPointer | None
 
 
 def _inventory_pointer(row: Attempt) -> ArtifactMemberPointer:
@@ -335,11 +345,15 @@ class KakaoCollectionAttemptService:
             "capability.json",
             cap_sha256,
         )
+        inventory = None if row.state == "RESERVED" else _inventory_pointer(row)
         validate_source_pointer_metadata_batch(
-            session, (pointer, *((_inventory_pointer(row),) if row.state != "RESERVED" else ()))
+            session, (pointer, *((inventory,) if inventory else ()))
         )
         return _CommandContext(
-            _identity(row), pointer, None if row.state == "RESERVED" else _command_pointer(row)
+            _identity(row),
+            pointer,
+            None if row.state == "RESERVED" else _command_pointer(row),
+            inventory,
         )
 
     def _read[T: BaseModel](self, pointer: ArtifactMemberPointer, model: type[T]) -> T:
@@ -467,6 +481,60 @@ class KakaoCollectionAttemptService:
             if row is None or row.state == "RESERVED" or row.capability_sha256 is None:
                 raise KakaoArchiveError(_INVALID)
             return self._context(session, row, row.capability_sha256)
+
+    def open_room_documents(
+        self,
+        attempt_id: str,
+        *,
+        expected_room: tuple[str, str],
+        read_receipt: Callable[[], OpenRoomDownloadReceipt],
+        read_csv: Callable[[CsvMember], bytes],
+        read_photo: Callable[[RoomPhotoReceipt], bytes],
+    ) -> RoomCaptureDocuments:
+        """Read a local handoff only for the current operator's exact bound room."""
+        expected = self._result_input_context(attempt_id)
+        if expected.command is None or expected.inventory is None:
+            raise KakaoArchiveError(_INVALID)
+        with self._sessions.begin() as session:
+            room = session.get(Room, expected.attempt.room_id)
+            if (
+                room is None
+                or room.state != "ACTIVE"
+                or room.source_binding_id != expected.attempt.source_binding_id
+                or room.source_identity_sha256 != manual_room_identity_sha256(*expected_room)
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+        command = self._read(expected.command, CaptureCommand)
+        self._match(command, expected.attempt)
+        capability = self._read(expected.capability, CaptureCapability)
+        inventory = self._read(expected.inventory, CaptureInventory)
+        try:
+            receipt = read_receipt()
+            if (
+                receipt.command_sha256 != expected.command.sha256
+                or receipt.started_at < command.issued_at
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+            return build_open_room_proposal(
+                command,
+                capability,
+                inventory,
+                source=read_csv(receipt.raw_csv),
+                evidence=OpenRoomDownloadEvidence(
+                    raw_csv=receipt.raw_csv,
+                    expected_room=expected_room,
+                    csv_document=receipt.csv_document,
+                    photos=receipt.photos,
+                    unresolved_visible_bubbles=receipt.unresolved_visible_bubbles,
+                    started_at=receipt.started_at,
+                    ended_at=receipt.ended_at,
+                ),
+                read_photo=read_photo,
+            )
+        except KakaoArchiveError:
+            raise
+        except (ValueError, OSError):
+            raise KakaoArchiveError(_INVALID) from None
 
     def publish_and_accept_result(
         self,

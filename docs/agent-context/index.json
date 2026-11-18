@@ -223,7 +223,7 @@
         "apps/web_gui/eom_web_gui/kakao_capture_routes.py",
         "apps/web_gui/eom_web_gui/static/kakao-captures.js",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection_attempt.py",
-        "services/catalog_service/eom_catalog_service/kakao_collection_attempt_models.py",
+        "packages/kakao_archive_contracts/eom_kakao_archive_contracts/open_room_download.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_attempt_service.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_source_access.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_source_composition.py",

@@ -28,6 +28,7 @@ from eom_kakao_archive_contracts.capture import (
     validate_capture_result,
 )
 from eom_kakao_archive_contracts.manual_observation import ManualDocument
+from eom_kakao_archive_contracts.open_room_download import RoomPhotoReceipt
 from eom_kakao_archive_contracts.render import LocalMember, canonical_bytes, sha256
 
 from .kakao_csv_parser import parse_kakao_csv, read_kakao_csv_messages
@@ -35,15 +36,6 @@ from .kakao_media_publication import inspect_kakao_media
 from .kakao_photo_alignment import infer_scoped_photo_occurrence
 
 _PHOTO_MEMBER = re.compile(r"outputs/photo-[1-6]\.bin")
-
-
-@dataclass(frozen=True, slots=True)
-class RoomPhotoReceipt:
-    relative_path: str
-    sha256: str
-    size_bytes: int
-    target: str = field(repr=False)
-    document: ManualDocument | None = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

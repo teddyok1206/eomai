@@ -15,7 +15,6 @@ from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_capture_proposal import (
     OpenRoomDownloadEvidence,
     PartialRoomEvidence,
-    RoomPhotoReceipt,
     build_open_room_proposal,
     build_partial_room_capture,
 )
@@ -26,11 +25,13 @@ from eom_catalog_service.kakao_collection_attempt_service import KakaoCollection
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_collection_source_composition import (
     admit_staged_kakao_capture_source,
+    admit_staged_kakao_open_room,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
 from eom_kakao_archive_contracts.capture import CaptureInventory, CsvMember
 from eom_kakao_archive_contracts.manual_observation import ManualDocument
+from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadReceipt, RoomPhotoReceipt
 from eom_kakao_archive_contracts.render import sha256
 from eom_orchestrator import kakao_capture_inputs as capture_inputs
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -167,7 +168,13 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
     image = photo()
     page = ManualDocument.model_validate(document(GROUPS))
     photos = tuple(
-        RoomPhotoReceipt(f"outputs/photo-{index}.bin", sha256(image), len(image), target, page)
+        RoomPhotoReceipt(
+            relative_path=f"outputs/photo-{index}.bin",
+            sha256=sha256(image),
+            size_bytes=len(image),
+            target=target,
+            document=page,
+        )
         for index, target in enumerate((TARGET, OTHER_PHOTO), 1)
     )
     for receipt in photos:
@@ -202,7 +209,7 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
 
     for insufficient in (
         replace(evidence, expected_room=("channel1", "room2")),
-        replace(evidence, photos=(photos[0], replace(photos[1], target=TARGET))),
+        replace(evidence, photos=(photos[0], photos[1].model_copy(update={"target": TARGET}))),
         replace(evidence, csv_document=None),
     ):
         incomplete = build(insufficient)
@@ -210,9 +217,15 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
         assert incomplete.report.unresolved_attachment_bubbles == 2
     assert reads == []
     with pytest.raises(ValueError, match="CAPTURE_DOWNLOAD_INVALID"):
-        build(replace(evidence, photos=(replace(photos[0], relative_path="../photo.bin"),)))
+        build(
+            replace(
+                evidence, photos=(photos[0].model_copy(update={"relative_path": "../photo.bin"}),)
+            )
+        )
     with pytest.raises(ValueError, match="CAPTURE_DOWNLOAD_MISMATCH"):
-        build(replace(evidence, photos=(replace(photos[0], sha256=sha256(b"wrong")),)))
+        build(
+            replace(evidence, photos=(photos[0].model_copy(update={"sha256": sha256(b"wrong")}),))
+        )
     reads.clear()
     proposal = build(evidence)
     assert [item.row_ordinal for item in proposal.report.attachments] == [2, 3]
@@ -228,6 +241,82 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
     assert len(saved) == 2 and saved[0].attachment_id != saved[1].attachment_id
     assert saved[0].original == saved[1].original
     assert admit(staged).replayed
+
+
+def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(staged):
+    data = staged.data
+    room = ("channel-one", "room-one")
+    groups = [
+        (kind, value.replace("/channel1/", "/channel-one/").replace("/room1/", "/room-one/"))
+        for kind, value in GROUPS
+    ]
+    page = ManualDocument.model_validate(
+        document(groups, path="/space/scope/channel/channel-one/chats")
+    )
+    raw = csv_bytes(
+        [
+            ["2026-11-16 12:00:00", "anonymous", message]
+            for message in ("질문\n이어서", "사진", "사진", "답변")
+        ]
+    )
+    outputs = staged.workspace / "outputs"
+    # The source owner, not the worker, creates C1 documents from the protected receipt.
+    for name in ("result.json", "room-report.json", "normalization.json"):
+        (outputs / name).unlink()
+    (outputs / "source.csv").write_bytes(raw)
+    image = photo()
+    path = outputs / "photo-1.bin"
+    path.write_bytes(image)
+    path.chmod(0o640)
+    fixed = OpenRoomDownloadReceipt(
+        command_sha256=data.command_pointer.sha256,
+        started_at=data.report.observed_start_at,
+        ended_at=data.report.observed_end_at,
+        raw_csv=CsvMember(
+            relative_path="outputs/source.csv", sha256=sha256(raw), size_bytes=len(raw)
+        ),
+        csv_document=page,
+        photos=(
+            RoomPhotoReceipt(
+                relative_path="outputs/photo-1.bin",
+                sha256=sha256(image),
+                size_bytes=len(image),
+                target=groups[1][1],
+                document=page,
+            ),
+        ),
+        unresolved_visible_bubbles=1,
+    )
+    receipt = outputs / "open-room.json"
+
+    def accept(expected):
+        return admit_staged_kakao_open_room(
+            staged.attempt.service,
+            data.reserved.attempt_id,
+            output_root=staged.root,
+            worker_uid=os.getuid(),
+            control_gid=os.getgid(),
+            expected_room=expected,
+            result_publisher=staged.publisher,
+            source_commit="a" * 40,
+            idempotency_key=staged.key,
+            expected_source_revision_id=None,
+            expected_resource_version=0,
+        )
+
+    receipt.write_bytes(fixed.model_copy(update={"command_sha256": sha256(b"another")}).encoded())
+    receipt.chmod(0o640)
+    with pytest.raises(KakaoArchiveError, match="CAPTURE_IDENTITY_MISMATCH"):
+        accept(room)
+    receipt.write_bytes(fixed.encoded())
+    with pytest.raises(KakaoArchiveError, match="CAPTURE_IDENTITY_MISMATCH"):
+        accept((room[0], "another-room"))
+    accepted = accept(room)
+    assert len(accepted.resolution.rows) == 4
+    assert len(accepted.resolution.admission.attachments) == 1
+    assert not (outputs / "normalization.json").exists()
+    receipt.unlink()
+    assert accept(room).replayed
 
 
 def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):

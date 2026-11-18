@@ -960,6 +960,23 @@ gate의 AUTO 소유, 실제 epoch/attempt, guarded activation과 full inventory�
   데 Counter를 사용한다. O(rows + bounded photo bytes)이며 새 DB/index/복제본은 없다.
 - 제안 작성은 저장하지 않는다. permission/fence/트랜잭션 및 idempotent replay는 기존 C1
   수락 경계를 그대로 거친다. hash/크기 불일치나 CSV 범위보다 많은 관측은 명시적으로 거부한다.
-- 순서·시간대·발화자·전체 사진 범위는 확인 없이는 unknown/PARTIAL이다. 별도 공개 요청이나
-  worker wire를 만들지 않는다. 다운로드 증거를 곧바로 완전한 원본으로 받아들이는 방식은
+- 순서·시간대·발화자·전체 사진 범위는 확인 없이는 unknown/PARTIAL이다. 이 제안 작성자는
+  공개 요청을 받지 않는다. 다운로드 증거를 곧바로 완전한 원본으로 받아들이는 방식은
   서로 다른 학생의 사진을 섞거나 중복을 숨길 수 있어 사용하지 않는다.
+
+### 수집 프로세스의 다운로드 증거 인계
+
+수집기가 같은 attempt의 로컬 `outputs/open-room.json`을 한 번 발행한다. 수락된 C1 command의
+SHA, 다운로드 시각 구간, raw 파일 pointer와 최대 6건 사진의 관측만 담는다. CSV/사진 bytes,
+인증정보, public 권한, 중복 원본, browser 동작 지시는 담지 않는다. command SHA로 attempt,
+fence, 대상 room/snapshot/revision을 함께 pin하고, 방의 provider scope는 owner가 별도로 준다.
+새 schema는 기존 C1/문서 관측 shape를 참조하고 이전 schema를 변경하지 않는다.
+
+Orchestrator는 정해진 attempt root에서 UID/GID/mode/크기와 기존 file guard를 재사용한다.
+Catalog는 protected receipt를 매핑하고 기존 `publish_and_accept_result`/원본 수락의 exact 재조회,
+권한과 concurrency를 사용한다. 완료 replay는 receipt나 브라우저를 다시 요구하지 않는다.
+파일 수와 경로 조회는 고정 bound이며 수신 bytes/CSV 행 외에 새 DB나 query/index가 없다.
+파일이나 command hash가 다르면 채택하지 않는다. 실패하거나 중단된 다운로드는 이 성공
+receipt를 발행하지 않고 기존 시작 표시와 raw 파일을 보존한다. 프로세스 실행/만료는 기존
+attempt에서 조율한다. 직접 넘기는 Python 객체는 OS process 경계를 넘지 못하고, 파일 전체를
+다른 서비스에 복제하거나 새 queue를 만드는 방식도 필요하지 않다.
