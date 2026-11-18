@@ -160,6 +160,10 @@ loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영
 `manual_capture_files.py`의 보호된 복사·hash 경계를 사용한다. 다른 event, 중복·timeout은
 다시 누르지 않는다. 기존 `manual_download.py`도 같은 file copy를 사용하지만 이전
 MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기에 연결하지 않았다.
+`open_room_capture.py`는 이미 열린 한 room의 bounded DOM에서 일반 사진 최대6개를
+고른 뒤 사진→메뉴→CSV를 한 번씩 연결한다. 앨범/중복/상한 밖은 미확정 수치를 남긴다.
+시작 표시가 있는 방을 재수집하지 않고 전송 불확실 시 이미 받은 파일만 유지한다.
+미로드 이력·channel 전체·실제 운영 collector start/C1 저장은 이 함수가 보증하지 않는다.
 
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.

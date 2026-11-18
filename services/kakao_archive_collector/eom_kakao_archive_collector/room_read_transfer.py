@@ -47,7 +47,12 @@ class RoomTransfer:
     document: ManualDocument | None = field(repr=False)
 
 
-async def _document(page: RoomTransferPage, path: str) -> ManualDocument | None:
+async def observe_room_document(
+    page: RoomTransferPage, *, expected_path: str | None = None
+) -> ManualDocument | None:
+    path = download_page_path(page)
+    if path is None or (expected_path is not None and path != expected_path):
+        return None
     try:
         raw = await asyncio.wait_for(page.evaluate(DOCUMENT_EXPRESSION), OBSERVATION_SECONDS)
         value = ManualDocument.model_validate(raw)
@@ -120,7 +125,7 @@ async def receive_room_transfer(
             download, matched = await asyncio.wait_for(asyncio.shield(received), _EVENT_SECONDS)
             if duplicates or not matched:
                 raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNASSOCIATED")
-            document = await _document(page, path)
+            document = await observe_room_document(page, expected_path=path)
             local = await asyncio.wait_for(download.path(), _TRANSFER_SECONDS)
         except TimeoutError:
             raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNCERTAIN") from None
