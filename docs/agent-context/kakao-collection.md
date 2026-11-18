@@ -164,6 +164,10 @@ MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기
 고른 뒤 사진→메뉴→CSV를 한 번씩 연결한다. 앨범/중복/상한 밖은 미확정 수치를 남긴다.
 시작 표시가 있는 방을 재수집하지 않고 전송 불확실 시 이미 받은 파일만 유지한다.
 미로드 이력·channel 전체·실제 운영 collector start/C1 저장은 이 함수가 보증하지 않는다.
+`kakao_capture_proposal.py`의 `build_open_room_proposal`은 좁은 내부 다운로드 증거를
+받아 exact CSV/사진 member·scope·텍스트 앵커를 확인한다. 유일하지 않은 행은 미연결로
+남기고, 실제 이미지 bytes만 기존 C1 제안에 넣는다. worker wire나 수락 권한은 추가하지
+않는다. 실제 local 파일→기존 source owner의 PostgreSQL 통합 검사는 합성 입력으로 한다.
 
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.

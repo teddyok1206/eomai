@@ -944,3 +944,22 @@ gate의 AUTO 소유, 실제 epoch/attempt, guarded activation과 full inventory�
   같은 OS adapter를 재사용하고, 실제 selector나 원격 브라우저를 fixture 근거로 활성화하지 않는다.
 - process-local bool lock이나 두 번째 AUTO 전용 mutex는 재시작/MANUAL 경합에 부족하다.
   반대로 browser record에 방별 result를 복제하거나 새 runtime service를 만드는 것도 불필요하다.
+
+### 열린 방의 다운로드에서 기존 C1 제안으로
+
+- Catalog의 C1 제안 작성자가 다운로드 증거를 정규화하되 수락 권한은 기존 attempt/source
+  owner에 둔다. 원본은 작업공간의 정확한 CSV/이미지 member이며 정본은 수락된 Artifact다.
+  방의 논리 ID와 snapshot/normalization revision은 기존 command에 pin한다.
+- 내부 입력은 파일명·크기·SHA-256, scope가 검증된 provider 방 ID와 두 다운로드 시점의
+  문서다. 같은 방의 양쪽 텍스트 앵커로 CSV 행이 유일할 때만 사진을 붙이고, 파일명·사진
+  순번·후보 첫 행으로 매칭하지 않는다. 사진 member는 원본 바이트와 실제 형식을 검사한다.
+- 등록은 중복 행을 제거하는 작업이 아니다. 행별 attachment identity와 revision은 pin된
+  snapshot/row/bytes에서 안정적으로 도출하고, 원본 이미지 bytes의 중복 제거는 기존 owner에
+  맡긴다. 증거 부족이나 같은 행을 경쟁하는 사진은 미연결로 기록한다.
+- 주 접근은 CSV의 선형 순회와 최대 여섯 사진의 제한된 앵커 탐색이다. 유일한 행인지 확인하는
+  데 Counter를 사용한다. O(rows + bounded photo bytes)이며 새 DB/index/복제본은 없다.
+- 제안 작성은 저장하지 않는다. permission/fence/트랜잭션 및 idempotent replay는 기존 C1
+  수락 경계를 그대로 거친다. hash/크기 불일치나 CSV 범위보다 많은 관측은 명시적으로 거부한다.
+- 순서·시간대·발화자·전체 사진 범위는 확인 없이는 unknown/PARTIAL이다. 별도 공개 요청이나
+  worker wire를 만들지 않는다. 다운로드 증거를 곧바로 완전한 원본으로 받아들이는 방식은
+  서로 다른 학생의 사진을 섞거나 중복을 숨길 수 있어 사용하지 않는다.

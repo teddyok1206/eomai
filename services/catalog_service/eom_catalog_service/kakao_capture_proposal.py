@@ -1,12 +1,17 @@
 """Assemble the established C1 output for one room without granting source authority."""
 
+import re
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from uuid import NAMESPACE_URL, uuid5
 
 from eom_catalog_contracts.kakao_archive import (
     KakaoAttachmentObservation,
     KakaoMessageObservation,
 )
+from eom_catalog_contracts.kakao_media import MAX_MEDIA_BYTES
 from eom_kakao_archive_contracts.capture import (
     CaptureAttachment,
     CaptureCapability,
@@ -22,9 +27,36 @@ from eom_kakao_archive_contracts.capture import (
     validate_capture_inputs,
     validate_capture_result,
 )
+from eom_kakao_archive_contracts.manual_observation import ManualDocument
 from eom_kakao_archive_contracts.render import LocalMember, canonical_bytes, sha256
 
-from .kakao_csv_parser import parse_kakao_csv
+from .kakao_csv_parser import parse_kakao_csv, read_kakao_csv_messages
+from .kakao_media_publication import inspect_kakao_media
+from .kakao_photo_alignment import infer_scoped_photo_occurrence
+
+_PHOTO_MEMBER = re.compile(r"outputs/photo-[1-6]\.bin")
+
+
+@dataclass(frozen=True, slots=True)
+class RoomPhotoReceipt:
+    relative_path: str
+    sha256: str
+    size_bytes: int
+    target: str = field(repr=False)
+    document: ManualDocument | None = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class OpenRoomDownloadEvidence:
+    """Trusted composition input, already scoped to the command's room and attempt."""
+
+    raw_csv: CsvMember
+    started_at: datetime
+    ended_at: datetime
+    expected_room: tuple[str, str] = field(repr=False)
+    csv_document: ManualDocument | None = field(repr=False)
+    photos: tuple[RoomPhotoReceipt, ...] = field(default=(), repr=False)
+    unresolved_visible_bubbles: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +83,111 @@ class RoomCaptureDocuments:
     normalization_bytes: bytes = field(repr=False)
     report_bytes: bytes = field(repr=False)
     result_bytes: bytes = field(repr=False)
+
+
+def _attachment(
+    command: CaptureCommand,
+    row: int,
+    photo: RoomPhotoReceipt,
+    read_photo: Callable[[RoomPhotoReceipt], bytes],
+) -> CaptureAttachment:
+    raw = read_photo(photo)
+    if len(raw) != photo.size_bytes:
+        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+    receipt = inspect_kakao_media(command.source_binding_id, raw)
+    if receipt.source_sha256 != photo.sha256:
+        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+    identity = f"eom:kakao:attachment:{command.snapshot_revision_id}:{row}:1"
+    return CaptureAttachment(
+        attachment_id="kakaoattachment_" + uuid5(NAMESPACE_URL, identity).hex,
+        attachment_revision_id="kakaoattachmentrev_"
+        + uuid5(NAMESPACE_URL, f"{identity}:{photo.sha256}").hex,
+        row_ordinal=row,
+        album_ordinal=1,
+        association="SEQUENCE_INFERRED",
+        availability="available",
+        quality_level="unknown",
+        member=LocalMember(
+            relative_path=photo.relative_path,
+            media_type=receipt.media_type,
+            sha256=photo.sha256,
+            size_bytes=photo.size_bytes,
+        ),
+        width_px=receipt.width_px,
+        height_px=receipt.height_px,
+        failure_reason=None,
+    )
+
+
+def build_open_room_proposal(
+    command: CaptureCommand,
+    capability: CaptureCapability,
+    inventory: CaptureInventory,
+    *,
+    source: bytes,
+    evidence: OpenRoomDownloadEvidence,
+    read_photo: Callable[[RoomPhotoReceipt], bytes],
+) -> RoomCaptureDocuments:
+    """Validate and join bounded downloads; this never admits or publishes a source."""
+    validate_capture_inputs(command, capability, inventory)
+    photos = evidence.photos
+    if (
+        len(photos) > 6
+        or len({photo.relative_path for photo in photos}) != len(photos)
+        or not 0 <= evidence.unresolved_visible_bubbles <= 100000
+        or any(
+            not _PHOTO_MEMBER.fullmatch(photo.relative_path)
+            or not 0 < photo.size_bytes <= MAX_MEDIA_BYTES
+            for photo in photos
+        )
+    ):
+        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_INVALID")
+    parsed = read_kakao_csv_messages(source)
+    if (
+        evidence.raw_csv.relative_path != "outputs/source.csv"
+        or evidence.raw_csv.sha256 != parsed.source_sha256
+        or evidence.raw_csv.size_bytes != parsed.source_bytes
+    ):
+        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+    matches: list[tuple[int, RoomPhotoReceipt]] = []
+    csv_doc = evidence.csv_document
+    if csv_doc is not None:
+        for photo in photos:
+            if photo.document is None:
+                continue
+            occurrence = infer_scoped_photo_occurrence(
+                parsed,
+                csv_doc=csv_doc,
+                photo_doc=photo.document,
+                target=photo.target,
+                expected_room=evidence.expected_room,
+            )
+            if occurrence is not None:
+                matches.append((occurrence.row_ordinal, photo))
+    row_counts = Counter(row for row, _ in matches)
+    attachments = tuple(
+        _attachment(command, row, photo, read_photo)
+        for row, photo in matches
+        if row_counts[row] == 1
+    )
+    return build_partial_room_capture(
+        command,
+        capability,
+        inventory,
+        source=source,
+        evidence=PartialRoomEvidence(
+            started_at=evidence.started_at,
+            ended_at=evidence.ended_at,
+            messages=tuple(
+                KakaoMessageObservation(row_ordinal=photo.row_ordinal, kind="attachment")
+                for photo in attachments
+            ),
+            attachments=attachments,
+            unresolved_attachment_bubbles=(
+                evidence.unresolved_visible_bubbles + len(photos) - len(attachments)
+            ),
+        ),
+    )
 
 
 def _attach_observations(evidence: PartialRoomEvidence) -> tuple[KakaoMessageObservation, ...]:

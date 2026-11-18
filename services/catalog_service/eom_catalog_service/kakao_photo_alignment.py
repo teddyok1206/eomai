@@ -170,10 +170,25 @@ def infer_kakao_photo_occurrence(
         )
     ):
         return None
+    return infer_scoped_photo_occurrence(csv, csv_doc=csv_doc, photo_doc=photo_doc, target=target)
+
+
+def infer_scoped_photo_occurrence(
+    csv: KakaoCsvMessages,
+    *,
+    csv_doc: ManualDocument,
+    photo_doc: ManualDocument,
+    target: str,
+    expected_room: tuple[str, str] | None = None,
+) -> KakaoPhotoOccurrence | None:
+    """Align verified download observations without granting capture or source authority."""
+    if csv_doc.path != photo_doc.path:
+        return None
     groups = _groups(photo_doc)
     keys = observed_manual_room_keys(photo_doc.path, target)
     if (
         keys is None
+        or (expected_room is not None and keys != expected_room)
         or _room(groups, photo_doc.path) != keys
         or _room(_groups(csv_doc), csv_doc.path) != keys
     ):
