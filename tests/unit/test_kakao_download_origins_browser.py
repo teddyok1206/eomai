@@ -84,6 +84,10 @@ TEXT_ONLY = AUTO_HTML.replace(
         "scoped",
         "room",
         "room-direct-cdn",
+        "room-direct-link",
+        "room-direct-preview",
+        "room-direct-other-query",
+        "room-direct-duplicate",
         "auto",
         "auto-text",
         "auto-popup",
@@ -136,9 +140,10 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                         b"document.querySelector('.chat_popup').hidden=false",
                         f"window.open('{opened}?tracking=fixture','selected')".encode(),
                     )
-                if (route == PAGE and receiver.endswith("-direct-cdn")) or (
-                    route == POPUP and receiver.startswith("manual-dom-")
-                ):
+                if (
+                    route == PAGE
+                    and (receiver == "manual-direct-cdn" or receiver.startswith("room-direct-"))
+                ) or (route == POPUP and receiver.startswith("manual-dom-")):
                     body = body.replace(
                         b"window.danger=0;",
                         (
@@ -146,9 +151,13 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                             "'click',e=>{e.preventDefault();location.assign('" + CDN + "');});"
                         ).encode(),
                     )
-                if route == POPUP and receiver.startswith("manual-dom-"):
-                    display = CDN + ("&different=1" if receiver == "manual-dom-other-query" else "")
-                    if receiver == "manual-dom-preview":
+                if (route == POPUP and receiver.startswith("manual-dom-")) or (
+                    route == PAGE
+                    and receiver.startswith("room-direct-")
+                    and receiver != "room-direct-cdn"
+                ):
+                    display = CDN + ("&different=1" if receiver.endswith("-other-query") else "")
+                    if receiver.endswith("-preview"):
                         body = body.replace(
                             b"<img class=thumb_g alt=photo>",
                             f'<img class=thumb_g alt=photo src="{display}">'.encode(),
@@ -160,15 +169,15 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                             f'<a class=link_pic href="{display}">'.encode(),
                             1,
                         )
-                    if receiver == "manual-dom-multiple":
+                    if receiver in {"manual-dom-multiple", "room-direct-duplicate"}:
                         body = body.replace(
-                            b"<div class=item_chat><div class=set_chat>",
+                            b"</div></div>\n</div>\n<div id=menu",
                             (
-                                "<div class=item_chat><div class=set_chat>"
+                                "</div></div><div class=item_chat><div class=set_chat>"
                                 f'<a class=link_pic href="{CDN}">'
                                 "<img class=thumb_g alt=photo></a><a class=btn_save "
                                 'href="/api/profiles/p/chats/r/elsewhere/another/image">photo</a>'
-                                "</div></div><div class=item_chat><div class=set_chat>"
+                                "</div></div></div><div id=menu"
                             ).encode(),
                             1,
                         )
@@ -294,19 +303,31 @@ async def main():
     document=received.document
     assert document is not None
     raw=document.model_dump_json().encode()
-   elif sys.argv[2]=='room-direct-cdn':
+   elif sys.argv[2].startswith('room-direct-'):
     capture=await capture_open_room_attempt(
       page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
-    assert capture.error_code is None and capture.csv is not None
-    assert not capture.photos and capture.unresolved_visible_bubbles==1
+    assert capture.error_code is None and capture.csv is not None, capture.error_code
     proof=OpenRoomDownloadReceipt.decode((outputs/'open-room.json').read_bytes())
-    assert not proof.photos and proof.unresolved_visible_bubbles==1
-    assert not (outputs/'photo-1.bin').exists()
+    accepted=sys.argv[2] in {'room-direct-link','room-direct-preview'}
+    if accepted:
+     assert len(capture.photos)==len(proof.photos)==1
+     assert capture.unresolved_visible_bubbles==proof.unresolved_visible_bubbles==0
+     photo=proof.photos[0]
+     assert photo.target==image_path
+     assert (outputs.parent/photo.relative_path).read_bytes()==b'synthetic download bytes'
+     assert photo.sha256==sha256((outputs.parent/photo.relative_path).read_bytes())
+    else:
+     missing=2 if sys.argv[2]=='room-direct-duplicate' else 1
+     assert not capture.photos and not proof.photos
+     assert capture.unresolved_visible_bubbles==proof.unresolved_visible_bubbles==missing
+     assert not (outputs/'photo-1.bin').exists()
+    assert b'NEVER_PERSIST_QUERY' not in (outputs/'open-room.json').read_bytes()
     assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
     assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
     assert await page.evaluate('window.danger')==0
     await context.close(); await browser.close()
-    print(json.dumps({'synthetic_real_chromium_redirect':'PASS','direct_cdn':'UNRESOLVED'}))
+    print(json.dumps({'synthetic_real_chromium_redirect':'PASS',
+        'direct_cdn':'MATCHED' if accepted else 'UNRESOLVED'}))
     return
    else:
     if sys.argv[2].startswith('auto'):

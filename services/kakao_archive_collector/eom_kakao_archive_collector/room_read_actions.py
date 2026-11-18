@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
@@ -13,6 +14,7 @@ _IMAGE = re.compile(
     r"[A-Za-z0-9_-]{1,128}/[A-Za-z0-9_-]{1,128}/image"
 )
 _ACTION_SECONDS = 2.0
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
 
 class RoomReadAction(StrEnum):
@@ -25,9 +27,15 @@ class RoomActionPage(Protocol):
     async def evaluate(self, expression: str, arg: object) -> object: ...
 
 
+@dataclass(frozen=True, slots=True)
+class RoomReadActivation:
+    triggered: bool
+    photo_url_digests: frozenset[str] = field(default_factory=frozenset, repr=False)
+
+
 # Provider structure actually observed on a real popup. There is no click by a
 # free-form selector, label, point, href or script supplied by a caller.
-ROOM_READ_EXPRESSION = r"""({action, channel, room, image}) => {
+ROOM_READ_EXPRESSION = r"""async ({action, channel, room, image}) => {
   if (location.origin !== 'https://business.kakao.com' || !document.body ||
       window.top !== window || document.designMode === 'on') return 'UNAVAILABLE';
   const route = /^\/space\/[A-Za-z0-9_-]{1,128}\/channel\/([A-Za-z0-9_-]{1,128})\/chats(?:\/|$)/;
@@ -101,21 +109,61 @@ ROOM_READ_EXPRESSION = r"""({action, channel, room, image}) => {
   const hit = document.elementFromPoint(x, y);
   if (!box.width || !box.height || !visible(target) || !hit || !target.contains(hit))
     return 'UNAVAILABLE';
+  const photoUrls = () => {
+    if (action !== 'DOWNLOAD_IMAGE' || !globalThis.crypto?.subtle) return [];
+    const selected = target.closest('.set_chat')?.querySelector('a.link_pic');
+    if (!selected || !visible(selected)) return [];
+    const candidates = Array.from(
+      popup.querySelectorAll('.item_chat a.link_pic, .item_chat a.link_pic_temp'));
+    if (candidates.length > 64 || !candidates.includes(selected)) return [];
+    const clean = value => {
+      if (!value || value.length > 8192) return null;
+      try {
+        const url = new URL(value);
+        return url.origin === 'https://k.kakaocdn.net' &&
+          !url.username && !url.password && !url.hash ? url.href : null;
+      } catch { return null; }
+    };
+    const urls = new Set(), usedElsewhere = new Set();
+    for (const preview of candidates) {
+      const images = preview.querySelectorAll('img');
+      if (images.length > 16 || (preview === selected && images.length !== 1)) return [];
+      const seen = preview === selected ? urls : usedElsewhere;
+      const fields = [preview.hasAttribute('href') && preview.href,
+        ...Array.from(images, node => node.currentSrc)];
+      if (preview !== selected) fields.push(...Array.from(images, node => node.src));
+      for (const field of fields) {
+        const value = clean(field);
+        if (value) seen.add(value);
+      }
+    }
+    return [...urls].filter(url => !usedElsewhere.has(url));
+  };
+  const observed = photoUrls();
   // Select and activate the same DOM node atomically; no mouse coordinate fallback.
   target.click();
+  if (observed.length) {
+    try {
+      const encoder = new TextEncoder();
+      return await Promise.all(observed.map(async url => {
+        const digest = await crypto.subtle.digest('SHA-256', encoder.encode(url));
+        return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2,'0')).join('');
+      }));
+    } catch { return 'TRIGGERED'; }
+  }
   return 'TRIGGERED';
 }"""
 
 
-async def trigger_room_read_action(
+async def activate_room_read_action(
     page: RoomActionPage,
     action: RoomReadAction,
     *,
     channel_key: str,
     room_key: str,
     image_path: str | None = None,
-) -> bool:
-    """True is one requested click; False is an already open menu, not a download."""
+) -> RoomReadActivation:
+    """Run one fixed interaction and return ephemeral selected-photo evidence."""
     if (
         not isinstance(action, RoomReadAction)
         or not isinstance(channel_key, str)
@@ -146,7 +194,29 @@ async def trigger_room_read_action(
         # The remote evaluation may have reached the click before transport failure.
         raise BrowserRuntimeError("KAKAO_ROOM_READ_ACTION_UNCERTAIN") from None
     if response == "TRIGGERED":
-        return True
+        return RoomReadActivation(True)
     if response == "ALREADY_OPEN" and action is RoomReadAction.OPEN_EXPORT_MENU:
-        return False
+        return RoomReadActivation(False)
+    if (
+        action is RoomReadAction.DOWNLOAD_IMAGE
+        and isinstance(response, list)
+        and 1 <= len(response) <= 2
+        and all(isinstance(value, str) and _SHA256_HEX.fullmatch(value) for value in response)
+    ):
+        return RoomReadActivation(True, frozenset(response))
     raise BrowserRuntimeError("KAKAO_ROOM_READ_ACTION_UNAVAILABLE")
+
+
+async def trigger_room_read_action(
+    page: RoomActionPage,
+    action: RoomReadAction,
+    *,
+    channel_key: str,
+    room_key: str,
+    image_path: str | None = None,
+) -> bool:
+    """True is one requested click; False is an already open menu, not a download."""
+    activation = await activate_room_read_action(
+        page, action, channel_key=channel_key, room_key=room_key, image_path=image_path
+    )
+    return activation.triggered

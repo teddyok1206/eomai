@@ -7,6 +7,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -22,7 +23,7 @@ from .manual_observation import (
     download_target,
 )
 from .profile import BrowserRuntimeError
-from .room_read_actions import RoomReadAction, trigger_room_read_action
+from .room_read_actions import RoomReadAction, activate_room_read_action
 
 _EVENT_SECONDS = 8
 _TRANSFER_SECONDS = 60
@@ -136,13 +137,19 @@ async def receive_room_transfer(
         for name, callback in (("request", request_event), ("download", download_event)):
             page.on(name, callback)
             listeners.append((name, callback))
-        await trigger_room_read_action(
+        activation = await activate_room_read_action(
             page, action, channel_key=channel_key, room_key=room_key, image_path=image_path
         )
         try:
             download, match = await asyncio.wait_for(asyncio.shield(received), _EVENT_SECONDS)
             if duplicates or match is _TransferMatch.UNASSOCIATED:
                 raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNASSOCIATED")
+            if (
+                match is _TransferMatch.DIRECT_PHOTO
+                and activation.triggered
+                and sha256(download.url.encode()).hexdigest() in activation.photo_url_digests
+            ):
+                match = _TransferMatch.VERIFIED
             document = (
                 await observe_room_document(page, expected_path=path)
                 if match is _TransferMatch.VERIFIED

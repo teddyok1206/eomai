@@ -2,6 +2,7 @@
 
 import asyncio
 import tempfile
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from eom_kakao_archive_collector import room_read_transfer as transfer
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
-from eom_kakao_archive_collector.room_read_actions import RoomReadAction
+from eom_kakao_archive_collector.room_read_actions import RoomReadAction, RoomReadActivation
 
 
 @pytest.fixture
@@ -54,8 +55,8 @@ async def fetch(page, workspace, *, image=False):
 def test_uncertain_transfer_keeps_start_fence_and_never_clicks_again(workspace, monkeypatch):
     _, destination = workspace
     page = Page()
-    trigger = AsyncMock(return_value=True)
-    monkeypatch.setattr(transfer, "trigger_room_read_action", trigger)
+    trigger = AsyncMock(return_value=RoomReadActivation(True))
+    monkeypatch.setattr(transfer, "activate_room_read_action", trigger)
     monkeypatch.setattr(transfer, "_EVENT_SECONDS", 0)
     with pytest.raises(BrowserRuntimeError, match="TRANSFER_UNCERTAIN"):
         asyncio.run(fetch(page, workspace))
@@ -82,9 +83,9 @@ def test_unrelated_or_duplicate_event_never_materializes_payload(workspace, monk
         page.listeners["download"](download)
         if duplicate:
             page.listeners["download"](SimpleNamespace(url=download.url, path=Mock()))
-        return True
+        return RoomReadActivation(True)
 
-    monkeypatch.setattr(transfer, "trigger_room_read_action", emit)
+    monkeypatch.setattr(transfer, "activate_room_read_action", emit)
     with pytest.raises(BrowserRuntimeError, match="TRANSFER_UNASSOCIATED"):
         asyncio.run(fetch(page, workspace))
     download.path.assert_not_awaited()
@@ -130,9 +131,10 @@ def test_only_completed_single_cdn_get_is_a_separable_photo(
                 SimpleNamespace(url=download.url, method="GET", redirected_from=None)
             )
         page.listeners["download"](download)
-        return True
+        digests = frozenset({sha256(download.url.encode()).hexdigest()})
+        return RoomReadActivation(True, digests if outcome == "missing_request" else frozenset())
 
-    monkeypatch.setattr(transfer, "trigger_room_read_action", emit)
+    monkeypatch.setattr(transfer, "activate_room_read_action", emit)
     with pytest.raises(expected_type, match=code) as failure:
         asyncio.run(fetch(page, workspace, image=True))
     assert type(failure.value) is expected_type

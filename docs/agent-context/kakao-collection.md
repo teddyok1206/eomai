@@ -181,7 +181,10 @@ loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영
 검사한다. 아직 AUTO 실행에 연결하지 않았고, 클릭 요청은 원본 수신/수락 증거가 아니다.
 `room_read_transfer.py`는 그 동작 전에 exact page listener와 attempt 로컬 시작 표시를
 준비한다. 같은-origin blob 또는 exact image GET/redirect 및 실제 SDK 파일이 확인되면
-`manual_capture_files.py`의 보호된 복사·hash 경계를 사용한다. 다른 event, 중복·timeout은
+`manual_capture_files.py`의 보호된 복사·hash 경계를 사용한다. 원래 GET 연결이 없는
+직접 CDN 전송은 AUTO가 클릭한 단일 사진의 유일한 표시 주소와 same-page CDN GET·
+최종 전송 주소가 정확히 일치할 때만 연결한다. 비교값은 메모리에서만 쓰고 MANUAL의
+사후 관측을 출처 판정으로 승격하지 않는다. 다른 event, 중복·timeout은
 다시 누르지 않는다. 기존 `manual_download.py`도 같은 file copy를 사용하지만 이전
 MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기에 연결하지 않았다.
 `open_room_capture.py`는 이미 열린 한 room의 bounded DOM에서 일반 사진 최대6개를
