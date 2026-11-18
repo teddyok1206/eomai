@@ -3,6 +3,20 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 실제 별도 대화창 관측과 단일 방 실행 경계
+
+운영 MANUAL에서 선택 방은 목록 DOM 내부가 아니라 별도 브라우저 창에 열렸다. 이번 수신의
+두 receipt에는 `/space/<id>/channel/<id>/chats/<room>` 구조, 대화 popup 하나와 같은 방의
+사진 경로 여섯 건이 있었다. 목록의 자동 선택용 DOM selector와 사진 download event의
+출처는 이 관측으로 확정하지 않는다.
+
+선택 click 직전부터 **그 목록 페이지의 popup event**만 받아 후보 창을 최대 둘까지만 기록한다.
+기존에 열린 탭이나 다른 창은 탐색하지 않는다. 정확한 provider origin/channel/room 경로,
+같은 방의 기존 popup 증거를 API 호출 전 다시 확인한다. 후보 둘 이상, 다른 경로, 시간 초과는
+자동 재클릭 없이 중단한다. 기존 inline 경로는 같은 guard를 유지한다. 새 DB나 worker wire는
+없으며 고정된 관측 기간에 O(1) 후보 상태만 추가한다. 더 넓게 모든 탭을 검사하는 방식은
+현재 실행이 만든 창과 이미 열린 창을 구분하지 못하므로 사용하지 않는다.
+
 ## 단일 방 수신 영수증의 확정 실패
 
 고정 attempt 경로에서 OS 보호 검사를 통과한 `open-room.json` bytes가 canonical 계약으로

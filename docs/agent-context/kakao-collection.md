@@ -202,6 +202,8 @@ typed command를 `FixedKakaoBrowserRuntime.stage_auto_room`의 단일 고정 mem
 `manual_driver`의 AUTO 분기는 기존 supervisor/profile lock 아래 같은 Chromium pin을
 headless로 사용한다. `auto_room_browser.py`는 지정된 channel route와 안정 ID의 방만 열고
 기존 guarded 다운로드를 호출하며 MANUAL/VNC 또는 임의 브라우저 조작을 하지 않는다.
+방 선택으로 열린 별도 popup은 그 클릭을 호스팅한 목록의 이벤트에서만 받아 구분한다.
+기존 탭을 뒤지지 않고, 새 창의 provider/room 경로와 popup 근거가 모두 맞을 때만 읽는다.
 격리 브라우저 fixture의 selector와 실제 카카오 UI 일치 여부는 별도 검증 대상이다.
 
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤

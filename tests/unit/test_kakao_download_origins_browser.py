@@ -6,6 +6,7 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -16,6 +17,7 @@ PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 BROWSERS = Path("/opt/eom/kakao-browser/playwright-1.65.2")
 PAGE = "/space/synthetic/channel/p/chats/room"
 LIST = "/space/synthetic/channel/p/chats"
+POPUP = LIST + "/r"
 IMAGE = "/api/profiles/p/chats/r/message/photo/image"
 CDN = "https://k.kakaocdn.net/synthetic.png?signature=NEVER_PERSIST_QUERY"
 HTML = """<!doctype html><html><head><meta charset=utf-8></head><body>
@@ -70,7 +72,9 @@ TEXT_ONLY = AUTO_HTML.replace(
 ).replace(b"<div class=chat_popup hidden>", b"<div class=chat_popup data-chat-id=r hidden>")
 
 
-@pytest.mark.parametrize("receiver", ["manual", "scoped", "room", "auto", "auto-text"])
+@pytest.mark.parametrize(
+    "receiver", ["manual", "scoped", "room", "auto", "auto-text", "auto-popup", "auto-wrong-popup"]
+)
 def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path, receiver):
     if not PYTHON.is_file() or not BROWSERS.is_dir():
         pytest.skip("explicit installed browser environment is unavailable")
@@ -104,14 +108,19 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
     class Origin(BaseHTTPRequestHandler):
         def do_GET(self):
             host = self.headers.get("Host")
-            if host == "business.kakao.com" and self.path in {PAGE, LIST}:
+            route = urlsplit(self.path).path
+            if host == "business.kakao.com" and route in {PAGE, LIST, POPUP}:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 body = (
-                    (TEXT_ONLY if receiver == "auto-text" else AUTO_HTML)
-                    if self.path == LIST
-                    else HTML
+                    (TEXT_ONLY if receiver == "auto-text" else AUTO_HTML) if route == LIST else HTML
                 )
+                if route == LIST and receiver in {"auto-popup", "auto-wrong-popup"}:
+                    opened = POPUP if receiver == "auto-popup" else PAGE
+                    body = body.replace(
+                        b"document.querySelector('.chat_popup').hidden=false",
+                        f"window.open('{opened}?tracking=fixture','selected')".encode(),
+                    )
             elif host == "business.kakao.com" and self.path == IMAGE:
                 self.send_response(302)
                 self.send_header("Location", CDN)
@@ -225,6 +234,19 @@ async def main():
    else:
     if sys.argv[2].startswith('auto'):
      request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')
+     if sys.argv[2]=='auto-wrong-popup':
+      try:
+       await read_registered_room(page,request,incoming=incoming,outputs=outputs)
+      except BrowserRuntimeError as error:
+       assert error.code=='KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED'
+      else:
+       raise AssertionError('wrong popup must not be read')
+      assert await page.evaluate('window.roomClicks')==1
+      assert await page.evaluate('window.danger')==0
+      assert not tuple(outputs.iterdir())
+      await context.close(); await browser.close()
+      print(json.dumps({'synthetic_real_chromium_redirect':'PASS','wrong_popup':'REFUSED'}))
+      return
      await read_registered_room(page,request,incoming=incoming,outputs=outputs)
      assert await page.evaluate('window.roomClicks')==1
     else:
@@ -245,12 +267,15 @@ async def main():
      assert photo.sha256==sha256((outputs.parent/photo.relative_path).read_bytes())
      document=photo.document
     assert document is not None
+    if sys.argv[2]=='auto-popup':
+     assert document.path=='/space/synthetic/channel/p/chats/r'
     raw=document.model_dump_json().encode()
     assert proof.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
     assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
+    attempt_page=page if sys.argv[2]!='auto-popup' else context.pages[-1]
     try:
      await capture_open_room_attempt(
-       page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
+       attempt_page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
     except BrowserRuntimeError as e:
      assert e.code=='KAKAO_ROOM_TRANSFER_ALREADY_STARTED'
     else:

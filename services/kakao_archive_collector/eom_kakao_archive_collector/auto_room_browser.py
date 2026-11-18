@@ -13,6 +13,7 @@ from eom_kakao_archive_contracts.auto_room_command import (
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 
 from .manual_capture_files import create_capture_directory
+from .manual_observation import download_page_path
 from .open_room_capture import capture_open_room_attempt
 from .profile import BrowserRuntimeError, protected_directory, read_protected
 from .room_read_transfer import RoomTransferPage
@@ -139,34 +140,63 @@ async def read_registered_room(
         await page.goto(target, wait_until="domcontentloaded", timeout=ROOM_LOAD_SECONDS * 1000)
     except Exception:
         raise BrowserRuntimeError("KAKAO_AUTO_CHANNEL_NAVIGATION_FAILED") from None
-    if page.url.rstrip("/") != target:
+    if download_page_path(page) != path:
         raise BrowserRuntimeError("KAKAO_AUTO_CHANNEL_NOT_CONFIRMED")
 
-    async def evaluate(phase: str) -> object:
+    async def evaluate(candidate: AutoRoomPage, candidate_path: str, phase: str) -> object:
         return await asyncio.wait_for(
-            page.evaluate(_OPEN_ROOM, {"path": path, "room": command.room_key, "phase": phase}),
+            candidate.evaluate(
+                _OPEN_ROOM, {"path": candidate_path, "room": command.room_key, "phase": phase}
+            ),
             timeout=ROOM_LOAD_SECONDS,
         )
 
-    async def wait(phase: str) -> object:
-        loop = asyncio.get_running_loop()
-        until = loop.time() + ROOM_LOAD_SECONDS
-        while loop.time() < until:
-            observed = await evaluate(phase)
-            if observed != "PENDING":
-                return observed
+    loop = asyncio.get_running_loop()
+    until = loop.time() + ROOM_LOAD_SECONDS
+    state: object = "PENDING"
+    while state == "PENDING" and loop.time() < until:
+        state = await evaluate(page, path, "PROBE")
+        if state == "PENDING":
             await asyncio.sleep(0.2)
-        return "UNAVAILABLE"
 
-    state = await wait("PROBE")
+    selected = page
     if state == "READY":
-        state = await evaluate("CLICK")
-    if state == "TRIGGERED":
-        state = await wait("CONFIRM")
+        popups: list[AutoRoomPage] = []
+
+        def opened(candidate: AutoRoomPage) -> None:
+            if len(popups) < 2:
+                popups.append(candidate)
+
+        popup_path = f"{path}/{command.room_key}"
+        page.on("popup", opened)
+        try:
+            state = await evaluate(page, path, "CLICK")
+            if state == "TRIGGERED":
+                state = "PENDING"
+                until = loop.time() + ROOM_LOAD_SECONDS
+                while state == "PENDING" and loop.time() < until:
+                    if len(popups) > 1:
+                        state = "UNAVAILABLE"
+                    elif popups:
+                        selected = popups[0]
+                        if download_page_path(selected) == popup_path:
+                            state = await evaluate(selected, popup_path, "CONFIRM")
+                        elif selected.url != "about:blank":
+                            state = "UNAVAILABLE"
+                    else:
+                        state = await evaluate(page, path, "CONFIRM")
+                        if popups:
+                            state = "PENDING"  # Prefer the newly created window, never both.
+                    if state == "PENDING":
+                        await asyncio.sleep(0.2)
+                if len(popups) > 1:
+                    state = "UNAVAILABLE"
+        finally:
+            page.remove_listener("popup", opened)
     if state != "OPENED":
         raise BrowserRuntimeError("KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED")
     result = await capture_open_room_attempt(
-        page,
+        selected,
         command.command,
         channel_key=command.channel_key,
         room_key=command.room_key,
