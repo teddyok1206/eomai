@@ -52,6 +52,8 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "kakao_manual_routes.py",
         "kakao_capture_contracts.py",
         "kakao_capture_routes.py",
+        "kakao_collection_contracts.py",
+        "kakao_collection_routes.py",
         "material_learning_contracts.py",
         "item_preview_projection.py",
         "knowledge_quality.py",
