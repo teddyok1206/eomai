@@ -29,7 +29,12 @@ from .download_origins import DownloadRequestOrigins
 from .manual_capture_files import commit_download_payload
 from .manual_capture_files import create_capture_directory as _directory
 from .manual_capture_files import write_capture_receipt as _write_once
-from .manual_observation import ReadOnlyPage, download_page_path, observe_download_page
+from .manual_observation import (
+    ReadOnlyPage,
+    download_page_path,
+    download_target,
+    observe_download_page,
+)
 from .profile import BrowserRuntimeError, protected_directory, read_protected
 
 ROOT = Path("/var/lib/eom-kakao/downloads")
@@ -165,11 +170,24 @@ class ManualDownloads:
             download_url = ""
         if not isinstance(download_url, str):
             download_url = ""
-        request_target = (
-            self._origins.consume(page_id, download_url, page_path=event_path)
+        decision = (
+            self._origins.resolve(page_id, download_url, page_path=event_path)
             if page is not None
             else None
         )
+        request_target = None if decision is None else decision.target
+        if (
+            decision is not None
+            and request_target is None
+            and download_target(download_url).kind == "UNAVAILABLE"
+        ):
+            # Driver stderr is deliberately suppressed. This local diagnostic is not an
+            # accepted receipt, a change to the result schema, or required to keep payload bytes.
+            with suppress(OSError):
+                _write_once(
+                    directory / "origin-diagnostic.txt",
+                    (decision.safe_log("MANUAL") + "\n").encode("ascii"),
+                )
         task = asyncio.create_task(
             self._receive(
                 download,

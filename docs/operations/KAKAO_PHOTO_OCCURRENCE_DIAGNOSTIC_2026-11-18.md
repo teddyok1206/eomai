@@ -22,9 +22,9 @@
 
 ## 확인된 실패 지점과 아직 모르는 원인
 
-1. [MANUAL 수집기](../../services/kakao_archive_collector/eom_kakao_archive_collector/manual_download.py#L118)는
+1. [MANUAL 수집기](../../services/kakao_archive_collector/eom_kakao_archive_collector/manual_download.py#L123)는
    같은 브라우저 페이지의 `request`와 `download` 이벤트를 기록한다. 직접 확인된 카카오 사진
-   경로가 없으면 [요청 연결기](../../services/kakao_archive_collector/eom_kakao_archive_collector/download_origins.py#L88)가
+   경로가 없으면 [요청 연결기](../../services/kakao_archive_collector/eom_kakao_archive_collector/download_origins.py#L148)가
    같은 페이지에서 유일하게 연결된 GET·리디렉션 기록으로 원래 경로를 확인한다. `UNAVAILABLE`은
    파일이 없다는 뜻이 아니라 **파일을 어느 사진 요청에서 받은 건지 검증하지 못했다는 뜻**이다.
 2. 당시의 수신 기록은 연결 결과만 남겼다. 원래 GET 이벤트가 없었는지, 브라우저가 다른
@@ -38,6 +38,12 @@
 
 ## 반영 범위와 다음 검증
 
+- 후속 소스는 아직 운영에 반영하지 않았다. MANUAL에서 출처가 미확정이면 해당 수신 폴더에
+  `origin-diagnostic.txt`를 한 번만 남긴다. `REDIRECT_PREDECESSOR_MISSING`,
+  `FINAL_URL_OBSERVED_ON_OTHER_PAGE`, `FINAL_URL_AMBIGUOUS`, `REQUEST_EXPIRED` 등
+  고정 사유와 일치 여부만 기록하며, 같은 주소라도 다른 페이지의 요청을 채택하지 않는다.
+  코드가 기록할 수 있는 것은 관측 여부이지 SDK에서 이벤트가 아예 발생하지 않았다는 증명이
+  아니다. 당시 파일에 사유를 소급 기록하지 않는다. 기존 수신 성공·정합 기준은 그대로다.
 - `bcca533c`는 목록에서 연 별도 대화창을 검증하는 **소스 수정**이다. 격리 Chromium에서 맞는
   창의 수집 및 다른 방의 창 거부를 확인했다. 운영 browser에는 미반영이며, 실제 사진 출처
   누락을 해결했다는 증거가 아니다. 전체 방·예약 수집은 꺼져 있다.

@@ -162,6 +162,8 @@ durable pending run을 선택한다. 원래 browser/attempt 및 source command�
 canonical text이며 DOM 조각을 전체 문장/전체 이력으로 간주하지 않는다. 편집·인증 subtree,
 페이지 이동과 전체 text/element/direct-node 상한은 유지한다. `download_origins.py`는 같은
 페이지의 실제 GET image endpoint→허용된 CDN redirect→download를 일회성으로 연결한다.
+출처 연결 실패 수신에는 `manual_download.py`가 같은 보호 폴더에 운영 진단 한 줄만 보관한다.
+주소·식별자·예외 문자열은 저장하지 않으며 진단으로 정합 조건을 완화하지 않는다.
 마지막 request leg의60초·64건·8redirect 상한과 SDK request identity를 확인하며 URL query/
 header/cookie는 저장하지 않는다. URL hash index를 사용하고 다른 방·모호함·범위 없는 event는
 소비 후 거부한다. direct CDN URL 자체는 여전히 UNAVAILABLE이고 source 권한이 아니다.

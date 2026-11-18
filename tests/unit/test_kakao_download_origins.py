@@ -8,6 +8,7 @@ from eom_kakao_archive_collector.download_origins import (
     MAX_REDIRECTS,
     MAX_REQUESTS,
     DownloadRequestOrigins,
+    OriginCode,
 )
 
 PAGE = "/space/example/channel/example/chats/room"
@@ -159,3 +160,68 @@ def test_optional_sdk_metadata_error_is_not_read_as_credentials_or_authority():
     cache = DownloadRequestOrigins()
     cache.observe("page", Missing(), page_path=PAGE)
     assert len(cache) == 0
+
+
+def test_diagnostic_separates_absence_orphan_page_and_final_url():
+    cache = DownloadRequestOrigins()
+    assert cache.resolve("page", CDN, page_path=PAGE).code == OriginCode.FINAL_URL_NOT_OBSERVED
+    cache.observe("page", Request(CDN), page_path=PAGE)
+    assert (
+        cache.resolve("page", CDN, page_path=PAGE).code
+        == OriginCode.INITIAL_PHOTO_REQUEST_NOT_OBSERVED
+    )
+    cache.observe("page", Request(CDN, redirected_from=Request(SOURCE)), page_path=PAGE)
+    assert (
+        cache.resolve("page", CDN, page_path=PAGE).code == OriginCode.REDIRECT_PREDECESSOR_MISSING
+    )
+    redirect(cache, "opener")
+    alternate = cache.resolve("page", CDN, page_path=PAGE)
+    assert alternate.code == OriginCode.FINAL_URL_OBSERVED_ON_OTHER_PAGE
+    assert alternate.target is None and alternate.final_url_on_other_page
+    assert (
+        cache.resolve("opener", CDN + "&different=1", page_path=PAGE).code
+        == OriginCode.FINAL_URL_NOT_MATCHED
+    )
+    changed = cache.resolve("opener", CDN, page_path=PAGE + "-another")
+    assert changed.code == OriginCode.DOWNLOAD_PAGE_CHANGED and changed.final_url_on_same_page
+
+
+def test_unapproved_redirect_and_ambiguity_emit_only_fixed_diagnostic_values():
+    cache = DownloadRequestOrigins()
+    destination = "https://unsupported.example/private-image?token=NEVER_RECORD"
+    redirect(cache, target=destination)
+    rejected = cache.resolve("page", destination, page_path=PAGE)
+    assert rejected.code == OriginCode.REQUEST_ORIGIN_NOT_ALLOWED
+    assert (
+        rejected.source_get_observed and rejected.final_url_on_same_page and rejected.target is None
+    )
+    assert rejected.safe_log("MANUAL") == (
+        "KAKAO_DOWNLOAD_ORIGIN mode=MANUAL code=REQUEST_ORIGIN_NOT_ALLOWED candidates=0 "
+        "source_get=OBSERVED final_same_page=1 final_other_page=0"
+    )
+    redirect(cache)
+    redirect(cache)
+    multiple = cache.resolve("page", CDN, page_path=PAGE)
+    assert multiple.code == OriginCode.FINAL_URL_AMBIGUOUS
+    assert multiple.target is None and multiple.candidates == 2
+    assert "candidates=MULTIPLE" in multiple.safe_log("MANUAL")
+
+
+def test_unrelated_requests_cannot_unbound_diagnostic_storage_and_expiry_is_distinct():
+    clock = [100.0]
+    cache = DownloadRequestOrigins(clock=lambda: clock[0])
+    redirect(cache)
+    clock[0] += LIFETIME_SECONDS
+    assert cache.resolve("page", CDN, page_path=PAGE).code == OriginCode.REQUEST_EXPIRED
+    for i in range(2 * MAX_REQUESTS):
+        cache.observe("page", Request(f"https://business.kakao.com/chats/?{i}"), page_path=PAGE)
+    assert not cache._rejections
+    for i in range(2 * MAX_REQUESTS):
+        cache.observe("page", Request(f"{CDN}&{i}"), page_path=PAGE)
+    assert len(cache._rejections) == MAX_REQUESTS
+    clock[0] += LIFETIME_SECONDS
+    assert (
+        cache.resolve("page", f"{CDN}&{2 * MAX_REQUESTS - 1}", page_path=PAGE).code
+        == OriginCode.FINAL_URL_NOT_OBSERVED
+    )
+    assert not cache._rejections

@@ -261,6 +261,48 @@ def test_page_subscriptions_and_byte_file_count_limits(monkeypatch):
         asyncio.run(run(root))
 
 
+@pytest.mark.parametrize("sidecar_writable", [True, False])
+def test_missing_origin_diagnostic_does_not_change_the_received_file(monkeypatch, sidecar_writable):
+    write_once = adapter._write_once
+
+    def write(path, raw):
+        if path.name == "origin-diagnostic.txt" and not sidecar_writable:
+            raise OSError("diagnostic storage unavailable")
+        write_once(path, raw)
+
+    monkeypatch.setattr(adapter, "_write_once", write)
+
+    async def run(root):
+        manager = adapter.ManualDownloads(fence(), root=root)
+        page = SimpleNamespace(
+            url="https://business.kakao.com/space/example/channel/example/chats/room",
+            evaluate=AsyncMock(return_value=None),
+        )
+        item = transfer(manager, b"synthetic image bytes", filename="sample.png")
+        item.url = "https://k.kakaocdn.net/synthetic?secret=DO_NOT_RECORD"
+        manager.receive(item, "kakaopage_" + "9" * 32, page=page)
+        await drain(manager)
+        (receipt,) = results(manager)
+        assert receipt.phase == "RECEIVED"
+        assert receipt.member.sha256 == sha256(b"synthetic image bytes")
+        folder = manager.run / receipt.capture_id
+        path = folder / "origin-diagnostic.txt"
+        if sidecar_writable:
+            assert path.stat().st_mode & 0o777 == 0o640
+            assert path.read_text() == (
+                "KAKAO_DOWNLOAD_ORIGIN mode=MANUAL code=FINAL_URL_NOT_OBSERVED candidates=0 "
+                "source_get=NOT_CONFIRMED final_same_page=0 final_other_page=0\n"
+            )
+        else:
+            assert not path.exists()
+        assert (folder / "payload.bin").read_bytes() == b"synthetic image bytes"
+        assert manager.failure is None
+        await manager.close()
+
+    with download_root() as root:
+        asyncio.run(run(root))
+
+
 def test_path_permissions_fence_and_no_overwrite(monkeypatch):
     with download_root() as root:
         with pytest.raises(BrowserRuntimeError, match="MODE_INVALID"):
