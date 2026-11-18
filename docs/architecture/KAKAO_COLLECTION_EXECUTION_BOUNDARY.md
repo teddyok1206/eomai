@@ -3,6 +3,28 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 대화 CSV의 방 식별 — successor 설계
+
+최근 운영의 대화 CSV는 채널·방 suffix가 있는 단일 대화 popup에서 수신됐고 서로 다른
+사진 말풍선들의 독립 경로도 같은 방을 가리켰다. 그러나 기존 MANUAL 방 등록은 사진
+전송의 원래 URL이 없으면 잠겨 있고, 새 사진 판정은 등록된 방의 AUTO에서만 실행된다.
+방 식별과 다운로드 파일의 사진 occurrence 증명을 분리한다.
+
+- trusted MANUAL 관측의 `BLOB`만 후보로 한다. 카카오 exact popup 경로, 현재 보존된
+  문서, 편집 영역 제외, 한 popup 안의 서로 다른 말풍선 두 개에서 같은 채널·방을 가리키는
+  서로 다른 사진 링크를 요구한다. 모호한 경로·여러 popup·다른 방 링크·잘린 관측은 거부한다.
+  이 경로는 사진이 보이는 알려진 화면 구조에 한정되며, 모든 방의 완전성을 대신하지 않는다.
+- 방 정본은 기존 logical identity와 현재 mapping이다. 기존 read-only preview는 receipt/
+  관측 hash를 고정한다. 확인 POST에서만 CSV payload·hash·실제 파싱·선행 owner와
+  exact MANUAL fence·시각 창을 확인한다. 이전 사진 proof v1은 그대로 두고, CSV 기반
+  자료는 별도 tag와 schema를 pin한 room proof successor로 발행한다. capability consumer도
+  exact tag에 따라 기존 사진 경로/CSV popup 증거를 따로 검사한다. 새 문서만 room 등록
+  증거가 되며, 이미 받은 이미지의 원래 말풍선이나 CSV 전체 범위·정본 채택 권한이 아니다.
+- 주 접근은 한 번의 bounded DOM 순회와 집합 비교, POST의 CSV 선형 검증이다.
+  기존 Artifact boundary·권한 재검사·같은 요청 key/CAS/불변 revision을 쓰며 새 테이블,
+  인덱스·템플릿·브라우저 동작은 필요하지 않다. 주소 suffix만 믿거나 사진 출처 확인을
+  우회시키는 대안은 서로 다른 방이나 사진을 합치는 오류를 만들 수 있어 사용하지 않는다.
+
 ## 직접 다운로드 주소의 화면 근거 확인
 
 직접 CDN 형태가 관측된 MANUAL 수신에서만, 원래 다운로드 버튼을 가진 같은 방의 사진
