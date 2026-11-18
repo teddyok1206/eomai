@@ -52,7 +52,14 @@ from tests.integration.test_kakao_collection_source_access import counts, photo
 from tests.integration.test_kakao_collection_source_access import h as h
 from tests.integration.test_kakao_collection_source_access import intake as intake
 from tests.unit.test_kakao_archive_rules import csv_bytes
-from tests.unit.test_kakao_photo_alignment import GROUPS, OTHER_PHOTO, TARGET, document
+from tests.unit.test_kakao_photo_alignment import (
+    END_GROUPS,
+    END_MESSAGES,
+    GROUPS,
+    OTHER_PHOTO,
+    TARGET,
+    document,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -160,18 +167,22 @@ def test_built_room_receipts_become_one_canonical_source(staged):
     assert admit(staged).replayed
 
 
-def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admission(staged):
+@pytest.mark.parametrize(
+    ("groups", "texts", "expected_rows"),
+    [
+        (GROUPS, ("질문\n이어서", "사진", "사진", "답변"), [2, 3]),
+        (END_GROUPS, END_MESSAGES, [4, 5]),
+    ],
+)
+def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admission(
+    staged, groups, texts, expected_rows
+):
     data = staged.data
     inventory = _verified_inventory(staged)
-    raw_csv = csv_bytes(
-        [
-            ["2026-11-16 12:00:00", "anonymous", message]
-            for message in ("질문\n이어서", "사진", "사진", "답변")
-        ]
-    )
+    raw_csv = csv_bytes([["2026-11-16 12:00:00", "anonymous", message] for message in texts])
     (staged.workspace / "outputs/source.csv").write_bytes(raw_csv)
     image = photo()
-    page = ManualDocument.model_validate(document(GROUPS))
+    page = ManualDocument.model_validate(document(groups))
     photos = tuple(
         RoomPhotoReceipt(
             relative_path=f"outputs/photo-{index}.bin",
@@ -233,7 +244,7 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
         )
     reads.clear()
     proposal = build(evidence)
-    assert [item.row_ordinal for item in proposal.report.attachments] == [2, 3]
+    assert [item.row_ordinal for item in proposal.report.attachments] == expected_rows
     assert all(item.association == "SEQUENCE_INFERRED" for item in proposal.report.attachments)
     assert reads == [receipt.relative_path for receipt in photos]
     assert proposal.result.status == "PARTIAL"
@@ -242,7 +253,7 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
 
     accepted = admit(staged)
     saved = accepted.resolution.admission.attachments
-    assert len(accepted.resolution.rows) == 4
+    assert len(accepted.resolution.rows) == len(texts)
     assert len(saved) == 2 and saved[0].attachment_id != saved[1].attachment_id
     assert saved[0].original == saved[1].original
     assert admit(staged).replayed

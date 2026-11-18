@@ -28,6 +28,9 @@ class KakaoPhotoOccurrence:
     association: Literal["SEQUENCE_INFERRED"] = "SEQUENCE_INFERRED"
 
 
+_Edge = Literal["START", "END"]
+
+
 @dataclass(slots=True)
 class _Group:
     nodes: list[ManualDocumentNode] = field(default_factory=list, repr=False)
@@ -185,12 +188,13 @@ def infer_scoped_photo_occurrence(
     if csv_doc.path != photo_doc.path:
         return None
     groups = _groups(photo_doc)
+    csv_groups = _groups(csv_doc)
     keys = observed_manual_room_keys(photo_doc.path, target)
     if (
         keys is None
         or (expected_room is not None and keys != expected_room)
         or _room(groups, photo_doc.path) != keys
-        or _room(_groups(csv_doc), csv_doc.path) != keys
+        or _room(csv_groups, csv_doc.path) != keys
     ):
         return None
     targets = [
@@ -215,20 +219,52 @@ def infer_scoped_photo_occurrence(
 
     before = anchor(range(index - 1, -1, -1))
     after = anchor(range(index + 1, len(groups)))
-    if before is None or after is None or tokens[before] == tokens[after]:
+    edge: _Edge | None = None
+    if before is not None and after is not None:
+        if tokens[before] == tokens[after]:
+            return None
+        low, high = before, after
+    elif before is not None and None not in tokens[index + 1 :]:
+        # The target is in the contiguous photo run at the end of the observation.
+        second = anchor(range(before - 1, -1, -1))
+        if second is None or tokens[second] == tokens[before]:
+            return None
+        low, high, edge = second, len(tokens) - 1, "END"
+    elif after is not None and None not in tokens[:index]:
+        second = anchor(range(after + 1, len(tokens)))
+        if second is None or tokens[second] == tokens[after]:
+            return None
+        low, high, edge = 0, second, "START"
+    else:
         return None
-    pattern = tuple(token[1] for token in tokens[before : after + 1] if token is not None)
+    if edge is not None:
+        length = high - low + 1
+        csv_edge = csv_groups[:length] if edge == "START" else csv_groups[-length:]
+        # Require the same ordered photo identities at CSV time, not just a
+        # matching number of photo markers on a moving/virtualized page.
+        if len(csv_edge) != length or any(
+            group.token() != tokens[position]
+            or tuple(group.photo_links()) != tuple(groups[position].photo_links())
+            for position, group in enumerate(csv_edge, low)
+        ):
+            return None
+    pattern = tuple(token[1] for token in tokens[low : high + 1] if token is not None)
+    reverse_edge: _Edge | None = None if edge is None else "START" if edge == "END" else "END"
     # Compare both orientations; a match in both is ambiguous even if dates sort.
     found = None
-    for candidate, offset in (
-        (pattern, index - before),
-        (pattern[::-1], after - index),
+    for candidate, offset, required_edge in (
+        (pattern, index - low, edge),
+        (pattern[::-1], high - index, reverse_edge),
     ):
         starts = _matching_starts(
             map(_text_key, csv.messages),
             tuple(map(_text_key, candidate)),
         )
         for start in starts:
+            if (required_edge == "START" and start != 0) or (
+                required_edge == "END" and start + len(candidate) != len(csv.messages)
+            ):
+                return None
             if not all(
                 _line_endings(csv.messages[start + i]) == text for i, text in enumerate(candidate)
             ):

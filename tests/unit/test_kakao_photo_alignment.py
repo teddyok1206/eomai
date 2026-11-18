@@ -138,6 +138,59 @@ def test_exact_window_maps_one_of_two_identical_photo_rows(messages, ordinal):
     )
 
 
+END_GROUPS = [
+    ("text", "첫 질문"),
+    ("text", "추가 설명"),
+    ("photo", TARGET),
+    ("photo", OTHER_PHOTO),
+]
+END_MESSAGES = ["사진", "첫 질문", "추가 설명", "사진", "사진"]
+
+
+@pytest.mark.parametrize("reverse_dom", [False, True])
+@pytest.mark.parametrize("reverse_csv", [False, True])
+def test_stable_latest_photo_run_aligns_even_with_an_older_unloaded_photo(reverse_dom, reverse_csv):
+    parsed, evidence = inputs(
+        END_MESSAGES[::-1] if reverse_csv else END_MESSAGES,
+        END_GROUPS[::-1] if reverse_dom else END_GROUPS,
+    )
+    answer = infer_kakao_photo_occurrence(parsed, **evidence)
+    assert answer is not None
+    assert (answer.row_ordinal, answer.association) == (
+        2 if reverse_csv else 4,
+        "SEQUENCE_INFERRED",
+    )
+
+
+@pytest.mark.parametrize(
+    "messages,groups,changes",
+    [
+        ([*END_MESSAGES, "사진"], END_GROUPS, {}),
+        ([*END_MESSAGES, "이후의 새 답변"], END_GROUPS, {}),
+        (END_MESSAGES + END_MESSAGES[1:], END_GROUPS, {}),
+        (
+            ["사진", "첫 질문", "첫 질문", "사진", "사진"],
+            [END_GROUPS[0], END_GROUPS[0], *END_GROUPS[2:]],
+            {},
+        ),
+        (END_MESSAGES, [END_GROUPS[0], ("collapsed", "추가 설명"), *END_GROUPS[2:]], {}),
+        (END_MESSAGES, [*END_GROUPS[:3], ("album", OTHER_PHOTO)], {}),
+        (END_MESSAGES, END_GROUPS, {"csv_groups": [*END_GROUPS[:2], *END_GROUPS[2:][::-1]]}),
+        (END_MESSAGES, END_GROUPS, {"csv_groups": END_GROUPS[:-1]}),
+        (
+            END_MESSAGES,
+            END_GROUPS,
+            {
+                "photo_changes": dict(target=dict(kind="UNAVAILABLE", path=None)),
+            },
+        ),
+    ],
+)
+def test_photo_run_never_guesses_from_count_or_end_position(messages, groups, changes):
+    parsed, evidence = inputs(messages, groups, **changes)
+    assert infer_kakao_photo_occurrence(parsed, **evidence) is None
+
+
 @pytest.mark.parametrize(
     "messages",
     [
