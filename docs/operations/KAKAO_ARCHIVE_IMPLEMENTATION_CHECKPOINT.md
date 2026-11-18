@@ -1,5 +1,19 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 사진–CSV 행 정합 준비
+
+실제 한 방에서 확인한 단일 사진과 앨범의 DOM 모양을 분리했다. 정합은 기존 수신 proof의
+run/fence/page, 두 관측의 같은 방과 exact CSV hash를 확인한다. 단일 사진 아이콘에서 얻은
+target이 한 메시지에만 있고, 그 사진을 감싸는 서로 다른 완전 텍스트 사이의 연속 패턴이
+CSV 전체의 두 방향에서 단 한 번 나타날 때만 `SEQUENCE_INFERRED`를 반환한다. 동일 시각·
+동일 `사진` 행의 개수와 순서를 유지한다. 앨범·더보기·중첩 텍스트·혼합 방·잘린 DOM·
+아직 target을 얻지 못한 옛 수신물은 미확정이다. 채팅 내용과 실제 방 key는 커밋하지 않았다.
+
+합성 정합21건 및 기존 CSV/관측/Chromium 회귀 포함101 PASS, strict mypy와 Ruff PASS다.
+정합 함수는 source-only이며 공개 API·운영 수락은 아직 연결하지 않았다. 직전 collector
+배포는 유지하고 browser/remote inactive를 다시 확인했다. 새 사진 관측, 실제 source/PDF,
+전체 방 자동화는 아직 미확인이다. 기존 수신 파일과 PDF는 수정하지 않았다.
+
 ## 2026-11-18 관측 수집기 호환 운영 반영
 
 source `04d417bcd57335895056f0e0ebf537d9962f206d`를 커밋·푸시하고 collector/contracts

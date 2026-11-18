@@ -3,6 +3,28 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 실제 사진의 CSV occurrence 제안 — 2026-11-18
+
+1. Catalog의 순수 정합 함수는 이미 검증해 읽은 두 MANUAL 수신물에서 단일 사진의 CSV
+   row ordinal을 제안한다. 클릭·원본 수락·첨부 발행은 담당하지 않는다.
+2. 정본은 기존 수신 reader가 확인한 CSV/사진 bytes와 각각의 관측 receipt이다.
+3. 새 wire/DB 계약 없이 기존 receipt/정규화 pointer에 대한 내부 값만 반환한다.
+4. 원 run/fence/page/profile, 각 capture, CSV hash와 byte 길이, 같은 문서 및 관측된
+   단일 room identity를 대조한다. 현재 사용자 권한 확인은 호출 owner에 남는다.
+5. DOM의 주 접근은 parent→메시지 group과 target path exact lookup, CSV의 주 접근은
+   원래 row 순서에서 정확한 연속 부분열 검색이다. 원래 순서를 정렬하지 않는다.
+6. DOM을 한 번 분류하고, 사진 전후의 연속 후보를 KMP로 양방향 검색한다. 같은 문장이
+   반복돼도 row를 합치지 않는다. 전체 DOM/CSV 자료를 결과에 복제하지 않는다.
+7. 시간은 관측 노드/CSV rows와 읽을 문자열 길이에 선형, 공간은 DOM과 검색 패턴 크기에
+   선형이다. 현재 observation 노드2048, CSV100,000행 상한을 그대로 사용한다.
+8. DB transaction이나 쓰기는 없다. 두 관측은 받은 같은 자료를 다시 읽어 재현한다.
+9. Catalog 순수 함수→기존 수신 자료 값과 계약 방향이다. browser SDK/파일/권한은 읽지 않는다.
+10. 앞뒤 정확한 텍스트가 서로 다르고, 양방향 통틀어 연속 패턴이 딱 한 곳이면
+    `SEQUENCE_INFERRED`다. DOM truncation·더보기·혼합 text·앨범·다른 방·모호한 위치는
+    추측하지 않는다. 시각·역할·원본 화질·방 전체 수집의 확인으로 확대하지 않는다.
+11. `사진` 문자열, 파일명, timestamp 근접성이나 같은 방의 첫 row만으로 연결하면 반복
+    메시지 또는 앨범에서 섞일 수 있다. 불확실하면 명시적 미확정이 더 단순하고 안전하다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나

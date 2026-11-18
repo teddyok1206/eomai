@@ -144,6 +144,13 @@ MANUAL의16건 상한은 AUTO의 전체 수집 상한과 다르며, loaded DOM �
 수집/연결했다고 표시하지 않는다. 실제 redirect와 direct-text fixture는 별도 임시 Chromium/
 loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영 인증은 사용하지 않는다.
 
+`kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
+단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.
+서로 다른 완전 본문 두 개가 사진을 감싸야 하며 원래 CSV의 양쪽 순서를 모두 비교한다.
+KMP는 같은 문구·같은 시각의 row를 합치지 않는다. 파일명·닉네임·시간 근접성은 쓰지
+않고, 더보기·앨범·잘린 DOM·복수 매치는 미확정이다. 내부 `SEQUENCE_INFERRED` 제안이며
+현재 source 권한·정본 첨부·방 전체 coverage를 증명하지 않는다. 공개 경로에는 아직 연결하지 않았다.
+
 `scripts/api/testdb_run.sh kakao-tests`의 guarded 임시 DB에서 MANUAL/AUTO 경합·중복
 예약·늦은 권한 철회·관측 불일치·종료 실패·terminal 불변·원래 이력/다른 binding 보존을
 검사한다. 기존 worker ProfileFence와 hash parity, closed owner metadata와 schema mirror도
