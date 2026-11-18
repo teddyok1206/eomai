@@ -39,6 +39,7 @@ from .kakao_manual_capture_access import (
     recent_owned_manual_captures,
 )
 from .kakao_photo_alignment import KakaoPhotoOccurrence, infer_kakao_photo_occurrence
+from .kakao_room_csv_identity import observed_csv_popup_room_keys
 from .kakao_room_intake import DownloadReader, KakaoRoomIntakeService
 
 MetadataReader = Callable[[ProfileFence, str], KakaoDownloadMetadata]
@@ -49,6 +50,8 @@ def _observed_keys(metadata: KakaoDownloadMetadata) -> tuple[str, str] | None:
     observed = metadata.observation
     if observed is None or observed.status != "OBSERVED" or observed.document is None:
         return None
+    if observed.target.kind == "BLOB":
+        return observed_csv_popup_room_keys(observed)
     return observed_manual_room_keys(observed.document.path, observed.target.path or "")
 
 

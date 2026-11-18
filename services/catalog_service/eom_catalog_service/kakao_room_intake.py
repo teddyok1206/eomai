@@ -16,10 +16,15 @@ from pathlib import Path
 
 from eom_catalog_contracts.kakao_capture_intake import manual_capture_preview_sha256
 from eom_catalog_contracts.kakao_room_intake import (
+    CSV_POPUP_ROOM_EVIDENCE_REF,
     MANUAL_ROOM_EVIDENCE_REF,
+    MANUAL_ROOM_EVIDENCE_REFS,
     ConfirmKakaoManualRoom,
+    KakaoCsvPopupRoomEvidence,
     KakaoManualRoomEvidence,
+    ManualRoomEvidence,
     manual_channel_identity_sha256,
+    manual_room_evidence_type,
     manual_room_identity_sha256,
     observed_manual_room_keys,
 )
@@ -47,12 +52,14 @@ from .kakao_archive_commands import (
     lock_kakao_intent,
     validate_kakao_idempotency_key,
 )
+from .kakao_csv_parser import read_kakao_csv_messages
 from .kakao_manual_capture_access import OwnedManualCaptureRun, authorize_owned_manual_capture
+from .kakao_room_csv_identity import observed_csv_popup_room_keys
 from .kakao_room_intake_models import KakaoManualChannelPinRecord
 from .kakao_room_models import KakaoRoomAdmissionRecord
 from .kakao_room_service import KakaoRoomService
 from .kakao_source_pointers import (
-    validate_source_pointer_metadata,
+    resolve_pinned_kakao_json_member,
     validate_source_pointer_metadata_batch,
 )
 
@@ -62,12 +69,12 @@ _RECEIPT_REF = "eom://schemas/kakao-archive/manual-download-v1/1.0"
 
 @dataclass(frozen=True, slots=True)
 class AcceptedKakaoRoomConfirmation:
-    proof: KakaoManualRoomEvidence
+    proof: ManualRoomEvidence
     observation: KakaoRoomObservation
     evidence: ArtifactMemberPointer
 
 
-def room_confirmation_preview_sha256(proof: KakaoManualRoomEvidence) -> str:
+def room_confirmation_preview_sha256(proof: ManualRoomEvidence) -> str:
     command = proof.confirmation
     return manual_capture_preview_sha256(
         owner=proof.owner_operator_id,
@@ -103,7 +110,7 @@ class KakaoRoomIntakeService:
         context: OwnedManualCaptureRun,
         command: ConfirmKakaoManualRoom,
         captured: ReceivedKakaoDownload,
-    ) -> KakaoManualRoomEvidence:
+    ) -> ManualRoomEvidence:
         receipt, observation = captured.receipt, captured.observation
         if (
             receipt.phase != "RECEIVED"
@@ -116,7 +123,26 @@ class KakaoRoomIntakeService:
             or captured.observation_bytes is None
         ):
             raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_IDENTITY_UNAVAILABLE")
-        keys = observed_manual_room_keys(observation.document.path, observation.target.path or "")
+        method: type[KakaoManualRoomEvidence] | type[KakaoCsvPopupRoomEvidence] = (
+            KakaoManualRoomEvidence
+        )
+        if observation.target.kind == "BLOB":
+            method = KakaoCsvPopupRoomEvidence
+            keys = observed_csv_popup_room_keys(observation)
+            if keys is not None:
+                try:
+                    csv = read_kakao_csv_messages(captured.payload)
+                    if not csv.messages or (csv.source_sha256, csv.source_bytes) != (
+                        receipt.member.sha256,
+                        receipt.member.size_bytes,
+                    ):
+                        keys = None
+                except ValueError:
+                    keys = None
+        else:
+            keys = observed_manual_room_keys(
+                observation.document.path, observation.target.path or ""
+            )
         if keys is None:
             raise KakaoArchiveError("KAKAO_ARCHIVE_ROOM_IDENTITY_UNAVAILABLE")
         if keys != (command.expected_channel_key, command.expected_room_key):
@@ -124,7 +150,7 @@ class KakaoRoomIntakeService:
         shared = ("capture_id", "profile_id", "browser_run_id", "fence_epoch", "page_instance_id")
         if any(getattr(receipt, name) != getattr(observation, name) for name in shared):
             raise KakaoArchiveError("KAKAO_ARCHIVE_MANUAL_CAPTURE_STALE")
-        result = KakaoManualRoomEvidence(
+        result = method(
             owner_operator_id=context.owner,
             confirmation=command,
             request_sha256=kakao_command_sha256(command),
@@ -220,9 +246,12 @@ class KakaoRoomIntakeService:
         if prior is None:
             return None
         observation = self._read_model(prior, ROOM_OBSERVATION_REF, KakaoRoomObservation)
-        proof = self._read_model(
-            observation.source_evidence, MANUAL_ROOM_EVIDENCE_REF, KakaoManualRoomEvidence
-        )
+        source_evidence = observation.source_evidence
+        try:
+            proof_type = manual_room_evidence_type(source_evidence.schema_ref)
+        except ValueError:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID") from None
+        proof = self._read_model(source_evidence, source_evidence.schema_ref, proof_type)
         with self._sessions.begin() as session:
             current = authorize_owned_manual_capture(session, actor, proof.confirmation)
             current.validate_evidence(proof)
@@ -304,7 +333,11 @@ class KakaoRoomIntakeService:
                     kind="kakao-room-intake-evidence",
                     key="kakao:room-source:" + scope,
                     schemas={
-                        "proof.json": MANUAL_ROOM_EVIDENCE_REF,
+                        "proof.json": (
+                            CSV_POPUP_ROOM_EVIDENCE_REF
+                            if isinstance(proof, KakaoCsvPopupRoomEvidence)
+                            else MANUAL_ROOM_EVIDENCE_REF
+                        ),
                         "download.json": _RECEIPT_REF,
                         "page-observation.json": MANUAL_PAGE_OBSERVATION_REF,
                     },
@@ -384,16 +417,13 @@ class KakaoRoomIntakeService:
             else:
                 if pin.owner_operator_id != current.owner or pin.channel_key_sha256 != channel_hash:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_CHANNEL_IDENTITY_MISMATCH")
-                validate_source_pointer_metadata(
+                resolve_pinned_kakao_json_member(
                     session,
-                    ArtifactMemberPointer(
-                        artifact_id=pin.evidence_artifact_id,
-                        artifact_revision_id=pin.evidence_artifact_revision_id,
-                        member_path="proof.json",
-                        schema_ref=MANUAL_ROOM_EVIDENCE_REF,
-                        media_type="application/json",
-                        sha256=pin.evidence_sha256,
-                    ),
+                    artifact_id=pin.evidence_artifact_id,
+                    revision_id=pin.evidence_artifact_revision_id,
+                    member_path="proof.json",
+                    sha256=pin.evidence_sha256,
+                    permitted_schemas=MANUAL_ROOM_EVIDENCE_REFS,
                 )
 
         return self.rooms.admit_room(

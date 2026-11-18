@@ -8,11 +8,16 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_contracts.kakao_archive_binding import KakaoBindingRetire, KakaoBindingUpdatePolicy
-from eom_catalog_contracts.kakao_capability import ConfirmKakaoCapability
+from eom_catalog_contracts.kakao_capability import (
+    CSV_POPUP_CAPABILITY_VERIFICATION_REF,
+    ConfirmKakaoCapability,
+)
+from eom_catalog_contracts.kakao_room_intake import CSV_POPUP_ROOM_EVIDENCE_REF
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
 from eom_catalog_service.kakao_capability_models import KakaoCapabilityAcceptanceRecord as Receipt
 from eom_catalog_service.kakao_capability_service import KakaoCapabilityService
+from eom_catalog_service.kakao_collection_service import KakaoCollectionService
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service.models import ApiSessionRecord
 from eom_kakao_archive_contracts.capture import CaptureCommand, validate_capture_inputs
@@ -27,6 +32,8 @@ from tests.integration.test_kakao_archive_storage import create, make_actor
 from tests.integration.test_kakao_room_intake import h as h
 from tests.integration.test_kakao_room_intake import intake as intake
 from tests.integration.test_kakao_room_storage import admit
+from tests.unit.test_kakao_archive_rules import csv_bytes
+from tests.unit.test_kakao_photo_alignment import GROUPS, document
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -57,6 +64,77 @@ def cap(intake):
 def confirm(cap, command=None, key=None):
     return cap.service.confirm_capability(
         cap.actor, command or cap.command, idempotency_key=key or cap.key
+    )
+
+
+def test_csv_popup_registration_enters_the_existing_one_room_collection(intake):
+    channel, room = "csv-channel", "csv-room"
+    groups = [
+        (kind, value.replace("/channel1/", f"/{channel}/").replace("/room1/", f"/{room}/"))
+        for kind, value in GROUPS
+    ]
+    popup = document(groups, path=f"/space/workspace/channel/{channel}/chats/{room}")
+    with pytest.raises(KakaoArchiveError, match="ROOM_IDENTITY_UNAVAILABLE"):
+        intake.service.confirm_room(
+            intake.actor,
+            intake.prepare(
+                channel=channel,
+                room=room,
+                target={"kind": "BLOB", "path": None},
+                document=popup,
+                payload=b"wrong bytes",
+            ),
+            idempotency_key="invalid-csv-room-" + uuid4().hex,
+        )
+    original = intake.prepare(
+        channel=channel,
+        room=room,
+        target={"kind": "BLOB", "path": None},
+        document=popup,
+        payload=csv_bytes([["2026-11-18 12:00:00", "synthetic", "사진"]]),
+    )
+    room_key = "csv-room-" + uuid4().hex
+    first = intake.service.confirm_room(intake.actor, original, idempotency_key=room_key)
+    proof = intake.service.get_confirmation(
+        intake.actor, original.source_binding_id, idempotency_key=room_key
+    )
+    assert proof.observation.source_evidence.schema_ref == CSV_POPUP_ROOM_EVIDENCE_REF
+    assert first.room.mapping.state == "UNMAPPED"
+    other = intake.prepare(channel=channel, room="old-photo-format")
+    assert (
+        intake.service.confirm_room(
+            intake.actor, other, idempotency_key="same-channel-photo-" + uuid4().hex
+        ).room.room_id
+        != first.room.room_id
+    )
+    capability = KakaoCapabilityService(
+        intake.engine, artifacts=intake.artifacts, adapter_release_sha256="sha256:" + "a" * 64
+    )
+    collection = KakaoCollectionService(intake.engine, capabilities=capability)
+    selection = ConfirmKakaoCapability(
+        source_binding_id=original.source_binding_id,
+        room_id=first.room.room_id,
+        expected_binding_version=1,
+    )
+    policy = (
+        KakaoArchiveService(intake.engine)
+        .get_binding(intake.actor, original.source_binding_id)
+        .policy_revision.policy_revision_id
+    )
+    request = {"expected_policy_revision_id": policy, "idempotency_key": "csv-auto-" + uuid4().hex}
+    status = collection.start_registered_room(intake.actor, selection, **request)
+    pinned = collection.read_background_intent(status.run_id)
+    assert pinned.capability_manifest.schema_ref == CSV_POPUP_CAPABILITY_VERIFICATION_REF
+    parsed = capability.read_pinned_manual_room(
+        pinned.capability_manifest,
+        binding=original.source_binding_id,
+        room=first.room.room_id,
+        revision=pinned.accepted.request.capability_revision_id,
+    )
+    assert (parsed.space_key, parsed.proof.confirmation.expected_room_key) == ("workspace", room)
+    assert parsed.capability.direction_evidence == parsed.capability.source_timezone == "unknown"
+    assert (
+        collection.start_registered_room(intake.actor, selection, **request).run_id == status.run_id
     )
 
 

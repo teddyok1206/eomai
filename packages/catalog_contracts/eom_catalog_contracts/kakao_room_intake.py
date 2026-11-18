@@ -14,6 +14,9 @@ from .models import FrozenModel, Sha256, UtcDatetime
 from .validation import validate_contract
 
 MANUAL_ROOM_EVIDENCE_REF = "eom://schemas/kakao-archive/manual-room-intake-v1/1.0"
+CSV_POPUP_PROOF_SCHEMA = "eom://schemas/kakao-archive/csv-popup-room-proof-v1/1.0"
+CSV_POPUP_ROOM_EVIDENCE_REF = CSV_POPUP_PROOF_SCHEMA + "#/$defs/evidence"
+MANUAL_ROOM_EVIDENCE_REFS = (MANUAL_ROOM_EVIDENCE_REF, CSV_POPUP_ROOM_EVIDENCE_REF)
 ProviderKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")]
 
 
@@ -93,8 +96,7 @@ class ConfirmKakaoManualRoom(FrozenModel):
         return self
 
 
-class KakaoManualRoomEvidence(FrozenModel):
-    schema_version: Literal["kakao-manual-room-evidence/1.0"] = "kakao-manual-room-evidence/1.0"
+class _ManualRoomEvidenceFields(FrozenModel):
     owner_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
     confirmation: ConfirmKakaoManualRoom
     request_sha256: Sha256
@@ -110,9 +112,6 @@ class KakaoManualRoomEvidence(FrozenModel):
     receipt_sha256: Sha256
     observation_sha256: Sha256
     source_identity_sha256: Sha256
-    identity_method: Literal["MANUALLY_CONFIRMED_CHANNEL_AND_DOWNLOAD_ROOM_PATH"] = (
-        "MANUALLY_CONFIRMED_CHANNEL_AND_DOWNLOAD_ROOM_PATH"
-    )
 
     @model_validator(mode="after")
     def exact_confirmation(self) -> Self:
@@ -126,5 +125,43 @@ class KakaoManualRoomEvidence(FrozenModel):
             or not self.capture_started_at <= self.observed_at <= self.capture_completed_at
         ):
             raise ValueError("KAKAO_ARCHIVE_MANUAL_ROOM_EVIDENCE_INVALID")
+        return self
+
+
+class KakaoManualRoomEvidence(_ManualRoomEvidenceFields):
+    schema_version: Literal["kakao-manual-room-evidence/1.0"] = "kakao-manual-room-evidence/1.0"
+    identity_method: Literal["MANUALLY_CONFIRMED_CHANNEL_AND_DOWNLOAD_ROOM_PATH"] = (
+        "MANUALLY_CONFIRMED_CHANNEL_AND_DOWNLOAD_ROOM_PATH"
+    )
+
+    @model_validator(mode="after")
+    def closed_evidence(self) -> Self:
         validate_contract("kakao-manual-room-intake-v1", self.model_dump(mode="json"))
         return self
+
+
+class KakaoCsvPopupRoomEvidence(_ManualRoomEvidenceFields):
+    schema_version: Literal["kakao-csv-popup-room-evidence/1.0"] = (
+        "kakao-csv-popup-room-evidence/1.0"
+    )
+    identity_method: Literal["MANUALLY_CONFIRMED_CSV_AND_CORROBORATED_POPUP"] = (
+        "MANUALLY_CONFIRMED_CSV_AND_CORROBORATED_POPUP"
+    )
+
+    @model_validator(mode="after")
+    def closed_evidence(self) -> Self:
+        validate_contract("kakao-csv-popup-room-proof-v1", self.model_dump(mode="json"))
+        return self
+
+
+ManualRoomEvidence = KakaoManualRoomEvidence | KakaoCsvPopupRoomEvidence
+
+
+def manual_room_evidence_type(
+    schema_ref: str,
+) -> type[KakaoManualRoomEvidence] | type[KakaoCsvPopupRoomEvidence]:
+    if schema_ref == MANUAL_ROOM_EVIDENCE_REF:
+        return KakaoManualRoomEvidence
+    if schema_ref == CSV_POPUP_ROOM_EVIDENCE_REF:
+        return KakaoCsvPopupRoomEvidence
+    raise ValueError("KAKAO_ARCHIVE_MANUAL_ROOM_EVIDENCE_INVALID")

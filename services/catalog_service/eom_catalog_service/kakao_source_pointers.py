@@ -7,7 +7,7 @@ write transaction, then recheck mutable publication/lifecycle here before adopti
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import select, tuple_
+from sqlalchemy import Select, select, tuple_
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
@@ -19,6 +19,60 @@ def validate_source_pointer_metadata(
     return validate_source_pointer_metadata_batch(session, (evidence,))[
         (evidence.artifact_id, evidence.artifact_revision_id)
     ]
+
+
+def resolve_pinned_kakao_json_member(
+    session: Session,
+    *,
+    artifact_id: str,
+    revision_id: str,
+    member_path: str,
+    sha256: str,
+    permitted_schemas: tuple[str, ...],
+) -> ArtifactMemberPointer:
+    """Resolve the exact schema of a historically pinned member, never latest."""
+    row = session.execute(
+        _artifact_state_query().where(
+            ArtifactRecord.logical_artifact_id == artifact_id,
+            ArtifactRevisionRecord.revision_id == revision_id,
+        )
+    ).one_or_none()
+    if row is None:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
+    logical, revision, status = row
+    manifest = revision.manifest
+    entries = manifest.get("files") if isinstance(manifest, dict) else None
+    matches = []
+    if isinstance(entries, list):
+        matches = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("file_name") == member_path
+        ]
+    if len(matches) != 1 or (schema := matches[0].get("schema_ref")) not in permitted_schemas:
+        raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")
+    pointer = ArtifactMemberPointer(
+        artifact_id=artifact_id,
+        artifact_revision_id=revision_id,
+        member_path=member_path,
+        schema_ref=schema,
+        media_type="application/json",
+        sha256=sha256,
+    )
+    _validate_metadata(logical, revision, status, [pointer])
+    return pointer
+
+
+def _artifact_state_query() -> Select[tuple[ArtifactRecord, ArtifactRevisionRecord, str]]:
+    return (
+        select(ArtifactRecord, ArtifactRevisionRecord, JobRecord.status)
+        .join(
+            ArtifactRevisionRecord,
+            ArtifactRevisionRecord.logical_artifact_id == ArtifactRecord.logical_artifact_id,
+        )
+        .join(JobRecord, JobRecord.job_id == ArtifactRevisionRecord.job_id)
+        .execution_options(populate_existing=True)
+    )
 
 
 def validate_source_pointer_metadata_batch(
@@ -33,18 +87,11 @@ def validate_source_pointer_metadata_batch(
     if not grouped:
         return {}
     rows = session.execute(
-        select(ArtifactRecord, ArtifactRevisionRecord, JobRecord.status)
-        .join(
-            ArtifactRevisionRecord,
-            ArtifactRevisionRecord.logical_artifact_id == ArtifactRecord.logical_artifact_id,
-        )
-        .join(JobRecord, JobRecord.job_id == ArtifactRevisionRecord.job_id)
-        .where(
+        _artifact_state_query().where(
             tuple_(ArtifactRecord.logical_artifact_id, ArtifactRevisionRecord.revision_id).in_(
                 tuple(grouped)
             )
         )
-        .execution_options(populate_existing=True)
     ).all()
     if len(rows) != len(grouped):
         raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_EVIDENCE_INVALID")

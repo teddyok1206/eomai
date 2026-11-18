@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/csv-popup-room-proof-v1/1.0",
+  "title": "Owner-confirmed CSV popup room identity; not source or photo admission",
+  "oneOf": [{"$ref": "#/$defs/evidence"}, {"$ref": "#/$defs/verification"}],
+  "$defs": {
+    "hash": {"$ref": "eom://schemas/kakao-archive/manual-room-intake-v1/1.0#/$defs/Hash"},
+    "utc": {"$ref": "eom://schemas/kakao-archive/manual-room-intake-v1/1.0#/$defs/UTC"},
+    "pointer": {"$ref": "eom://schemas/kakao-archive/capability-verification-v1/1.0#/$defs/pointer"},
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "owner_operator_id", "confirmation", "request_sha256", "profile_id", "browser_run_id", "fence_epoch", "page_instance_id", "capture_started_at", "observed_at", "capture_completed_at", "payload_sha256", "payload_bytes", "receipt_sha256", "observation_sha256", "source_identity_sha256", "identity_method"],
+      "properties": {
+        "schema_version": {"const": "kakao-csv-popup-room-evidence/1.0"},
+        "owner_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "confirmation": {"$ref": "eom://schemas/kakao-archive/manual-room-intake-v1/1.0#/$defs/Request"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "profile_id": {"type": "string", "pattern": "^kakaoprofile_[0-9a-f]{32}$"},
+        "browser_run_id": {"type": "string", "pattern": "^kakaobrowserrun_[0-9a-f]{32}$"},
+        "fence_epoch": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "page_instance_id": {"type": "string", "pattern": "^kakaopage_[0-9a-f]{32}$"},
+        "capture_started_at": {"$ref": "#/$defs/utc"},
+        "observed_at": {"$ref": "#/$defs/utc"},
+        "capture_completed_at": {"$ref": "#/$defs/utc"},
+        "payload_sha256": {"$ref": "#/$defs/hash"},
+        "payload_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "receipt_sha256": {"$ref": "#/$defs/hash"},
+        "observation_sha256": {"$ref": "#/$defs/hash"},
+        "source_identity_sha256": {"$ref": "#/$defs/hash"},
+        "identity_method": {"const": "MANUALLY_CONFIRMED_CSV_AND_CORROBORATED_POPUP"}
+      }
+    },
+    "verification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "request", "request_sha256", "created_by", "capability_revision_id", "adapter_release_sha256", "room_observation", "manual_proof", "capability_sha256"],
+      "properties": {
+        "schema_version": {"const": "kakao-csv-popup-capability-verification/1.0"},
+        "request": {"$ref": "eom://schemas/kakao-archive/capability-verification-v1/1.0#/$defs/request"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "created_by": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "capability_revision_id": {"type": "string", "pattern": "^kakaocapabilityrev_[0-9a-f]{32}$"},
+        "adapter_release_sha256": {"$ref": "#/$defs/hash"},
+        "room_observation": {"$ref": "#/$defs/pointer"},
+        "manual_proof": {
+          "allOf": [
+            {"$ref": "#/$defs/pointer"},
+            {"properties": {"schema_ref": {"const": "eom://schemas/kakao-archive/csv-popup-room-proof-v1/1.0#/$defs/evidence"}}}
+          ]
+        },
+        "capability_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

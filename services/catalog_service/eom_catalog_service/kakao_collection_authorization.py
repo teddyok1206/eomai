@@ -1,6 +1,6 @@
 """Shared current-owner and exact-pin checks for accepted collection preparation."""
 
-from eom_catalog_contracts.kakao_capability import CAPABILITY_VERIFICATION_REF
+from eom_catalog_contracts.kakao_capability import CAPABILITY_VERIFICATION_REFS
 from eom_operator_identity import PermissionKey
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from .kakao_collection_browser_models import KakaoCollectionBrowserRecord
 from .kakao_collection_models import KakaoCollectionRunRecord
 from .kakao_manual_models import KakaoProfileRuntimeRecord
 from .kakao_room_models import KakaoRoomRecord
-from .kakao_source_pointers import validate_source_pointer_metadata_batch
+from .kakao_source_pointers import resolve_pinned_kakao_json_member
 
 
 def lock_kakao_collection_profile_gate(session: Session, run: KakaoCollectionRunRecord) -> None:
@@ -80,16 +80,14 @@ def validate_kakao_collection_pins(
         or policy.sha256 != row.policy_sha256
     ):
         raise KakaoArchiveError("KAKAO_ARCHIVE_COLLECTION_PIN_INVALID")
-    pointer = ArtifactMemberPointer(
+    return resolve_pinned_kakao_json_member(
+        session,
         artifact_id=capability.manifest_artifact_id,
-        artifact_revision_id=capability.manifest_artifact_revision_id,
+        revision_id=capability.manifest_artifact_revision_id,
         member_path="verification.json",
-        schema_ref=CAPABILITY_VERIFICATION_REF,
-        media_type="application/json",
         sha256=capability.manifest_sha256,
+        permitted_schemas=CAPABILITY_VERIFICATION_REFS,
     )
-    validate_source_pointer_metadata_batch(session, (pointer,))
-    return pointer
 
 
 def authorize_kakao_collection_preparation(

@@ -26,6 +26,12 @@ COLLECT와 원래 lease/fence를 파일 I/O 뒤에도 검사한다. 확인 POST�
 삭제와 분리한다. 새 학생/질문/source 수락·capability 승격·AUTO 시작은 수행하지 않는다.
 화면은 불확실한 응답의 key/body를 유지하고 다른 owner/binding의 늦은 목록을 표시하지 않는다.
 
+CSV popup successor는 같은 공개 요청의 독립 방 근거다. 기존 사진 proof/version에는
+손대지 않는다. preview는 보호된 관측만 읽고, 확인 POST에서 CSV/hash를 확인해 새
+proof를 발행한다. 고정 artifact manifest에서 원래 schema를 해석하고, capability
+소비자가 같은 태그의 저장 근거를 다시 검사한다. 사진 파일과 말풍선의 연결, 전체 범위,
+발신 역할·시각대는 이 방 근거로 인정하지 않는다.
+
 ## 담당 코드
 
 `kakao_room_intake.py`와 `kakao_capability_service.py`가 실제 MANUAL 수신 관측을 기존

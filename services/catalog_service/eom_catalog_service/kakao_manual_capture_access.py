@@ -7,7 +7,7 @@ renew the original session, open a browser or change a failed/ended lease.
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from eom_catalog_contracts.kakao_room_intake import ConfirmKakaoManualRoom, KakaoManualRoomEvidence
+from eom_catalog_contracts.kakao_room_intake import ConfirmKakaoManualRoom, ManualRoomEvidence
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_operator_identity import ActorContext, PermissionKey
 from sqlalchemy import select
@@ -33,7 +33,7 @@ class OwnedManualCaptureRun:
     closed_at: datetime | None
     browser_first_observed_at: datetime | None = None
 
-    def validate_evidence(self, evidence: KakaoManualRoomEvidence) -> None:
+    def validate_evidence(self, evidence: ManualRoomEvidence) -> None:
         if evidence.owner_operator_id != self.owner or (
             evidence.profile_id,
             evidence.browser_run_id,

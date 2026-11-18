@@ -5,8 +5,11 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_contracts.kakao_room_intake import (
+    CSV_POPUP_ROOM_EVIDENCE_REF,
     ConfirmKakaoManualRoom,
+    KakaoCsvPopupRoomEvidence,
     KakaoManualRoomEvidence,
+    manual_room_evidence_type,
     manual_room_identity_sha256,
     observed_manual_room_keys,
 )
@@ -62,6 +65,18 @@ def test_manual_room_schema_bytes_and_mirror_frozen_values():
     assert KakaoManualRoomEvidence.model_validate_json(value.model_dump_json()) == value
     with pytest.raises(ValueError):
         value.confirmation.expected_room_key = "different"
+
+
+def test_csv_evidence_has_exact_new_identity_and_keeps_photo_predecessor():
+    current = KakaoCsvPopupRoomEvidence.model_validate(evidence())
+    raw = current.model_dump(mode="json")
+    assert current == manual_room_evidence_type(CSV_POPUP_ROOM_EVIDENCE_REF).model_validate(raw)
+    with pytest.raises(ValueError):
+        KakaoManualRoomEvidence.model_validate(raw)
+    with pytest.raises(ValueError):
+        KakaoCsvPopupRoomEvidence.model_validate(raw | {"identity_method": "SOURCE_VERIFIED"})
+    with pytest.raises(ValueError):
+        manual_room_evidence_type(CSV_POPUP_ROOM_EVIDENCE_REF + "-unknown")
 
 
 @pytest.mark.parametrize(

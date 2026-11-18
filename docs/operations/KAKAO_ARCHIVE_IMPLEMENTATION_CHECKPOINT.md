@@ -1,5 +1,17 @@
 # KakaoTalk 구현 체크포인트
 
+## 대화 CSV만으로 방 등록과 선택 방 수집 준비 연결
+
+명시적으로 확인된 보호 MANUAL CSV의 popup 근거를 기존 방 등록 owner에 연결했다.
+preview는 metadata-only, 확인 POST는 CSV 원본의 형식·hash·owner·fence·시간과
+지정한 방을 확인한다. 기존 사진 proof는 별도 유형 그대로 보존하며 새 CSV 방 proof와
+capability는 독립된 schema family에 pin한다. 수락/재전송과 수집 준비는 저장된 exact
+artifact를 검증한다. 역할·시간대·사진 파일의 출처·전체 방 권한을 승격하지 않는다.
+
+집중 단위 81건, 임시 PostgreSQL 68건, 격리 Chromium의 확인 요청/재전송 검사를
+통과했다. CSV→방 등록→새 capability→단일 방 수집 준비의 실제 application/DB
+연결을 합성 자료로 검증했고 DB cleanup 완료. 운영 등록·실제 수집·배포는 아직이다.
+
 ## 실방 접수 전제 — CSV로 방을 확인하는 증거
 
 설치 검증 뒤 운영에서 읽기 전용으로 대조했다. 등록된 MANUAL 방이나 정식 수집/원본은

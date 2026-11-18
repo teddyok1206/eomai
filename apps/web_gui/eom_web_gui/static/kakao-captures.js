@@ -39,8 +39,8 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
   function photoSelection() {
     const items = page?.items || [];
     const csv = items[nodes.csv.value], photo = items[nodes.photo.value];
-    if (!csv || !photo || photo.state !== "ROOM_IDENTITY_OBSERVED" ||
-        csv.state !== "ROOM_IDENTITY_UNAVAILABLE" || csv.manual_lease_id !== photo.manual_lease_id) return null;
+    if (!csv || !photo || csv.capture_id === photo.capture_id || photo.state !== "ROOM_IDENTITY_OBSERVED" ||
+        !["ROOM_IDENTITY_OBSERVED", "ROOM_IDENTITY_UNAVAILABLE"].includes(csv.state) || csv.manual_lease_id !== photo.manual_lease_id) return null;
     return {source_binding_id:page.source_binding_id, manual_lease_id:photo.manual_lease_id,
       csv_capture_id:csv.capture_id, photo_capture_id:photo.capture_id};
   }
@@ -53,10 +53,9 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
       const empty = node("option", title); empty.value = ""; select.replaceChildren(empty);
     }
     for (const [index, item] of (page?.items || []).entries()) {
-      const select = item.state === "ROOM_IDENTITY_OBSERVED" ? nodes.photo :
-        item.state === "ROOM_IDENTITY_UNAVAILABLE" ? nodes.csv : null;
-      if (!select) continue;
-      const option = node("option", label(item, index)); option.value = String(index); select.append(option);
+      if (!["ROOM_IDENTITY_OBSERVED", "ROOM_IDENTITY_UNAVAILABLE"].includes(item.state)) continue;
+      const option = node("option", label(item, index)); option.value = String(index); nodes.csv.append(option);
+      if (item.state === "ROOM_IDENTITY_OBSERVED") nodes.photo.append(option.cloneNode(true));
     }
     sync();
   }
@@ -95,7 +94,7 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
   }
   function clear() {
     page = null; selected = null; request++; loading = false;
-    if (root) { nodes.list.replaceChildren(); nodes.name.value = ""; nodes.confirm.checked = false; message("사진을 내려받은 뒤 ‘받은 자료 새로고침’을 눌러 주세요."); photoOptions(); }
+    if (root) { nodes.list.replaceChildren(); nodes.name.value = ""; nodes.confirm.checked = false; message("대화 CSV 또는 사진을 내려받은 뒤 ‘받은 자료 새로고침’을 눌러 주세요."); photoOptions(); }
   }
   function renderList() {
     nodes.list.replaceChildren();
@@ -118,7 +117,7 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
       const result = await api(`${BASE}?source_binding_id=${encodeURIComponent(bindingId)}`);
       if (!live(token) || current !== request) return;
       page = pageValue(result, bindingId); selected = null; renderList(); photoOptions();
-      message(page.truncated ? "최근 수신 자료 일부만 표시됩니다. 확인 정보가 없는 자료는 연결하지 않습니다." : "방 확인 정보는 사진 다운로드에서 관측한 정보입니다. 아직 질문이나 사진이 등록된 것은 아닙니다.");
+      message(page.truncated ? "최근 수신 자료 일부만 표시됩니다. 확인 정보가 없는 자료는 연결하지 않습니다." : "대화 CSV나 사진에서 확인된 정보로 방만 저장합니다. 아직 질문이나 사진이 등록된 것은 아닙니다.");
     } catch (error) { if (live(token) && current === request) { page = null; selected = null; nodes.list.replaceChildren(); photoOptions(); message(`수신 기록을 확인하지 못했습니다. ${explainError(error)}`, true); } }
     finally { if (live(token) && current === request) { loading = false; sync(); } }
   }
@@ -156,7 +155,7 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
     nodes.form = node("form", undefined, "kakao-bootstrap"); nodes.form.setAttribute("aria-label", "수신 대화방 확인");
     const name = node("label", "저장할 대화방 이름"); nodes.name = node("input"); nodes.name.type = "text"; nodes.name.required = true; nodes.name.maxLength = 256; nodes.name.autocomplete = "off"; name.append(nodes.name);
     const confirmation = node("label", undefined, "kakao-retire-confirm"); nodes.confirm = node("input"); nodes.confirm.type = "checkbox";
-    confirmation.append(nodes.confirm, node("span", "선택한 연결의 채널·대화방에서 내려받은 사진임을 확인했습니다."));
+    confirmation.append(nodes.confirm, node("span", "선택한 연결의 채널·대화방에서 내려받은 자료임을 확인했습니다."));
     const save = node("button", "대화방 확인 저장", "button secondary"); save.type = "submit";
     nodes.form.append(name, confirmation, save); nodes.form.addEventListener("submit", event => { event.preventDefault(); void begin(); });
     nodes.photoForm = node("div", undefined, "kakao-bootstrap");

@@ -16,13 +16,20 @@ from uuid import UUID, uuid5
 
 from eom_catalog_contracts.kakao_capability import (
     CAPABILITY_VERIFICATION_REF,
+    CAPABILITY_VERIFICATION_REFS,
+    CSV_POPUP_CAPABILITY_VERIFICATION_REF,
+    CapabilityVerification,
     ConfirmKakaoCapability,
     KakaoCapabilityVerification,
+    KakaoCsvPopupCapabilityVerification,
+    capability_verification_type,
 )
 from eom_catalog_contracts.kakao_room_intake import (
-    MANUAL_ROOM_EVIDENCE_REF,
-    KakaoManualRoomEvidence,
+    MANUAL_ROOM_EVIDENCE_REFS,
+    KakaoCsvPopupRoomEvidence,
+    ManualRoomEvidence,
     manual_channel_identity_sha256,
+    manual_room_evidence_type,
     observed_manual_room_keys,
 )
 from eom_catalog_contracts.kakao_rooms import ROOM_OBSERVATION_REF, KakaoRoomObservation
@@ -56,8 +63,12 @@ from .kakao_archive_commands import (
 from .kakao_archive_models import KakaoChannelBindingRecord
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord as Receipt
 from .kakao_manual_capture_access import authorize_owned_manual_capture
+from .kakao_room_csv_identity import observed_csv_popup_room_keys
 from .kakao_room_intake_models import KakaoManualChannelPinRecord
-from .kakao_source_pointers import validate_source_pointer_metadata_batch
+from .kakao_source_pointers import (
+    resolve_pinned_kakao_json_member,
+    validate_source_pointer_metadata_batch,
+)
 
 _REVISION_NAMESPACE = UUID("5fcc213e-63b5-4b07-bb2c-23305307f966")
 _INVALID = "KAKAO_ARCHIVE_CAPABILITY_EVIDENCE_INVALID"
@@ -97,7 +108,7 @@ class _Receipt:
 
 @dataclass(frozen=True, slots=True)
 class AcceptedKakaoCapability:
-    verification: KakaoCapabilityVerification
+    verification: CapabilityVerification
     capability: CaptureCapability
     manifest: ArtifactMemberPointer
     capability_pointer: ArtifactMemberPointer
@@ -108,7 +119,7 @@ class AcceptedKakaoCapability:
 @dataclass(frozen=True, slots=True)
 class PinnedManualRoomInput:
     capability: CaptureCapability
-    proof: KakaoManualRoomEvidence = field(repr=False)
+    proof: ManualRoomEvidence = field(repr=False)
     space_key: str = field(repr=False)
 
 
@@ -119,13 +130,10 @@ def _reserved_revision(owner: str, binding: str, key: str) -> str:
 
 
 def manual_room_capability(
-    proof: KakaoManualRoomEvidence, proof_bytes: bytes, *, revision: str, adapter_sha256: str
+    proof: ManualRoomEvidence, proof_bytes: bytes, *, revision: str, adapter_sha256: str
 ) -> CaptureCapability:
     """Project previously authorized evidence; this value grants no execution permission."""
-    if (
-        len(proof_bytes) > 32768
-        or KakaoManualRoomEvidence.model_validate_json(proof_bytes) != proof
-    ):
+    if len(proof_bytes) > 32768 or type(proof).model_validate_json(proof_bytes) != proof:
         raise ValueError(_INVALID)
     value = CaptureCapability(
         source_binding_id=proof.confirmation.source_binding_id,
@@ -209,15 +217,15 @@ class KakaoCapabilityService:
             schema_ref=ROOM_OBSERVATION_REF,
             sha256=room.evidence_sha256,
         )
-        channel_proof = ArtifactMemberPointer(
+        resolve_pinned_kakao_json_member(
+            session,
             artifact_id=pin.evidence_artifact_id,
-            artifact_revision_id=pin.evidence_artifact_revision_id,
+            revision_id=pin.evidence_artifact_revision_id,
             member_path="proof.json",
-            media_type="application/json",
-            schema_ref=MANUAL_ROOM_EVIDENCE_REF,
             sha256=pin.evidence_sha256,
+            permitted_schemas=MANUAL_ROOM_EVIDENCE_REFS,
         )
-        validate_source_pointer_metadata_batch(session, (observation, channel_proof))
+        validate_source_pointer_metadata_batch(session, (observation,))
         return _RoomScope(
             owner,
             current_binding.resource_version,
@@ -249,13 +257,15 @@ class KakaoCapabilityService:
 
     def _room_evidence(
         self, context: _RoomScope
-    ) -> tuple[KakaoRoomObservation, KakaoManualRoomEvidence, bytes]:
+    ) -> tuple[KakaoRoomObservation, ManualRoomEvidence, bytes]:
         try:
             observation = KakaoRoomObservation.model_validate_json(
                 self._read(context.observation, ROOM_OBSERVATION_REF)
             )
-            raw = self._read(observation.source_evidence, MANUAL_ROOM_EVIDENCE_REF)
-            proof = KakaoManualRoomEvidence.model_validate_json(raw)
+            schema = observation.source_evidence.schema_ref
+            proof_type = manual_room_evidence_type(schema)
+            raw = self._read(observation.source_evidence, schema)
+            proof = proof_type.model_validate_json(raw)
             return observation, proof, raw
         except ValueError:
             raise KakaoArchiveError(_INVALID) from None
@@ -265,9 +275,7 @@ class KakaoCapabilityService:
     ) -> PinnedManualRoomInput:
         """Artifact proof reader for an already reauthorized, accepted collection intent."""
         try:
-            manifest = KakaoCapabilityVerification.model_validate_json(
-                self._read(pointer, CAPABILITY_VERIFICATION_REF)
-            )
+            manifest = self._read_verification(pointer)
             if (
                 manifest.request.source_binding_id,
                 manifest.request.room_id,
@@ -278,8 +286,10 @@ class KakaoCapabilityService:
             observation = KakaoRoomObservation.model_validate_json(
                 self._read(manifest.room_observation, ROOM_OBSERVATION_REF)
             )
-            proof_raw = self._read(manifest.manual_proof, MANUAL_ROOM_EVIDENCE_REF)
-            proof = KakaoManualRoomEvidence.model_validate_json(proof_raw)
+            schema = manifest.manual_proof.schema_ref
+            proof_type = manual_room_evidence_type(schema)
+            proof_raw = self._read(manifest.manual_proof, schema)
+            proof = proof_type.model_validate_json(proof_raw)
             if (
                 observation.source_evidence != manifest.manual_proof
                 or observation.source_binding_id != binding
@@ -328,7 +338,6 @@ class KakaoCapabilityService:
             if (
                 page.status != "OBSERVED"
                 or page.document is None
-                or page.target.kind != "SAME_ORIGIN_PATH"
                 or page.capture_id != proof.confirmation.capture_id
                 or any(
                     getattr(page, name) != getattr(proof, name)
@@ -340,11 +349,18 @@ class KakaoCapabilityService:
                         "observed_at",
                     )
                 )
-                or observed_manual_room_keys(page.document.path, page.target.path or "")
-                != (
-                    proof.confirmation.expected_channel_key,
-                    proof.confirmation.expected_room_key,
-                )
+            ):
+                raise ValueError(_INVALID)
+            keys = (
+                observed_csv_popup_room_keys(page)
+                if isinstance(proof, KakaoCsvPopupRoomEvidence)
+                else observed_manual_room_keys(page.document.path, page.target.path or "")
+                if page.target.kind == "SAME_ORIGIN_PATH"
+                else None
+            )
+            if keys != (
+                proof.confirmation.expected_channel_key,
+                proof.confirmation.expected_room_key,
             ):
                 raise ValueError(_INVALID)
             return PinnedManualRoomInput(capability, proof, page.document.path.split("/")[2])
@@ -357,7 +373,7 @@ class KakaoCapabilityService:
         actor: ActorContext,
         command: ConfirmKakaoCapability,
         observation: KakaoRoomObservation,
-        proof: KakaoManualRoomEvidence,
+        proof: ManualRoomEvidence,
         *,
         mutate: bool,
     ) -> _RoomScope:
@@ -387,7 +403,7 @@ class KakaoCapabilityService:
         return context
 
     @staticmethod
-    def _receipt(row: Receipt) -> _Receipt:
+    def _receipt(session: Session, row: Receipt) -> _Receipt:
         return _Receipt(
             row.owner_operator_id,
             row.source_binding_id,
@@ -396,24 +412,26 @@ class KakaoCapabilityService:
             row.idempotency_key,
             row.request_sha256,
             row.adapter_release_sha256,
-            ArtifactMemberPointer(
+            resolve_pinned_kakao_json_member(
+                session,
                 artifact_id=row.manifest_artifact_id,
-                artifact_revision_id=row.manifest_artifact_revision_id,
+                revision_id=row.manifest_artifact_revision_id,
                 member_path="verification.json",
-                schema_ref=CAPABILITY_VERIFICATION_REF,
-                media_type="application/json",
                 sha256=row.manifest_sha256,
+                permitted_schemas=CAPABILITY_VERIFICATION_REFS,
             ),
             row.accepted_at,
         )
+
+    def _read_verification(self, pointer: ArtifactMemberPointer) -> CapabilityVerification:
+        model = capability_verification_type(pointer.schema_ref)
+        return model.model_validate_json(self._read(pointer, pointer.schema_ref))
 
     def _resolve(
         self, actor: ActorContext, stored: _Receipt, *, replayed: bool
     ) -> AcceptedKakaoCapability:
         try:
-            verification = KakaoCapabilityVerification.model_validate_json(
-                self._read(stored.manifest, CAPABILITY_VERIFICATION_REF)
-            )
+            verification = self._read_verification(stored.manifest)
             command = verification.request
             if (
                 verification.created_by,
@@ -469,7 +487,7 @@ class KakaoCapabilityService:
         with self._sessions.begin() as session:
             self._validate(session, actor, command, observation, proof, mutate=False)
             row = session.get(Receipt, stored.revision, populate_existing=True)
-            if row is None or self._receipt(row) != stored:
+            if row is None or self._receipt(session, row) != stored:
                 raise KakaoArchiveError(_INVALID)
             validate_source_pointer_metadata_batch(session, (stored.manifest, capability_pointer))
         return AcceptedKakaoCapability(
@@ -500,7 +518,7 @@ class KakaoCapabilityService:
             if row is None:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
             self._scope(session, actor, binding, row.room_id, mutate=False)
-            stored = self._receipt(row)
+            stored = self._receipt(session, row)
         return self._resolve(actor, stored, replayed=False)
 
     def confirm_capability(
@@ -519,7 +537,7 @@ class KakaoCapabilityService:
                     Receipt.idempotency_key == key,
                 )
             )
-            stored = self._receipt(prior) if prior is not None else None
+            stored = self._receipt(session, prior) if prior is not None else None
         if stored is not None:
             if stored.request_sha256 != digest:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
@@ -543,7 +561,14 @@ class KakaoCapabilityService:
             proof, proof_bytes, revision=revision, adapter_sha256=self.adapter_sha256
         )
         cap_raw = canonical_json_bytes(capability.model_dump(mode="json"))
-        verification = KakaoCapabilityVerification(
+        csv_proof = isinstance(proof, KakaoCsvPopupRoomEvidence)
+        verification_type = (
+            KakaoCsvPopupCapabilityVerification if csv_proof else KakaoCapabilityVerification
+        )
+        verification_ref = (
+            CSV_POPUP_CAPABILITY_VERIFICATION_REF if csv_proof else CAPABILITY_VERIFICATION_REF
+        )
+        verification = verification_type(
             request=command,
             request_sha256=digest,
             created_by=context.owner,
@@ -584,7 +609,7 @@ class KakaoCapabilityService:
                         name: dict(schema_ref=schema, media_type="application/json")
                         for name, schema in (
                             ("capability.json", CAPTURE_REF),
-                            ("verification.json", CAPABILITY_VERIFICATION_REF),
+                            ("verification.json", verification_ref),
                         )
                     },
                     expected_file_sha256={
@@ -611,7 +636,7 @@ class KakaoCapabilityService:
             if prior is not None:
                 if prior.request_sha256 != digest:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_IDEMPOTENCY_CONFLICT")
-                stored, replayed = self._receipt(prior), True
+                stored, replayed = self._receipt(session, prior), True
             else:
                 if (
                     current.binding_version != command.expected_binding_version
@@ -631,7 +656,7 @@ class KakaoCapabilityService:
                     adapter_release_sha256=self.adapter_sha256,
                     accepted_at=datetime.now(UTC),
                 )
-                validate_source_pointer_metadata_batch(session, (self._receipt(row).manifest,))
+                stored = self._receipt(session, row)
                 session.add(row)
-                stored, replayed = self._receipt(row), False
+                replayed = False
         return self._resolve(actor, stored, replayed=replayed)
