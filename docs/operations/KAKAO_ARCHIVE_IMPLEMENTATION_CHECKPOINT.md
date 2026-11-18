@@ -1,5 +1,23 @@
 # KakaoTalk 구현 체크포인트
 
+## 사진 출처·행 정합 운영 설치 — 선택한 방만
+
+`919164330fcb41f580f1169400e574491511a627`의 Platform wheel을 Catalog 전용
+설치 경로에 넣고, 같은 커밋의 수집기 wheel과 함께 반영했다. Catalog 전용 closure의
+나머지 세 wheel은 기존 `cf5c5806`의 정확한 API·계약 payload를 유지한다. 공유 API·Web·
+QUERY 서비스는 재시작하지 않았고 기존 PID와 설치를 유지했다. DB head `20261117_0097`,
+기존 INDEX 및 자료 학습의 실행/구성, Kakao PDF·원격 프로필·원본은 유지했다.
+
+적용 직전 기존 보호된 검사에서 작업과 비종료 Kakao 수집이 없었고, 서비스가 실제 종료된
+브라우저의 프로필 잠금 아래 수집기를 교체했다. 설치 member 및 Catalog socket, API Ready
+200·Studio HTTPS 200, 비로그인 수집 조회의 API/Web 401을 확인했다. `ONE_ROOM`만
+활성 상태이며 실제 카카오 창을 열거나 새 수집을 요청하지 않았다. 전체 방·주기 수집과
+실제 사진 연결·학생 PDF는 검증되지 않았다.
+
+설치·복구 증거: `/var/lib/eom-kakao-catalog-collector-release-91916433/`.
+정확한 기존 Catalog 경로와 drop-in·기존 수집기 wheel로만 복구하며, 새 claim이 들어가면
+진행 중인 실행을 중단하거나 새 이력을 덮어쓰지 않는다.
+
 ## 사진 출처·행 정합의 호환 릴리스 후보
 
 후보 커밋 `919164330fcb41f580f1169400e574491511a627`로 공식 API build-only와
