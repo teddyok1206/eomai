@@ -38,15 +38,16 @@ class Page:
         assert self.listeners.pop(event) is callback
 
 
-async def fetch(page, workspace):
+async def fetch(page, workspace, *, image=False):
     incoming, destination = workspace
     return await transfer.receive_room_transfer(
         page,
-        RoomReadAction.EXPORT_CSV,
+        RoomReadAction.DOWNLOAD_IMAGE if image else RoomReadAction.EXPORT_CSV,
         channel_key="channel",
         room_key="room",
         incoming=incoming,
         destination=destination,
+        image_path="/api/profiles/channel/chats/room/message/file/image" if image else None,
     )
 
 
@@ -88,4 +89,51 @@ def test_unrelated_or_duplicate_event_never_materializes_payload(workspace, monk
         asyncio.run(fetch(page, workspace))
     download.path.assert_not_awaited()
     download.cancel.assert_awaited_once()
+    assert not page.listeners and not destination.exists()
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_type", "code"),
+    [
+        ("completed", transfer.CompletedUnassociatedPhoto, "TRANSFER_UNASSOCIATED"),
+        ("duplicate", BrowserRuntimeError, "TRANSFER_UNASSOCIATED"),
+        ("moved", BrowserRuntimeError, "TRANSFER_UNASSOCIATED"),
+        ("failed", BrowserRuntimeError, "TRANSFER_FAILED"),
+        ("wrong_path", BrowserRuntimeError, "DOWNLOAD_FILE_INVALID"),
+        ("missing_request", BrowserRuntimeError, "TRANSFER_UNASSOCIATED"),
+    ],
+)
+def test_only_completed_single_cdn_get_is_a_separable_photo(
+    outcome, expected_type, code, workspace, monkeypatch
+):
+    incoming, destination = workspace
+    page = Page()
+
+    async def finished():
+        if outcome == "duplicate":
+            page.listeners["download"](download)
+        if outcome == "moved":
+            page.url += "/other"
+        if outcome == "failed":
+            raise OSError("failed SDK download")
+        return (destination.parent if outcome == "wrong_path" else incoming) / "fixture"
+
+    download = SimpleNamespace(
+        url="https://k.kakaocdn.net/fixture",
+        path=AsyncMock(side_effect=finished),
+        cancel=AsyncMock(),
+    )
+
+    async def emit(*_args, **_kwargs):
+        if outcome != "missing_request":
+            page.listeners["request"](
+                SimpleNamespace(url=download.url, method="GET", redirected_from=None)
+            )
+        page.listeners["download"](download)
+        return True
+
+    monkeypatch.setattr(transfer, "trigger_room_read_action", emit)
+    with pytest.raises(expected_type, match=code) as failure:
+        asyncio.run(fetch(page, workspace, image=True))
+    assert type(failure.value) is expected_type
     assert not page.listeners and not destination.exists()

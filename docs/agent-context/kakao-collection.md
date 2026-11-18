@@ -186,7 +186,10 @@ loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영
 MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기에 연결하지 않았다.
 `open_room_capture.py`는 이미 열린 한 room의 bounded DOM에서 일반 사진 최대6개를
 고른 뒤 사진→메뉴→CSV를 한 번씩 연결한다. 앨범/중복/상한 밖은 미확정 수치를 남긴다.
-시작 표시가 있는 방을 재수집하지 않고 전송 불확실 시 이미 받은 파일만 유지한다.
+같은 페이지의 CDN 직접 GET이 단일 파일로 끝났으나 원래 사진 요청에 연결되지 않은 경우,
+나머지 사진 동작을 건너뛰고 해당 부분을 미확정으로 올린다. 기존 CSV 내보내기를 한 번
+시도하며, 성공하면 확인된 CSV·사진만 기존 부분 수집 receipt에 넣는다. 그 외의 전송
+불확실 상태는 이미 받은 파일만 유지하고 중단한다. 시작 표시가 있는 방은 재수집하지 않는다.
 미로드 이력·channel 전체·실제 운영 collector start/C1 저장은 이 함수가 보증하지 않는다.
 `kakao_capture_proposal.py`의 `build_open_room_proposal`은 좁은 내부 다운로드 증거를
 받아 exact CSV/사진 member·scope·텍스트 앵커를 확인한다. 유일하지 않은 행은 미연결로

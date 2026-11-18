@@ -21,6 +21,7 @@ from .manual_capture_files import reserve_download_payload, write_capture_receip
 from .profile import BrowserRuntimeError
 from .room_read_actions import RoomReadAction, trigger_room_read_action
 from .room_read_transfer import (
+    CompletedUnassociatedPhoto,
     RoomTransfer,
     RoomTransferPage,
     observe_room_document,
@@ -127,15 +128,19 @@ async def capture_open_room(
     try:
         for ordinal, target in enumerate(targets, 1):
             name = f"photo-{ordinal}.bin"  # Decoder verifies media type downstream.
-            received = await receive_room_transfer(
-                page,
-                RoomReadAction.DOWNLOAD_IMAGE,
-                channel_key=channel_key,
-                room_key=room_key,
-                incoming=incoming,
-                destination=outputs / name,
-                image_path=target,
-            )
+            try:
+                received = await receive_room_transfer(
+                    page,
+                    RoomReadAction.DOWNLOAD_IMAGE,
+                    channel_key=channel_key,
+                    room_key=room_key,
+                    incoming=incoming,
+                    destination=outputs / name,
+                    image_path=target,
+                )
+            except CompletedUnassociatedPhoto:
+                # Do not collect more ambiguous photos; the independent CSV can still be read.
+                break
             photos.append(OpenRoomPhoto(name, target, received))
         if not await trigger_room_read_action(
             page, RoomReadAction.OPEN_EXPORT_MENU, channel_key=channel_key, room_key=room_key
@@ -154,7 +159,7 @@ async def capture_open_room(
         return OpenRoomCapture(
             None, tuple(photos), unresolved + len(targets) - len(photos), error.code
         )
-    return OpenRoomCapture(csv, tuple(photos), unresolved, None)
+    return OpenRoomCapture(csv, tuple(photos), unresolved + len(targets) - len(photos), None)
 
 
 async def capture_open_room_attempt(

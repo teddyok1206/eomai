@@ -6,12 +6,14 @@ import asyncio
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from eom_kakao_archive_contracts.manual_observation import ManualDocument
 
-from .download_origins import DownloadRequest, DownloadRequestOrigins
+from .download_origins import DownloadRequest, DownloadRequestOrigins, OriginCode
 from .manual_capture_files import DownloadedFile, commit_download_payload, reserve_download_payload
 from .manual_observation import (
     DOCUMENT_EXPRESSION,
@@ -45,6 +47,16 @@ class RoomTransferPage(Protocol):
 class RoomTransfer:
     payload: DownloadedFile
     document: ManualDocument | None = field(repr=False)
+
+
+class CompletedUnassociatedPhoto(BrowserRuntimeError):
+    """An observed direct photo transfer ended, but its bytes cannot be assigned."""
+
+
+class _TransferMatch(Enum):
+    UNASSOCIATED = auto()
+    DIRECT_PHOTO = auto()
+    VERIFIED = auto()
 
 
 async def observe_room_document(
@@ -84,13 +96,13 @@ async def receive_room_transfer(
     reserve_download_payload(incoming, destination)
     origins = DownloadRequestOrigins()
     loop = asyncio.get_running_loop()
-    received: asyncio.Future[tuple[BrowserDownload, bool]] = loop.create_future()
+    received: asyncio.Future[tuple[BrowserDownload, _TransferMatch]] = loop.create_future()
     duplicates = closed = False
     image = action is RoomReadAction.DOWNLOAD_IMAGE
 
     def request_event(request: DownloadRequest) -> None:
-        if image and not closed and not received.done():
-            origins.observe("one-room", request, page_path=download_page_path(page))
+        if image and not closed and not received.done() and download_page_path(page) == path:
+            origins.observe("one-room", request, page_path=path)
 
     def download_event(download: BrowserDownload) -> None:
         nonlocal duplicates
@@ -99,18 +111,24 @@ async def receive_room_transfer(
         if received.done():
             duplicates = True
             return
-        matched = False
+        match = _TransferMatch.UNASSOCIATED
         try:
             url, observed_path = download.url, download_page_path(page)
             if isinstance(url, str) and observed_path == path:
                 if image:
-                    target = origins.consume("one-room", url, page_path=path)
-                    matched = target is not None and target.path == image_path
-                else:
-                    matched = download_target(url).kind == "BLOB"
+                    origin = origins.resolve("one-room", url, page_path=path)
+                    if origin.target is not None and origin.target.path == image_path:
+                        match = _TransferMatch.VERIFIED
+                    elif (
+                        origin.code is OriginCode.INITIAL_PHOTO_REQUEST_NOT_OBSERVED
+                        and urlsplit(url).hostname == "k.kakaocdn.net"
+                    ):
+                        match = _TransferMatch.DIRECT_PHOTO
+                elif download_target(url).kind == "BLOB":
+                    match = _TransferMatch.VERIFIED
         except Exception:
             pass  # Missing SDK metadata is an unassociated transfer.
-        received.set_result((download, matched))
+        received.set_result((download, match))
 
     listeners: list[tuple[str, Callable[..., None]]] = []
     committed = False
@@ -122,10 +140,14 @@ async def receive_room_transfer(
             page, action, channel_key=channel_key, room_key=room_key, image_path=image_path
         )
         try:
-            download, matched = await asyncio.wait_for(asyncio.shield(received), _EVENT_SECONDS)
-            if duplicates or not matched:
+            download, match = await asyncio.wait_for(asyncio.shield(received), _EVENT_SECONDS)
+            if duplicates or match is _TransferMatch.UNASSOCIATED:
                 raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNASSOCIATED")
-            document = await observe_room_document(page, expected_path=path)
+            document = (
+                await observe_room_document(page, expected_path=path)
+                if match is _TransferMatch.VERIFIED
+                else None
+            )
             local = await asyncio.wait_for(download.path(), _TRANSFER_SECONDS)
         except TimeoutError:
             raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNCERTAIN") from None
@@ -135,6 +157,10 @@ async def receive_room_transfer(
             raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_FAILED") from None
         if duplicates or local is None or download_page_path(page) != path:
             raise BrowserRuntimeError("KAKAO_ROOM_TRANSFER_UNASSOCIATED")
+        if match is _TransferMatch.DIRECT_PHOTO:
+            if local.parent != incoming:
+                raise BrowserRuntimeError("DOWNLOAD_FILE_INVALID")
+            raise CompletedUnassociatedPhoto("KAKAO_ROOM_TRANSFER_UNASSOCIATED")
         payload = commit_download_payload(
             local, incoming=incoming, destination=destination, limit=32 * 1024 * 1024
         )

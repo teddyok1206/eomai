@@ -1027,10 +1027,22 @@ Orchestrator는 정해진 attempt root에서 UID/GID/mode/크기와 기존 file 
 Catalog는 protected receipt를 매핑하고 기존 `publish_and_accept_result`/원본 수락의 exact 재조회,
 권한과 concurrency를 사용한다. 완료 replay는 receipt나 브라우저를 다시 요구하지 않는다.
 파일 수와 경로 조회는 고정 bound이며 수신 bytes/CSV 행 외에 새 DB나 query/index가 없다.
-파일이나 command hash가 다르면 채택하지 않는다. 실패하거나 중단된 다운로드는 이 성공
+파일이나 command hash가 다르면 채택하지 않는다. CSV 실패나 실행 결과가 불확실한 다운로드는
 receipt를 발행하지 않고 기존 시작 표시와 raw 파일을 보존한다. 프로세스 실행/만료는 기존
 attempt에서 조율한다. 직접 넘기는 Python 객체는 OS process 경계를 넘지 못하고, 파일 전체를
 다른 서비스에 복제하거나 새 queue를 만드는 방식도 필요하지 않다.
+
+단일 사진의 경우만 예외적으로, 고정 사진 읽기 동작에서 같은 방의 허용 CDN GET과 단일
+다운로드 완료가 관측됐지만 원래 사진 요청과의 연결이 없는 경우를 구분한다. 해당 다운로드
+bytes는 채택하지 않고, 이 사진부터 나머지 계획된 사진까지 미확정으로 센다. 추가 사진 버튼을
+누르지 않고 정확한 방을 다시 검사하는 기존 CSV 내보내기를 한 번 수행할 수 있다. CSV를
+검증한 경우에만 기존 receipt로 검증된 자료와 미확정 수를 인계하며, Catalog는 그대로
+`PARTIAL`로 처리한다. URL·파일 순서로 occurrence를 추정하지 않는다. 중복 이벤트, 화면
+이동, 다운로드 타임아웃/실패, 다른 파일 경로는 계속 전송 실패로 멈춘다. 대상을 초기에
+정하는 기존 bounded list와 attempt/command의 불변 pin·고정 파일만 사용하므로 schema,
+permission, 잠금, retry, 저장소나 복잡도는 바뀌지 않는다. 모든 실패에서 계속하거나
+CSV를 확인하기 위해 사진 동작을 다시 실행하는 방법은 불확실한 동작을 반복하게 되므로
+사용하지 않는다.
 
 ### 고정 AUTO browser의 단일 방 실행
 

@@ -297,13 +297,16 @@ async def main():
    elif sys.argv[2]=='room-direct-cdn':
     capture=await capture_open_room_attempt(
       page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
-    assert capture.error_code=='KAKAO_ROOM_TRANSFER_UNASSOCIATED'
-    assert not capture.photos and capture.csv is None
-    assert not (outputs/'open-room.json').exists()
-    assert not (outputs/'source.csv').exists()
+    assert capture.error_code is None and capture.csv is not None
+    assert not capture.photos and capture.unresolved_visible_bubbles==1
+    proof=OpenRoomDownloadReceipt.decode((outputs/'open-room.json').read_bytes())
+    assert not proof.photos and proof.unresolved_visible_bubbles==1
+    assert not (outputs/'photo-1.bin').exists()
+    assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
+    assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
     assert await page.evaluate('window.danger')==0
     await context.close(); await browser.close()
-    print(json.dumps({'synthetic_real_chromium_redirect':'PASS','direct_cdn':'REFUSED'}))
+    print(json.dumps({'synthetic_real_chromium_redirect':'PASS','direct_cdn':'UNRESOLVED'}))
     return
    else:
     if sys.argv[2].startswith('auto'):
