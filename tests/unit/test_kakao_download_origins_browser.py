@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 BROWSERS = Path("/opt/eom/kakao-browser/playwright-1.65.2")
 PAGE = "/space/synthetic/channel/p/chats/room"
+LIST = "/space/synthetic/channel/p/chats"
 IMAGE = "/api/profiles/p/chats/r/message/photo/image"
 CDN = "https://k.kakaocdn.net/synthetic.png?signature=NEVER_PERSIST_QUERY"
 HTML = """<!doctype html><html><head><meta charset=utf-8></head><body>
@@ -50,9 +51,26 @@ HTML = """<!doctype html><html><head><meta charset=utf-8></head><body>
   file.download='fixture.csv'; file.click();
  }
 </script></body></html>""".encode()
+AUTO_HTML = HTML.replace(
+    b"<div class=chat_popup>",
+    b"""<ul class=list_chat>
+      <li data-chat-id=other><button type=button data-chat-id=other
+           onclick="window.danger++">Same name</button></li>
+      <li data-chat-id=r><button type=button data-chat-id=r
+           onclick="window.roomClicks++; document.querySelector('.chat_popup').hidden=false">
+           Same name</button></li>
+    </ul><script>window.roomClicks=0;</script><div class=chat_popup hidden>""",
+    1,
+)
+PHOTO_NODE = HTML.split(b"<div class=item_chat>", 1)[1].split(b"<div id=menu", 1)[0]
+TEXT_ONLY = AUTO_HTML.replace(
+    b"<div class=item_chat>" + PHOTO_NODE,
+    b"</div>",
+    1,
+).replace(b"<div class=chat_popup hidden>", b"<div class=chat_popup data-chat-id=r hidden>")
 
 
-@pytest.mark.parametrize("receiver", ["manual", "scoped", "room"])
+@pytest.mark.parametrize("receiver", ["manual", "scoped", "room", "auto", "auto-text"])
 def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path, receiver):
     if not PYTHON.is_file() or not BROWSERS.is_dir():
         pytest.skip("explicit installed browser environment is unavailable")
@@ -86,10 +104,14 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
     class Origin(BaseHTTPRequestHandler):
         def do_GET(self):
             host = self.headers.get("Host")
-            if host == "business.kakao.com" and self.path == PAGE:
+            if host == "business.kakao.com" and self.path in {PAGE, LIST}:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                body = HTML
+                body = (
+                    (TEXT_ONLY if receiver == "auto-text" else AUTO_HTML)
+                    if self.path == LIST
+                    else HTML
+                )
             elif host == "business.kakao.com" and self.path == IMAGE:
                 self.send_response(302)
                 self.send_header("Location", CDN)
@@ -135,11 +157,13 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
 import asyncio, json, sys, tempfile
 from pathlib import Path
 from playwright.async_api import async_playwright
+from eom_kakao_archive_collector.auto_room_browser import read_registered_room
 from eom_kakao_archive_collector.manual_download import ManualDownloads
 from eom_kakao_archive_collector.open_room_capture import capture_open_room_attempt
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
 from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
+from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
 from eom_kakao_archive_contracts.capture import CaptureCommand
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
@@ -168,7 +192,8 @@ async def main():
    context=await browser.new_context(accept_downloads=True,ignore_https_errors=True)
    page=await context.new_page()
    if manager: manager.subscribe(page)
-   await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/room')
+   if not sys.argv[2].startswith('auto'):
+    await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/room')
    image_path='/api/profiles/p/chats/r/message/photo/image'
    if manager:
     async with page.expect_download(timeout=10000) as pending:
@@ -198,22 +223,31 @@ async def main():
     assert document is not None
     raw=document.model_dump_json().encode()
    else:
-    capture=await capture_open_room_attempt(
-      page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
-    assert capture.error_code is None and capture.csv and len(capture.photos)==1
-    assert capture.unresolved_visible_bubbles==0
-    assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
-    photo=capture.photos[0]
-    assert (outputs/photo.member_name).read_bytes()==b'synthetic download bytes'
-    assert photo.image_path==image_path
-    document=photo.transfer.document
-    assert document is not None
-    raw=document.model_dump_json().encode()
+    if sys.argv[2].startswith('auto'):
+     request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')
+     await read_registered_room(page,request,incoming=incoming,outputs=outputs)
+     assert await page.evaluate('window.roomClicks')==1
+    else:
+     capture=await capture_open_room_attempt(
+       page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
+     assert capture.error_code is None and capture.csv and len(capture.photos)==1
+     assert capture.unresolved_visible_bubbles==0
     evidence=(outputs/'open-room.json').read_bytes()
     proof=OpenRoomDownloadReceipt.decode(evidence)
+    assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
+    if sys.argv[2]=='auto-text':
+     assert not proof.photos and not (outputs/'photo-1.bin').exists()
+     document=proof.csv_document
+    else:
+     photo=proof.photos[0]
+     assert (outputs.parent/photo.relative_path).read_bytes()==b'synthetic download bytes'
+     assert photo.target==image_path
+     assert photo.sha256==sha256((outputs.parent/photo.relative_path).read_bytes())
+     document=photo.document
+    assert document is not None
+    raw=document.model_dump_json().encode()
     assert proof.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
     assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
-    assert proof.photos[0].sha256==sha256((outputs/photo.member_name).read_bytes())
     try:
      await capture_open_room_attempt(
        page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)

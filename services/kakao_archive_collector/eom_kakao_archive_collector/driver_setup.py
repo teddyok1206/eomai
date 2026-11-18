@@ -45,6 +45,12 @@ class ManualSetup:
     chromium_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class AutoSetup:
+    fence: ProfileFence
+    chromium_sha256: str
+
+
 def _kernel_read(path: Path) -> bytes:
     with path.open("rb") as stream:
         raw = stream.read(4097)
@@ -260,7 +266,7 @@ def prepare_x11_directory() -> None:
         os.close(fd)
 
 
-def validate_setup(request: Path, profile: Path) -> ManualSetup:
+def validate_setup(request: Path, profile: Path) -> ManualSetup | AutoSetup:
     browser = pwd.getpwnam("eom-kakao")
     uid = browser.pw_uid
     if (
@@ -279,14 +285,26 @@ def validate_setup(request: Path, profile: Path) -> ManualSetup:
     fence = ProfileFence.model_validate(value)
     if request.name != f"{fence.browser_run_id}.json":
         raise BrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH")
-    if fence.mode != "MANUAL":
-        raise BrowserRuntimeError("KAKAO_BROWSER_AUTO_UNAVAILABLE")
+    if fence.mode not in {"MANUAL", "AUTO"}:
+        raise BrowserRuntimeError("KAKAO_BROWSER_MODE_NOT_STARTABLE")
     require_supervisor()
     for path in (PROFILE, PRIVATE):
         with protected_directory(path, allowed_uids=frozenset({0, uid})) as directory:
             metadata = os.fstat(directory)
             if metadata.st_uid != uid or stat.S_IMODE(metadata.st_mode) != 0o700:
                 raise BrowserRuntimeError("KAKAO_BROWSER_DIRECTORY_UNSAFE")
+    config = read_protected(RELEASE, uid=0, limit=256, allowed_uids=frozenset({0})).decode("ascii")
+    pattern = (
+        r"EOM_KAKAO_XVNC_SHA256=(sha256:[0-9a-f]{64})\n"
+        r"EOM_KAKAO_CHROMIUM_SHA256=(sha256:[0-9a-f]{64})\n"
+    )
+    matched = re.fullmatch(pattern, config)
+    if matched is None:
+        raise BrowserRuntimeError("KAKAO_BROWSER_DRIVER_RELEASE_MISMATCH")
+    if fence.mode == "AUTO":
+        for path in (VNC_SOCKET, X_SOCKET, X_LOCK):
+            _require_absent(path)
+        return AutoSetup(fence, matched.group(2))
     with protected_directory(VNC_SOCKET.parent, allowed_uids=frozenset({0, uid})) as directory:
         metadata = os.fstat(directory)
         if (
@@ -302,20 +320,14 @@ def validate_setup(request: Path, profile: Path) -> ManualSetup:
         raise BrowserRuntimeError("KAKAO_BROWSER_VNC_PASSWORD_FILE_INVALID")
     for path in (VNC_SOCKET, X_SOCKET, X_LOCK):
         _require_absent(path)
-    config = read_protected(RELEASE, uid=0, limit=256, allowed_uids=frozenset({0})).decode("ascii")
-    pattern = (
-        r"EOM_KAKAO_XVNC_SHA256=(sha256:[0-9a-f]{64})\n"
-        r"EOM_KAKAO_CHROMIUM_SHA256=(sha256:[0-9a-f]{64})\n"
-    )
-    matched = re.fullmatch(pattern, config)
-    if matched is None or hash_executable(XVNC) != matched.group(1):
+    if hash_executable(XVNC) != matched.group(1):
         raise BrowserRuntimeError("KAKAO_BROWSER_DRIVER_RELEASE_MISMATCH")
     # The preinstalled X11 utility confirms display authentication, not just an RFB inode.
     hash_executable(XDPYINFO)
     return ManualSetup(fence, matched.group(1), matched.group(2))
 
 
-def child_environment() -> dict[str, str]:
+def browser_environment() -> dict[str, str]:
     # Paths are not secret values. Inherit no tokens, debug flags, proxies or caller config.
     return {
         # The parent owns the profile lock and is deliberately not browser-writable.
@@ -324,10 +336,12 @@ def child_environment() -> dict[str, str]:
         "LANG": "C.UTF-8",
         "PATH": "/usr/bin:/bin",
         "TMPDIR": "/tmp",
-        "DISPLAY": DISPLAY,
-        "XAUTHORITY": str(XAUTHORITY),
         "PLAYWRIGHT_BROWSERS_PATH": str(BROWSER_ROOT),
     }
+
+
+def child_environment() -> dict[str, str]:
+    return browser_environment() | {"DISPLAY": DISPLAY, "XAUTHORITY": str(XAUTHORITY)}
 
 
 def xvnc_argv() -> tuple[str, ...]:

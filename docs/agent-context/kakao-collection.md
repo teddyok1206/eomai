@@ -174,6 +174,13 @@ command SHA와 실제 등록 방의 scope를 확인한 후 C1 문서를 기존 �
 이미 수락된 재조회는 영수증을 다시 요구하지 않는다. 이 경로는 실제 AUTO 브라우저를
 시작하거나 방을 여는 launcher가 아니다.
 
+`prepare_auto_room`과 `dispatch_staged_kakao_open_room`은 기존 active epoch/등록 room의
+typed command를 `FixedKakaoBrowserRuntime.stage_auto_room`의 단일 고정 member에 넣는다.
+`manual_driver`의 AUTO 분기는 기존 supervisor/profile lock 아래 같은 Chromium pin을
+headless로 사용한다. `auto_room_browser.py`는 지정된 channel route와 안정 ID의 방만 열고
+기존 guarded 다운로드를 호출하며 MANUAL/VNC 또는 임의 브라우저 조작을 하지 않는다.
+격리 브라우저 fixture의 selector와 실제 카카오 UI 일치 여부는 별도 검증 대상이다.
+
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.
 서로 다른 완전 본문 두 개가 사진을 감싸야 하며 원래 CSV의 양쪽 순서를 모두 비교한다.

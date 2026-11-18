@@ -64,6 +64,9 @@ def _visible_photo_plan(
     popups = [node.index for node in document.nodes if "chat_popup" in node.classes]
     if channel is None or channel[1] != channel_key or len(popups) != 1 or document.truncated:
         raise BrowserRuntimeError("KAKAO_OPEN_ROOM_EVIDENCE_UNAVAILABLE")
+    shown_room = document.nodes[popups[0]].identities.data_chat_id
+    if shown_room is not None and shown_room != room_key:
+        raise BrowserRuntimeError("KAKAO_OPEN_ROOM_EVIDENCE_UNAVAILABLE")
     branches: dict[int | None, _Bubble | None] = {popups[0]: None}
     bubbles: list[_Bubble] = []
     for node in document.nodes[popups[0] + 1 :]:
@@ -87,7 +90,7 @@ def _visible_photo_plan(
                 bubble.links.append(node.link_path)
         branches[node.index] = bubble
     counts = Counter(link for bubble in bubbles for link in bubble.links)
-    if not counts:
+    if not counts and shown_room is None:
         raise BrowserRuntimeError("KAKAO_OPEN_ROOM_EVIDENCE_UNAVAILABLE")
     candidates: list[str] = []
     unresolved = 0

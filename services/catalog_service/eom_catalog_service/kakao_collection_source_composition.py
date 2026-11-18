@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from eom_kakao_archive_contracts.capture import CsvMember
     from eom_kakao_archive_contracts.render import LocalMember
     from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+    from eom_orchestrator.kakao_browser_runtime import BrowserRunHandle, FixedKakaoBrowserRuntime
 
     from .kakao_capture_proposal import RoomCaptureDocuments
     from .kakao_collection_attempt_service import KakaoCollectionAttemptService
@@ -43,6 +44,30 @@ def build_configured_kakao_collection_attempts(
         profile_id=profile,
         adapter_release_sha256=adapter,
     )
+
+
+def dispatch_staged_kakao_open_room(
+    attempts: KakaoCollectionAttemptService,
+    runtime: FixedKakaoBrowserRuntime,
+    browser: BrowserRunHandle,
+    attempt_id: str,
+    *,
+    space_key: str,
+    expected_room: tuple[str, str],
+) -> None:
+    """Send the bound C1 command to that AUTO browser, never launch another one."""
+
+    def current() -> None:
+        if (
+            attempts.prepare_auto_room(attempt_id, space_key=space_key, expected_room=expected_room)
+            != command
+        ):
+            raise ValueError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+
+    command = attempts.prepare_auto_room(
+        attempt_id, space_key=space_key, expected_room=expected_room
+    )
+    runtime.stage_auto_room(browser, command, assert_current=current)
 
 
 def admit_staged_kakao_capture_source(

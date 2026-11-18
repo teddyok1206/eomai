@@ -980,3 +980,22 @@ Catalog는 protected receipt를 매핑하고 기존 `publish_and_accept_result`/
 receipt를 발행하지 않고 기존 시작 표시와 raw 파일을 보존한다. 프로세스 실행/만료는 기존
 attempt에서 조율한다. 직접 넘기는 Python 객체는 OS process 경계를 넘지 못하고, 파일 전체를
 다른 서비스에 복제하거나 새 queue를 만드는 방식도 필요하지 않다.
+
+### 고정 AUTO browser의 단일 방 실행
+
+기존 systemd supervisor의 AUTO profile lock 아래에서만 headless Chromium을 실행한다.
+Catalog owner가 현재 RUNNING epoch·받아들인 C1 command·등록된 provider room을 확인하고
+정해진 browser-run member에 1건만 원자 발행한다. command의 hash, profile/run/attempt/fence와
+room/snapshot은 기존 pin이고, 추가 입력은 URL이나 스크립트가 아닌 channel route의 검증된
+세 키뿐이다. 설치 디렉터리/읽기 권한을 재사용하고 browser는 DB/NAS를 읽거나 쓰지 않는다.
+
+정해진 채널 목록 경로와 유일한 안정 ID가 보일 때만 이미 승인된 방을 연다. 이름·좌표·본문·
+아무 버튼으로 대체하지 않고, 열린 뒤에도 기존 방 검사를 거쳐 다운로드한다. 알려지지 않은
+selector/읽음 효과를 운영 검증으로 간주하지 않는다. 로그인 redirect·scope/DOM 변경은
+명시적으로 멈추며 자동 credential 입력은 없다. MANUAL/Xvnc 경로는 바꾸지 않는다.
+
+epoch당 고정 입력/attempt 출력의 indexed path lookup, 제한된 DOM 탐색과 기존 원본 I/O만
+수행한다. 프로세스가 끊길 때 시작 표시와 원본을 남기고 같은 command를 자동 재실행하지
+않는다. 수락/재조회 권한·트랜잭션은 기존 Catalog owner에 남는다. 새 큐/DB/index/상시
+서비스나 임의 브라우저 IPC 대신 기존 잠금·로컬 인계 경계를 유지한다. 이 한 방 명령은
+전체 목록, 주기 실행, 사진 전체를 다뤘다는 의미가 아니다.

@@ -18,8 +18,11 @@ from unittest.mock import Mock
 
 import pytest
 from eom_kakao_archive_collector import profile, supervisor
+from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_orchestrator import kakao_browser_runtime as runtime
+
+from tests.unit.test_kakao_capture_contracts import command, execution, inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 OWNER = os.getuid()
@@ -413,6 +416,52 @@ def test_fixed_start_requires_prior_exact_stop_and_fresh_current_claim(gate, mon
         "start",
         runtime.UNIT,
     ]
+
+
+def test_auto_dispatch_keeps_one_exact_room_command(gate, safe_dir, monkeypatch):
+    current = handle()
+    source = command(
+        inventory=inventory(),
+        profile_id=current.fence.profile_id,
+        browser_run_id=current.fence.browser_run_id,
+        execution=execution(fence=1),
+    )
+    selected = AutoRoomCommand(
+        command=source, space_key="scope", channel_key="channel", room_key="room"
+    )
+    monkeypatch.setattr(runtime, "_show", observed)
+    monkeypatch.setattr(runtime, "REQUEST", safe_dir / "request.json")
+    monkeypatch.setattr(runtime.pwd, "getpwnam", lambda _: SimpleNamespace(pw_uid=OWNER))
+    live = Mock()
+    gate.stage_auto_room(current, selected, assert_current=live)
+    path = safe_dir / f"{current.fence.browser_run_id}.capture.json"
+    assert AutoRoomCommand.decode(path.read_bytes(), current.fence) == selected
+    before = path.stat()
+    gate.stage_auto_room(current, selected, assert_current=live)
+    assert path.stat().st_ino == before.st_ino and path.stat().st_nlink == 1
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="AUTO_COMMAND_CONFLICT"):
+        gate.stage_auto_room(
+            current, selected.model_copy(update={"room_key": "other"}), assert_current=live
+        )
+    with pytest.raises(ValueError, match="AUTO_ROOM_FENCE_MISMATCH"):
+        gate.stage_auto_room(
+            current,
+            selected.model_copy(
+                update={
+                    "command": source.model_copy(
+                        update={
+                            "browser_run_id": fence(run="3").browser_run_id,
+                        }
+                    )
+                }
+            ),
+            assert_current=live,
+        )
+    monkeypatch.setattr(runtime, "_show", new_observation)
+    with pytest.raises(runtime.KakaoBrowserRuntimeError, match="FENCE_MISMATCH"):
+        gate.stage_auto_room(current, selected, assert_current=live)
+    assert live.call_count == 3
+    assert path.read_bytes() == selected.encoded()
 
 
 @pytest.mark.parametrize(

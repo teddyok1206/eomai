@@ -246,6 +246,15 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
 def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(staged):
     data = staged.data
     room = ("channel-one", "room-one")
+    attempts = staged.attempt.service
+    prepared = attempts.prepare_auto_room(
+        data.reserved.attempt_id, space_key="scope", expected_room=room
+    )
+    assert prepared.command == data.command
+    with pytest.raises(KakaoArchiveError, match="CAPTURE_IDENTITY_MISMATCH"):
+        attempts.prepare_auto_room(
+            data.reserved.attempt_id, space_key="scope", expected_room=(room[0], "other")
+        )
     groups = [
         (kind, value.replace("/channel1/", "/channel-one/").replace("/room1/", "/room-one/"))
         for kind, value in GROUPS
@@ -315,6 +324,8 @@ def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(s
     assert len(accepted.resolution.rows) == 4
     assert len(accepted.resolution.admission.attachments) == 1
     assert not (outputs / "normalization.json").exists()
+    with pytest.raises(KakaoArchiveError, match="PRECONDITION_FAILED"):
+        attempts.prepare_auto_room(data.reserved.attempt_id, space_key="scope", expected_room=room)
     receipt.unlink()
     assert accept(room).replayed
 

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/auto-room-command/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command", "space_key", "channel_key", "room_key"],
+  "properties": {
+    "schema_version": {"const": "kakao-auto-room-command/1.0"},
+    "command": {"$ref": "eom://schemas/kakao-archive/worker-collection-v1/1.0#/$defs/command", "properties": {"operation": {"const": "CAPTURE_ROOM"}}},
+    "space_key": {"$ref": "#/$defs/key"},
+    "channel_key": {"$ref": "#/$defs/key"},
+    "room_key": {"$ref": "#/$defs/key"}
+  },
+  "$defs": {
+    "key": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"}
+  }
+}

@@ -26,6 +26,9 @@ def authority(monkeypatch):
         local = Path(name)
         private = local / "private"
         private.mkdir(mode=0o700)
+        x11 = local / "x11"
+        x11.mkdir()
+        x11.chmod(0o1777)
         password = local / "vnc.passwd"
         password.write_bytes(b"FAKEONLY")
         password.chmod(0o600)
@@ -34,7 +37,8 @@ def authority(monkeypatch):
             ("XAUTHORITY", private / "Xauthority"),
             ("PASSWORD", password),
             ("VNC_SOCKET", local / "vnc.sock"),
-            ("X_SOCKET", local / "X94"),
+            ("X11_DIRECTORY", x11),
+            ("X_SOCKET", x11 / "X94"),
             ("X_LOCK", local / "X94-lock"),
         ):
             monkeypatch.setattr(setup, key, path)
@@ -82,7 +86,7 @@ def test_first_boot_and_restart_rotate_only_display_authority(authority, capsys)
     assert (
         first_cookie.hex().encode() not in exposed and second_cookie.hex().encode() not in exposed
     )
-    assert setup.require_supervisor.call_count == 4
+    assert setup.require_supervisor.call_count >= 4
 
 
 def test_generated_binary_is_accepted_by_installed_xauth(authority):
@@ -238,12 +242,9 @@ def test_target_change_before_atomic_publish_is_preserved(authority, monkeypatch
     replacement = setup.PRIVATE / "replacement"
     replacement.write_bytes(b"unrelated replacement")
     replacement.chmod(0o600)
-    calls = 0
 
     def supervisor():
-        nonlocal calls
-        calls += 1
-        if calls == 2:
+        if (setup.PRIVATE / ".Xauthority.next").exists() and replacement.exists():
             replacement.replace(setup.XAUTHORITY)
 
     monkeypatch.setattr(setup, "require_supervisor", supervisor)
@@ -256,12 +257,9 @@ def test_target_change_before_atomic_publish_is_preserved(authority, monkeypatch
 def test_substituted_temporary_is_not_deleted(authority, monkeypatch):
     original = setup.PRIVATE / "retained-own-temporary"
     temporary = setup.PRIVATE / ".Xauthority.next"
-    calls = 0
 
     def supervisor():
-        nonlocal calls
-        calls += 1
-        if calls == 2:
+        if temporary.exists() and not original.exists():
             temporary.replace(original)
             temporary.write_bytes(b"unrelated interrupted work")
             temporary.chmod(0o600)

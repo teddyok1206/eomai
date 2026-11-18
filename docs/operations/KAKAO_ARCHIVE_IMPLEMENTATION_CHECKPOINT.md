@@ -1,5 +1,23 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 AUTO 브라우저의 단일 방 명령과 guarded 수집
+
+기존 supervisor/profile lock 아래 동일 pin의 headless Chromium이 정확한 AUTO epoch의
+등록된 C1 명령을 받는다. 기존 control lock 아래 고정 파일 하나를 원자 발행하며 다른
+명령으로 덮어쓰지 않는다. 고정 channel route와 안정 ID가 있는 방만 열고, 표시된 popup을
+다시 검사해 기존 CSV/사진 수신 증거를 남긴다. 로그인 redirect·모호한 UI·다른 방인 경우
+수집으로 가지 않는다. MANUAL 경로·프로필 자격증명·운영 DB를 바꾸지 않았다.
+
+격리 TLS/Chromium에서 동일 표시명의 방을 구분하고 사진이 있는 방과 텍스트만 있는 방의
+다운로드, 위험 동작 호출 0건을 확인했다. disposable PostgreSQL에서는 현재 room/attempt
+dispatch 준비, 방 불일치, 수락 뒤 새 dispatch 거부와 원본 채택/재조회를 검증했다.
+집중 소스236 PASS, 임시 DB51 PASS, mypy/Ruff와 schema audit PASS. 기존 MANUAL 회귀의
+X11 fixture가 설치 invariant를 누락해 가짜 경로에서 실패했던 부분은 fixture만 바로잡았다.
+
+소스 반영이며 운영 driver나 AUTO를 활성화하지 않았다. 실제 카카오의 목록 row 안정 ID와
+읽음 효과는 합성 fixture로 증명되지 않는다. 다음은 기존 collection owner의 시작·관측·
+종료 및 동일 명령으로 수신물 채택을 한 경로로 운영 연결하고 실제 한 방에서 확인하는 것이다.
+
 ## 2026-11-18 수집기 다운로드 증거의 프로세스 인계
 
 열린 방 수집기가 command SHA와 exact CSV/사진 관측을 붙인 `open-room.json`을 고정 작업

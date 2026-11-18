@@ -45,16 +45,15 @@ ROOM_READ_EXPRESSION = r"""({action, channel, room, image}) => {
   };
   const popup = unique(document, '.chat_popup');
   if (!popup) return 'UNAVAILABLE';
+  const shownRoom = popup.getAttribute('data-chat-id');
+  if (shownRoom !== null && shownRoom !== room) return 'UNAVAILABLE';
   const key = /^[A-Za-z0-9_-]{1,128}$/;
   const links = [];
+  let verifiedLinks = 0;
   for (const link of popup.querySelectorAll('.item_chat .set_chat a.btn_save')) {
     if (!visible(link)) continue;
     const bubble = link.closest('.set_chat');
-    if (!bubble || bubble.closest('.chat_popup') !== popup ||
-        bubble.querySelector('.box_package, .link_pic_temp') ||
-        bubble.querySelectorAll('a.link_pic').length !== 1 ||
-        bubble.querySelectorAll('a.btn_save').length !== 1 ||
-        !bubble.querySelector('a.link_pic img.thumb_g')) return 'UNAVAILABLE';
+    if (!bubble || bubble.closest('.chat_popup') !== popup) return 'UNAVAILABLE';
     let url;
     try { url = new URL(link.href); } catch { return 'UNAVAILABLE'; }
     const segments = url.pathname.slice(1).split('/');
@@ -64,9 +63,13 @@ ROOM_READ_EXPRESSION = r"""({action, channel, room, image}) => {
         url.origin !== location.origin || url.username || url.password || url.search || url.hash ||
         sourceChannel !== channel || sourceRoom !== room)
       return 'UNAVAILABLE';
-    links.push({link, path:url.pathname});
+    verifiedLinks++;
+    if (!bubble.querySelector('.box_package, .link_pic_temp') &&
+        bubble.querySelectorAll('a.link_pic').length === 1 &&
+        bubble.querySelectorAll('a.btn_save').length === 1 &&
+        bubble.querySelector('a.link_pic img.thumb_g')) links.push({link, path:url.pathname});
   }
-  if (!links.length) return 'UNAVAILABLE'; // A filename or a display name is never room identity.
+  if (!verifiedLinks && shownRoom === null) return 'UNAVAILABLE';
   const allMenus = Array.from(document.querySelectorAll('.menu_side_type2')).filter(visible);
   let target = null;
   if (action === 'OPEN_EXPORT_MENU') {

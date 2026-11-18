@@ -18,6 +18,7 @@ from eom_catalog_contracts.kakao_source import (
     KakaoSourceAdmission,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
 from eom_kakao_archive_contracts.capture import (
     CaptureCapability,
     CaptureCommand,
@@ -482,6 +483,53 @@ class KakaoCollectionAttemptService:
                 raise KakaoArchiveError(_INVALID)
             return self._context(session, row, row.capability_sha256)
 
+    @staticmethod
+    def _require_bound_room(
+        session: Session, attempt: KakaoCollectionAttempt, expected_room: tuple[str, str]
+    ) -> None:
+        room = session.get(Room, attempt.room_id)
+        if (
+            room is None
+            or room.state != "ACTIVE"
+            or room.source_binding_id != attempt.source_binding_id
+            or room.source_identity_sha256 != manual_room_identity_sha256(*expected_room)
+        ):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+
+    def prepare_auto_room(
+        self, attempt_id: str, *, space_key: str, expected_room: tuple[str, str]
+    ) -> AutoRoomCommand:
+        """Authorize a fixed run dispatch from the exact already-pinned attempt."""
+        context = self._result_input_context(attempt_id)
+        if context.command is None:
+            raise KakaoArchiveError(_INVALID)
+        command = self._read(context.command, CaptureCommand)
+        self._match(command, context.attempt)
+        with self._sessions.begin() as session:
+            browser, profile, run = lock_kakao_collection_browser(
+                session, context.attempt.browser_run_id, profile_id=self.profile_id
+            )
+            self._authorize(session, run)
+            self._current(browser, profile, run)
+            row = session.get(Attempt, attempt_id)
+            task = session.get(Task, context.attempt.task_id)
+            if (
+                row is None
+                or row.state != "COMMAND_READY"
+                or _command_pointer(row) != context.command
+                or task is None
+                or task.state != "RUNNING"
+                or run.state != "COLLECTING"
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            self._require_bound_room(session, context.attempt, expected_room)
+        return AutoRoomCommand(
+            command=command,
+            space_key=space_key,
+            channel_key=expected_room[0],
+            room_key=expected_room[1],
+        )
+
     def open_room_documents(
         self,
         attempt_id: str,
@@ -496,14 +544,7 @@ class KakaoCollectionAttemptService:
         if expected.command is None or expected.inventory is None:
             raise KakaoArchiveError(_INVALID)
         with self._sessions.begin() as session:
-            room = session.get(Room, expected.attempt.room_id)
-            if (
-                room is None
-                or room.state != "ACTIVE"
-                or room.source_binding_id != expected.attempt.source_binding_id
-                or room.source_identity_sha256 != manual_room_identity_sha256(*expected_room)
-            ):
-                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+            self._require_bound_room(session, expected.attempt, expected_room)
         command = self._read(expected.command, CaptureCommand)
         self._match(command, expected.attempt)
         capability = self._read(expected.capability, CaptureCapability)

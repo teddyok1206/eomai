@@ -18,6 +18,10 @@ from pathlib import Path
 from typing import Literal
 
 from eom_kakao_archive_contracts import canonical_bytes
+from eom_kakao_archive_contracts.auto_room_command import (
+    MAX_AUTO_ROOM_COMMAND_BYTES,
+    AutoRoomCommand,
+)
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence, validate_remote_contract
 
 from . import kakao_runtime_os as runtime_os
@@ -341,6 +345,59 @@ class FixedKakaoBrowserRuntime:
         with _control_lock():
             self._installed()
             return self._running(fence, self._request(fence), _show())
+
+    def stage_auto_room(
+        self,
+        run: BrowserRunHandle,
+        command: AutoRoomCommand,
+        *,
+        assert_current: Callable[[], None],
+    ) -> None:
+        """Publish one immutable command to the already-running exact AUTO fence."""
+        raw = command.encoded()
+        AutoRoomCommand.decode(raw, run.fence)
+        with _control_lock():
+            self._installed()
+            current = self._running(run.fence, self._request(run.fence), _show())
+            if current != run:
+                raise KakaoBrowserRuntimeError("KAKAO_BROWSER_FENCE_MISMATCH")
+            assert_current()
+            owner = pwd.getpwnam("eom-catalog-manager").pw_uid
+            owners = frozenset({0, owner})
+            path = REQUEST.with_name(f"{run.fence.browser_run_id}.capture.json")
+            try:
+                prior = _read(path, uid=owner, maximum=MAX_AUTO_ROOM_COMMAND_BYTES, owners=owners)
+            except FileNotFoundError:
+                pass
+            else:
+                if prior != raw:
+                    raise KakaoBrowserRuntimeError("KAKAO_BROWSER_AUTO_COMMAND_CONFLICT")
+                return
+            with _directory(path.parent, owners=owners) as directory:
+                pending = path.with_suffix(".next").name
+                try:
+                    fd = os.open(
+                        pending,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                        0o640,
+                        dir_fd=directory,
+                    )
+                except FileExistsError:
+                    raise KakaoBrowserRuntimeError("KAKAO_BROWSER_AUTO_COMMAND_UNCERTAIN") from None
+                with os.fdopen(fd, "wb") as stream:
+                    os.fchmod(stream.fileno(), 0o640)
+                    stream.write(raw)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                # The one trusted owner holds control.lock. Rename publishes a single-link
+                # file at once; a reader must never see an incomplete or two-link member.
+                try:
+                    os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+                except FileNotFoundError:
+                    os.rename(pending, path.name, src_dir_fd=directory, dst_dir_fd=directory)
+                else:
+                    raise KakaoBrowserRuntimeError("KAKAO_BROWSER_AUTO_COMMAND_CONFLICT")
+                os.fsync(directory)
 
     def observe_stage(self, fence: ProfileFence) -> BrowserStageObservation:
         """Observe exact protected input; a partial stage is not permission to relaunch."""

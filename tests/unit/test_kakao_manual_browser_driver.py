@@ -60,6 +60,41 @@ def fence(mode="MANUAL"):
     )
 
 
+def test_auto_uses_bound_command_and_closes_without_starting_remote_display(monkeypatch):
+    auto = setup.AutoSetup(fence("AUTO"), SHA)
+    request, page = Mock(), Mock()
+    context = SimpleNamespace(new_page=AsyncMock(return_value=page), close=AsyncMock())
+    chromium = SimpleNamespace(
+        executable_path="/private/pinned/chromium",
+        launch_persistent_context=AsyncMock(return_value=context),
+    )
+    playwright = SimpleNamespace(chromium=chromium, stop=AsyncMock())
+    prepare, validate, display, collect = (
+        AsyncMock(return_value=request),
+        Mock(),
+        Mock(),
+        AsyncMock(),
+    )
+    incoming, outputs = Path("/private/incoming"), Path("/private/outputs")
+    monkeypatch.setattr(driver, "wait_for_room_command", prepare)
+    monkeypatch.setattr(driver.setup, "require_supervisor", Mock())
+    monkeypatch.setattr(driver.setup, "require_chromium", validate)
+    monkeypatch.setattr(driver, "stage_room_workspace", Mock(return_value=(incoming, outputs)))
+    monkeypatch.setattr(driver, "_start_playwright", AsyncMock(return_value=playwright))
+    monkeypatch.setattr(driver, "_start_xvnc", display)
+    monkeypatch.setattr(driver, "read_registered_room", collect)
+    asyncio.run(driver.run_auto(auto, asyncio.Event()))
+    display.assert_not_called()
+    collect.assert_awaited_once_with(page, request, incoming=incoming, outputs=outputs)
+    validate.assert_called_once_with(Path(chromium.executable_path), SHA)
+    arguments = chromium.launch_persistent_context.call_args.kwargs
+    assert arguments["headless"] and arguments["chromium_sandbox"]
+    assert arguments["executable_path"] == chromium.executable_path
+    assert "DISPLAY" not in arguments["env"] and "XAUTHORITY" not in arguments["env"]
+    context.close.assert_awaited_once()
+    playwright.stop.assert_awaited_once()
+
+
 @pytest.fixture
 def local():
     with tempfile.TemporaryDirectory(prefix="kakao-manual-test-", dir=ROOT / "staging") as name:

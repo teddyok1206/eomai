@@ -19,6 +19,8 @@ from eom_kakao_archive_contracts.render import LocalMember, sha256
 
 from .kakao_runtime_os import KakaoRuntimeOsError, protected_directory, read_protected
 
+_INSTALLED_BROWSER_DOWNLOADS = Path("/var/lib/eom-kakao/downloads")
+
 
 class KakaoCaptureInputError(ValueError):
     """Stable technical code only, never an untrusted path or file content."""
@@ -105,7 +107,10 @@ class KakaoCaptureOutputReader:
                     raise KakaoCaptureInputError("KAKAO_CAPTURE_STAGING_UNSAFE")
 
         try:
-            directory(self.root, os.geteuid(), 0o2750)
+            root_owner = (
+                self.worker_uid if self.root == _INSTALLED_BROWSER_DOWNLOADS else os.geteuid()
+            )
+            directory(self.root, root_owner, 0o2750)
             parent = self.root / self.attempt_id
             directory(parent, self.worker_uid, 0o750)
             for component in relative_path.split("/")[:-1]:
