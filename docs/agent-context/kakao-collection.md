@@ -164,6 +164,9 @@ canonical text이며 DOM 조각을 전체 문장/전체 이력으로 간주하�
 페이지의 실제 GET image endpoint→허용된 CDN redirect→download를 일회성으로 연결한다.
 출처 연결 실패 수신에는 `manual_download.py`가 같은 보호 폴더에 운영 진단 한 줄만 보관한다.
 주소·식별자·예외 문자열은 저장하지 않으며 진단으로 정합 조건을 완화하지 않는다.
+`photo_dom_diagnostic.py`는 직접 전송 형태의 수신에서 같은 방의 사진 링크·표시 주소가 최종
+전송 주소와 일치하는지 검사한다. 브라우저를 벗어나는 값은 고정 분류뿐이며, 일치 결과도
+말풍선/CSV 행 연결 권한이 아니다.
 마지막 request leg의60초·64건·8redirect 상한과 SDK request identity를 확인하며 URL query/
 header/cookie는 저장하지 않는다. URL hash index를 사용하고 다른 방·모호함·범위 없는 event는
 소비 후 거부한다. direct CDN URL 자체는 여전히 UNAVAILABLE이고 source 권한이 아니다.

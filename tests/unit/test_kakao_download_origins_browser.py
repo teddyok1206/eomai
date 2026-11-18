@@ -77,6 +77,10 @@ TEXT_ONLY = AUTO_HTML.replace(
     [
         "manual",
         "manual-direct-cdn",
+        "manual-dom-link",
+        "manual-dom-preview",
+        "manual-dom-other-query",
+        "manual-dom-multiple",
         "scoped",
         "room",
         "room-direct-cdn",
@@ -132,7 +136,9 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                         b"document.querySelector('.chat_popup').hidden=false",
                         f"window.open('{opened}?tracking=fixture','selected')".encode(),
                     )
-                if route == PAGE and receiver.endswith("-direct-cdn"):
+                if (route == PAGE and receiver.endswith("-direct-cdn")) or (
+                    route == POPUP and receiver.startswith("manual-dom-")
+                ):
                     body = body.replace(
                         b"window.danger=0;",
                         (
@@ -140,6 +146,32 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                             "'click',e=>{e.preventDefault();location.assign('" + CDN + "');});"
                         ).encode(),
                     )
+                if route == POPUP and receiver.startswith("manual-dom-"):
+                    display = CDN + ("&different=1" if receiver == "manual-dom-other-query" else "")
+                    if receiver == "manual-dom-preview":
+                        body = body.replace(
+                            b"<img class=thumb_g alt=photo>",
+                            f'<img class=thumb_g alt=photo src="{display}">'.encode(),
+                            1,
+                        )
+                    else:
+                        body = body.replace(
+                            b"<a class=link_pic>",
+                            f'<a class=link_pic href="{display}">'.encode(),
+                            1,
+                        )
+                    if receiver == "manual-dom-multiple":
+                        body = body.replace(
+                            b"<div class=item_chat><div class=set_chat>",
+                            (
+                                "<div class=item_chat><div class=set_chat>"
+                                f'<a class=link_pic href="{CDN}">'
+                                "<img class=thumb_g alt=photo></a><a class=btn_save "
+                                'href="/api/profiles/p/chats/r/elsewhere/another/image">photo</a>'
+                                "</div></div><div class=item_chat><div class=set_chat>"
+                            ).encode(),
+                            1,
+                        )
             elif host == "business.kakao.com" and self.path == IMAGE:
                 self.send_response(302)
                 self.send_header("Location", CDN)
@@ -221,7 +253,8 @@ async def main():
    page=await context.new_page()
    if manager: manager.subscribe(page)
    if not sys.argv[2].startswith('auto'):
-    await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/room')
+    suffix='r' if sys.argv[2].startswith('manual-dom-') else 'room'
+    await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/'+suffix)
    image_path='/api/profiles/p/chats/r/message/photo/image'
    if manager:
     async with page.expect_download(timeout=10000) as pending:
@@ -236,13 +269,17 @@ async def main():
     raw=(paths[0].parent/'page-observation.json').read_bytes()
     value=ManualPageObservation.model_validate_json(raw)
     assert value.status=='OBSERVED'
-    if sys.argv[2]=='manual-direct-cdn':
+    if sys.argv[2]=='manual-direct-cdn' or sys.argv[2].startswith('manual-dom-'):
      assert value.target.kind=='UNAVAILABLE' and value.target.path is None
      assert (paths[0].parent/'payload.bin').read_bytes()==b'synthetic download bytes'
      decision=(paths[0].parent/'origin-diagnostic.txt').read_text()
      assert decision==('KAKAO_DOWNLOAD_ORIGIN mode=MANUAL '
         'code=INITIAL_PHOTO_REQUEST_NOT_OBSERVED candidates=0 '
         'source_get=NOT_CONFIRMED final_same_page=1 final_other_page=0'+chr(10))
+     expected={'manual-direct-cdn':'UNAVAILABLE','manual-dom-link':'PHOTO_LINK',
+               'manual-dom-preview':'DISPLAYED_IMAGE','manual-dom-other-query':'NONE',
+               'manual-dom-multiple':'MULTIPLE_CARDS'}
+     assert (paths[0].parent/'photo-dom-diagnostic.txt').read_text()==expected[sys.argv[2]]+chr(10)
     else:
      assert value.target.kind=='SAME_ORIGIN_PATH' and value.target.path==image_path
     document=value.document

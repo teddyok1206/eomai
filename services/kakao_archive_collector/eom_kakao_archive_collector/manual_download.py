@@ -25,16 +25,16 @@ from eom_kakao_archive_contracts.manual_download import (
 from eom_kakao_archive_contracts.manual_observation import ManualDownloadTarget
 from eom_kakao_archive_contracts.render import canonical_bytes
 
-from .download_origins import DownloadRequestOrigins
+from .download_origins import DownloadRequestOrigins, OriginCode
 from .manual_capture_files import commit_download_payload
 from .manual_capture_files import create_capture_directory as _directory
 from .manual_capture_files import write_capture_receipt as _write_once
 from .manual_observation import (
-    ReadOnlyPage,
     download_page_path,
     download_target,
     observe_download_page,
 )
+from .photo_dom_diagnostic import PhotoDomPage, compare_displayed_photo_urls
 from .profile import BrowserRuntimeError, protected_directory, read_protected
 
 ROOT = Path("/var/lib/eom-kakao/downloads")
@@ -54,7 +54,7 @@ class Download(Protocol):
     async def cancel(self) -> None: ...
 
 
-class Page(ReadOnlyPage, Protocol):
+class Page(PhotoDomPage, Protocol):
     def on(self, event: str, callback: Callable[..., None]) -> None: ...
 
 
@@ -197,6 +197,8 @@ class ManualDownloads:
                 event_path=event_path,
                 request_target=request_target,
                 download_url=download_url,
+                probe_photo_dom=decision is not None
+                and decision.code == OriginCode.INITIAL_PHOTO_REQUEST_NOT_OBSERVED,
             )
         )
         self._tasks.add(task)
@@ -217,8 +219,14 @@ class ManualDownloads:
         event_path: str | None,
         download_url: str,
         request_target: ManualDownloadTarget | None = None,
+        probe_photo_dom: bool = False,
     ) -> None:
         member, error, name = None, None, None
+        probe = None
+        if page is not None and probe_photo_dom:
+            probe = asyncio.create_task(
+                compare_displayed_photo_urls(page, event_path=event_path, download_url=download_url)
+            )
         try:
             if page is not None:
                 observation = await observe_download_page(
@@ -268,7 +276,18 @@ class ManualDownloads:
                 "error_code": error,
             }
         )
-        _write_once(directory / "result.json", canonical_bytes(result.model_dump(mode="json")))
+        try:
+            _write_once(directory / "result.json", canonical_bytes(result.model_dump(mode="json")))
+        except OSError:
+            if probe is not None:
+                probe.cancel()
+            raise
+        if probe is not None:
+            if member is None:
+                probe.cancel()
+            with suppress(asyncio.CancelledError, OSError):
+                finding = await probe
+                _write_once(directory / "photo-dom-diagnostic.txt", f"{finding}\n".encode("ascii"))
 
     def observe_incoming(self) -> None:
         size = 0
