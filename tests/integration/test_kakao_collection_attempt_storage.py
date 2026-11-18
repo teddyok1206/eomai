@@ -314,6 +314,7 @@ def result_proposal(attempt, *, status="PARTIAL", error=None, images=()):
         command=command,
         cap=cap,
         command_pointer=command_pointer,
+        inventory_pointer=inventory_pointer,
         result=result,
         report=report,
         raw=raw,

@@ -214,6 +214,7 @@
         "packages/catalog_contracts/eom_catalog_contracts/kakao_capture_intake.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_capture_rpc.py",
         "services/catalog_service/eom_catalog_service/kakao_capture_intake_service.py",
+        "services/catalog_service/eom_catalog_service/kakao_capture_proposal.py",
         "services/catalog_service/eom_catalog_service/kakao_capture_dispatch.py",
         "services/catalog_service/eom_catalog_service/kakao_capture_composition.py",
         "services/catalog_service/eom_catalog_service/kakao_manual_capture_access.py",
@@ -230,7 +231,6 @@
         "services/kakao_archive_collector/eom_kakao_archive_collector/manual_download.py",
         "services/kakao_archive_collector/eom_kakao_archive_collector/download_origins.py",
         "services/catalog_service/eom_catalog_service/kakao_question_composition.py",
-        "services/catalog_service/eom_catalog_service/application_runner.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_question_refresh.py",
         "services/catalog_service/eom_catalog_service/kakao_source_access.py",
         "services/orchestrator/eom_orchestrator/kakao_capture_inputs.py",
@@ -254,6 +254,7 @@
       ],
       "test_paths": [
         "tests/unit/test_kakao_capture_rpc.py",
+        "tests/unit/test_kakao_capture_proposal.py",
         "tests/integration/test_kakao_capture_intake.py",
         "tests/unit/test_kakao_download_inputs.py",
         "tests/web_gui/test_kakao_archive_browser.py",

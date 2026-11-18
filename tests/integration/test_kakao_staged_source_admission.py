@@ -11,6 +11,10 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
+from eom_catalog_service.kakao_capture_proposal import (
+    PartialRoomEvidence,
+    build_partial_room_capture,
+)
 from eom_catalog_service.kakao_collection_attempt_models import (
     KakaoCollectionAttemptRecord as Attempt,
 )
@@ -21,6 +25,7 @@ from eom_catalog_service.kakao_collection_source_composition import (
 )
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
+from eom_kakao_archive_contracts.capture import CaptureInventory
 from eom_orchestrator import kakao_capture_inputs as capture_inputs
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.settings import Settings
@@ -93,6 +98,45 @@ def admit(staged, *, service=None, key=None, **changes):
     return admit_staged_kakao_capture_source(
         service or staged.attempt.service, staged.data.reserved.attempt_id, **arguments
     )
+
+
+def test_built_room_receipts_become_one_canonical_source(staged):
+    data = staged.data
+    pointer = data.inventory_pointer
+    opened = staged.attempt.artifacts.open_verified_member(
+        artifact_id=pointer.artifact_id,
+        revision_id=pointer.artifact_revision_id,
+        member_path=pointer.member_path,
+        sha256=pointer.sha256,
+        schema_ref=pointer.schema_ref,
+        media_type=pointer.media_type,
+        max_bytes=4 * 1024 * 1024,
+    )
+    with opened.stream as stream:
+        inventory = CaptureInventory.model_validate_json(stream.read())
+    proposal = build_partial_room_capture(
+        data.command,
+        data.cap.capability,
+        inventory,
+        source=data.raw,
+        evidence=PartialRoomEvidence(
+            started_at=data.report.observed_start_at,
+            ended_at=data.report.observed_end_at,
+            attachments=data.report.attachments,
+        ),
+    )
+    for name, contents in {
+        "outputs/result.json": proposal.result_bytes,
+        "outputs/room-report.json": proposal.report_bytes,
+        "outputs/normalization.json": proposal.normalization_bytes,
+    }.items():
+        (staged.workspace / name).write_bytes(contents)
+    accepted = admit(staged)
+    photos = accepted.resolution.admission.attachments
+    assert len(accepted.resolution.rows) == len(photos) == 2
+    assert photos[0].original == photos[1].original
+    assert photos[0].attachment_id != photos[1].attachment_id
+    assert admit(staged).replayed
 
 
 def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):

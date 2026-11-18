@@ -96,6 +96,12 @@ canonical bytes·report4MiB/hash를 검증한 뒤 `kakao_capture_result_publicat
 내부 metadata read는 source 권한이 아니며 그 다음 현재 accepted-source 권한 검사를 유지한다.
 설치 release commit은 trusted controller에서 전달하고 ambient Git을 사용하지 않는다.
 
+`kakao_capture_proposal.py`는 exact C1 command/capability/inventory를 먼저 확인하고, 실제
+수집 owner가 넘길 CSV·행 관측·사진 member로 기존 normalization/report/result를 조립한다.
+발신/시간대/순서를 자동 추정하지 않고 같은 사진 bytes의 별도 행을 유지한다. 일부 room
+결과만 조립하고 브라우저를 실행하거나 권한·완전성·등록을 부여하지 않는다. 기존
+`admit_staged_kakao_capture_source`의 합성 파일·DB 테스트로 이 연결을 검증한다.
+
 원본 채택 다음의 `KakaoQuestionService.create_source_candidates`는 같은 accepted access로
 최대100개 후보를 기존 질문 owner에 저장한다. API 세션을 꾸미지 않으며 현재 EDIT도 확인한다.
 source는 한 번 해석하고 origin을 bounded IN lookup해 이미 편집/제외/분할/병합된 원본은

@@ -48,6 +48,23 @@ schema는 유지하고, 새 operation의 contract는 exact binding/lease/두 cap
 현재 권한, 파일·parse 한도, 입력 오류 및 미확정의 의미는 위 owner 검사를 그대로 사용한다.
 이 확인으로 원본을 새로 수집하거나 학생·질문을 저장하지 않는다.
 
+### 한 방의 부분 수집 결과 조립
+
+실제 AUTO collector가 확보할 방별 자료를 기존 C1 정규화/report/result로 조립한다.
+정본은 고정 command/inventory/capability와 확인한 CSV bytes, 사진 member pointer,
+행별 관측이다. 기존 schema와 ID를 그대로 쓰며, MANUAL 다운로드에 AUTO 권한을 부여하지
+않는다. CSV는 한 번 순차 파싱하고 attachment를 row ordinal map으로 묶는다. 보고서와
+정규화가 attachment ID·순서·상태를 따로 받아 불일치하지 않도록 같은 attachment에서
+양쪽을 만든다. 순서·시간대·발신 근거는 pin이 허용하는 실제 관측에서만 채운다.
+조립은 CSV bytes·행 수에 선형이고 첨부는 최대2,000건의 정렬을 수행한다. 추가 메모리는
+행/첨부/직렬화 bytes에 선형이며
+파일 I/O, DNS/브라우저, DB/NAS, 실행 또는 publication은 하지 않는다. exact command/
+inventory/capability를 먼저 검증하고 표준 C1 validator에 맞는 canonical 문서만 반환한다.
+미확정 범위와 사진은 PARTIAL로 남긴다. 전체 수집 선언은 목록·앨범·원본 검증을 마친
+collector 단계가 별도로 필요하다. 같은 입력은 같은 결과이고 재수집 권한이 아니다.
+서로 독립적인 CSV·정규화·보고서를 외부에서 넘기는 대안은 숫자·첨부·revision의 일치가
+추가 검증 전까지 보장되지 않는다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나

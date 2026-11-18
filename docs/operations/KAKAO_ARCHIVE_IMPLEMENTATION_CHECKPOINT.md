@@ -1,5 +1,19 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 한 방 부분 수집 결과와 정식 원본 등록 경계
+
+이미 고정된 C1 command/capability/inventory, 실제 CSV bytes, 행 관측과 사진 pointer로
+기존 normalization·room-report·result를 조립하는 순수 함수를 추가했다. 두 문서가 서로
+다른 사진 순서나 행을 받지 않도록 동일 evidence에서 만들며, 미확정 정보를 추정하거나
+부분 수집을 완료로 승격하지 않는다. 기존 C1 bytes/schema 변경, runtime 실행/권한
+부여, 공개 입구·운영 변경은 없다.
+
+기존 guarded local workspace→result 수락→원본 Artifact→task 채택에 이 함수의 합성
+출력을 실제로 넣었다. 같은 시각·본문의 CSV 두 행과 같은 사진 bytes의 별도 occurrence
+두 건을 보존했으며, 원본 그림은 재사용하고 같은 요청은 이미 채택한 정본을 재조회했다.
+unit/C1 66 PASS, 임시 DB 23 PASS, context13·mypy·Ruff PASS다. 실제 카카오 원격 세션은
+여전히 닫혀 있었고, 실제 room source/PDF·전체방 주기 실행은 미완료다.
+
 ## 2026-11-18 Studio 사진 위치 확인 운영 반영
 
 source `5a480ab99302f3de9939beb7aa36602ad422d215`의 API/platform/API contracts와 Web을
