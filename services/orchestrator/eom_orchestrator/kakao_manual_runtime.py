@@ -46,6 +46,7 @@ class FixedKakaoManualRuntime:
     _observation_lock: threading.Lock = field(
         default_factory=threading.Lock, compare=False, repr=False
     )
+    resolve_auto_predecessor: Callable[[ProfileFence, ProfileFence], tuple[str, str]] | None = None
 
     def observe_profile(self) -> KakaoManualFreshProfile:
         return self.profile.observe()
@@ -67,10 +68,16 @@ class FixedKakaoManualRuntime:
             if not idle.never_dispatched:
                 raise KakaoManualRuntimeError("KAKAO_MANUAL_BROWSER_PRIOR_UNKNOWN")
             return None
-        prior = self.resolve_predecessor(intent, observed.fence_epoch)
-        if profile_fence(prior) != observed:
-            raise KakaoManualRuntimeError("KAKAO_MANUAL_PREDECESSOR_MISMATCH")
-        closed = self._browser_dispatch(prior)
+        if observed.mode == "AUTO" and self.resolve_auto_predecessor is not None:
+            digest, boot = self.resolve_auto_predecessor(profile_fence(intent), observed)
+            closed = self.browser.observe_dispatch(
+                observed, command_sha256=digest, dispatched_boot_id=boot
+            )
+        else:
+            prior = self.resolve_predecessor(intent, observed.fence_epoch)
+            if profile_fence(prior) != observed:
+                raise KakaoManualRuntimeError("KAKAO_MANUAL_PREDECESSOR_MISMATCH")
+            closed = self._browser_dispatch(prior)
         if not isinstance(closed, ClosedBrowserDispatch):
             raise KakaoManualRuntimeError("KAKAO_MANUAL_PREDECESSOR_RUNNING")
         return closed

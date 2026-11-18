@@ -7,7 +7,11 @@ from unittest.mock import Mock
 
 import pytest
 from eom_orchestrator import kakao_collection_browser_runtime as runtime
-from eom_orchestrator.kakao_browser_runtime import BrowserRunHandle, ClosedBrowserDispatch
+from eom_orchestrator.kakao_browser_runtime import (
+    BrowserRunHandle,
+    BrowserStageObservation,
+    ClosedBrowserDispatch,
+)
 
 from tests.unit.test_kakao_collection_browser_contracts import intent
 
@@ -41,12 +45,44 @@ def stopped(value, *, reboot=False):
     )
 
 
+def test_first_start_and_uncertain_replay_do_not_start_twice(system):
+    value = system.value
+    system.lock.return_value = True
+    system.browser.observe_stage.return_value = BrowserStageObservation(False, None)
+    system.browser.boot_identity.return_value = value.dispatch_boot_id
+    system.browser.start.return_value = handle(value)
+    authorizer, resolve = Mock(), Mock()
+
+    def launch(fence, *, prior, assert_current):
+        assert prior is None
+        assert_current(fence)
+        return handle(value)
+
+    system.browser.start.side_effect = launch
+    assert system.service.ensure_started(
+        value, assert_current=authorizer, resolve_predecessor=resolve
+    ) == handle(value)
+    authorizer.assert_called_once_with(value)
+    resolve.assert_not_called()
+    system.browser.observe_stage.return_value = BrowserStageObservation(
+        True, runtime.collection_profile_fence(value)
+    )
+    assert system.service.ensure_started(
+        value, assert_current=authorizer, resolve_predecessor=resolve
+    ) == handle(value)
+    system.browser.observe_dispatch.return_value = stopped(value)
+    with pytest.raises(runtime.KakaoCollectionBrowserRuntimeError, match="ATTEMPT_CLOSED"):
+        system.service.ensure_started(value, assert_current=authorizer, resolve_predecessor=resolve)
+    system.browser.start.assert_called_once()
+
+
 @pytest.fixture
 def system(monkeypatch):
     value = intent()
     browser = SimpleNamespace(
         observe_dispatch=Mock(return_value=handle(value)),
         observe_stage=Mock(return_value=SimpleNamespace(staged=True)),
+        start=Mock(),
         stop=Mock(),
         observe_idle=Mock(),
         boot_identity=Mock(return_value=value.dispatch_boot_id),

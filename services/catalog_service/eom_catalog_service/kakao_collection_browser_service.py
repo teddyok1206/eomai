@@ -120,6 +120,19 @@ class KakaoCollectionBrowserService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
             return _intent(row)
 
+    def assert_current_start(self, intent: Intent) -> None:
+        """Final Catalog fence check outside any OS wait or file materialization."""
+        with self._sessions.begin() as session:
+            row, profile, run = self._locked(session, intent.browser_run_id)
+            self._authorize(session, run)
+            if (
+                _intent(row) != intent
+                or intent.phase != "PREPARING"
+                or profile.mode != "AUTO"
+                or run.state != "QUEUED"
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+
     def reserve_browser(
         self, run_id: str, *, observe_profile: Callable[[], KakaoManualFreshProfile]
     ) -> Intent:

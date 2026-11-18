@@ -999,3 +999,19 @@ epoch당 고정 입력/attempt 출력의 indexed path lookup, 제한된 DOM 탐�
 않는다. 수락/재조회 권한·트랜잭션은 기존 Catalog owner에 남는다. 새 큐/DB/index/상시
 서비스나 임의 브라우저 IPC 대신 기존 잠금·로컬 인계 경계를 유지한다. 이 한 방 명령은
 전체 목록, 주기 실행, 사진 전체를 다뤘다는 의미가 아니다.
+
+### 단일 방 브라우저 수명과 후속 원본 채택
+
+기존 수집 owner가 만든 run/첫 task, 공유 profile과 browser epoch, exact C1 attempt를 그대로
+연결한다. reserve는 현재 계정·권한·재인가된 pin과 OS fallback이 아닌 실제 idle proof에 근거한다.
+이전 MANUAL/AUTO는 보호된 OS fence가 가리킨 exact DB 기록이 이미 닫혔고 OS invocation도
+닫힌 경우만 선행 실행으로 쓴다. 최신 row 또는 화면 이름으로 대신하지 않는다. 새 run의
+start 직전 기존 profile gate에서 버전·owner·phase를 재검사한다. staged epoch는 관측만
+하며 불확실한 시작을 다시 호출하지 않는다.
+
+정해진 local receipt가 나오기 전에는 실행 중/종료를 실제 OS에서 구분한다. receipt가 있으면
+원래 프로세스의 종료를 확인하고 기존 source owner로 채택한다. 파일이 없으면 성공으로
+처리하지 않으며 실패 산출물을 지우지 않는다. 원본 commit/재조회는 기존 멱등 키와 CAS를
+재사용한다. 조회는 기존 정확한 PK/unique index이고 DB lock 안에서 systemd/NAS I/O를
+하지 않는다. 새 queue/schema/cache는 필요 없으며 아직 전체 방 스케줄러나 첫 실제 공급자
+검증을 의미하지 않는다.

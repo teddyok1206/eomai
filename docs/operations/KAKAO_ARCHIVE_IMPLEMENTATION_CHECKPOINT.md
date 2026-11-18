@@ -1,5 +1,22 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 같은 수집 작업의 브라우저 수명·원본 채택 연결
+
+수락된 단일 방 run의 profile reserve → 실제 OS 시작/관측 → 원래 attempt → 고정
+command dispatch를 연결했다. 직전 MANUAL/AUTO를 넘겨받을 때는 보호된 OS fence의
+exact DB 종료 기록과 실제 process closure를 모두 요구한다. start 응답이 유실되어도
+같은 staged epoch를 관측하며 같은 수집을 다시 시작하지 않는다.
+
+완료는 로컬 receipt → exact browser 종료 확인 → 기존 source 발행/채택 → 실제 C1
+coverage의 `PARTIAL`/`COMPLETED` 순이다. receipt가 없고 같은 프로세스가 확인될 때만
+대기하며, 종료됐는데 파일도 없으면 명시 오류다. 실패 이력이나 파일을 지우지 않는다.
+저장본 재조회는 local receipt가 없어도 같은 정본과 결과를 재사용한다.
+
+브라우저 어댑터 및 기존 runtime 단위117 PASS, guarded disposable PostgreSQL에서
+브라우저 저장·원본 수락47 PASS, mypy/Ruff 및 개발 문맥13 PASS다. 이 단계는 운영
+미배포이며 실제 카카오 동작은 검증하지 않았다. 다음은 실제 선택 방 증거에서 C1
+입력을 발행하고 기존 운영 진입을 연결해 한 방 수집→질문→학생 PDF를 수행하는 것이다.
+
 ## 2026-11-18 AUTO 브라우저의 단일 방 명령과 guarded 수집
 
 기존 supervisor/profile lock 아래 동일 pin의 headless Chromium이 정확한 AUTO epoch의

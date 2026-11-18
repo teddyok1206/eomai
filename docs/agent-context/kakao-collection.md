@@ -133,9 +133,16 @@ source 권한·fence·만료·종료와 Artifact 검증은 그대로다. context
 Orchestrator OS adapter다. profile flock·systemd boot/invocation/cgroup 실제 상태를
 관측하며 core/worker가 타 component의 DB/NAS를 직접 쓰지 않는다. source existence나
 임시 DB의 합성 관측 PASS를 실제 Kakao/AUTO 활성화로 간주하지 않는다.
-`kakao_collection_browser_runtime.py`는 같은 fixed adapter의 실행 관측·exact stop/재관측을
-collection metadata에 연결한다. 실제 시작/selector는 아직 제공하지 않는다. 알려진 invocation이
+`kakao_collection_browser_runtime.py`는 같은 fixed adapter의 exact start·관측·종료를
+collection metadata에 연결한다. 이미 staged된 epoch는 관측만 한다. 알려진 invocation이
 바뀌면 다른 프로세스를 정지하지 않고, reboot와 PRE_READY_FAILED를 성공 flush로 바꾸지 않는다.
+`kakao_browser_history.py`는 실제 보호된 입력의 MANUAL/AUTO fence와 일치하는 닫힌 기록만
+반환한다. 두 모드 전환에 같은 브라우저를 동시 실행하지 않는다.
+
+`kakao_one_room_collection.py`는 수락된 run→browser→원 attempt, 고정 command dispatch,
+receipt→동일 browser의 종료→원본 수락·단일 run 종료를 기존 owner로 호출한다. receipt가
+없을 때 실행 중이라는 증거는 OS 관측이다. 끝난 프로세스는 receipt 없이 성공하지 않으며
+닫힌 socket/epoch를 재시작하지 않는다. C1 input 준비와 실제 운영 진입·주기 실행은 별도다.
 
 ## 검증 경계
 

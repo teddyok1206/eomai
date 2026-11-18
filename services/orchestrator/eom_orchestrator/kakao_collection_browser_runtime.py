@@ -1,9 +1,10 @@
-"""Observe/close one stored collection epoch using fixed installed OS adapters.
+"""Start/observe/close one stored collection epoch using fixed installed OS adapters.
 
-No browser launch or selector is exposed here. Source admission and current-owner
-checks remain with Catalog; this adapter never reads DB/NAS or credentials.
+Source admission and current-owner checks remain with Catalog; this adapter
+never reads DB/NAS or credentials, and it exposes no selector or command text.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -42,6 +43,46 @@ class FixedKakaoCollectionBrowserRuntime:
     browser: FixedKakaoBrowserRuntime
     gateway: FixedKakaoGatewayRuntime
 
+    def ensure_started(
+        self,
+        intent: Intent,
+        *,
+        assert_current: Callable[[Intent], None],
+        resolve_predecessor: Callable[[ProfileFence], tuple[str, str]],
+    ) -> BrowserRunHandle:
+        """Only an unstaged PREPARING epoch may start; replay observes the same process."""
+        fence = collection_profile_fence(intent)
+        if intent.phase not in {"PREPARING", "RUNNING"}:
+            raise KakaoCollectionBrowserRuntimeError("RUNNING_NOT_REQUESTED")
+        stage = self.browser.observe_stage(fence)
+        if stage.staged:
+            return self.running_handle(intent)
+        if intent.phase != "PREPARING":
+            raise KakaoCollectionBrowserRuntimeError("INPUT_LOST")
+        observed = self.gateway.observe_idle()
+        if (
+            observed.boot_id != intent.dispatch_boot_id
+            or self.browser.boot_identity() != intent.dispatch_boot_id
+            or not profile_lock_released()
+        ):
+            raise KakaoCollectionBrowserRuntimeError("START_UNCONFIRMED")
+        predecessor = stage.current_fence
+        prior = None
+        if predecessor is not None:
+            digest, boot = resolve_predecessor(predecessor)
+            actual = self.browser.observe_dispatch(
+                predecessor, command_sha256=digest, dispatched_boot_id=boot
+            )
+            if not isinstance(actual, ClosedBrowserDispatch):
+                raise KakaoCollectionBrowserRuntimeError("PREDECESSOR_RUNNING")
+            prior = actual
+        result = self.browser.start(
+            fence, prior=prior, assert_current=lambda _: assert_current(intent)
+        )
+        if result.command_sha256 != intent.command_sha256:
+            raise KakaoCollectionBrowserRuntimeError("EXECUTION_CHANGED")
+        return result
+
     def _dispatch(self, intent: Intent) -> BrowserRunHandle | ClosedBrowserDispatch:
         return self.browser.observe_dispatch(
             collection_profile_fence(intent),
@@ -64,10 +105,7 @@ class FixedKakaoCollectionBrowserRuntime:
         if intent.phase not in {"PREPARING", "RUNNING"}:
             raise KakaoCollectionBrowserRuntimeError("RUNNING_NOT_REQUESTED")
         observed_at = datetime.now(UTC)
-        actual = self._dispatch(intent)
-        if not isinstance(actual, BrowserRunHandle):
-            raise KakaoCollectionBrowserRuntimeError("ATTEMPT_CLOSED")
-        self._known_execution(intent, actual)
+        actual = self.running_handle(intent)
         gateway = self.gateway.observe_idle()
         if (
             gateway.boot_id != actual.boot_id
@@ -90,6 +128,13 @@ class FixedKakaoCollectionBrowserRuntime:
             main_pid=actual.main_pid,
             started_monotonic_us=actual.started_monotonic_us,
         )
+
+    def running_handle(self, intent: Intent) -> BrowserRunHandle:
+        actual = self._dispatch(intent)
+        if not isinstance(actual, BrowserRunHandle):
+            raise KakaoCollectionBrowserRuntimeError("ATTEMPT_CLOSED")
+        self._known_execution(intent, actual)
+        return actual
 
     def close(self, intent: Intent) -> Observation:
         if intent.phase != "STOPPING":

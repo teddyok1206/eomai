@@ -11,6 +11,7 @@ from eom_catalog_contracts.kakao_collection_browser import KakaoCollectionBrowse
 from eom_catalog_contracts.kakao_manual import KakaoManualEnd, KakaoManualStart
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
 from eom_catalog_service.kakao_archive_service import KakaoArchiveService
+from eom_catalog_service.kakao_browser_history import closed_kakao_browser_pin
 from eom_catalog_service.kakao_collection_browser_models import (
     KakaoCollectionBrowserRecord as Browser,
 )
@@ -21,6 +22,7 @@ from eom_catalog_service.kakao_manual_models import KakaoProfileRuntimeRecord as
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service.models import OperatorRecord
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
+from eom_orchestrator.kakao_collection_browser_runtime import collection_profile_fence
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -103,6 +105,34 @@ def closed(browser, intent, **changes):
         started_monotonic_us=intent.browser_monotonic_us,
     )
     return observation(browser, intent, **(values | changes))
+
+
+def test_first_auto_dispatch_resolves_exact_closed_manual_predecessor(browser):
+    initial = reserve(browser)
+    browser.service.assert_current_start(initial)
+    with Session(browser.h.engine) as session:
+        row = session.scalar(select(Lease).where(Lease.profile_id == initial.profile_id))
+        previous = ProfileFence(
+            schema_version="kakao-profile-fence/1.0",
+            profile_id=row.profile_id,
+            browser_run_id=row.browser_run_id,
+            fence_epoch=row.fence_epoch,
+            mode="MANUAL",
+        )
+        pin = (row.command_sha256, row.dispatch_boot_id)
+    current = collection_profile_fence(initial)
+    assert closed_kakao_browser_pin(browser.h.engine, current, previous) == pin
+    with pytest.raises(KakaoArchiveError, match="REMOTE_FENCE_STALE"):
+        closed_kakao_browser_pin(
+            browser.h.engine,
+            current,
+            previous.model_copy(update={"browser_run_id": "kakaobrowserrun_" + "a" * 32}),
+        )
+    browser.service.accept_running(
+        initial.browser_run_id, observe_runtime=lambda i: observation(browser, i)
+    )
+    with pytest.raises(KakaoArchiveError, match="PRECONDITION_FAILED"):
+        browser.service.assert_current_start(initial)
 
 
 def test_reservation_replay_reuses_epoch_and_existing_worker_profile_contract(browser):
@@ -286,6 +316,17 @@ def test_unknown_stop_keeps_profile_busy_then_closure_releases_exact_epoch(brows
         assert session.get(Run, intent.run_id).current_browser_run_id is None
     assert reserve(browser, lambda: pytest.fail("closed replay must not restart")) == result
     manual = browser.h.start()
+    manual_intent = browser.h.service.get_intent(manual.session.lease_id)
+    current = ProfileFence(
+        schema_version="kakao-profile-fence/1.0",
+        profile_id=manual_intent.profile_id,
+        browser_run_id=manual_intent.browser_run_id,
+        fence_epoch=manual_intent.fence_epoch,
+        mode="MANUAL",
+    )
+    assert closed_kakao_browser_pin(
+        browser.h.engine, current, collection_profile_fence(result)
+    ) == (result.command_sha256, result.dispatch_boot_id)
     replay = browser.service.accept_closed(
         result.browser_run_id,
         observe_stopped=lambda _: pytest.fail("never stop the newer MANUAL browser"),

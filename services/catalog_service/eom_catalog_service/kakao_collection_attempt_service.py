@@ -1032,7 +1032,7 @@ class KakaoCollectionAttemptService:
                 )
             ):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_ADMISSION_AUTHORITY_REQUIRED")
-            if task.state == "LOCAL_ACCEPTED":
+            if task.state == "LOCAL_ACCEPTED" or task.state == run.state == seed.result_status:
                 return _identity(seed)
             self._authorize(session, run)
             validate_source_pointer_metadata_batch(
@@ -1052,3 +1052,42 @@ class KakaoCollectionAttemptService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
             task.state = "LOCAL_ACCEPTED"
             return _identity(seed)
+
+    def finalize_one_room(self, attempt_id: str) -> None:
+        """Close the single-task run only after source adoption and observed browser closure."""
+        access = self.accepted_source_access(attempt_id)
+        with self._sessions.begin() as session:
+            browser, _, run = lock_kakao_collection_browser(
+                session, access.attempt.browser_run_id, profile_id=self.profile_id
+            )
+            self._source_owner(session, access, attempt_id)
+            row = session.get(Attempt, attempt_id)
+            task = session.scalar(
+                select(Task).where(Task.task_id == access.attempt.task_id).with_for_update()
+            )
+            if (
+                row is None
+                or task is None
+                or task.ordinal != 1
+                or task.room_id != run.anchor_room_id
+                or browser.phase != "CLOSED"
+                or browser.close_kind != "STOPPED"
+                or row.result_status not in {"COMPLETED", "PARTIAL"}
+                or session.scalar(
+                    select(Task.task_id).where(Task.run_id == run.run_id, Task.ordinal > 1).limit(1)
+                )
+                is not None
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            outcome = row.result_status
+            if task.state == run.state == outcome:
+                return
+            self._authorize(session, run)
+            if (
+                run.state != "COLLECTING"
+                or task.state != "LOCAL_ACCEPTED"
+                or run.current_browser_run_id is not None
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            task.state, run.state = outcome, outcome
+            run.updated_at, run.resource_version = datetime.now(UTC), run.resource_version + 1

@@ -17,6 +17,7 @@ from sqlalchemy import Engine
 from .kakao_archive_authorization import KakaoArchiveError
 
 if TYPE_CHECKING:
+    from .kakao_browser_history import closed_kakao_browser_pin
     from .kakao_manual_coordinator import KakaoManualCoordinator
     from .kakao_manual_dispatch import KakaoManualApplication
 
@@ -101,7 +102,16 @@ def build_kakao_manual_runtime(
             raise KakaoArchiveError("KAKAO_ARCHIVE_REMOTE_FENCE_STALE")
         return result
 
-    runtime = FixedKakaoManualRuntime(browser, gateway, profile, assert_current, predecessor)
+    runtime = FixedKakaoManualRuntime(
+        browser,
+        gateway,
+        profile,
+        assert_current,
+        predecessor,
+        resolve_auto_predecessor=lambda current, prior: closed_kakao_browser_pin(
+            engine, current, prior
+        ),
+    )
 
     def observe_profile() -> KakaoManualFreshProfile:
         try:

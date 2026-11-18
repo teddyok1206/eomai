@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -27,6 +28,7 @@ from eom_catalog_service.kakao_collection_source_composition import (
     admit_staged_kakao_capture_source,
     admit_staged_kakao_open_room,
 )
+from eom_catalog_service.kakao_one_room_collection import KakaoOneRoomCollection
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
 from eom_kakao_archive_contracts.capture import CaptureInventory, CsvMember
@@ -39,6 +41,7 @@ from eom_orchestrator.settings import Settings
 from sqlalchemy.orm import Session
 
 from tests.integration.test_kakao_collection_attempt_storage import result_proposal
+from tests.integration.test_kakao_collection_browser_storage import closed
 from tests.integration.test_kakao_collection_source_access import attempt as attempt
 from tests.integration.test_kakao_collection_source_access import browser as browser
 from tests.integration.test_kakao_collection_source_access import cap as cap
@@ -320,14 +323,49 @@ def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(s
     receipt.write_bytes(fixed.encoded())
     with pytest.raises(KakaoArchiveError, match="CAPTURE_IDENTITY_MISMATCH"):
         accept((room[0], "another-room"))
-    accepted = accept(room)
+    browser = staged.attempt.browser
+    browser.h.now = max(browser.h.now, datetime.now(UTC))
+    runtime = Mock()
+    runtime.close.side_effect = lambda intent: closed(browser, intent)
+    controller = KakaoOneRoomCollection(
+        engine=staged.attempt.engine,
+        collections=browser.collection.service,
+        browsers=browser.service,
+        attempts=attempts,
+        runtime=runtime,
+        observe_profile=browser.h.profile_proof,
+        result_publisher=staged.publisher,
+        source_commit="a" * 40,
+        output_root=staged.root,
+        worker_uid=os.getuid(),
+        control_gid=os.getgid(),
+    )
+    options = dict(
+        room=room,
+        idempotency_key=staged.key,
+        expected_source_revision_id=None,
+        expected_resource_version=0,
+    )
+    saved_receipt = receipt.read_bytes()
+    receipt.unlink()
+    assert controller.finish(data.reserved.attempt_id, **options) is None
+    runtime.running_handle.assert_called_once()
+    runtime.close.assert_not_called()
+    receipt.write_bytes(saved_receipt)
+    receipt.chmod(0o640)
+    accepted = controller.finish(data.reserved.attempt_id, **options)
     assert len(accepted.resolution.rows) == 4
     assert len(accepted.resolution.admission.attachments) == 1
     assert not (outputs / "normalization.json").exists()
-    with pytest.raises(KakaoArchiveError, match="PRECONDITION_FAILED"):
+    with pytest.raises(KakaoArchiveError, match="COLLECTION_TERMINAL"):
         attempts.prepare_auto_room(data.reserved.attempt_id, space_key="scope", expected_room=room)
+    status = browser.collection.service.get_status(
+        staged.attempt.actor, data.command.source_binding_id, data.command.run_id
+    )
+    assert status.state == "PARTIAL"
     receipt.unlink()
-    assert accept(room).replayed
+    assert controller.finish(data.reserved.attempt_id, **options).replayed
+    runtime.close.assert_called_once()
 
 
 def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):
