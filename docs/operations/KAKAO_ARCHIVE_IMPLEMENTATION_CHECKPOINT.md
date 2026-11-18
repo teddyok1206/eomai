@@ -1,5 +1,27 @@
 # KakaoTalk 구현 체크포인트
 
+## 사진 출처·행 정합의 호환 릴리스 후보
+
+후보 커밋 `919164330fcb41f580f1169400e574491511a627`로 공식 API build-only와
+wheel RECORD 검증, 별도 설치 경로의 API/Catalog import를 통과했다. 설치 중인
+`cf5c5806`의 payload와 비교하면 Platform은 `kakao_photo_alignment.py` 한 파일,
+API는 빌드 식별 메타데이터만 다르며 API/Kakao 계약 payload·Web 소스·OpenAPI·migration은
+동일하다. 같은 커밋의 수집기 wheel은 별도 설치 경로에서 검증했다.
+
+| 후보 wheel | SHA-256 |
+| --- | --- |
+| Platform | `0a9b93611039b012f269ca2e6eb9ac5a039729596811e1525d1f4a85a84e661c` |
+| Application API | `a5521caaf48854b6db8ac0f30975bcbe35c252746550e038e0e95fc0a74e30f8` |
+| API contracts | `534eb18cc89feae4c2f4cbe7bc6d89318e2e35660614a8ce0a172f6bab95fbb2` |
+| Kakao contracts | `da1d5584803fe0fa2bc49c5e72adc5c693bba62b5e1066ef33cd113ec5c710b9` |
+| Kakao collector | `1ec6e6db7d230aba506d0d20b101fe8e6a1cfb1b29722e1c7085f2e91acd7f52` |
+
+읽기 전용 운영 확인에서 기존 브라우저·원격 프로세스와 활성 worker/command,
+HWPX·채팅·카카오 PDF 대상이 없었다. 이 조회는 배포 시점에 재확인한다.
+다음은 기존 보호된 호환 배포 경계에서 공용 Platform 소비자와 실시간 owner pin을
+함께 검증하고 선택 방 수집기만 연결하는 것이다. 현재 운영 설치/권한/정본 변경이나
+새 provider 접근은 없었다.
+
 ## 직접 CDN 전송의 사진 출처 확인 — 소스·격리 Chromium 검증
 
 고정 AUTO 클릭에서 선택한 사진 링크/표시 이미지 주소를 메모리에서만 확인한다.
