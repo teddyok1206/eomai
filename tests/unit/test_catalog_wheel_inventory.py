@@ -57,6 +57,11 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_catalog_contracts/kakao_capture_rpc.py",
             "eom_catalog_contracts/resources/kakao-archive/manual-capture-intake-v1.schema.json",
             "eom_catalog_contracts/resources/kakao-archive/catalog-kakao-capture-v1.schema.json",
+            (
+                "eom_catalog_contracts/resources/kakao-archive/"
+                "catalog-kakao-photo-check-v1.schema.json"
+            ),
+            "eom_catalog_service/kakao_photo_alignment.py",
             "eom_catalog_service/kakao_capture_intake_service.py",
             "eom_catalog_service/kakao_capture_dispatch.py",
             "eom_catalog_service/kakao_capture_composition.py",

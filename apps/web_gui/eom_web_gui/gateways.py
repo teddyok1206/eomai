@@ -166,7 +166,12 @@ from eom_web_gui.kakao_archive_contracts import (
     BindingUpdatePolicy,
     SourceBinding,
 )
-from eom_web_gui.kakao_capture_contracts import CaptureConfirm, CapturePage
+from eom_web_gui.kakao_capture_contracts import (
+    CaptureConfirm,
+    CapturePage,
+    PhotoCheckResult,
+    PhotoCheckSelection,
+)
 from eom_web_gui.kakao_concept_contracts import (
     ConceptCreate,
     ConceptHistory,
@@ -561,6 +566,10 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def kakao_photo_check(
+        self, session: WebSession, value: PhotoCheckSelection
+    ) -> PhotoCheckResult: ...
+
     async def kakao_capture_list(
         self, session: WebSession, source_binding_id: str
     ) -> CapturePage: ...
@@ -1579,6 +1588,23 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def kakao_photo_check(
+        self, session: WebSession, value: PhotoCheckSelection
+    ) -> PhotoCheckResult:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/kakao-archive/manual-captures/photo-occurrence",
+            params=value.model_dump(mode="json"),
+        )
+        try:
+            result = PhotoCheckResult.model_validate(self._data(response))
+            if result.selection != value:
+                raise ValueError("different capture selection")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def kakao_capture_list(self, session: WebSession, source_binding_id: str) -> CapturePage:
         response = await self._authorized(
             session,

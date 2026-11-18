@@ -153,6 +153,11 @@ KMP는 같은 문구·같은 시각의 row를 합치지 않는다. 파일명·�
 수신물 owner의 `inspect_photo_occurrence`는 기존 보호된 reader와 실제 binding/lease 권한을
 I/O 전후 확인해 두 exact capture에서 이를 호출한다. CSV parser의 공통 헤더/행 검사를
 재사용하고 가짜 normalization revision을 만들지 않는다. 원본/질문/Artifact 쓰기는 없다.
+기존 수신물 UI의 '사진 위치 확인'은 별도 추가 wire인 `catalog-kakao-photo-check-v1`을
+사용한다. `kakao-captures.js` → 기존 BFF/API `/manual-captures/photo-occurrence` →
+기존 socket dispatch 순서이며 exact 선택과 응답을 각 경계에서 대조한다. 같은 로그인
+회차의 두 파일을 고른다. 해당 없음과 전송 실패를 구분하고, 선택/owner가 바뀌면 늦은 응답을
+버린다. source/API/Chromium 테스트는 실제 카카오나 운영 활성화 증거가 아니다.
 
 `scripts/api/testdb_run.sh kakao-tests`의 guarded 임시 DB에서 MANUAL/AUTO 경합·중복
 예약·늦은 권한 철회·관측 불일치·종료 실패·terminal 불변·원래 이력/다른 binding 보존을

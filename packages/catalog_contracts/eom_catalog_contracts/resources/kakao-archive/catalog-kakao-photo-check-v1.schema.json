@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-photo-check-v1/1.0",
+  "oneOf": [
+    {"$ref": "#/$defs/Request"},
+    {"$ref": "#/$defs/Reply"},
+    {"$ref": "#/$defs/Failure"}
+  ],
+  "$defs": {
+    "Selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_binding_id", "manual_lease_id", "csv_capture_id", "photo_capture_id"],
+      "properties": {
+        "source_binding_id": {"type": "string", "pattern": "^kakaobinding_[0-9a-f]{32}$"},
+        "manual_lease_id": {"type": "string", "pattern": "^kakaoremotelease_[0-9a-f]{32}$"},
+        "csv_capture_id": {"$ref": "#/$defs/Capture"},
+        "photo_capture_id": {"$ref": "#/$defs/Capture"}
+      }
+    },
+    "Capture": {"type": "string", "pattern": "^kakaodownload_[0-9a-f]{32}$"},
+    "Request": {
+      "allOf": [
+        {"$ref": "eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/Identity"},
+        {"type": "object", "required": ["operation", "selection"], "properties": {
+          "operation": {"const": "CHECK_KAKAO_MANUAL_PHOTO"},
+          "selection": {"$ref": "#/$defs/Selection"}
+        }}
+      ],
+      "unevaluatedProperties": false
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection", "row_ordinal"],
+      "properties": {
+        "selection": {"$ref": "#/$defs/Selection"},
+        "row_ordinal": {"type": ["integer", "null"], "minimum": 1, "maximum": 100000}
+      }
+    },
+    "Reply": {
+      "allOf": [
+        {"$ref": "eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/Success"},
+        {"type": "object", "required": ["operation", "result"], "properties": {
+          "operation": {"const": "CHECK_KAKAO_MANUAL_PHOTO"}, "result": {"$ref": "#/$defs/Result"}
+        }}
+      ],
+      "unevaluatedProperties": false
+    },
+    "Failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "request_id", "status", "result", "error_code"],
+      "properties": {
+        "operation": {"const": "CHECK_KAKAO_MANUAL_PHOTO"},
+        "request_id": {"$ref": "eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/RequestId"},
+        "status": {"const": "ERROR"},
+        "result": {"type": "null"},
+        "error_code": {"$ref": "eom://schemas/kakao-archive/catalog-kakao-capture-v1/1.0#/$defs/Failure/properties/error_code"}
+      }
+    }
+  }
+}

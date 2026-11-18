@@ -25,17 +25,68 @@ function pageValue(value, binding) {
 export function createKakaoCaptures({document, api, explainError, onConfirmed = async () => {}}) {
   let root, owner = null, binding = null, active = false, roles = new Set(), permissions = new Set();
   let generation = 0, request = 0, loading = false, pending = false, page = null, selected = null, intent = null;
+  let photoRequest = 0, checkingPhoto = false;
   const nodes = {};
   const allowed = () => active && owner && roles.has("ADMIN") && permissions.has("kakao_archive:collect") && binding && binding.state !== "RETIRED";
   const live = token => allowed() && token === generation;
   function node(tag, text, cls = "") { const result = document.createElement(tag); if (text !== undefined) result.textContent = text; if (cls) result.className = cls; return result; }
   function button(text, callback) { const result = node("button", text, "button quiet"); result.type = "button"; result.addEventListener("click", callback); return result; }
   function message(text, error = false) { nodes.message.textContent = text; nodes.message.className = `form-message${error ? " error" : ""}`; }
+  function label(item, index) {
+    const time = item.started_at ? new Date(item.started_at).toLocaleString("ko-KR", {timeZone:"Asia/Seoul", dateStyle:"short", timeStyle:"short"}) : "시각 확인 필요";
+    return `${index + 1}. ${time} · ${STATES[item.state]}`;
+  }
+  function photoSelection() {
+    const items = page?.items || [];
+    const csv = items[nodes.csv.value], photo = items[nodes.photo.value];
+    if (!csv || !photo || photo.state !== "ROOM_IDENTITY_OBSERVED" ||
+        csv.state !== "ROOM_IDENTITY_UNAVAILABLE" || csv.manual_lease_id !== photo.manual_lease_id) return null;
+    return {source_binding_id:page.source_binding_id, manual_lease_id:photo.manual_lease_id,
+      csv_capture_id:csv.capture_id, photo_capture_id:photo.capture_id};
+  }
+  function resetPhotoStatus() {
+    photoRequest++; checkingPhoto = false; nodes.photoStatus.textContent = "";
+  }
+  function photoOptions() {
+    resetPhotoStatus();
+    for (const [select, title] of [[nodes.csv, "받은 대화 CSV 선택"], [nodes.photo, "받은 사진 선택"]]) {
+      const empty = node("option", title); empty.value = ""; select.replaceChildren(empty);
+    }
+    for (const [index, item] of (page?.items || []).entries()) {
+      const select = item.state === "ROOM_IDENTITY_OBSERVED" ? nodes.photo :
+        item.state === "ROOM_IDENTITY_UNAVAILABLE" ? nodes.csv : null;
+      if (!select) continue;
+      const option = node("option", label(item, index)); option.value = String(index); select.append(option);
+    }
+    sync();
+  }
+  async function checkPhoto() {
+    const selection = photoSelection();
+    if (!allowed() || loading || pending || checkingPhoto || !selection) return;
+    const token = generation, serial = ++photoRequest;
+    checkingPhoto = true; sync(); nodes.photoStatus.textContent = "두 파일에서 사진이 들어갈 대화 행을 확인하고 있습니다.";
+    try {
+      const result = await api(`${BASE}/photo-occurrence?${new URLSearchParams(selection)}`);
+      if (!live(token) || serial !== photoRequest) return;
+      if (Object.entries(selection).some(([key, value]) => result?.selection?.[key] !== value) ||
+          (result.row_ordinal !== null && (!Number.isInteger(result.row_ordinal) ||
+           result.row_ordinal < 1 || result.row_ordinal > 100000))) throw new Error("선택한 수신 자료와 응답이 일치하지 않습니다.");
+      nodes.photoStatus.textContent = result.row_ordinal === null
+        ? "사진이 속한 대화 행을 확정하지 못했습니다. 어떤 자료도 등록하지 않았습니다."
+        : `앞뒤 대화가 일치하는 CSV ${result.row_ordinal}번째 대화 행을 찾았습니다. 아직 등록하지 않았습니다.`;
+    } catch (error) {
+      if (live(token) && serial === photoRequest) nodes.photoStatus.textContent = `사진 위치를 확인하지 못했습니다. ${explainError(error)}`;
+    } finally {
+      if (live(token) && serial === photoRequest) { checkingPhoto = false; sync(); }
+    }
+  }
   function sync() {
     if (!root) return;
     root.hidden = !allowed(); nodes.refresh.disabled = !allowed() || loading || pending;
     for (const control of nodes.form.querySelectorAll("input,button")) control.disabled = !allowed() || pending || Boolean(intent && !intent.receipt);
     nodes.form.hidden = !selected || selected.state !== "ROOM_IDENTITY_OBSERVED";
+    nodes.photoForm.hidden = nodes.csv.options.length < 2 || nodes.photo.options.length < 2;
+    nodes.checkPhoto.disabled = !allowed() || loading || pending || checkingPhoto || !photoSelection();
     nodes.recovery.replaceChildren();
     if (intent && !intent.receipt && allowed()) {
       nodes.recovery.append(node("p", "처리 여부가 확인되지 않은 요청은 같은 요청으로 확인합니다.", "muted-label"));
@@ -44,14 +95,13 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
   }
   function clear() {
     page = null; selected = null; request++; loading = false;
-    if (root) { nodes.list.replaceChildren(); nodes.name.value = ""; nodes.confirm.checked = false; message("사진을 내려받은 뒤 ‘받은 자료 새로고침’을 눌러 주세요."); sync(); }
+    if (root) { nodes.list.replaceChildren(); nodes.name.value = ""; nodes.confirm.checked = false; message("사진을 내려받은 뒤 ‘받은 자료 새로고침’을 눌러 주세요."); photoOptions(); }
   }
   function renderList() {
     nodes.list.replaceChildren();
     for (const [index, item] of (page?.items || []).entries()) {
       const line = node("div", undefined, "kakao-list-row");
-      const time = item.started_at ? new Date(item.started_at).toLocaleString("ko-KR", {timeZone:"Asia/Seoul", dateStyle:"short", timeStyle:"short"}) : "시각 확인 필요";
-      const select = button(`${index + 1}. ${time} · ${STATES[item.state]}`, () => {
+      const select = button(label(item, index), () => {
         if (!allowed() || pending || intent && !intent.receipt) return;
         selected = item; nodes.confirm.checked = false; sync();
       });
@@ -63,13 +113,13 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
   }
   async function refresh() {
     if (!allowed() || loading || pending) return;
-    const token = generation, current = ++request, bindingId = binding.source_binding_id; loading = true; sync(); message("수신 기록만 확인하고 있습니다. 사진·대화를 새로 가져오지 않습니다.");
+    const token = generation, current = ++request, bindingId = binding.source_binding_id; loading = true; resetPhotoStatus(); sync(); message("수신 기록만 확인하고 있습니다. 사진·대화를 새로 가져오지 않습니다.");
     try {
       const result = await api(`${BASE}?source_binding_id=${encodeURIComponent(bindingId)}`);
       if (!live(token) || current !== request) return;
-      page = pageValue(result, bindingId); selected = null; renderList();
+      page = pageValue(result, bindingId); selected = null; renderList(); photoOptions();
       message(page.truncated ? "최근 수신 자료 일부만 표시됩니다. 확인 정보가 없는 자료는 연결하지 않습니다." : "방 확인 정보는 사진 다운로드에서 관측한 정보입니다. 아직 질문이나 사진이 등록된 것은 아닙니다.");
-    } catch (error) { if (live(token) && current === request) { page = null; selected = null; nodes.list.replaceChildren(); message(`수신 기록을 확인하지 못했습니다. ${explainError(error)}`, true); } }
+    } catch (error) { if (live(token) && current === request) { page = null; selected = null; nodes.list.replaceChildren(); photoOptions(); message(`수신 기록을 확인하지 못했습니다. ${explainError(error)}`, true); } }
     finally { if (live(token) && current === request) { loading = false; sync(); } }
   }
   async function begin() {
@@ -109,7 +159,17 @@ export function createKakaoCaptures({document, api, explainError, onConfirmed = 
     confirmation.append(nodes.confirm, node("span", "선택한 연결의 채널·대화방에서 내려받은 사진임을 확인했습니다."));
     const save = node("button", "대화방 확인 저장", "button secondary"); save.type = "submit";
     nodes.form.append(name, confirmation, save); nodes.form.addEventListener("submit", event => { event.preventDefault(); void begin(); });
-    root.replaceChildren(node("h3", "받은 자료 확인"), nodes.message, nodes.refresh, nodes.list, nodes.form, nodes.recovery); clear();
+    nodes.photoForm = node("div", undefined, "kakao-bootstrap");
+    nodes.photoForm.setAttribute("role", "group"); nodes.photoForm.setAttribute("aria-label", "사진이 속한 대화 확인");
+    for (const [key, text] of [["csv", "대화 CSV"], ["photo", "사진"]]) {
+      const field = node("label", text); nodes[key] = node("select");
+      nodes[key].addEventListener("change", () => { resetPhotoStatus(); sync(); });
+      field.append(nodes[key]); nodes.photoForm.append(field);
+    }
+    nodes.checkPhoto = button("사진 위치 확인", () => void checkPhoto());
+    nodes.photoStatus = node("p", undefined, "form-message"); nodes.photoStatus.setAttribute("role", "status");
+    nodes.photoForm.append(nodes.checkPhoto, node("p", "같은 카카오 로그인 회차에서 받은 대화 CSV와 사진을 골라 주세요.", "muted-label"), nodes.photoStatus);
+    root.replaceChildren(node("h3", "받은 자료 확인"), nodes.message, nodes.refresh, nodes.list, nodes.photoForm, nodes.form, nodes.recovery); clear();
   }
   function setOwner(value) { if (owner === value) return; owner = value || null; roles.clear(); permissions.clear(); binding = null; intent = null; pending = false; generation++; clear(); }
   function setRoles(values) { roles = new Set(values); generation++; clear(); }

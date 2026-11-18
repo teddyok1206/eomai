@@ -6,12 +6,19 @@ from pydantic import Field, TypeAdapter
 
 from .kakao_archive import KakaoBindingId
 from .kakao_archive_rpc import IdempotencyKey, RequestId
-from .kakao_capture_intake import ConfirmKakaoManualCapture, KakaoManualCapturePage
+from .kakao_capture_intake import (
+    ConfirmKakaoManualCapture,
+    KakaoManualCapturePage,
+    KakaoPhotoCheckResult,
+    KakaoPhotoCheckSelection,
+)
 from .kakao_rooms import KakaoRoomMutation
 from .models import FrozenModel, UtcDatetime
 from .validation import validate_contract
 
-type KakaoCaptureOperation = Literal["LIST_KAKAO_MANUAL_CAPTURES", "CONFIRM_KAKAO_MANUAL_CAPTURE"]
+type KakaoCaptureOperation = Literal[
+    "LIST_KAKAO_MANUAL_CAPTURES", "CONFIRM_KAKAO_MANUAL_CAPTURE", "CHECK_KAKAO_MANUAL_PHOTO"
+]
 type KakaoCaptureErrorCode = Literal[
     "KAKAO_ARCHIVE_REQUEST_INVALID",
     "KAKAO_ARCHIVE_PERMISSION_DENIED",
@@ -54,8 +61,14 @@ class ConfirmKakaoCaptureRequest(_Identity):
     idempotency_key: IdempotencyKey
 
 
+class CheckKakaoPhotoRequest(_Identity):
+    operation: Literal["CHECK_KAKAO_MANUAL_PHOTO"] = "CHECK_KAKAO_MANUAL_PHOTO"
+    selection: KakaoPhotoCheckSelection
+
+
 type KakaoCaptureRequest = Annotated[
-    ListKakaoCapturesRequest | ConfirmKakaoCaptureRequest, Field(discriminator="operation")
+    ListKakaoCapturesRequest | ConfirmKakaoCaptureRequest | CheckKakaoPhotoRequest,
+    Field(discriminator="operation"),
 ]
 
 
@@ -75,6 +88,11 @@ class ConfirmKakaoCaptureReply(_Ok):
     result: KakaoRoomMutation
 
 
+class CheckKakaoPhotoReply(_Ok):
+    operation: Literal["CHECK_KAKAO_MANUAL_PHOTO"] = "CHECK_KAKAO_MANUAL_PHOTO"
+    result: KakaoPhotoCheckResult
+
+
 class KakaoCaptureFailure(FrozenModel):
     operation: KakaoCaptureOperation
     request_id: RequestId
@@ -84,20 +102,30 @@ class KakaoCaptureFailure(FrozenModel):
 
 
 type _Success = Annotated[
-    ListKakaoCapturesReply | ConfirmKakaoCaptureReply, Field(discriminator="operation")
+    ListKakaoCapturesReply | ConfirmKakaoCaptureReply | CheckKakaoPhotoReply,
+    Field(discriminator="operation"),
 ]
 type KakaoCaptureReply = Annotated[_Success | KakaoCaptureFailure, Field(discriminator="status")]
 _REQUEST: TypeAdapter[KakaoCaptureRequest] = TypeAdapter(KakaoCaptureRequest)
 _REPLY: TypeAdapter[KakaoCaptureReply] = TypeAdapter(KakaoCaptureReply)
 
 
+def _validate(value: dict[str, object]) -> None:
+    family = (
+        "catalog-kakao-photo-check-v1"
+        if value.get("operation") == "CHECK_KAKAO_MANUAL_PHOTO"
+        else "catalog-kakao-capture-v1"
+    )
+    validate_contract(family, value)
+
+
 def parse_kakao_capture_request(value: dict[str, object]) -> KakaoCaptureRequest:
-    validate_contract("catalog-kakao-capture-v1", value)
+    _validate(value)
     return _REQUEST.validate_python(value)
 
 
 def parse_kakao_capture_reply(value: dict[str, object]) -> KakaoCaptureReply:
-    validate_contract("catalog-kakao-capture-v1", value)
+    _validate(value)
     return _REPLY.validate_python(value)
 
 
@@ -105,6 +133,14 @@ def check_kakao_capture_reply(request: KakaoCaptureRequest, reply: KakaoCaptureR
     if request.operation != reply.operation or request.request_id != reply.request_id:
         raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
     if isinstance(reply, KakaoCaptureFailure):
+        return
+    if isinstance(request, CheckKakaoPhotoRequest) or isinstance(reply, CheckKakaoPhotoReply):
+        if not (
+            isinstance(request, CheckKakaoPhotoRequest)
+            and isinstance(reply, CheckKakaoPhotoReply)
+            and request.selection == reply.result.selection
+        ):
+            raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
         return
     expected = (
         request.source_binding_id

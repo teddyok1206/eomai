@@ -11,6 +11,19 @@ from .kakao_manual import KakaoManualLeaseId
 from .models import FrozenModel, Sha256, UtcDatetime
 from .validation import validate_contract
 
+
+class KakaoPhotoCheckSelection(FrozenModel):
+    source_binding_id: KakaoBindingId
+    manual_lease_id: KakaoManualLeaseId
+    csv_capture_id: str = Field(pattern=r"^kakaodownload_[0-9a-f]{32}$")
+    photo_capture_id: str = Field(pattern=r"^kakaodownload_[0-9a-f]{32}$")
+
+
+class KakaoPhotoCheckResult(FrozenModel):
+    selection: KakaoPhotoCheckSelection
+    row_ordinal: int | None = Field(strict=True, ge=1, le=100000)
+
+
 CaptureState = Literal[
     "ROOM_IDENTITY_OBSERVED",
     "NOT_RECEIVED",

@@ -5,7 +5,12 @@ from contextlib import contextmanager
 from typing import Annotated
 
 from eom_api_contracts import SingleResponse
-from eom_api_contracts.kakao_capture_intake import ConfirmKakaoManualCapture, KakaoManualCapturePage
+from eom_api_contracts.kakao_capture_intake import (
+    ConfirmKakaoManualCapture,
+    KakaoManualCapturePage,
+    KakaoPhotoCheckResult,
+    KakaoPhotoCheckSelection,
+)
 from eom_api_contracts.kakao_rooms import KakaoRoomMutation
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
@@ -62,6 +67,26 @@ def list_captures(
     with _boundary():
         result = request.app.state.services.catalog_application.list_kakao_manual_captures(
             source_binding_id, actor=request.state.request_context.actor()
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, result)
+
+
+@router.get(
+    "/photo-occurrence",
+    operation_id="kakao_capture_check_photo",
+    response_model=SingleResponse[KakaoPhotoCheckResult],
+    dependencies=[Depends(COLLECT)],
+)
+def check_photo(
+    request: Request,
+    response: Response,
+    authentication: Auth,
+    selection: Annotated[KakaoPhotoCheckSelection, Query()],
+) -> SingleResponse[KakaoPhotoCheckResult]:
+    with _boundary():
+        result = request.app.state.services.catalog_application.check_kakao_manual_photo(
+            selection, actor=request.state.request_context.actor()
         )
     response.headers["Cache-Control"] = "no-store"
     return one(request, result)

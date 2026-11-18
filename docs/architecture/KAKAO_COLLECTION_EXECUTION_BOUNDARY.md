@@ -39,6 +39,15 @@ receipt의 전송 상태와 actual payload를 대조하고, owner는 원래 leas
 검사는 제안 또는 미확정을 반환하고, 실패/입력 유실을 원본 수락 성공으로 바꾸지 않는다.
 목록에서 최근 자료를 자동 결합하는 대안은 범위를 넘고 다른 방을 섞을 수 있어 선택하지 않는다.
 
+Studio의 받은 자료에서 동일 연결·동일 로그인 회차의 CSV와 사진을 명시적으로 고른다.
+기존 관리자 조회와 Catalog socket에 쓰기 없는 확인 경로만 추가한다. released 목록/방 확인
+schema는 유지하고, 새 operation의 contract는 exact binding/lease/두 capture ID와
+미확정 또는 행 번호만 전달한다. API/BFF는 응답의 두 ID와 binding/lease까지 반드시
+대조한다. 목록은 여전히 payload를 읽지 않고 두 ID를 골랐을 때만 실제 읽는다.
+응답은 no-store이고, 다른 선택/계정으로 이동한 뒤 도착한 결과를 표시하지 않는다.
+현재 권한, 파일·parse 한도, 입력 오류 및 미확정의 의미는 위 owner 검사를 그대로 사용한다.
+이 확인으로 원본을 새로 수집하거나 학생·질문을 저장하지 않는다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나

@@ -209,8 +209,11 @@ from eom_catalog_contracts.kakao_archive_rpc import (
 from eom_catalog_contracts.kakao_capture_intake import (
     ConfirmKakaoManualCapture,
     KakaoManualCapturePage,
+    KakaoPhotoCheckResult,
+    KakaoPhotoCheckSelection,
 )
 from eom_catalog_contracts.kakao_capture_rpc import (
+    CheckKakaoPhotoRequest,
     ConfirmKakaoCaptureRequest,
     KakaoCaptureFailure,
     KakaoCaptureRequest,
@@ -496,9 +499,17 @@ class CatalogApplicationClient:
         )
         return cast(KakaoRoomMutation, self._request_kakao_capture(request))
 
+    def check_kakao_manual_photo(
+        self, selection: KakaoPhotoCheckSelection, *, actor: ActorContext
+    ) -> KakaoPhotoCheckResult:
+        request = CheckKakaoPhotoRequest.model_validate(
+            {**self._kakao_identity(actor), "selection": selection}
+        )
+        return cast(KakaoPhotoCheckResult, self._request_kakao_capture(request))
+
     def _request_kakao_capture(
         self, request: KakaoCaptureRequest
-    ) -> KakaoManualCapturePage | KakaoRoomMutation:
+    ) -> KakaoManualCapturePage | KakaoRoomMutation | KakaoPhotoCheckResult:
         try:
             parsed = parse_kakao_capture_request(request.model_dump(mode="json"))
             reply = parse_kakao_capture_reply(

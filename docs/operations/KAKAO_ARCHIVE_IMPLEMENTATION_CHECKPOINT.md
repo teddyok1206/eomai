@@ -1,5 +1,19 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 Studio 받은 자료에서 사진 위치 확인
+
+같은 수집 회차의 CSV·사진을 고르면 Studio → API → Catalog socket → 보호된 local reader로
+확인한다. 응답은 원 선택의 두 capture/lease/binding과 CSV 행 번호 또는 미확정뿐이다.
+조회 후에는 원본·대화방·질문·PDF가 저장되지 않는다. 기존 방 확인과 받은 자료 목록의
+wire는 그대로고, OpenAPI 비교에서 새 GET 1건만 추가됐다. UI는 새 선택/로그아웃 후
+늦은 응답을 표시하지 않는다.
+
+격리 Chromium의 실제 선택/재조회/미확정/늦은 응답 검증과 disposable PostgreSQL의
+실제 Studio→API→socket→파일 정합 경계가 통과했다. 집중 56 PASS(별도 후보 화면의
+full Chromium 실행 파일이 없는 1건 제외), 임시 DB 28 PASS, strict mypy10개, Ruff와
+schema audit PASS다. 이 절의 실제 카카오 연결과 새 PDF
+생성·다운로드는 아직 미확인이다. 운영의 기존 profile/수집 원본·활성 설정은 바꾸지 않았다.
+
 ## 2026-11-18 보호된 실제 수신물 reader와 사진 정합의 연결
 
 Catalog 내부 `inspect_photo_occurrence`가 현재 운영자의 exact binding/원 MANUAL lease로

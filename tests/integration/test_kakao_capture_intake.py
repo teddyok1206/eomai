@@ -305,3 +305,39 @@ def test_studio_api_socket_and_storage_confirm_same_room_with_csrf_and_replay(
             base + "/confirm-room", json=command, headers={**headers, "If-Match": '"v999"'}
         )
         assert bad.status_code == 412
+
+
+def test_studio_checks_exact_photo_pair_via_api_socket(capture_intake, tmp_path):
+    h = capture_intake.intake
+    pair = prepare_photo_pair(h)
+    sources = KakaoSourceService(
+        h.engine,
+        artifacts=h.artifacts,
+        authorize_capture=lambda *_: pytest.fail("unexpected write"),
+    )
+    store = (h.engine, h.actor, None, None, sources, h.artifacts, None)
+    with (
+        question_api(store, tmp_path, actor=h.actor, captures=capture_intake.service) as (
+            api,
+            _,
+            _,
+        ),
+        studio_api(api, h.actor.operator_id) as (web, _),
+    ):
+        url = "/studio/api/v1/kakao-archive/manual-captures/photo-occurrence"
+        verified = web.get(url, params=pair)
+        assert verified.status_code == 200, verified.text
+        assert verified.headers["cache-control"] == "no-store"
+        assert verified.json() == {"selection": pair, "row_ordinal": 3}
+        assert web.get(url, params=pair).json() == verified.json()
+        assert web.get(url, params=pair | {"path": "/other"}).status_code == 422
+        assert (
+            web.get(url, params=pair | {"photo_capture_id": pair["csv_capture_id"]}).status_code
+            == 412
+        )
+        assert (
+            web.get(
+                url, params=pair | {"source_binding_id": "kakaobinding_" + "f" * 32}
+            ).status_code
+            == 404
+        )

@@ -12,6 +12,18 @@ CaptureId = Annotated[str, Field(pattern=r"^kakaodownload_[0-9a-f]{32}$")]
 Hash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
+class PhotoCheckSelection(WebModel):
+    source_binding_id: str = Field(pattern=r"^kakaobinding_[0-9a-f]{32}$")
+    manual_lease_id: LeaseId
+    csv_capture_id: CaptureId
+    photo_capture_id: CaptureId
+
+
+class PhotoCheckResult(WebModel):
+    selection: PhotoCheckSelection
+    row_ordinal: int | None = Field(strict=True, ge=1, le=100000)
+
+
 class CaptureItem(WebModel):
     manual_lease_id: LeaseId
     capture_id: CaptureId

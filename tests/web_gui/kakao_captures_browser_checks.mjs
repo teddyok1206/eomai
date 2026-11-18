@@ -8,9 +8,10 @@ const assets = new Map(await Promise.all(["styles.css","kakao-archive.css","kaka
 const id = prefix => prefix+'_'+'1'.repeat(32), binding=id('kakaobinding');
 const payload = {schema_version:'kakao-manual-capture-page/1.0',source_binding_id:binding,binding_resource_version:1,scope:'RECENT_EIGHT_MANUAL_SESSIONS',truncated:false,items:[
   {manual_lease_id:id('kakaoremotelease'),capture_id:id('kakaodownload'),started_at:'2026-11-16T00:00:00Z',completed_at:'2026-11-16T00:00:01Z',size_bytes:1024,state:'ROOM_IDENTITY_OBSERVED',preview_sha256:'sha256:'+'a'.repeat(64)},
-  {manual_lease_id:id('kakaoremotelease'),capture_id:'kakaodownload_'+'2'.repeat(32),started_at:'2026-11-16T00:00:00Z',completed_at:'2026-11-16T00:00:01Z',size_bytes:1024,state:'NO_OBSERVATION',preview_sha256:null}
+  {manual_lease_id:id('kakaoremotelease'),capture_id:'kakaodownload_'+'2'.repeat(32),started_at:'2026-11-16T00:00:00Z',completed_at:'2026-11-16T00:00:01Z',size_bytes:1024,state:'NO_OBSERVATION',preview_sha256:null},
+  {manual_lease_id:id('kakaoremotelease'),capture_id:'kakaodownload_'+'3'.repeat(32),started_at:'2026-11-16T00:00:00Z',completed_at:'2026-11-16T00:00:01Z',size_bytes:1024,state:'ROOM_IDENTITY_UNAVAILABLE',preview_sha256:null}
 ]};
-const mutations=[],receipts=new Map();
+const mutations=[],checks=[],receipts=new Map();
 const app = `import {createKakaoCaptures} from './kakao-captures.js';
 const state=window.fixture={owner:'one',lose:false,hold:false,release:null,opened:[]};
 const api=async(path,options={})=>{
@@ -25,8 +26,17 @@ controller.install(document.querySelector('#captures'));controller.setOwner('one
 const server=createServer(async(req,res)=>{
  const name=req.url.slice(1);
  if(name==='fixture'){
-  let raw='';for await(const chunk of req)raw+=chunk;const {options,owner}=JSON.parse(raw);res.setHeader('Content-Type','application/json');
+  let raw='';for await(const chunk of req)raw+=chunk;const {path,options,owner}=JSON.parse(raw);res.setHeader('Content-Type','application/json');
   if(owner!=='one'){res.end(JSON.stringify({code:'KAKAO_ARCHIVE_RESOURCE_NOT_FOUND'}));return;}
+  if(path.includes('/photo-occurrence?')){
+   assert.equal(options.method,undefined);
+   const selection=Object.fromEntries(new URL(path,'http://fixture.invalid').searchParams);
+   assert.equal(selection.source_binding_id,binding);
+   assert.equal(selection.csv_capture_id,payload.items[2].capture_id);
+   assert.equal(selection.photo_capture_id,payload.items[0].capture_id);
+   assert.equal(selection.manual_lease_id,payload.items[0].manual_lease_id);
+   checks.push(selection);res.end(JSON.stringify({selection,row_ordinal:checks.length===1?3:null}));return;
+  }
   if(options.method==='POST'){
    mutations.push(options);const key=options.headers['Idempotency-Key'];const prior=receipts.get(key);
    if(prior){assert.deepEqual(prior.body,options.body);res.end(JSON.stringify({...prior.result,replayed:true}));return;}
@@ -48,6 +58,17 @@ try{
  await page.getByRole('button',{name:/^1\./}).waitFor();
  assert.equal(await page.getByRole('button',{name:/방 확인 정보 없음/}).isDisabled(),true);
  assert.equal(await page.getByRole('form',{name:'수신 대화방 확인'}).isVisible(),false);
+ await page.getByRole('combobox',{name:'대화 CSV',exact:true}).selectOption('2');
+ await page.getByRole('combobox',{name:'사진',exact:true}).selectOption('0');
+ const check=page.getByRole('button',{name:'사진 위치 확인',exact:true});
+ await check.click();await page.getByText(/CSV 3번째 대화 행을 찾았습니다/).waitFor();
+ await check.click();await page.getByText(/대화 행을 확정하지 못했습니다/).waitFor();
+ await page.evaluate(()=>{fixture.release=null;fixture.hold=true;});await check.click();
+ await page.waitForFunction(()=>fixture.release!==null);
+ await page.getByRole('combobox',{name:'사진',exact:true}).selectOption('');
+ await page.evaluate(()=>fixture.release());assert.equal(await check.isDisabled(),true);
+ assert.equal(await page.getByText(/대화 행을 확정하지 못했습니다/).count(),0);
+ assert.equal(checks.length,3);assert.equal(mutations.length,0);
  await page.getByRole('button',{name:/대화방 확인 정보 있음/}).click();
  await page.getByLabel('저장할 대화방 이름',{exact:true}).fill('학생 <img src=x> 방');
  await page.getByRole('checkbox').check();await page.evaluate(()=>fixture.lose=true);

@@ -5,6 +5,7 @@
 .kakao-bootstrap { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 20px 0; padding: 16px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-card); }
 .kakao-bootstrap label { display: grid; gap: 8px; min-width: 0; flex: 1 1 220px; max-width: 420px; }
 .kakao-bootstrap input { width: 100%; min-height: 40px; }
+.kakao-capture-intake select { width: 100%; min-width: 0; min-height: 40px; }
 .kakao-bootstrap p { flex-basis: 100%; margin: 0; }
 .kakao-retire-confirm { display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .kakao-binding { display: grid; gap: 8px; max-width: 420px; margin: 20px 0; }

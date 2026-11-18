@@ -9,8 +9,12 @@ import pytest
 from eom_catalog_contracts.kakao_capture_intake import (
     ConfirmKakaoManualCapture,
     KakaoManualCapturePage,
+    KakaoPhotoCheckResult,
+    KakaoPhotoCheckSelection,
 )
 from eom_catalog_contracts.kakao_capture_rpc import (
+    CheckKakaoPhotoReply,
+    CheckKakaoPhotoRequest,
     ListKakaoCapturesReply,
     ListKakaoCapturesRequest,
     check_kakao_capture_reply,
@@ -34,7 +38,11 @@ def request():
 
 def test_schema_mirrors_and_closed_identity():
     root = Path(__file__).resolve().parents[2]
-    for name in ("kakao-manual-capture-intake-v1", "catalog-kakao-capture-v1"):
+    for name in (
+        "kakao-manual-capture-intake-v1",
+        "catalog-kakao-capture-v1",
+        "catalog-kakao-photo-check-v1",
+    ):
         entry = CATALOG_SCHEMA_RESOURCES[name]
         raw = (root / entry.canonical_path).read_bytes()
         assert sha256_bytes(raw) == entry.sha256
@@ -58,6 +66,34 @@ def test_schema_mirrors_and_closed_identity():
     )
     check_kakao_capture_reply(value, reply)
     assert service.list_captures.call_args.args[0].permissions == frozenset()
+
+
+def test_photo_rpc_binds_both_inputs_and_rejects_browser_control():
+    actor = request()
+    selection = KakaoPhotoCheckSelection(
+        source_binding_id=actor.source_binding_id,
+        manual_lease_id="kakaoremotelease_" + "1" * 32,
+        csv_capture_id="kakaodownload_" + "2" * 32,
+        photo_capture_id="kakaodownload_" + "3" * 32,
+    )
+    value = CheckKakaoPhotoRequest.model_validate(
+        actor.model_dump(exclude={"operation", "source_binding_id"}) | {"selection": selection}
+    )
+    raw = value.model_dump(mode="json")
+    assert parse_kakao_capture_request(raw) == value
+    service = Mock()
+    bad = raw | {"selection": selection.model_dump() | {"provider_url": "https://example.test"}}
+    result = json.loads(dispatch_kakao_capture(service, bad))
+    assert result["error_code"] == "KAKAO_ARCHIVE_REQUEST_INVALID"
+    service.inspect_photo_occurrence.assert_not_called()
+    altered = selection.model_copy(update={"photo_capture_id": selection.csv_capture_id})
+    reply = CheckKakaoPhotoReply(
+        request_id=value.request_id,
+        result=KakaoPhotoCheckResult(selection=altered, row_ordinal=2),
+    )
+    assert parse_kakao_capture_reply(reply.model_dump(mode="json")) == reply
+    with pytest.raises(ValueError, match="RESULT_INVALID"):
+        check_kakao_capture_reply(value, reply)
 
 
 @pytest.mark.parametrize("field", ["permissions", "role", "root", "cookie", "provider_key"])

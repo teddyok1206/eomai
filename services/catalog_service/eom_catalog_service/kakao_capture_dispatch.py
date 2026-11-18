@@ -5,9 +5,12 @@ from typing import TYPE_CHECKING, cast
 
 from eom_catalog_contracts.application import CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 from eom_catalog_contracts.kakao_archive_rpc import RequestId
+from eom_catalog_contracts.kakao_capture_intake import KakaoPhotoCheckResult
 from eom_catalog_contracts.kakao_capture_rpc import (
     KAKAO_CAPTURE_ERROR_CODES,
     KAKAO_CAPTURE_OPERATIONS,
+    CheckKakaoPhotoReply,
+    CheckKakaoPhotoRequest,
     ConfirmKakaoCaptureReply,
     ConfirmKakaoCaptureRequest,
     KakaoCaptureErrorCode,
@@ -99,6 +102,21 @@ def _dispatch_request(
                 request_id=request.request_id,
                 result=service.confirm_capture(
                     actor, request.command, idempotency_key=request.idempotency_key
+                ),
+            )
+        elif isinstance(request, CheckKakaoPhotoRequest):
+            selection = request.selection
+            photo = service.inspect_photo_occurrence(
+                actor,
+                source_binding_id=selection.source_binding_id,
+                manual_lease_id=selection.manual_lease_id,
+                csv_capture_id=selection.csv_capture_id,
+                photo_capture_id=selection.photo_capture_id,
+            )
+            reply = CheckKakaoPhotoReply(
+                request_id=request.request_id,
+                result=KakaoPhotoCheckResult(
+                    selection=selection, row_ordinal=None if photo is None else photo.row_ordinal
                 ),
             )
         else:

@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, Header, Query, Response
 
 from .contracts import StudioIdempotencyKey
 from .gateways import ApplicationGateway
-from .kakao_capture_contracts import CaptureConfirm
+from .kakao_capture_contracts import CaptureConfirm, PhotoCheckSelection
 from .sessions import WebSession
 
 
@@ -26,6 +26,16 @@ def install_kakao_capture_routes(
         session: Annotated[WebSession, Depends(require_admin_session)],
     ) -> dict[str, object]:
         result = await gateway.kakao_capture_list(session, source_binding_id)
+        response.headers["Cache-Control"] = "no-store"
+        return result.model_dump(mode="json")
+
+    @app.get(prefix + "/photo-occurrence")
+    async def check_photo(
+        response: Response,
+        selection: Annotated[PhotoCheckSelection, Query()],
+        session: Annotated[WebSession, Depends(require_admin_session)],
+    ) -> dict[str, object]:
+        result = await gateway.kakao_photo_check(session, selection)
         response.headers["Cache-Control"] = "no-store"
         return result.model_dump(mode="json")
 
