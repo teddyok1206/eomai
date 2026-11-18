@@ -1,5 +1,22 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 한 방 수집 운영 설치·활성화
+
+- 설치 정본은 `cf5c5806d1d3e7133b611b188783a94af5787f99`. 기존 보호된 operator가
+  worker/command/chat 실행 0건과 DB `20261117_0097`을 확인하고 API·Web·Catalog 호환
+  조합을 반영했다. migration head는 유지했으며 API isolation 검사를 통과했다.
+- 전용 browser 환경에 동일 release의 Kakao 계약과 한 방 수집기 wheel만 설치해 기존 수집기
+  구성과 호환성을 확인했다. 기존 PDF worker·원격 런타임·프로필과 INDEX/QUERY는 유지했다.
+  설치 증거는 `/var/lib/eom-kakao-collector-release-cf5c5806/installed.json`에 있다.
+- Catalog에 `ONE_ROOM`만 활성화했다. 활성화 직전 미완료 수집 0건, 활성화 직후 API Ready
+  200·Studio HTTPS 200·인증 없는 수집 조회 401·카카오 browser와 remote inactive를 확인했다.
+  운영 플래그는 `/etc/systemd/system/eom-catalog-application-runner.service.d/56-eom-kakao-one-room.conf`다.
+  전체 방·주기 수집은 비활성이고, 실제 카카오 방 열기·다운로드·학생 PDF 발행은 시도하지 않았다.
+- 별도 합성 임시 PostgreSQL에서는 수집 receipt 채택, CSV·사진 occurrence 보존, 학생별 출력
+  분리, Studio 다운로드 권한·재조회 9건이 통과했다. 실제 카카오 계정으로 이 경로가 끝까지
+  실행됐다는 증거는 아니다. 다음 검증은 관리자 원격 로그인 후 한 방의 정확한 CSV·사진을
+  등록하고 질문·학생 PDF까지 이어보는 것이다.
+
 ## 단일 방 수신 영수증 오류의 종료 처리
 
 기존 고정 경로의 수신 영수증 bytes가 계약 위반으로 해석되지 않으면, 사용 중인 browser
