@@ -6,7 +6,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-study-editor.js", "kakao-concept-picker.js", "kakao-question-composer.js", "kakao-question-candidates.js", "kakao-students.js", "kakao-rooms.js", "kakao-manual.js", "kakao-captures.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
+const assets = new Map(await Promise.all(["styles.css", "kakao-archive.css", "kakao-archive.js", "kakao-publications.js", "kakao-study-editor.js", "kakao-concept-picker.js", "kakao-question-composer.js", "kakao-question-candidates.js", "kakao-students.js", "kakao-rooms.js", "kakao-room-collection.js", "kakao-manual.js", "kakao-captures.js"].map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createKakaoArchive} from './kakao-archive.js';
 const id=(prefix,n)=>prefix+'_'+n.toString(16).padStart(32,'0');
@@ -62,7 +62,7 @@ const server=createServer((request,response)=>{
   response.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');response.end(content);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,channel:process.env.EOM_WEB_PLAYWRIGHT_CHANNEL||undefined});
 try {
   const page=await browser.newPage({viewport:{width:1200,height:900}}),errors=[],outbound=[];
   page.on('pageerror',error=>errors.push(error.message));

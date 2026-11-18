@@ -172,6 +172,7 @@ from eom_web_gui.kakao_capture_contracts import (
     PhotoCheckResult,
     PhotoCheckSelection,
 )
+from eom_web_gui.kakao_collection_contracts import RoomCollectionStart, RoomCollectionStatus
 from eom_web_gui.kakao_concept_contracts import (
     ConceptCreate,
     ConceptHistory,
@@ -577,6 +578,14 @@ class ApplicationGateway(Protocol):
     async def kakao_capture_confirm(
         self, session: WebSession, value: CaptureConfirm, idempotency_key: str, if_match: str
     ) -> RoomMutation: ...
+
+    async def kakao_collection_start(
+        self, session: WebSession, value: RoomCollectionStart, idempotency_key: str, if_match: str
+    ) -> RoomCollectionStatus: ...
+
+    async def kakao_collection_status(
+        self, session: WebSession, source_binding_id: str, run_id: str
+    ) -> RoomCollectionStatus: ...
 
     async def kakao_manual_start(
         self, session: WebSession, value: ManualStart, idempotency_key: str
@@ -1634,6 +1643,45 @@ class HttpApplicationGateway:
             result = RoomMutation.model_validate(self._data(response))
             if result.room.source_binding_id != value.source_binding_id:
                 raise ValueError("different capture room")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def kakao_collection_start(
+        self, session: WebSession, value: RoomCollectionStart, idempotency_key: str, if_match: str
+    ) -> RoomCollectionStatus:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/kakao-archive/collections",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key, "If-Match": if_match},
+        )
+        return self._kakao_collection_result(
+            self._data(response), value.selection.source_binding_id
+        )
+
+    async def kakao_collection_status(
+        self, session: WebSession, source_binding_id: str, run_id: str
+    ) -> RoomCollectionStatus:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/kakao-archive/collections/{quote(run_id, safe='')}",
+            params={"source_binding_id": source_binding_id},
+        )
+        return self._kakao_collection_result(self._data(response), source_binding_id, run_id)
+
+    @staticmethod
+    def _kakao_collection_result(
+        data: object, source_binding_id: str, run_id: str | None = None
+    ) -> RoomCollectionStatus:
+        try:
+            result = RoomCollectionStatus.model_validate(data)
+            if result.source_binding_id != source_binding_id or (
+                run_id is not None and result.run_id != run_id
+            ):
+                raise ValueError("different collection scope")
             return result
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error

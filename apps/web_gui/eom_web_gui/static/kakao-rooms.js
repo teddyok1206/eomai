@@ -24,7 +24,7 @@ function roomValue(value, bindingId) {
   return value;
 }
 
-export function createKakaoRooms({document, api, explainError, onSelect = () => {}}) {
+export function createKakaoRooms({document, api, explainError, onSelect = () => {}, onClear = () => {}}) {
   let root = null, owner = null, active = false, permissions = new Set(), binding = null;
   let generation = 0, listRequest = 0, detailRequest = 0, studentRequest = 0;
   let rows = new Map(), students = new Map(), selected = null, cursor = null, studentCursor = null;
@@ -39,6 +39,7 @@ export function createKakaoRooms({document, api, explainError, onSelect = () => 
   function button(text, callback) { const value = node("button", text, "button quiet"); value.type = "button"; value.addEventListener("click", callback); return value; }
   function message(text, error = false) { nodes.message.textContent = text; nodes.message.className = `form-message${error ? " error" : ""}`; }
   function clearDetail() {
+    onClear();
     selected = null; detailRequest++; studentRequest++; students.clear(); studentCursor = null; studentLoading = false;
     nodes.detail.replaceChildren(node("p", "대화방을 선택해 학생 연결을 확인해 주세요.", "empty-state"));
   }

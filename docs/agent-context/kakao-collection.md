@@ -151,8 +151,10 @@ capability를 복제하지 않으며, 발행 뒤 pin 중단은 동일 member rev
 durable pending run을 선택한다. 원래 browser/attempt 및 source command의 CAS를 재사용하고
 수신물 없이 실제 종료된 한 방은 `FAILED`로 남긴다. 사용자의 상태 조회는 `get_status`만
 호출한다. HTTP→보호된 API-peer의 collection 요청은 `kakao_collection_dispatch.py`에서
-검증하고, 기능이 꺼져 있으면 작업을 접수하지 않는다. Studio 버튼, 운영 활성화와 전체 방
-주기 수집은 별도다.
+검증하고, 기능이 꺼져 있으면 작업을 접수하지 않는다. Studio의 `kakao_collection_routes.py`
+및 `kakao-room-collection.js`는 admin/CSRF로 등록된 방 수집을 접수하고, 같은 탭에서
+같은 owner/binding/room의 미확정 키 또는 수집 ID를 되찾는다. 접수 뒤는 GET만 쓴다.
+운영 활성화와 전체 방 주기 수집은 별도다.
 
 ## 검증 경계
 

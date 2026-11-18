@@ -1,6 +1,7 @@
 // Presentation only: original messages, revisions and source authority belong to Catalog.
 import {createKakaoStudents} from "./kakao-students.js";
 import {createKakaoRooms} from "./kakao-rooms.js";
+import {createKakaoRoomCollection} from "./kakao-room-collection.js";
 import {createKakaoManual} from "./kakao-manual.js";
 import {createKakaoCaptures} from "./kakao-captures.js";
 import {createKakaoPublications} from "./kakao-publications.js";
@@ -81,8 +82,10 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       if (!live(token) || currentRoom !== room || question.source_binding_id !== binding?.source_binding_id) return false;
       return await openQuestion(question.question_id, question.question_revision_id) === true;
     }});
-  const rooms = createKakaoRooms({document, api, explainError, onSelect: row => {
+  const roomCollection = createKakaoRoomCollection({document, api, explainError, schedule, unschedule, pollMilliseconds});
+  const rooms = createKakaoRooms({document, api, explainError, onClear: () => roomCollection.setScope(null, null, null, false), onSelect: row => {
     if (!active || !readReady() || row.source_binding_id !== binding?.source_binding_id) return;
+    roomCollection.setScope(owner, binding, row, mayManage());
     const token = generation; currentRoom = row.room_id; clearDetails(); questionRows.clear(); candidates.setRoom(row);
     empty(nodes.questions, "이 대화방의 질문을 불러오고 있습니다.");
     void loadQuestions(token).catch(error => { if (live(token)) message(explainError(error), true); });
@@ -200,6 +203,8 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
     nodes.composer = node("section", undefined, "kakao-question-composer"); composer.install(nodes.composer);
     nodes.candidates = node("section", undefined, "kakao-question-candidates"); candidates.install(nodes.candidates);
     rooms.install(nodes.rooms);
+    nodes.selectedRoomCollection = node("section", undefined, "kakao-run"); roomCollection.install(nodes.selectedRoomCollection);
+    nodes.rooms.parentNode.append(nodes.selectedRoomCollection);
     root.replaceChildren(toolbar, nodes.message, nodes.bootstrap, nodes.bindingRecovery, bindingLabel, nodes.connection, nodes.manual, nodes.captures, nodes.students, nodes.run, nodes.candidates, work, nodes.composer, publicationSection);
     clearDetails(); syncBootstrapControls();
   }
@@ -358,7 +363,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
       nodes.connection.replaceChildren(node("strong", detail.display_name), status(detail.state));
       if (!archiveReady()) {
         const retired = detail.state === "RETIRED";
-        nodes.connection.append(node("p", retired ? "해제된 연결 준비입니다. 보관된 이력은 유지됩니다." : "연결 이름을 저장했습니다. 카카오 로그인과 대상 채널 확인은 아직 준비되지 않았습니다. 자동 수집하지 않습니다."));
+        nodes.connection.append(node("p", retired ? "해제된 연결 준비입니다. 보관된 이력은 유지됩니다." : "채널 전체 자동 수집은 꺼져 있습니다. 등록된 대화방을 선택하면 해당 방의 수집 기능을 확인할 수 있습니다."));
         empty(nodes.questions, "대화를 수집한 뒤 질문을 확인할 수 있습니다.");
         if (!retired && mayManage()) {
           const label = node("label", undefined, "kakao-retire-confirm"), check = node("input");
@@ -368,7 +373,7 @@ export function createKakaoArchive({document, api, setStateStatus, explainError 
           nodes.connection.append(label, retire);
         }
         nodes.connection.append(technicalDetails([["연결", value], ["설정 버전", detail.resource_version], ["수집 정책", detail.policy_revision.policy_revision_id]]));
-        syncBootstrapControls(); message(retired ? "연결 준비를 해제했습니다." : "연결 준비만 저장된 상태입니다. 대화 수집은 아직 시작하지 않았습니다.");
+        syncBootstrapControls(); message(retired ? "연결 준비를 해제했습니다." : "채널 전체 수집 설정은 연결 준비만 저장된 상태입니다.");
         if (!retired) {
           try { await loadQuestions(token); }
           catch (error) { if (live(token)) { empty(nodes.questions, "질문 목록을 불러오지 못했습니다."); message(explainError(error), true); } }

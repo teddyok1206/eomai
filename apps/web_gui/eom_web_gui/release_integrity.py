@@ -104,6 +104,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/kakao-question-candidates.js",
         "static/kakao-students.js",
         "static/kakao-rooms.js",
+        "static/kakao-room-collection.js",
         "static/kakao-manual.js",
         "static/kakao-captures.js",
         "static/kakao-archive.css",
