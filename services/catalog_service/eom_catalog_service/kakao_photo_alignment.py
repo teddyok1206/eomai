@@ -57,17 +57,32 @@ class _Group:
         if len(bodies) != 1 or pictures or links:
             return None
         body = bodies[0]
-        # Only the body's direct text/BR can be safely read from v1. A retained
-        # descendant with text can be interleaved with it in an unknown order.
         body_descendants = {body.index}
+        descendants = []
         for node in self.nodes:
             if node.parent_index in body_descendants:
-                if node.text is not None or node.is_image or node.tag not in {"br", "span"}:
-                    return None
                 body_descendants.add(node.index)
-        if body.text is None or body.text == _PHOTO_MARKER:
+                descendants.append(node)
+        text = body.text
+        if text is None and len(descendants) == 1:
+            child = descendants[0]
+            # Kakao may wrap one complete body segment in a passive span.
+            if (
+                body.tag == "p"
+                and child.parent_index == body.index
+                and child.tag == "span"
+                and not child.is_image
+            ):
+                text = child.text
+        elif any(
+            node.text is not None or node.is_image or node.tag not in {"br", "span"}
+            for node in descendants
+        ):
+            # The v1 observation cannot assemble interleaved text fragments.
             return None
-        return False, _line_endings(body.text)
+        if text is None or text == _PHOTO_MARKER:
+            return None
+        return False, _line_endings(text)
 
 
 def _line_endings(text: str) -> str:

@@ -54,7 +54,12 @@ def document(groups, *, truncated=False, path=PATH):
             add(album, "a", "link_pic")
             add(album, "a", "btn_save", link=value)
         else:
-            body = add(container, "p", "txt_chat", text=value)
+            wrapped = kind in {"wrapped", "split"}
+            body = add(container, "p", "txt_chat", text=None if wrapped else value)
+            if wrapped:
+                add(body, "span", text=value)
+                if kind == "split":
+                    add(body, "span", text="이어지는 내용")
             if kind == "collapsed":
                 add(body, "a", "link_more", text="더보기")
             if kind == "mixed":
@@ -127,8 +132,10 @@ GROUPS = [("text", "질문\n이어서"), ("photo", TARGET), ("photo", OTHER_PHOT
         (["다음", "답변", "사진", "사진", "질문\r\n이어서", "이전"], 4),
     ],
 )
-def test_exact_window_maps_one_of_two_identical_photo_rows(messages, ordinal):
-    parsed, evidence = inputs(messages, GROUPS, csv_groups=[("photo", OTHER_PHOTO)])
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_exact_window_maps_one_of_two_identical_photo_rows(messages, ordinal, wrapped):
+    groups = [("wrapped" if wrapped and kind == "text" else kind, value) for kind, value in GROUPS]
+    parsed, evidence = inputs(messages, groups, csv_groups=[("photo", OTHER_PHOTO)])
     answer = infer_kakao_photo_occurrence(parsed, **evidence)
     assert answer is not None
     assert (answer.row_ordinal, answer.album_ordinal, answer.association) == (
@@ -210,6 +217,7 @@ def test_ambiguous_or_not_exact_never_picks_first_row(messages):
     [
         [("text", "질문\n이어서"), ("album", TARGET), ("photo", OTHER_PHOTO), ("text", "답변")],
         [("mixed", "질문\n이어서"), *GROUPS[1:]],
+        [("split", "질문\n이어서"), *GROUPS[1:]],
         [("collapsed", "질문\n이어서"), *GROUPS[1:]],
         [*GROUPS[:2], ("photo", TARGET), GROUPS[-1]],
         [*GROUPS[:2], ("photo", OTHER_ROOM), GROUPS[-1]],
