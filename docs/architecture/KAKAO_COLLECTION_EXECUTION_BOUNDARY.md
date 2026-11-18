@@ -65,6 +65,23 @@ collector 단계가 별도로 필요하다. 같은 입력은 같은 결과이고
 서로 독립적인 CSV·정규화·보고서를 외부에서 넘기는 대안은 숫자·첨부·revision의 일치가
 추가 검증 전까지 보장되지 않는다.
 
+### 한 방의 고정 읽기 동작
+
+collector 전용 adapter에서 이미 관측한 열린 방의 (1) 우측 상단 메뉴 (2) 대화 내보내기의
+내 PC 저장 (3) 단일 사진의 다운로드만 지원한다. user/worker가 selector·좌표·JS·URL을
+넘길 수 없으며, 계정/채널을 코드에 고정하지 않는다. 정본 실행 권한과 exact room pin은
+상위 owner가 확인해야 한다. 이 adapter는 저장된 room key를 현재 화면에서 재대조하는
+마지막 실행 검사다. 동일 channel route, 보이는 popup 하나, 해당 room의 단일 사진 경로
+근거가 있어야 한다. 아는 DOM의 상한을 넘거나 모호할 경우 누르지 않는다.
+
+메뉴·버튼은 코드가 고른 고정 DOM element 하나에만 click을 요청한다. 같은 JS 호출에서
+정확한 section/label/anchor path·보임·편집 영역 제외·hit test를 재확인하며 좌표 click,
+메시지 입력, 앱 설정 변경, 새 방 열기와 asset 직접 URL 호출은 하지 않는다. 클릭 뒤
+다운로드 event와 실제 파일 수신 검증은 별도다. timeout은 요청 여부를 모를 수 있으므로
+같은 동작을 자동 반복하지 않는다. 정규식과 상한이 있는 DOM scan이며 새 wire/DB/queue는
+없다. 앨범, 텍스트 전용 방의 identity, 잦은 UI가 현재 adapter의 범위 밖이고 실제 채팅방
+UI에서 합성 동작과 자동 수집을 별도 검증하기 전 운영 연결하지 않는다.
+
 ## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
 
 1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나

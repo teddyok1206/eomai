@@ -1,5 +1,18 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 열린 방의 고정 읽기 동작
+
+실제 관측한 열린 방 메뉴·대화 내보내기의 내 PC 저장·단일 사진 다운로드만 실행할 수
+있는 collector adapter를 추가했다. 실제 채널/방 key는 하드코딩하지 않는다. 같은 도메인·
+채널 route와 사진 endpoint가 가리키는 방을 대조하고, 버튼이 중복되거나 가려졌으면
+누르지 않는다. 메시지 및 상담 변경 동작은 없다. 클릭 요청과 download 성공을 구분한다.
+
+격리 Chromium에서 CSV 및 사진 download event와 bytes, 클릭 수, 잘못된 방·텍스트·오버레이·
+편집 요소·중복 popup 거부를 확인했다. 별도 loopback TLS fixture는 새 동작으로 시작한
+사진의 실제 302와 관측 receipt까지 확인했다. 집중64 PASS, mypy·Ruff PASS다. 테스트
+fixture의 초기 invocation 및 브라우저 가로채기 경계 실패는 운영 실행이 아니다.
+운영 배포나 실제 카카오 방에서 새 click은 없었으며 AUTO/정식 원본·PDF는 미완료다.
+
 ## 2026-11-18 한 방 부분 수집 결과와 정식 원본 등록 경계
 
 이미 고정된 C1 command/capability/inventory, 실제 CSV bytes, 행 관측과 사진 pointer로

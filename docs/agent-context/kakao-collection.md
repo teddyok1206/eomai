@@ -150,6 +150,12 @@ MANUAL의16건 상한은 AUTO의 전체 수집 상한과 다르며, loaded DOM �
 수집/연결했다고 표시하지 않는다. 실제 redirect와 direct-text fixture는 별도 임시 Chromium/
 loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영 인증은 사용하지 않는다.
 
+`room_read_actions.py`는 열린 방과 보호된 room pin 위에서 세 가지 고정 동작만 제공한다.
+실제 관측한 popup/menu/내보내기 구역과 같은 방의 단일 사진 링크를 확인하며 좌표나
+외부 selector를 받지 않는다. 모호하거나 가려진 버튼은 누르지 않으며 timeout은 자동
+재클릭 권한이 아니다. 테스트는 격리 browser의 실제 download event와 로컬 TLS302를
+검사한다. 아직 AUTO 실행에 연결하지 않았고, 클릭 요청은 원본 수신/수락 증거가 아니다.
+
 `kakao_photo_alignment.py`는 같은 MANUAL fence/page와 방, CSV exact hash를 확인한 뒤
 단일 사진의 인접 메시지 window가 CSV에서 유일한 경우 row/album ordinal을 제안한다.
 서로 다른 완전 본문 두 개가 사진을 감싸야 하며 원래 CSV의 양쪽 순서를 모두 비교한다.

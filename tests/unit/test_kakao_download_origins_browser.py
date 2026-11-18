@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = Path("/opt/eom/conda/envs/eom-kakao-browser/bin/python")
 BROWSERS = Path("/opt/eom/kakao-browser/playwright-1.65.2")
-PAGE = "/space/synthetic/channel/example/chats/room"
+PAGE = "/space/synthetic/channel/p/chats/room"
 IMAGE = "/api/profiles/p/chats/r/message/photo/image"
 CDN = "https://k.kakaocdn.net/synthetic.png?signature=NEVER_PERSIST_QUERY"
 HTML = b"""<!doctype html><html><head><meta charset=utf-8></head><body>
@@ -25,7 +25,10 @@ HTML = b"""<!doctype html><html><head><meta charset=utf-8></head><body>
  <div style="display:none">NEVER_CAPTURE_HIDDEN</div>
  <button onclick="window.danger++">send</button>
  <button onclick="window.danger++">block</button>
- <a id=download class=btn_save href="/api/profiles/p/chats/r/message/photo/image">photo</a>
+ <div class=item_chat><div class=set_chat>
+  <a class=link_pic><img class=thumb_g alt=photo></a>
+  <a id=download class=btn_save href="/api/profiles/p/chats/r/message/photo/image">photo</a>
+ </div></div>
 </div><script>window.danger=0;</script></body></html>"""
 
 
@@ -112,6 +115,7 @@ import asyncio, json, sys, tempfile
 from pathlib import Path
 from playwright.async_api import async_playwright
 from eom_kakao_archive_collector.manual_download import ManualDownloads
+from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
@@ -129,9 +133,11 @@ async def main():
    context=await browser.new_context(accept_downloads=True,ignore_https_errors=True)
    page=await context.new_page()
    manager.subscribe(page)
-   await page.goto('https://business.kakao.com/space/synthetic/channel/example/chats/room')
+   await page.goto('https://business.kakao.com/space/synthetic/channel/p/chats/room')
    async with page.expect_download(timeout=10000) as pending:
-    await page.locator('#download').click()
+    assert await trigger_room_read_action(
+      page, RoomReadAction.DOWNLOAD_IMAGE, channel_key='p', room_key='r',
+      image_path='/api/profiles/p/chats/r/message/photo/image')
    await pending.value
    await asyncio.gather(*tuple(manager._tasks)); await asyncio.sleep(0)
    assert manager.failure is None

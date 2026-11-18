@@ -230,6 +230,7 @@
         "services/kakao_archive_collector/eom_kakao_archive_collector/manual_observation.py",
         "services/kakao_archive_collector/eom_kakao_archive_collector/manual_download.py",
         "services/kakao_archive_collector/eom_kakao_archive_collector/download_origins.py",
+        "services/kakao_archive_collector/eom_kakao_archive_collector/room_read_actions.py",
         "services/catalog_service/eom_catalog_service/kakao_question_composition.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_question_refresh.py",
         "services/catalog_service/eom_catalog_service/kakao_source_access.py",
@@ -249,8 +250,7 @@
         "services/catalog_service/eom_catalog_service/kakao_manual_models.py",
         "services/orchestrator/eom_orchestrator/kakao_browser_runtime.py",
         "services/orchestrator/eom_orchestrator/kakao_manual_runtime.py",
-        "services/orchestrator/eom_orchestrator/kakao_collection_browser_runtime.py",
-        "services/orchestrator/eom_orchestrator/kakao_profile_observation.py"
+        "services/orchestrator/eom_orchestrator/kakao_collection_browser_runtime.py"
       ],
       "test_paths": [
         "tests/unit/test_kakao_capture_rpc.py",
@@ -262,6 +262,7 @@
         "tests/unit/test_kakao_collection_source_composition.py",
         "tests/unit/test_kakao_download_origins.py",
         "tests/unit/test_kakao_download_origins_browser.py",
+        "tests/unit/test_kakao_room_read_actions.py",
         "tests/unit/test_kakao_photo_alignment.py",
         "tests/integration/test_kakao_collection_question_composition.py",
         "tests/integration/test_kakao_collection_attempt_storage.py",
