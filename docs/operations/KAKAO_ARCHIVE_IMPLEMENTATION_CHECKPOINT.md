@@ -1,5 +1,18 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 등록 방 증거의 C1 명령 발행·재조회
+
+기존 수락 run/task와 등록된 방의 capability→room proof→page observation을 exact pointer와
+해시로 따라가 C1 명령과 부분 inventory를 한 Artifact로 발행·pin했다. route는 원래 카카오
+관측에서만 가져오고 방 이름/URL/추가 인증을 입력받지 않는다. 큰 DOM이나 capability를
+복제하지 않고 선택 근거는 기존 verification artifact pointer만 남긴다.
+
+`start_registered_room`이 이 명령을 기존 같은 브라우저 dispatch에 넘긴다. disposable
+PostgreSQL에서 발행 후 pin 이전 중단, 동일 파일·attempt 복구, 보호된 writer의 재인가,
+원본 수락 회귀 등67 PASS. mypy/Ruff와 문맥13 PASS. 이 경로는 선택된 한 방에 한정되며
+운영 진입·카카오 실제 수집·학생 PDF는 아직 미검증이다. 운영 DB 또는 실제 카카오 계정·
+인증정보를 변경하지 않았다.
+
 ## 2026-11-18 같은 수집 작업의 브라우저 수명·원본 채택 연결
 
 수락된 단일 방 run의 profile reserve → 실제 OS 시작/관측 → 원래 attempt → 고정

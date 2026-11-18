@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid5
@@ -23,11 +23,17 @@ from eom_catalog_contracts.kakao_room_intake import (
     MANUAL_ROOM_EVIDENCE_REF,
     KakaoManualRoomEvidence,
     manual_channel_identity_sha256,
+    observed_manual_room_keys,
 )
 from eom_catalog_contracts.kakao_rooms import ROOM_OBSERVATION_REF, KakaoRoomObservation
 from eom_catalog_contracts.kakao_source import CAPTURE_REF
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_kakao_archive_contracts.capture import CaptureCapability, validate_capture_contract
+from eom_kakao_archive_contracts.manual_observation import (
+    MANUAL_PAGE_OBSERVATION_REF,
+    MAX_OBSERVATION_BYTES,
+    ManualPageObservation,
+)
 from eom_kakao_archive_contracts.render import LocalMember
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
@@ -97,6 +103,13 @@ class AcceptedKakaoCapability:
     capability_pointer: ArtifactMemberPointer
     accepted_at: datetime
     replayed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PinnedManualRoomInput:
+    capability: CaptureCapability
+    proof: KakaoManualRoomEvidence = field(repr=False)
+    space_key: str = field(repr=False)
 
 
 def _reserved_revision(owner: str, binding: str, key: str) -> str:
@@ -213,7 +226,7 @@ class KakaoCapabilityService:
             pin.channel_key_sha256,
         )
 
-    def _read(self, pointer: ArtifactMemberPointer, schema: str) -> bytes:
+    def _read(self, pointer: ArtifactMemberPointer, schema: str, *, maximum: int = 32768) -> bytes:
         if pointer.schema_ref != schema or pointer.media_type != "application/json":
             raise KakaoArchiveError(_INVALID)
         try:
@@ -224,10 +237,10 @@ class KakaoCapabilityService:
                 sha256=pointer.sha256,
                 schema_ref=schema,
                 media_type="application/json",
-                max_bytes=32768,
+                max_bytes=maximum,
             )
             with opened.stream as stream:
-                raw = stream.read(32769)
+                raw = stream.read(maximum + 1)
             if len(raw) != opened.content_length or sha256_bytes(raw) != pointer.sha256:
                 raise ValueError(_INVALID)
             return raw
@@ -244,6 +257,97 @@ class KakaoCapabilityService:
             raw = self._read(observation.source_evidence, MANUAL_ROOM_EVIDENCE_REF)
             proof = KakaoManualRoomEvidence.model_validate_json(raw)
             return observation, proof, raw
+        except ValueError:
+            raise KakaoArchiveError(_INVALID) from None
+
+    def read_pinned_manual_room(
+        self, pointer: ArtifactMemberPointer, *, binding: str, room: str, revision: str
+    ) -> PinnedManualRoomInput:
+        """Artifact proof reader for an already reauthorized, accepted collection intent."""
+        try:
+            manifest = KakaoCapabilityVerification.model_validate_json(
+                self._read(pointer, CAPABILITY_VERIFICATION_REF)
+            )
+            if (
+                manifest.request.source_binding_id,
+                manifest.request.room_id,
+                manifest.capability_revision_id,
+                manifest.adapter_release_sha256,
+            ) != (binding, room, revision, self.adapter_sha256):
+                raise ValueError(_INVALID)
+            observation = KakaoRoomObservation.model_validate_json(
+                self._read(manifest.room_observation, ROOM_OBSERVATION_REF)
+            )
+            proof_raw = self._read(manifest.manual_proof, MANUAL_ROOM_EVIDENCE_REF)
+            proof = KakaoManualRoomEvidence.model_validate_json(proof_raw)
+            if (
+                observation.source_evidence != manifest.manual_proof
+                or observation.source_binding_id != binding
+                or observation.identity_level != "MANUAL_CONFIRMED"
+                or observation.source_identity_sha256 != proof.source_identity_sha256
+                or observation.observed_at != proof.observed_at
+                or proof.confirmation.source_binding_id != binding
+                or proof.owner_operator_id != manifest.created_by
+            ):
+                raise ValueError(_INVALID)
+            # Reconstruct only the supported observation bounds; the accepted
+            # capability may intentionally claim fewer. Its artifact remains canonical.
+            supported = manual_room_capability(
+                proof, proof_raw, revision=revision, adapter_sha256=self.adapter_sha256
+            )
+            cap_pointer = ArtifactMemberPointer(
+                artifact_id=pointer.artifact_id,
+                artifact_revision_id=pointer.artifact_revision_id,
+                member_path="capability.json",
+                schema_ref=CAPTURE_REF,
+                media_type="application/json",
+                sha256=manifest.capability_sha256,
+            )
+            capability = CaptureCapability.model_validate_json(self._read(cap_pointer, CAPTURE_REF))
+            if sha256_bytes(
+                canonical_json_bytes(capability.model_dump(mode="json"))
+            ) != cap_pointer.sha256 or not capability_within_observed_evidence(
+                capability, supported
+            ):
+                raise ValueError(_INVALID)
+            page_pointer = ArtifactMemberPointer(
+                artifact_id=manifest.manual_proof.artifact_id,
+                artifact_revision_id=manifest.manual_proof.artifact_revision_id,
+                member_path="page-observation.json",
+                schema_ref=MANUAL_PAGE_OBSERVATION_REF,
+                media_type="application/json",
+                sha256=proof.observation_sha256,
+            )
+            page = ManualPageObservation.model_validate_json(
+                self._read(
+                    page_pointer,
+                    MANUAL_PAGE_OBSERVATION_REF,
+                    maximum=MAX_OBSERVATION_BYTES,
+                )
+            )
+            if (
+                page.status != "OBSERVED"
+                or page.document is None
+                or page.target.kind != "SAME_ORIGIN_PATH"
+                or page.capture_id != proof.confirmation.capture_id
+                or any(
+                    getattr(page, name) != getattr(proof, name)
+                    for name in (
+                        "profile_id",
+                        "browser_run_id",
+                        "fence_epoch",
+                        "page_instance_id",
+                        "observed_at",
+                    )
+                )
+                or observed_manual_room_keys(page.document.path, page.target.path or "")
+                != (
+                    proof.confirmation.expected_channel_key,
+                    proof.confirmation.expected_room_key,
+                )
+            ):
+                raise ValueError(_INVALID)
+            return PinnedManualRoomInput(capability, proof, page.document.path.split("/")[2])
         except ValueError:
             raise KakaoArchiveError(_INVALID) from None
 

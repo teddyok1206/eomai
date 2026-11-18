@@ -1015,3 +1015,22 @@ start 직전 기존 profile gate에서 버전·owner·phase를 재검사한다. 
 재사용한다. 조회는 기존 정확한 PK/unique index이고 DB lock 안에서 systemd/NAS I/O를
 하지 않는다. 새 queue/schema/cache는 필요 없으며 아직 전체 방 스케줄러나 첫 실제 공급자
 검증을 의미하지 않는다.
+
+### 등록된 한 방에서 C1 명령을 준비하는 경계
+
+정본은 기존 accepted collection run/task와 capability verification Artifact, 그 manifest가 pin한
+room observation·수동 방 proof·capability다. Catalog가 현재 계정/room/policy/runtime pin을
+다시 확인한 뒤 exact member를 읽고 서로 다른 채널/방/adapter를 배제한다. 발행 직전과 pin할
+때 재인가한다. 과거 proof를 재사용할 뿐 현재 채널/전체 방을 관측했다고 기록하지 않는다.
+
+원래 attempt에 기존 C1 `command.json`/`inventory.json` 두 작은 문서를 한 번 발행한다.
+inventory revision은 attempt에 고정되고 선택된 방만 담는다. proof와 capability 원본은
+복제하지 않고 exact SHA/size 참조와 기존 immutable Artifact를 재사용한다. 우세한 접근은
+attempt ID, 두 member,하나의 방 lookup이다. 추가 DB/index/queue가 필요 없고 시간/공간은
+고정 상한의 증거 크기에 선형이다. `space_key`는 수동 proof가 SHA로 pin한 기존
+`page-observation.json`의 카카오 경로에서만 가져온다. 채널·방은 같은 관측의 다운로드
+대상과 대조한다. 설치자나 화면에서 raw URL을 받지 않는다.
+
+발행 후 DB pin 직전 중단은 같은 command/identity의 기존 발행을 재사용한다. 서로 다른 명령이나
+현재 권한이 바뀌면 기존 run을 새 방/새 profile로 재작성하지 않는다. 관리 UI에서 raw browser
+URL/자격을 선택하거나 직접 DB 입력을 만들어 넣는 대안은 이 보호 경계를 우회한다.

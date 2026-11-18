@@ -30,6 +30,7 @@ from eom_catalog_contracts.kakao_rooms import (
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
+from eom_kakao_archive_contracts.manual_observation import MANUAL_PAGE_OBSERVATION_REF
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.kakao_download_inputs import KakaoDownloadInputError, ReceivedKakaoDownload
@@ -57,7 +58,6 @@ from .kakao_source_pointers import (
 
 DownloadReader = Callable[[ProfileFence, str], ReceivedKakaoDownload]
 _RECEIPT_REF = "eom://schemas/kakao-archive/manual-download-v1/1.0"
-_OBSERVATION_REF = "eom://schemas/kakao-archive/manual-page-observation-v1/1.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,7 +306,7 @@ class KakaoRoomIntakeService:
                     schemas={
                         "proof.json": MANUAL_ROOM_EVIDENCE_REF,
                         "download.json": _RECEIPT_REF,
-                        "page-observation.json": _OBSERVATION_REF,
+                        "page-observation.json": MANUAL_PAGE_OBSERVATION_REF,
                     },
                     request=metadata,
                     authorize=authorize,

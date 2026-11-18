@@ -14,6 +14,7 @@ from .kakao_remote import BrowserRunId, Epoch, ProfileId, UtcDatetime
 from .render import FrozenModel, canonical_bytes, sha256
 
 SCHEMA_SHA256 = "sha256:d5a0016a7208ea6c7a6c23a0a6cb0cb266c15ace7ceed608dcf4715e52ae559f"
+MANUAL_PAGE_OBSERVATION_REF = "eom://schemas/kakao-archive/manual-page-observation-v1/1.0"
 MAX_OBSERVATION_BYTES = 1024 * 1024
 MAX_TEXT_CODEPOINTS = 65536
 

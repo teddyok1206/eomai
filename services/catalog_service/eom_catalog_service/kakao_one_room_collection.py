@@ -19,6 +19,7 @@ from .kakao_archive_authorization import KakaoArchiveError
 from .kakao_browser_history import closed_kakao_browser_pin
 from .kakao_collection_attempt_service import KakaoCollectionAttemptService
 from .kakao_collection_browser_service import KakaoCollectionBrowserService
+from .kakao_collection_input_publication import PreparedKakaoRoom, prepare_kakao_registered_room
 from .kakao_collection_service import KakaoCollectionService
 from .kakao_collection_source_composition import (
     admit_staged_kakao_open_room,
@@ -40,6 +41,19 @@ class KakaoOneRoomCollection:
     output_root: Path = field(repr=False)
     worker_uid: int
     control_gid: int
+
+    def start_registered_room(self, run_id: str) -> PreparedKakaoRoom:
+        """Start the one accepted room without a caller-supplied provider URL or identity."""
+        attempt = self.begin(run_id)
+        prepared = prepare_kakao_registered_room(
+            self.collections,
+            self.attempts,
+            attempt,
+            publisher=self.result_publisher,
+            source_commit=self.source_commit,
+        )
+        self.dispatch(prepared.attempt.attempt_id, space_key=prepared.space_key, room=prepared.room)
+        return prepared
 
     def begin(self, run_id: str) -> KakaoCollectionAttempt:
         accepted = self.collections.read_background_intent(run_id).accepted

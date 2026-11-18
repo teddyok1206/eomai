@@ -6,6 +6,7 @@ from io import BytesIO
 from threading import Barrier
 from time import sleep
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -21,9 +22,11 @@ from eom_catalog_service.kakao_collection_attempt_models import (
     KakaoCollectionAttemptRecord as Attempt,
 )
 from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
+from eom_catalog_service.kakao_collection_input_publication import prepare_kakao_registered_room
 from eom_catalog_service.kakao_collection_models import KakaoCollectionRunRecord as Run
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_csv_parser import parse_kakao_csv
+from eom_catalog_service.kakao_one_room_collection import KakaoOneRoomCollection
 from eom_catalog_service.kakao_source_service import KakaoSourceService
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service.models import OperatorRecord
@@ -39,6 +42,7 @@ from eom_kakao_archive_contracts.capture import (
 )
 from eom_kakao_archive_contracts.execution import WorkerExecution
 from eom_kakao_archive_contracts.render import LocalMember
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import func, select, update
@@ -48,7 +52,7 @@ from sqlalchemy.orm import Session
 from tests.integration.test_kakao_archive_storage import make_actor
 from tests.integration.test_kakao_capability_storage import cap as cap
 from tests.integration.test_kakao_collection_browser_storage import browser as browser
-from tests.integration.test_kakao_collection_browser_storage import closed, running
+from tests.integration.test_kakao_collection_browser_storage import closed, observation, running
 from tests.integration.test_kakao_collection_storage import collection as collection
 from tests.integration.test_kakao_room_intake import h as h
 from tests.integration.test_kakao_room_intake import intake as intake
@@ -95,6 +99,96 @@ def reserve(attempt):
     return attempt.service.reserve_attempt(
         attempt.browser.accepted.task_id, browser_run_id=attempt.active.browser_run_id
     )
+
+
+def test_pinned_manual_room_input_publication_recovers_after_lost_pin(attempt, monkeypatch):
+    row = reserve(attempt)
+    controller = attempt.browser.collection.service
+    publisher = ControlFileSetPublisher(attempt.engine, attempt.artifacts.settings)
+    original = attempt.service.pin_command
+
+    def interrupted(*args, **kwargs):
+        raise RuntimeError("simulated loss after publishing")
+
+    monkeypatch.setattr(attempt.service, "pin_command", interrupted)
+    with pytest.raises(RuntimeError, match="simulated loss"):
+        prepare_kakao_registered_room(
+            controller, attempt.service, row, publisher=publisher, source_commit="a" * 40
+        )
+    assert attempt.service.get_attempt(row.attempt_id).state == "RESERVED"
+    pointer = publisher.find_published_primary_member(
+        idempotency_key="kakao:capture-inputs:" + row.attempt_id,
+        artifact_type="control_kakao_capture_inputs",
+    )
+    assert pointer is not None
+    monkeypatch.setattr(attempt.service, "pin_command", original)
+    # A fresh caller reuses the original installed publication rather than
+    # manufacturing a second command with its own release/timestamp.
+    prepared = prepare_kakao_registered_room(
+        controller, attempt.service, row, publisher=publisher, source_commit="b" * 40
+    )
+    assert prepared.attempt.state == "COMMAND_READY"
+    assert prepared.room == ("channel-one", "room-one")
+    selected = attempt.service.prepare_auto_room(
+        row.attempt_id, space_key=prepared.space_key, expected_room=prepared.room
+    )
+    assert (
+        sha256_bytes(canonical_json_bytes(selected.command.model_dump(mode="json")))
+        == pointer.sha256
+    )
+    with Session(attempt.engine) as session:
+        record = session.get(Attempt, row.attempt_id)
+        assert record.command_artifact_revision_id == record.inventory_artifact_revision_id
+        assert record.command_artifact_revision_id == pointer.artifact_revision_id
+    inventory_pointer = selected.command.inventory
+    assert inventory_pointer is not None
+    raw_inventory = attempt.artifacts.read_member(
+        artifact_id=pointer.artifact_id,
+        revision_id=pointer.artifact_revision_id,
+        member_path="inventory.json",
+        sha256=inventory_pointer.sha256,
+        schema_ref=CAPTURE_REF,
+        media_type="application/json",
+        max_bytes=32768,
+    )
+    inventory = CaptureInventory.model_validate_json(raw_inventory)
+    assert not inventory.inventory_complete and len(inventory.rooms) == 1
+    evidence = inventory.rooms[0].evidence
+    raw_evidence = attempt.artifacts.read_member(
+        artifact_id=pointer.artifact_id,
+        revision_id=pointer.artifact_revision_id,
+        member_path=evidence.relative_path,
+        sha256=evidence.sha256,
+        schema_ref="eom://schemas/artifact-member/1.0",
+        media_type="application/json",
+        max_bytes=4096,
+    )
+    assert (
+        ArtifactMemberPointer.model_validate_json(raw_evidence)
+        == controller.read_background_intent(row.run_id).capability_manifest
+    )
+
+    browser = attempt.browser
+    runtime = Mock()
+    runtime.observe_running.side_effect = lambda intent: observation(browser, intent)
+    dispatcher = KakaoOneRoomCollection(
+        engine=attempt.engine,
+        collections=controller,
+        browsers=browser.service,
+        attempts=attempt.service,
+        runtime=runtime,
+        observe_profile=browser.h.profile_proof,
+        result_publisher=publisher,
+        source_commit="a" * 40,
+        output_root=attempt.tmp,
+        worker_uid=1234,
+        control_gid=1234,
+    )
+    assert dispatcher.start_registered_room(row.run_id) == prepared
+    dispatch = runtime.browser.stage_auto_room.call_args
+    assert dispatch.args[1] == selected
+    # The protected OS writer repeats this owner check immediately before staging.
+    dispatch.kwargs["assert_current"]()
 
 
 def publish(attempt, files, primary):

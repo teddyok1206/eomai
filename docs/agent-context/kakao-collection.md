@@ -142,7 +142,12 @@ collection metadata에 연결한다. 이미 staged된 epoch는 관측만 한다.
 `kakao_one_room_collection.py`는 수락된 run→browser→원 attempt, 고정 command dispatch,
 receipt→동일 browser의 종료→원본 수락·단일 run 종료를 기존 owner로 호출한다. receipt가
 없을 때 실행 중이라는 증거는 OS 관측이다. 끝난 프로세스는 receipt 없이 성공하지 않으며
-닫힌 socket/epoch를 재시작하지 않는다. C1 input 준비와 실제 운영 진입·주기 실행은 별도다.
+닫힌 socket/epoch를 재시작하지 않는다. `start_registered_room`은
+`kakao_collection_input_publication.py`와 기존 capability owner를 사용해 등록된 한 방의
+증거에서 C1 command/선택 범위 inventory를 한번 발행·pin하고 실행에 넘긴다.
+카카오 route 키는 exact manual proof가 pin한 page observation에서만 추출한다. 원본 증거와
+capability를 복제하지 않으며, 발행 뒤 pin 중단은 동일 member revision을 재사용한다.
+실제 운영 진입·주기 실행은 별도다.
 
 ## 검증 경계
 

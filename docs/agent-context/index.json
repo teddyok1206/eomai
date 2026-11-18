@@ -243,7 +243,7 @@
         "services/catalog_service/eom_catalog_service/kakao_collection_browser_service.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_authorization.py",
         "services/catalog_service/eom_catalog_service/kakao_collection_service.py",
-        "services/catalog_service/eom_catalog_service/kakao_collection_models.py",
+        "services/catalog_service/eom_catalog_service/kakao_collection_input_publication.py",
         "packages/catalog_contracts/eom_catalog_contracts/kakao_collection.py",
         "services/catalog_service/eom_catalog_service/kakao_capability_service.py",
         "services/catalog_service/eom_catalog_service/kakao_room_intake.py",
