@@ -1,5 +1,36 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 관측 수집기 호환 운영 반영
+
+source `04d417bcd57335895056f0e0ebf537d9962f206d`를 커밋·푸시하고 collector/contracts
+두 wheel을 browser 전용 prefix에 반영했다. 실제 source/fixture 변경은 아래 절에 기록한다.
+API/Web/Catalog 코드·DB0097·PDF worker와 활성 layout은 바꾸지 않았다. Catalog만 설치 창에서
+정지·재기동했고 실제 새 MainPID의 active·socket 준비와 `NeedDaemonReload=no`를 확인했다.
+HTTPS Studio 페이지200은 인증된 카카오/PDF 검증과 구분한다.
+
+- 최초 설치 시도는 오래된53cb1a1e 통합 manifest와 현재 runtime hash 차이를 감지해 **설치 전**
+  멈췄다. 실제 browser는 이미 승인된eda2a1b0의 exact tree/wheel과 일치했다. PDF는 별도
+  승인된c93f78f7의d18fa035 worker·a3ee8722 template을 사용 중이었다. 이를 변조/장애로
+  간주하거나 옛 PDF로 후퇴하지 않고 실제 component별 release set을 대조했다.
+- 두 번째 시도도 개발 build의 `/tmp` 경로에 운영 protected-file reader를 잘못 적용해
+  **운영 패키지 변경 전** 중단됐다. 기존 helper/실패 로그는 보존했다. 후속 instance는 입력
+  wheel SHA 검사→root-private 복사→같은 SHA 재검증의 기존 설치 경계를 사용한다.
+- 세 번째 instance는 실제 predecessor hash와 별도 PDF wheel member를 먼저 검사했다.
+  browser 두 wheel의 offline 설치·모든 wheel member byte 비교·pip check·실제 interpreter
+  import와 공식 installer stage/verify가 PASS다. 다른 desired config가 현재 bytes와
+  일치함을 검사하고 PDF runtime/env/template/activation·최초 profile receipt를 보존했다.
+  INDEX/QUERY pin·원본·기존 실패 이력·인증 파일을 바꾸거나 AUTO를 활성화하지 않았다.
+- collector wheel SHA는
+  `008eaa6aa4ceb7de7f2ce575f49a7d0a20619969d8351d16ff0b424b994bc22f`,
+  contracts wheel SHA는
+  `318d927a5bc50fc8ba613beec90c94bbe23ecbd485507d22b5770efb82b87833`다.
+
+보호된 설치 receipt는 `/var/lib/eom-kakao-observation-release-04d417bc-v3/installed.json`,
+실행 로그는 `staging/kakao-observation-release-04d417bc-v3-20261118.log`다. 앞선 두 설치 실패와
+read-only component 대조 결과도 보존한다. 이번 반영은 **adapter 설치 성공**이지 실제 새
+사진→메시지 occurrence 연결이나 source 수락→Studio PDF 성공이 아니다. 기존 profile로
+다시 원격 화면을 열어 direct text와 실제 redirect 증거를 받는 것이 다음 검증이다.
+
 ## 2026-11-18 실제 한 방 CSV·사진 수신과 관측 adapter 수정
 
 사용자가 실제 채팅 목록을 연 상태에서 원격 browser/remote의 active MainPID와 화면을
