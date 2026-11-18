@@ -30,7 +30,7 @@ DOCUMENT_EXPRESSION = r"""() => {
   const ids = ['data-id','data-chat-id','data-message-id','data-log-id'];
   const parentIndices = new Map();
   const nodes = [];
-  let scanned = 0, textBudget = 65536, truncated = false;
+  let scanned = 0, directNodes = 0, textBudget = 65536, truncated = false;
   const clip = (value, maximum, usesBudget = false) => {
     if (!value || !value.trim()) return null;
     const bound = usesBudget ? Math.min(maximum, textBudget) : maximum;
@@ -56,6 +56,19 @@ DOCUMENT_EXPRESSION = r"""() => {
       current = current.parentElement;
     return current && current !== document.body ? current.nextElementSibling : null;
   };
+  const directText = (element) => {
+    let value = '';
+    for (const child of element.childNodes) {
+      if (++directNodes > 8192) { truncated = true; break; }
+      const part = child.nodeType === Node.TEXT_NODE ? child.nodeValue :
+        child.nodeType === Node.ELEMENT_NODE && child.localName === 'br' ? '\n' : '';
+      if (!part) continue;
+      const capacity = 16386 - value.length;
+      if (part.length > capacity) { value += part.slice(0, capacity); truncated = true; break; }
+      value += part;
+    }
+    return value;
+  };
   const elements = [];
   let cursor = document.body.firstElementChild;
   while (cursor && scanned < 8192) {
@@ -80,7 +93,7 @@ DOCUMENT_EXPRESSION = r"""() => {
     const role = clip(element.getAttribute('role'), 64);
     const label = clip(element.getAttribute('aria-label') || element.getAttribute('title') ||
       (element.tagName === 'IMG' ? element.getAttribute('alt') : null), 512, true);
-    const text = element.children.length === 0 ? clip(element.textContent, 8192, true) : null;
+    const text = clip(directText(element), 8192, true);
     const identities = Object.fromEntries(ids.map(name => {
       const value = element.getAttribute(name);
       return [name, value && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : null];
@@ -146,12 +159,16 @@ async def observe_download_page(
     *,
     download_url: str,
     event_path: str | None,
+    request_target: ManualDownloadTarget | None = None,
 ) -> ManualPageObservation:
     identity = started.model_dump(exclude={"phase", "schema_version", "started_at"})
+    target = download_target(download_url)
+    if target.kind == "UNAVAILABLE" and request_target is not None:
+        target = request_target
     base = dict(
         **identity,
         observed_at=datetime.now(UTC),
-        target=download_target(download_url),
+        target=target,
         status="UNAVAILABLE",
         document=None,
         error_code="UNSUPPORTED_ORIGIN",

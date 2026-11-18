@@ -1,5 +1,50 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 실제 한 방 CSV·사진 수신과 관측 adapter 수정
+
+사용자가 실제 채팅 목록을 연 상태에서 원격 browser/remote의 active MainPID와 화면을
+확인했다. 목록에는 `진행 중 상담` 필터가 있었으므로 전체 접근 방 inventory로 취급하지
+않았다. 실제 보이는 row만 열고 메뉴·스크롤·CSV 내보내기·사진 다운로드를 수행했다.
+메시지 입력/전송·답장·차단·상담 완료·방 나가기는 하지 않았다. 채널/학생 이름을 코드에
+고정하거나 실제 대화/사진 내용을 Git·Slack에 넣지 않는다.
+
+- 새 CSV1건(66,258bytes)과 사진1건(3,093,525bytes)이 실제 로컬 `RECEIVED`다.
+  immutable download/DOM receipt와 원 bytes는 보존한다. CSV의 DATE/USER/MESSAGE155행 중
+  문자 그대로 `사진`인 행은51개지만 실제 파일/album 개수나 확인된 attachment로 세지 않는다.
+- 이때의 DOM은 item_chat41개와 사진 링크14개다. bounded observation의 truncated=false는
+  현재 로드된 tree의 상한 미도달이지 CSV 전체 이력의 완전성 증거가 아니다. 화면 추가 로드와
+  CSV 순서/행 연결·context bounds 검증이 필요하며 번호를 맞춰 강제로 연결하지 않는다.
+- 실제 사진 링크는 같은 message 영역의 same-origin image endpoint다. 최종 SDK download
+  URL이 CDN으로 이동해 기존 target이 UNAVAILABLE인 것을 재현했다. CSV/사진의 파일명은
+  association 근거로 사용하지 않는다. 현재 receipt를 SOURCE_VERIFIED로 고쳐 쓰지 않는다.
+- body26개와 시각의 direct text가 child element/BR 때문에 기존 leaf-only 표현에서 빠지는
+  결함도 확인했다. 기존 관측의 source bytes를 바꾸지 않고 새 관측 adapter를 수정했다.
+
+수정은 기존 collector owner의 direct text/BR 읽기와 page-local GET redirect correlation이다.
+노드/문자 상한·편집/인증 subtree 제외·MANUAL16건 예산은 유지한다. 실제 Request predecessor,
+페이지/원래 URI,64건·최근 leg60초·8redirect 한도를 확인하고 모호한 후보는 소비 후 거부한다.
+최종 signed query/header/cookie는 결과에 저장하지 않으며 새 네트워크 요청·권한/queue/schema는
+추가하지 않았다. direct CDN URL만 있는 경우는 그대로 UNAVAILABLE다.
+
+검증: 관련 source277 PASS, 실제 로컬 TLS302→CDN 역할의 임시 Chromium fixture PASS,
+guarded disposable PostgreSQL의 수신/방 경계24 PASS, strict mypy3개·문맥13건·Ruff/format PASS다.
+277건은 browser fixture를 포함한다. 마지막 추가 private-subtree fixture도 별도로 통과했다.
+최종 browser fixture는 loopback CONNECT proxy와 임시 인증서를 사용하며 DNS 외부 해석을
+막는다. 별도 브라우저의 임시 self-signed 인증서 허용은 fixture에만 있고 운영 TLS는 바꾸지 않았다.
+실제 Chrome download 파일이 group-writable인 최초 fixture는 production과 같은 UMask0077을
+설정해 고쳤다. 파일 permission 검증을 느슨하게 하지 않았다. 최초 source invocation의
+PYTHONPATH/없는 test 경로 오류와 redirect/TLS fixture 실패 로그도 보존한다.
+
+증거: `staging/kakao-source-observation-fix-{focused-v2,db,types-final,context,browser-final}-20261118.log`,
+실제 수신의 내용 없는 구조 대조는 `staging/kakao-live-{dom-structure,row-evidence}-20261118.*`다.
+화면/원 CSV/사진은 private staging 및 기존 로컬 수신 저장소에만 있으며 공개 evidence가 아니다.
+
+**이 절의 수정은 아직 source-only다.** 현재 API/Web4f778cb4·DB0097과 실행 pin은 그대로다.
+원격 연결은 추가 확인 시 inactive/MainPID0이었다. 수정본을 별도 wheel과
+설치 manifest로 검증·반영한 뒤 기존 로그인 profile을 재사용해 같은 방에서 실제 재검증한다.
+로그인/권한을 위조해 source를 등록하지 않는다. AUTO driver·실제 source→Studio PDF·전체 방
+주기 수집은 아직 미완료이며 기존 preview PDF를 그 성공으로 재분류하지 않는다.
+
 ## 2026-11-17 21:26 UTC 호환 운영 반영과 실제 수집 대기
 
 운영 core/API/Web/Catalog/Runner/QUERY source는

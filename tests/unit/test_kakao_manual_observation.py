@@ -327,6 +327,49 @@ def test_observer_timeout_does_not_discard_successful_download_bytes():
         asyncio.run(run(root))
 
 
+def test_redirected_photo_uses_only_the_observed_same_page_request_path():
+    from eom_kakao_archive_collector.manual_download import ManualDownloads
+
+    async def run(root):
+        callbacks = {}
+        page = SimpleNamespace(
+            url=observer.ORIGIN + document()["path"],
+            evaluate=AsyncMock(return_value=document()),
+            on=lambda name, callback: callbacks.update({name: callback}),
+        )
+        manager = ManualDownloads(fence(), root=root)
+        manager.subscribe(page)
+        source = SimpleNamespace(
+            url=observer.ORIGIN + document()["nodes"][0]["link_path"],
+            method="GET",
+            redirected_from=None,
+        )
+        final = SimpleNamespace(
+            url="https://k.kakaocdn.net/test/image?signature=NEVER_RECORD",
+            method="GET",
+            redirected_from=source,
+        )
+        callbacks["request"](source)
+        callbacks["request"](final)
+        download = transfer(manager, raw=b"synthetic image bytes", filename="same.jpg")
+        download.url = final.url
+        callbacks["download"](download)
+        await drain(manager)
+        (receipt,) = results(manager)
+        assert receipt.phase == "RECEIVED" and manager.failure is None
+        raw = (manager.run / receipt.capture_id / "page-observation.json").read_bytes()
+        observed = ManualPageObservation.model_validate_json(raw)
+        assert observed.target.path == document()["nodes"][0]["link_path"]
+        assert observed.target.kind == "SAME_ORIGIN_PATH"
+        assert b"NEVER_RECORD" not in raw and b"k.kakaocdn.net" not in raw
+        await manager.close()
+        callbacks["request"](source)
+        assert len(manager._origins) == 0
+
+    with download_root() as root:
+        asyncio.run(run(root))
+
+
 @pytest.mark.parametrize("navigation", ["before_observer", "during_observer", "document_only"])
 def test_room_navigation_does_not_relabel_a_received_file(navigation):
     from eom_kakao_archive_collector.manual_download import ManualDownloads

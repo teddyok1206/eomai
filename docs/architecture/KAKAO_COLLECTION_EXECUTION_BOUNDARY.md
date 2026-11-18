@@ -3,6 +3,34 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 실제 방 관측에서 확인한 수집 adapter 보완 — 2026-11-18
+
+1. 책임은 기존 MANUAL download/읽기 전용 DOM adapter다. 새 수집 권한·클릭·로그인이나
+   source 수락을 추가하지 않는다. 실제로 받은 CSV보다 화면의 loaded message 수가 작을 수
+   있으므로 현재 DOM만으로 전체 이력을 수집했다고 선언하지 않는다.
+2. 정본은 기존 원본 download/observation receipt다. 새 관측은 새 capture identity로 저장하고
+   기존 UNAVAILABLE target이나 과거 source/질문/PDF는 재해석·수정하지 않는다.
+3. 기존 observation1.0의 text는 관측한 text 조각이다. leaf element만 보던 구현을 direct text/
+   BR node까지 읽도록 수정하되 기존 schema bytes·상한·편집/인증 subtree 제외를 유지한다.
+4. 사진은 실제 같은 페이지의 GET→redirect→download event에서 확인한 최초 same-origin
+   image endpoint path만 보완한다. 최종 signed CDN URL·query·header/cookie는 저장하지 않는다.
+   URL만 있는 CDN download나 다른 페이지/만료/모호한 chain은 여전히 UNAVAILABLE다.
+5. 주요 접근은 page/request identity lookup, redirect predecessor lookup와 최종 URL hash의
+   일회성 correlation이다. SDK 이벤트의 실제 request 객체도 비교해 object-id 재사용을 막는다.
+6. 기존 run-local owner 안에서 최대64건/60초의 OrderedDict와 URL-hash→request-key set을
+   사용한다. source/profile/room registry나 persistent cache·queue는 만들지 않는다.
+7. lookup은 평균 O(1), expiry/eviction은 amortized O(1), 모호한 match 정리는 O(k≤64)다.
+   DOM direct-text 순회도 별도 전역8192 child-node 상한을 두고 큰 subtree를 반복 읽지 않는다.
+8. 같은 asyncio event loop의 synchronous request/download callback에서 cache를 갱신·소비한다.
+   DB transaction은 없고 worker는 기존 로컬 결과만 쓴다. close 후 새 요청은 저장하지 않는다.
+9. collector SDK adapter→기존 pure contract 방향이다. 네트워크를 새로 호출하거나 공개 API가
+   request path/authority를 주입하게 하지 않는다. 실제 원본 수락·현재 권한은 Catalog가 담당한다.
+10. redirect method/origin/chain/page가 맞지 않거나 둘 이상이면 상관을 거부한다. metadata
+    미확인을 사진 성공/원본 화질 증명으로 승격하지 않는다. 기존 download 실패/중복 event
+    구분·원본 hash 검증과 16개 MANUAL 실행 상한은 유지한다.
+11. filename·시간 근접성만으로 연결하는 대안은 다른 메시지 사진을 섞을 수 있다. raw signed
+    URL 저장이나 외부 cookie 복사는 불필요하다. 이 보완 자체가 AUTO/전체 방 수집의 완료는 아니다.
+
 ## 기존 수락 owner의 운영 조립 — 2026-11-17
 
 1. 책임은 Catalog composition에서 이미 구현한 collection attempt/source owner를 질문

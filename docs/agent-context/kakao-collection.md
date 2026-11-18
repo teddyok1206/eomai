@@ -133,6 +133,17 @@ collection metadata에 연결한다. 실제 시작/selector는 아직 제공하�
 
 ## 검증 경계
 
+`manual_observation.py`는 leaf element뿐 아니라 direct text/BR 조각도 관측한다. 원문 CSV가
+canonical text이며 DOM 조각을 전체 문장/전체 이력으로 간주하지 않는다. 편집·인증 subtree,
+페이지 이동과 전체 text/element/direct-node 상한은 유지한다. `download_origins.py`는 같은
+페이지의 실제 GET image endpoint→허용된 CDN redirect→download를 일회성으로 연결한다.
+마지막 request leg의60초·64건·8redirect 상한과 SDK request identity를 확인하며 URL query/
+header/cookie는 저장하지 않는다. URL hash index를 사용하고 다른 방·모호함·범위 없는 event는
+소비 후 거부한다. direct CDN URL 자체는 여전히 UNAVAILABLE이고 source 권한이 아니다.
+MANUAL의16건 상한은 AUTO의 전체 수집 상한과 다르며, loaded DOM 수만으로 CSV 전체를
+수집/연결했다고 표시하지 않는다. 실제 redirect와 direct-text fixture는 별도 임시 Chromium/
+loopback TLS proxy를 사용하며 개인 profile·실제 provider 접속/운영 인증은 사용하지 않는다.
+
 `scripts/api/testdb_run.sh kakao-tests`의 guarded 임시 DB에서 MANUAL/AUTO 경합·중복
 예약·늦은 권한 철회·관측 불일치·종료 실패·terminal 불변·원래 이력/다른 binding 보존을
 검사한다. 기존 worker ProfileFence와 hash parity, closed owner metadata와 schema mirror도

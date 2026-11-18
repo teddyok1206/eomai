@@ -23,8 +23,10 @@ from eom_kakao_archive_contracts.manual_download import (
     ManualDownloadResult,
     ManualDownloadStart,
 )
+from eom_kakao_archive_contracts.manual_observation import ManualDownloadTarget
 from eom_kakao_archive_contracts.render import canonical_bytes
 
+from .download_origins import DownloadRequestOrigins
 from .manual_capture_files import create_capture_directory as _directory
 from .manual_capture_files import write_capture_receipt as _write_once
 from .manual_observation import ReadOnlyPage, download_page_path, observe_download_page
@@ -137,6 +139,7 @@ class ManualDownloads:
         self._pages: dict[int, Page] = {}
         self._events: dict[int, Download] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        self._origins = DownloadRequestOrigins()
         self._closing = False
         self.failure: BrowserRuntimeError | None = None
         self._count, self._bytes = 0, 0
@@ -165,6 +168,14 @@ class ManualDownloads:
             return
         self._pages[id(page)] = page
         page_id = "kakaopage_" + uuid4().hex
+        page.on(
+            "request",
+            lambda request: (
+                None
+                if self._closing
+                else self._origins.observe(page_id, request, page_path=download_page_path(page))
+            ),
+        )
         page.on("download", lambda download: self.receive(download, page_id, page=page))
 
     def receive(self, download: Download, page_id: str, *, page: Page | None = None) -> None:
@@ -193,8 +204,27 @@ class ManualDownloads:
             self.failure = BrowserRuntimeError("KAKAO_BROWSER_DOWNLOAD_RECEIPT_FAILED")
             return
         event_path = download_page_path(page) if page is not None else None
+        try:
+            download_url = download.url if page is not None else ""
+        except Exception:
+            download_url = ""
+        if not isinstance(download_url, str):
+            download_url = ""
+        request_target = (
+            self._origins.consume(page_id, download_url, page_path=event_path)
+            if page is not None
+            else None
+        )
         task = asyncio.create_task(
-            self._receive(download, started, directory, page=page, event_path=event_path)
+            self._receive(
+                download,
+                started,
+                directory,
+                page=page,
+                event_path=event_path,
+                request_target=request_target,
+                download_url=download_url,
+            )
         )
         self._tasks.add(task)
         task.add_done_callback(self._done)
@@ -212,12 +242,18 @@ class ManualDownloads:
         *,
         page: Page | None,
         event_path: str | None,
+        download_url: str,
+        request_target: ManualDownloadTarget | None = None,
     ) -> None:
         member, error, name = None, None, None
         try:
             if page is not None:
                 observation = await observe_download_page(
-                    page, started, download_url=download.url, event_path=event_path
+                    page,
+                    started,
+                    download_url=download_url,
+                    event_path=event_path,
+                    request_target=request_target,
                 )
                 _write_once(
                     directory / "page-observation.json",
@@ -275,6 +311,7 @@ class ManualDownloads:
 
     async def close(self) -> None:
         self._closing = True
+        self._origins.clear()
         # An event can arrive immediately before shutdown. Let each reserved task
         # enter its cancellation handler so STARTED is not stranded by cancel-before-start.
         await asyncio.sleep(0)
