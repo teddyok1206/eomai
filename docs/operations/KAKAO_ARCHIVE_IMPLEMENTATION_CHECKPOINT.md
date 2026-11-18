@@ -1,5 +1,23 @@
 # KakaoTalk 구현 체크포인트
 
+## 2026-11-18 Studio 사진 위치 확인 운영 반영
+
+source `5a480ab99302f3de9939beb7aa36602ad422d215`의 API/platform/API contracts와 Web을
+호환 묶음으로 설치했다. 운영 0097 검증, 보호된 source/wheel admission, installed wheel
+member/RECORD, Web offline 폐쇄 설치와 service UID 파일110건, API namespace 검사가 통과했다.
+API/Web/Catalog/QUERY가 새 프로세스로 준비됐고 HTTPS Studio 로그인200·API READY200,
+새 조회 경로의 비로그인401 및 실제 배포 JS SHA의 source 일치를 확인했다.
+
+PDF worker/layout·collector/profile/auth·기존 원본/실패 이력을 그대로 유지했다. AUTO는
+비활성이다. QUERY의 provider/source pin만 호환 갱신하고 수치 runtime은 보존했다.
+INDEX·자료 학습·창작 학습은 배포 전부터 FAILED/PID0인 별도 상태였고 복구나 재시작하지 않았다.
+보호된 release 기록은 `/var/lib/eom-kakao-capture-release-study-5a480ab9/api/activated.json`,
+설치 기록은 `staging/kakao-photo-check-{stage,activate}-5a480ab9.log`다.
+
+운영 endpoint와 asset 검증은 실제 카카오 인증/사진 정합/PDF 실증이 아니다. 다음은 같은
+프로필의 실제 방에서 새 CSV·사진 수신과 행 연결을 확인하는 것이다. 과거 관측을 새
+receipt로 바꿔 쓰지 않는다.
+
 ## 2026-11-18 Studio 받은 자료에서 사진 위치 확인
 
 같은 수집 회차의 CSV·사진을 고르면 Studio → API → Catalog socket → 보호된 local reader로
