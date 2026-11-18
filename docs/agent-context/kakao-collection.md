@@ -192,6 +192,10 @@ MANUAL receipt/경로/범위는 유지한다. 자동 dispatcher는 아직 여기
 command SHA와 실제 등록 방의 scope를 확인한 후 C1 문서를 기존 발행기에 넘긴다. 결과가
 이미 수락된 재조회는 영수증을 다시 요구하지 않는다. 이 경로는 실제 AUTO 브라우저를
 시작하거나 방을 여는 launcher가 아니다.
+영수증 bytes가 수신 계약 자체를 위반하는 경우 `KakaoOneRoomCollection.finish`는 먼저
+exact browser 종료를 확인하고, continuation은 기존 browser owner의 단일 방 실패
+전이를 호출한다. 경로 보호·설치 schema 오류는 malformed bytes와 구별한다. 상태 재조회가
+새 attempt나 브라우저를 시작하지 않으며 원본·영수증에는 쓰지 않는다.
 
 `prepare_auto_room`과 `dispatch_staged_kakao_open_room`은 기존 active epoch/등록 room의
 typed command를 `FixedKakaoBrowserRuntime.stage_auto_room`의 단일 고정 member에 넣는다.

@@ -286,8 +286,8 @@ class KakaoCollectionBrowserService:
             session.flush()
             return _intent(row)
 
-    def record_missing_one_room_output(self, browser: str) -> None:
-        """Record confirmed closure without output; never overwrite a worker result."""
+    def record_unusable_one_room_output(self, browser: str) -> None:
+        """Record confirmed closure without acceptable output; preserve accepted results."""
         with self._sessions.begin() as session:
             row, _, run = lock_kakao_collection_browser(
                 session, browser, profile_id=self.profile_id

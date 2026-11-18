@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttempt
 from eom_catalog_contracts.kakao_manual import KakaoManualFreshProfile
@@ -26,6 +27,18 @@ from .kakao_collection_source_composition import (
     dispatch_staged_kakao_open_room,
 )
 from .kakao_source_service import AcceptedKakaoSource
+
+
+def _receipt_state(reader: KakaoCaptureOutputReader) -> Literal["PRESENT", "MISSING", "INVALID"]:
+    try:
+        reader.open_room_download()
+    except KakaoCaptureInputError as error:
+        if str(error) == "KAKAO_CAPTURE_INPUT_MISSING":
+            return "MISSING"
+        if str(error) == "KAKAO_CAPTURE_RECEIPT_INVALID":
+            return "INVALID"
+        raise
+    return "PRESENT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,15 +116,14 @@ class KakaoOneRoomCollection:
         if attempt.state == "RESERVED":
             raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
         intent = self.browsers.get_intent(attempt.browser_run_id)
+        reader = None
+        receipt = "PRESENT"
         if attempt.state != "RESULT_ACCEPTED":
             reader = KakaoCaptureOutputReader(
                 self.output_root, attempt_id, self.worker_uid, self.control_gid
             )
-            try:
-                reader.open_room_download()
-            except KakaoCaptureInputError as error:
-                if str(error) != "KAKAO_CAPTURE_INPUT_MISSING":
-                    raise
+            receipt = _receipt_state(reader)
+            if receipt == "MISSING":
                 if intent.phase == "RUNNING":
                     try:
                         self.runtime.running_handle(intent)
@@ -121,17 +133,16 @@ class KakaoOneRoomCollection:
                     else:
                         return None
                 elif intent.phase not in {"STOPPING", "CLOSED"}:
-                    raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED") from None
-                # Receipt could have appeared in between the first lookup and the final exit.
-                self.close(attempt.browser_run_id)
-                try:
-                    reader.open_room_download()
-                except KakaoCaptureInputError as final:
-                    if str(final) != "KAKAO_CAPTURE_INPUT_MISSING":
-                        raise
-                    raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING") from None
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
 
         self.close(attempt.browser_run_id)
+        # Receipt could have appeared between the first lookup and the final exit.
+        if receipt == "MISSING" and reader is not None:
+            receipt = _receipt_state(reader)
+        if receipt == "MISSING":
+            raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING")
+        if receipt == "INVALID":
+            raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID")
         accepted = admit_staged_kakao_open_room(
             self.attempts,
             attempt_id,

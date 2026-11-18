@@ -42,7 +42,7 @@ class KakaoCollectionContinuation:
                     pending.browser_run_id is not None
                     and owner.browsers.get_intent(pending.browser_run_id).phase == "CLOSED"
                 ):
-                    owner.browsers.record_missing_one_room_output(pending.browser_run_id)
+                    owner.browsers.record_unusable_one_room_output(pending.browser_run_id)
                     return "FAILED"
                 prepared = owner.start_registered_room(pending.run_id)
                 self._scope = pending.run_id, prepared.space_key, prepared.room
@@ -86,12 +86,19 @@ class KakaoCollectionContinuation:
                 ):
                     return "WAITING"
                 owner.close(pending.browser_run_id)
-                owner.browsers.record_missing_one_room_output(pending.browser_run_id)
+                owner.browsers.record_unusable_one_room_output(pending.browser_run_id)
                 return "FAILED"
             return "ERROR"
         except KakaoArchiveError as error:
-            if error.code == "KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING" and pending.browser_run_id:
-                owner.browsers.record_missing_one_room_output(pending.browser_run_id)
+            if (
+                error.code
+                in {
+                    "KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING",
+                    "KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID",
+                }
+                and pending.browser_run_id
+            ):
+                owner.browsers.record_unusable_one_room_output(pending.browser_run_id)
                 return "FAILED"
             if error.code in {
                 "KAKAO_ARCHIVE_REMOTE_PROFILE_BUSY",

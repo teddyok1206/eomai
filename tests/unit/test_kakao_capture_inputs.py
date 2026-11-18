@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from eom_kakao_archive_contracts import open_room_download
 from eom_kakao_archive_contracts.capture import CsvMember
 from eom_kakao_archive_contracts.render import LocalMember, sha256
 from eom_orchestrator import kakao_runtime_os as runtime_os
@@ -188,6 +189,27 @@ def test_missing_payload_is_not_a_request_to_redownload(staged):
     staged.path.unlink()
     with pytest.raises(KakaoCaptureInputError, match="INPUT_MISSING"):
         staged.reader(staged.member)
+
+
+def test_invalid_open_room_receipt_is_distinct_from_missing_and_unsafe(staged, monkeypatch):
+    receipt = staged.output / open_room_download.OPEN_ROOM_RECEIPT_NAME
+    with pytest.raises(KakaoCaptureInputError, match="INPUT_MISSING"):
+        staged.reader.open_room_download()
+    receipt.write_bytes(b'{"bad":"synthetic and private"}')
+    receipt.chmod(0o644)
+    with pytest.raises(KakaoCaptureInputError, match="STAGING_UNSAFE"):
+        staged.reader.open_room_download()
+    receipt.chmod(0o640)
+    with pytest.raises(KakaoCaptureInputError, match=r"^KAKAO_CAPTURE_RECEIPT_INVALID$"):
+        staged.reader.open_room_download()
+
+    def broken_installed_schema():
+        raise ValueError("KAKAO_OPEN_ROOM_SCHEMA_MISMATCH")
+
+    monkeypatch.setattr(open_room_download, "_validator", broken_installed_schema)
+    with pytest.raises(ValueError, match=r"^KAKAO_OPEN_ROOM_SCHEMA_MISMATCH$") as error:
+        staged.reader.open_room_download()
+    assert not isinstance(error.value, KakaoCaptureInputError)
 
 
 def test_hash_tamper_hardlink_and_fifo_are_rejected(staged):

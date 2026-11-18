@@ -7,6 +7,7 @@ from typing import Literal, Self
 
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from pydantic import Field, model_validator
+from pydantic import ValidationError as PydanticValidationError
 from referencing import Registry, Resource
 
 from .capture import CsvMember
@@ -30,6 +31,10 @@ _SCHEMAS = (
         "d5a0016a7208ea6c7a6c23a0a6cb0cb266c15ace7ceed608dcf4715e52ae559f",
     ),
 )
+
+
+class InvalidOpenRoomDownloadReceipt(ValueError):
+    """The supplied bytes fail the receipt contract, not installed schema integrity."""
 
 
 @lru_cache(maxsize=1)
@@ -95,8 +100,12 @@ class OpenRoomDownloadReceipt(FrozenModel):
     @classmethod
     def decode(cls, raw: bytes) -> Self:
         if not 0 < len(raw) <= MAX_OPEN_ROOM_RECEIPT_BYTES:
-            raise ValueError("KAKAO_OPEN_ROOM_RECEIPT_TOO_LARGE")
-        receipt = cls.model_validate_json(raw)
+            raise InvalidOpenRoomDownloadReceipt("KAKAO_OPEN_ROOM_RECEIPT_TOO_LARGE")
+        _validator()  # Installed schema errors are not attributable to this attempt's bytes.
+        try:
+            receipt = cls.model_validate_json(raw)
+        except PydanticValidationError:
+            raise InvalidOpenRoomDownloadReceipt("KAKAO_OPEN_ROOM_RECEIPT_INVALID") from None
         if receipt.encoded() != raw:
-            raise ValueError("KAKAO_OPEN_ROOM_RECEIPT_INVALID")
+            raise InvalidOpenRoomDownloadReceipt("KAKAO_OPEN_ROOM_RECEIPT_INVALID")
         return receipt

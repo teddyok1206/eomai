@@ -23,6 +23,7 @@ from eom_catalog_service.kakao_collection_attempt_models import (
     KakaoCollectionAttemptRecord as Attempt,
 )
 from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
+from eom_catalog_service.kakao_collection_continuation import KakaoCollectionContinuation
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_collection_source_composition import (
     admit_staged_kakao_capture_source,
@@ -37,6 +38,7 @@ from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadRecei
 from eom_kakao_archive_contracts.render import sha256
 from eom_orchestrator import kakao_capture_inputs as capture_inputs
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.kakao_collection_browser_runtime import KakaoCollectionBrowserRuntimeError
 from eom_orchestrator.settings import Settings
 from sqlalchemy.orm import Session
 
@@ -366,6 +368,63 @@ def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(s
     receipt.unlink()
     assert controller.finish(data.reserved.attempt_id, **options).replayed
     runtime.close.assert_called_once()
+
+
+@pytest.mark.parametrize("before_close", [True, False])
+def test_unreadable_open_room_receipt_fails_only_after_exact_browser_closure(staged, before_close):
+    data, browser = staged.data, staged.attempt.browser
+    attempts = staged.attempt.service
+    room = ("channel-one", "room-one")
+    attempts.prepare_auto_room(data.reserved.attempt_id, space_key="scope", expected_room=room)
+    receipt = staged.workspace / "outputs" / "open-room.json"
+    invalid = b'{"synthetic":"malformed receipt"}'
+
+    def publish_invalid():
+        receipt.write_bytes(invalid)
+        receipt.chmod(0o640)
+
+    if before_close:
+        publish_invalid()
+
+    def confirm_close(intent):
+        assert (
+            browser.collection.service.get_status(
+                staged.attempt.actor, data.command.source_binding_id, data.command.run_id
+            ).state
+            == "COLLECTING"
+        )
+        if not before_close:
+            publish_invalid()
+        return closed(browser, intent)
+
+    runtime = Mock()
+    runtime.running_handle.side_effect = KakaoCollectionBrowserRuntimeError("ATTEMPT_CLOSED")
+    runtime.close.side_effect = confirm_close
+    browser.h.now = max(browser.h.now, datetime.now(UTC))
+    owner = KakaoOneRoomCollection(
+        engine=staged.attempt.engine,
+        collections=browser.collection.service,
+        browsers=browser.service,
+        attempts=attempts,
+        runtime=runtime,
+        observe_profile=browser.h.profile_proof,
+        result_publisher=staged.publisher,
+        source_commit="a" * 40,
+        output_root=staged.root,
+        worker_uid=os.getuid(),
+        control_gid=os.getgid(),
+    )
+    before = counts(staged.attempt)
+    assert KakaoCollectionContinuation(owner).advance_once() == "FAILED"
+    assert KakaoCollectionContinuation(owner).advance_once() == "IDLE"
+    status = owner.collections.get_status(
+        staged.attempt.actor, data.command.source_binding_id, data.command.run_id
+    )
+    assert status.state == "FAILED"
+    assert attempts.get_attempt(data.reserved.attempt_id).state == "COMMAND_READY"
+    assert counts(staged.attempt) == before and receipt.read_bytes() == invalid
+    runtime.close.assert_called_once()
+    runtime.ensure_started.assert_not_called()
 
 
 def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):

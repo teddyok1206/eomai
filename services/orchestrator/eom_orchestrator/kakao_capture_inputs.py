@@ -12,6 +12,7 @@ from eom_kakao_archive_contracts.capture import CsvMember
 from eom_kakao_archive_contracts.open_room_download import (
     MAX_OPEN_ROOM_RECEIPT_BYTES,
     OPEN_ROOM_RECEIPT_NAME,
+    InvalidOpenRoomDownloadReceipt,
     OpenRoomDownloadReceipt,
     RoomPhotoReceipt,
 )
@@ -80,9 +81,11 @@ class KakaoCaptureOutputReader:
         return self._read("outputs/result.json", maximum=32768)
 
     def open_room_download(self) -> OpenRoomDownloadReceipt:
-        return OpenRoomDownloadReceipt.decode(
-            self._read(f"outputs/{OPEN_ROOM_RECEIPT_NAME}", maximum=MAX_OPEN_ROOM_RECEIPT_BYTES)
-        )
+        raw = self._read(f"outputs/{OPEN_ROOM_RECEIPT_NAME}", maximum=MAX_OPEN_ROOM_RECEIPT_BYTES)
+        try:
+            return OpenRoomDownloadReceipt.decode(raw)
+        except InvalidOpenRoomDownloadReceipt:
+            raise KakaoCaptureInputError("KAKAO_CAPTURE_RECEIPT_INVALID") from None
 
     def read_open_room_photo(self, photo: RoomPhotoReceipt) -> bytes:
         if (

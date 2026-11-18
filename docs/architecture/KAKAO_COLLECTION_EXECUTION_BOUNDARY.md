@@ -3,6 +3,17 @@
 기준: `KAKAO_CHANNEL_ARCHIVE_STUDIO_IMPLEMENTATION_SPEC.md` §§4–6.
 이 문서는 source 계약이며 실제 카카오 capability·로그인·운영 활성화 증거가 아니다.
 
+## 단일 방 수신 영수증의 확정 실패
+
+고정 attempt 경로에서 OS 보호 검사를 통과한 `open-room.json` bytes가 canonical 계약으로
+해석되지 않으면 수집기는 그 파일을 다시 쓰지 않는다. Orchestrator reader는 이 경우만
+별도 내부 오류로 분류하며, 파일 부재·경로 보호 실패·프로세스 관측 실패와 혼동하지 않는다.
+Catalog는 기존 exact browser fence로 실제 종료를 먼저 확인한 뒤 기존 단일 방 실패 전이를
+사용한다. 완료된 C1 수락, 보존 중인 로컬 파일과 이전 원본/시도는 바꾸지 않는다. 재조회는
+같은 실패를 읽고, 자동 새 브라우저 또는 수신을 시작하지 않는다. 새 schema/DB/queue 없이
+기존 attempt lookup과 상한이 있는 원래 1회 영수증 decode를 재사용한다. 모든 I/O 오류를
+실패로 닫는 대안은 실제 실행이나 권한 상태가 불명확한 때 오판할 수 있어 채택하지 않는다.
+
 ## 실제 사진의 CSV occurrence 제안 — 2026-11-18
 
 1. Catalog의 순수 정합 함수는 이미 검증해 읽은 두 MANUAL 수신물에서 단일 사진의 CSV
