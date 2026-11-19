@@ -11,6 +11,12 @@
 기존 종료는 유지하며 자동 재시도·클릭·다운로드·자동 인증은 없다. 격리 Chromium과 실행기
 회귀 71건이 통과했다. 이 분기들의 실제 카카오 관측은 별도다.
 
+`2026-11-19 05:21 UTC`에 수집기 `353cb129`를 운영에 반영했다. 설치 wheel에서 두 모듈만
+달라졌으며 기존 Catalog `1f31516a`, API/Web, QUERY 및 임베딩 설치 경로를 유지했다.
+Catalog socket·API readiness·Studio HTTPS를 확인했다. 새 migration, 로그인 변경 또는
+운영 배포에 의한 수집 시작은 없다. 설치·복구 기록은
+`/var/lib/eom-kakao-account-route-release-353cb129/`에 있다.
+
 ## AUTO에서 MANUAL로 돌아갈 때의 원격 로그인 정체 수정
 
 운영에서 AUTO 브라우저 종료와 프로필 잠금 해제가 확인됐으나, 후속 MANUAL 요청이
