@@ -153,6 +153,8 @@ receipt→동일 browser의 종료→원본 수락·단일 run 종료를 기존 
 증거에서 C1 command/선택 범위 inventory를 한번 발행·pin하고 실행에 넘긴다.
 카카오 route 키는 exact manual proof가 pin한 page observation에서만 추출한다. 원본 증거와
 capability를 복제하지 않으며, 발행 뒤 pin 중단은 동일 member revision을 재사용한다.
+검증한 CSV popup proof에서만 현재 세 키의 AUTO v2 직접 주소를 사용한다. 다른 증거는 v1
+목록 경로를 유지하고 v2는 주소/DOM이 맞지 않으면 목록으로 우회하지 않는다.
 기존 Catalog runner의 `ONE_ROOM` 설정이 맞으면 `kakao_collection_continuation.py`가
 durable pending run을 선택한다. 원래 browser/attempt 및 source command의 CAS를 재사용하고
 수신물이 없거나 고정 수신물의 내용이 확정적으로 잘못된 한 방은 실제 종료 확인 뒤 `FAILED`로

@@ -18,7 +18,11 @@ from unittest.mock import Mock
 
 import pytest
 from eom_kakao_archive_collector import profile, supervisor
-from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
+from eom_kakao_archive_contracts.auto_room_command import (
+    AutoRoomCommand,
+    AutoRoomPopupCommand,
+    decode_auto_room_input,
+)
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_orchestrator import kakao_browser_runtime as runtime
 
@@ -418,7 +422,8 @@ def test_fixed_start_requires_prior_exact_stop_and_fresh_current_claim(gate, mon
     ]
 
 
-def test_auto_dispatch_keeps_one_exact_room_command(gate, safe_dir, monkeypatch):
+@pytest.mark.parametrize("wire", [AutoRoomCommand, AutoRoomPopupCommand])
+def test_auto_dispatch_keeps_one_exact_room_command(gate, safe_dir, monkeypatch, wire):
     current = handle()
     source = command(
         inventory=inventory(),
@@ -426,16 +431,19 @@ def test_auto_dispatch_keeps_one_exact_room_command(gate, safe_dir, monkeypatch)
         browser_run_id=current.fence.browser_run_id,
         execution=execution(fence=1),
     )
-    selected = AutoRoomCommand(
-        command=source, space_key="scope", channel_key="channel", room_key="room"
-    )
+    selected = wire(command=source, space_key="scope", channel_key="channel", room_key="room")
     monkeypatch.setattr(runtime, "_show", observed)
     monkeypatch.setattr(runtime, "REQUEST", safe_dir / "request.json")
     monkeypatch.setattr(runtime.pwd, "getpwnam", lambda _: SimpleNamespace(pw_uid=OWNER))
     live = Mock()
     gate.stage_auto_room(current, selected, assert_current=live)
     path = safe_dir / f"{current.fence.browser_run_id}.capture.json"
-    assert AutoRoomCommand.decode(path.read_bytes(), current.fence) == selected
+    assert decode_auto_room_input(path.read_bytes(), current.fence) == selected
+    if wire == AutoRoomPopupCommand:
+        with pytest.raises(ValueError):
+            AutoRoomCommand.decode(path.read_bytes(), current.fence)
+        with pytest.raises(ValueError):
+            wire(command=source, space_key="scope", channel_key="channel", room_key="other/room")
     before = path.stat()
     gate.stage_auto_room(current, selected, assert_current=live)
     assert path.stat().st_ino == before.st_ino and path.stat().st_nlink == 1

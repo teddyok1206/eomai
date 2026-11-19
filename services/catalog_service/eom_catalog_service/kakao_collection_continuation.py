@@ -3,6 +3,7 @@
 from threading import Lock
 from typing import Literal
 
+from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
 from eom_orchestrator.kakao_collection_browser_runtime import KakaoCollectionBrowserRuntimeError
 
 from .kakao_archive_authorization import KakaoArchiveError
@@ -19,7 +20,7 @@ class KakaoCollectionContinuation:
         self._tick = Lock()
         # A lookup hint only. After restart, the protected command writer proves
         # exact replay before it can touch the same immutable per-epoch command.
-        self._scope: tuple[str, str, tuple[str, str]] | None = None
+        self._scope: tuple[str, str, tuple[str, str], RoomNavigation] | None = None
         self._dispatched: str | None = None
 
     def advance_once(self) -> Progress:
@@ -46,7 +47,7 @@ class KakaoCollectionContinuation:
                     owner.browsers.record_unusable_one_room_output(pending.browser_run_id)
                     return "FAILED"
                 prepared = owner.start_registered_room(pending.run_id)
-                self._scope = pending.run_id, prepared.space_key, prepared.room
+                self._scope = pending.run_id, prepared.space_key, prepared.room, prepared.navigation
                 self._dispatched = prepared.attempt.attempt_id
                 return "DISPATCHED"
             if self._scope is None or self._scope[0] != pending.run_id:
@@ -59,8 +60,9 @@ class KakaoCollectionContinuation:
                         confirmation.expected_channel_key,
                         confirmation.expected_room_key,
                     ),
+                    verified.navigation,
                 )
-            _, space, room = self._scope
+            _, space, room, navigation = self._scope
             predecessor, version = owner.attempts.source_adoption_pin(attempt_id)
             accepted = owner.finish(
                 attempt_id,
@@ -73,7 +75,7 @@ class KakaoCollectionContinuation:
                 self._scope, self._dispatched = None, None
                 return "STORED"
             if self._dispatched != attempt_id:
-                owner.dispatch(attempt_id, space_key=space, room=room)
+                owner.dispatch(attempt_id, space_key=space, room=room, navigation=navigation)
                 self._dispatched = attempt_id
                 return "DISPATCHED"
             return "WAITING"

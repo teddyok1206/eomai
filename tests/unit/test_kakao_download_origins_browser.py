@@ -94,6 +94,8 @@ TEXT_ONLY = AUTO_HTML.replace(
         "auto-persistent-other-page",
         "auto-text",
         "auto-popup",
+        "auto-popup-direct",
+        "auto-popup-direct-other-room",
         "auto-wrong-popup",
     ],
 )
@@ -126,11 +128,14 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
     key.chmod(0o600)
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(certificate, key)
+    visited_chat_pages = set()
 
     class Origin(BaseHTTPRequestHandler):
         def do_GET(self):
             host = self.headers.get("Host")
             route = urlsplit(self.path).path
+            if host == "business.kakao.com" and route in {PAGE, LIST, POPUP}:
+                visited_chat_pages.add(route)
             if (
                 host == "business.kakao.com"
                 and route == LIST
@@ -138,6 +143,14 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
             ):
                 self.send_response(302)
                 self.send_header("Location", "/synthetic-sign-in")
+                body = b""
+            elif (
+                host == "business.kakao.com"
+                and route == POPUP
+                and receiver == "auto-popup-direct-other-room"
+            ):
+                self.send_response(302)
+                self.send_header("Location", PAGE)
                 body = b""
             elif host == "business.kakao.com" and route == "/synthetic-sign-in":
                 self.send_response(200)
@@ -266,7 +279,7 @@ from eom_kakao_archive_collector.open_room_capture import capture_open_room_atte
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
 from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
-from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
+from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand,AutoRoomPopupCommand
 from eom_kakao_archive_contracts.capture import CaptureCommand
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
@@ -424,22 +437,25 @@ async def main():
     return
    else:
     if sys.argv[2].startswith('auto'):
-     request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')
-     if sys.argv[2]=='auto-wrong-popup':
+     direct=sys.argv[2].startswith('auto-popup-direct')
+     wire=AutoRoomPopupCommand if direct else AutoRoomCommand
+     request=wire(command=command,space_key='synthetic',channel_key='p',room_key='r')
+     if sys.argv[2] in ('auto-wrong-popup','auto-popup-direct-other-room'):
       try:
        await read_registered_room(page,request,incoming=incoming,outputs=outputs)
       except BrowserRuntimeError as error:
-       assert error.code=='KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED'
+       assert error.code==('KAKAO_AUTO_VERIFIED_POPUP_NOT_CONFIRMED' if direct else
+                          'KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED')
       else:
        raise AssertionError('wrong popup must not be read')
-      assert await page.evaluate('window.roomClicks')==1
+      assert await page.evaluate('window.roomClicks')==(None if direct else 1)
       assert await page.evaluate('window.danger')==0
       assert not tuple(outputs.iterdir())
       await context.close(); await browser.close()
       print(json.dumps({'synthetic_real_chromium_redirect':'PASS','wrong_popup':'REFUSED'}))
       return
      await read_registered_room(page,request,incoming=incoming,outputs=outputs)
-     assert await page.evaluate('window.roomClicks')==1
+     assert await page.evaluate('window.roomClicks')==(None if direct else 1)
     else:
      capture=await capture_open_room_attempt(
        page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
@@ -461,7 +477,7 @@ async def main():
      assert photo.sha256==sha256((outputs.parent/photo.relative_path).read_bytes())
      document=photo.document
     assert document is not None
-    if sys.argv[2]=='auto-popup':
+    if sys.argv[2] in ('auto-popup','auto-popup-direct'):
      assert document.path=='/space/synthetic/channel/p/chats/r'
     raw=document.model_dump_json().encode()
     assert proof.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
@@ -535,3 +551,5 @@ asyncio.run(main())
         assert result["persistent_auto"] == "PASS"
     elif receiver == "auto-persistent-other-page":
         assert result["persistent_auto"] == "REFUSED"
+    elif receiver.startswith("auto-popup-direct"):
+        assert POPUP in visited_chat_pages and LIST not in visited_chat_pages

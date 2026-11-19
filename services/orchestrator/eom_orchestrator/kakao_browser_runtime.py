@@ -20,7 +20,8 @@ from typing import Literal
 from eom_kakao_archive_contracts import canonical_bytes
 from eom_kakao_archive_contracts.auto_room_command import (
     MAX_AUTO_ROOM_COMMAND_BYTES,
-    AutoRoomCommand,
+    AutoRoomInput,
+    decode_auto_room_input,
 )
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence, validate_remote_contract
 
@@ -349,13 +350,13 @@ class FixedKakaoBrowserRuntime:
     def stage_auto_room(
         self,
         run: BrowserRunHandle,
-        command: AutoRoomCommand,
+        command: AutoRoomInput,
         *,
         assert_current: Callable[[], None],
     ) -> None:
         """Publish one immutable command to the already-running exact AUTO fence."""
         raw = command.encoded()
-        AutoRoomCommand.decode(raw, run.fence)
+        decode_auto_room_input(raw, run.fence)
         with _control_lock():
             self._installed()
             current = self._running(run.fence, self._request(run.fence), _show())

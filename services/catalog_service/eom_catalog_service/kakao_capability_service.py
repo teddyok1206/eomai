@@ -35,6 +35,7 @@ from eom_catalog_contracts.kakao_room_intake import (
 from eom_catalog_contracts.kakao_rooms import ROOM_OBSERVATION_REF, KakaoRoomObservation
 from eom_catalog_contracts.kakao_source import CAPTURE_REF
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
 from eom_kakao_archive_contracts.capture import CaptureCapability, validate_capture_contract
 from eom_kakao_archive_contracts.manual_observation import (
     MANUAL_PAGE_OBSERVATION_REF,
@@ -121,6 +122,11 @@ class PinnedManualRoomInput:
     capability: CaptureCapability
     proof: ManualRoomEvidence = field(repr=False)
     space_key: str = field(repr=False)
+
+    @property
+    def navigation(self) -> RoomNavigation:
+        # This evidence family verifies the exact popup pathname as well as the room key.
+        return "VERIFIED_POPUP" if isinstance(self.proof, KakaoCsvPopupRoomEvidence) else "LIST"
 
 
 def _reserved_revision(owner: str, binding: str, key: str) -> str:

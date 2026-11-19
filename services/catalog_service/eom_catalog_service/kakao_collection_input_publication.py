@@ -8,6 +8,7 @@ from uuid import UUID, uuid5
 from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttempt
 from eom_catalog_contracts.kakao_source import CAPTURE_REF
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
 from eom_kakao_archive_contracts.capture import (
     CaptureCommand,
     CaptureInventory,
@@ -40,6 +41,7 @@ class PreparedKakaoRoom:
     attempt: KakaoCollectionAttempt
     room: tuple[str, str] = field(repr=False)
     space_key: str = field(repr=False)
+    navigation: RoomNavigation = "LIST"
 
 
 def _member(name: str, raw: bytes) -> LocalMember:
@@ -207,4 +209,5 @@ def prepare_kakao_registered_room(
         pinned,
         (proof.confirmation.expected_channel_key, proof.confirmation.expected_room_key),
         resolved.space_key,
+        resolved.navigation,
     )

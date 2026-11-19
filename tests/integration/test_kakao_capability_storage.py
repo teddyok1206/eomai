@@ -132,6 +132,7 @@ def test_csv_popup_registration_enters_the_existing_one_room_collection(intake):
         revision=pinned.accepted.request.capability_revision_id,
     )
     assert (parsed.space_key, parsed.proof.confirmation.expected_room_key) == ("workspace", room)
+    assert parsed.navigation == "VERIFIED_POPUP"
     assert parsed.capability.direction_evidence == parsed.capability.source_timezone == "unknown"
     assert (
         collection.start_registered_room(intake.actor, selection, **request).run_id == status.run_id

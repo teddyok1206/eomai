@@ -1131,6 +1131,16 @@ room/snapshot은 기존 pin이고, 추가 입력은 URL이나 스크립트가 �
 selector/읽음 효과를 운영 검증으로 간주하지 않는다. 로그인 redirect·scope/DOM 변경은
 명시적으로 멈추며 자동 credential 입력은 없다. MANUAL/Xvnc 경로는 바꾸지 않는다.
 
+실제 `CSV_POPUP` 방 근거가 고정한 경우에는 목록 버튼을 거치지 않는 AUTO 명령 v2를
+사용할 수 있다. 정본은 기존 Catalog가 검증하는 exact CSV popup proof이며, 실행 입력은
+기존 세 provider key와 frozen C1 command뿐이다. v2의 고정 목적지는 같은 origin의 기존
+관측된 `/space/<space>/channel/<channel>/chats/<room>`이다. 사용자 URL·query·이름을 받지
+않고, 해당 주소와 열린 방 DOM이 다시 일치해야만 기존 읽기 동작을 실행한다. 다른 주소로
+이동하거나 확인에 실패하면 클릭/목록 fallback 없이 멈춘다. v1과 기존 성공/실패 기록은
+그대로다. 기존 run/attempt/fence 및 등록 방의 identity/권한 검사를 재사용하므로 DB·index·
+publication 경계 변경은 없다. lookup과 bounded DOM 검사 비용도 기존과 같다. 목록 버튼
+조건을 완화하거나 확인되지 않은 방 주소를 조합하는 대안은 사용하지 않는다.
+
 epoch당 고정 입력/attempt 출력의 indexed path lookup, 제한된 DOM 탐색과 기존 원본 I/O만
 수행한다. 프로세스가 끊길 때 시작 표시와 원본을 남기고 같은 command를 자동 재실행하지
 않는다. 수락/재조회 권한·트랜잭션은 기존 Catalog owner에 남는다. 새 큐/DB/index/상시

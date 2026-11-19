@@ -18,7 +18,12 @@ from eom_catalog_contracts.kakao_source import (
     KakaoSourceAdmission,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand
+from eom_kakao_archive_contracts.auto_room_command import (
+    AutoRoomCommand,
+    AutoRoomInput,
+    AutoRoomPopupCommand,
+    RoomNavigation,
+)
 from eom_kakao_archive_contracts.capture import (
     CaptureCapability,
     CaptureCommand,
@@ -535,8 +540,13 @@ class KakaoCollectionAttemptService:
             raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
 
     def prepare_auto_room(
-        self, attempt_id: str, *, space_key: str, expected_room: tuple[str, str]
-    ) -> AutoRoomCommand:
+        self,
+        attempt_id: str,
+        *,
+        space_key: str,
+        expected_room: tuple[str, str],
+        navigation: RoomNavigation = "LIST",
+    ) -> AutoRoomInput:
         """Authorize a fixed run dispatch from the exact already-pinned attempt."""
         context = self._result_input_context(attempt_id)
         if context.command is None:
@@ -561,7 +571,8 @@ class KakaoCollectionAttemptService:
             ):
                 raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
             self._require_bound_room(session, context.attempt, expected_room)
-        return AutoRoomCommand(
+        wire = AutoRoomPopupCommand if navigation == "VERIFIED_POPUP" else AutoRoomCommand
+        return wire(
             command=command,
             space_key=space_key,
             channel_key=expected_room[0],

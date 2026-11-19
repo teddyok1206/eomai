@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Engine
 
 if TYPE_CHECKING:
+    from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
     from eom_kakao_archive_contracts.capture import CsvMember
     from eom_kakao_archive_contracts.render import LocalMember
     from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -54,18 +55,21 @@ def dispatch_staged_kakao_open_room(
     *,
     space_key: str,
     expected_room: tuple[str, str],
+    navigation: RoomNavigation = "LIST",
 ) -> None:
     """Send the bound C1 command to that AUTO browser, never launch another one."""
 
     def current() -> None:
         if (
-            attempts.prepare_auto_room(attempt_id, space_key=space_key, expected_room=expected_room)
+            attempts.prepare_auto_room(
+                attempt_id, space_key=space_key, expected_room=expected_room, navigation=navigation
+            )
             != command
         ):
             raise ValueError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
 
     command = attempts.prepare_auto_room(
-        attempt_id, space_key=space_key, expected_room=expected_room
+        attempt_id, space_key=space_key, expected_room=expected_room, navigation=navigation
     )
     runtime.stage_auto_room(browser, command, assert_current=current)
 

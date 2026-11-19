@@ -7,6 +7,7 @@ from typing import Literal
 
 from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttempt
 from eom_catalog_contracts.kakao_manual import KakaoManualFreshProfile
+from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.kakao_capture_inputs import KakaoCaptureInputError, KakaoCaptureOutputReader
 from eom_orchestrator.kakao_collection_browser_runtime import (
@@ -65,7 +66,12 @@ class KakaoOneRoomCollection:
             publisher=self.result_publisher,
             source_commit=self.source_commit,
         )
-        self.dispatch(prepared.attempt.attempt_id, space_key=prepared.space_key, room=prepared.room)
+        self.dispatch(
+            prepared.attempt.attempt_id,
+            space_key=prepared.space_key,
+            room=prepared.room,
+            navigation=prepared.navigation,
+        )
         return prepared
 
     def begin(self, run_id: str) -> KakaoCollectionAttempt:
@@ -86,7 +92,14 @@ class KakaoOneRoomCollection:
             accepted.task_id, browser_run_id=running.browser_run_id
         )
 
-    def dispatch(self, attempt_id: str, *, space_key: str, room: tuple[str, str]) -> None:
+    def dispatch(
+        self,
+        attempt_id: str,
+        *,
+        space_key: str,
+        room: tuple[str, str],
+        navigation: RoomNavigation = "LIST",
+    ) -> None:
         """An already pinned C1 command is required; no fresh browser on lost response."""
         attempt = self.attempts.get_attempt(attempt_id)
         intent = self.browsers.get_intent(attempt.browser_run_id)
@@ -100,6 +113,7 @@ class KakaoOneRoomCollection:
             attempt_id,
             space_key=space_key,
             expected_room=room,
+            navigation=navigation,
         )
 
     def finish(

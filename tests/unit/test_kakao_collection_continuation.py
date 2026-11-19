@@ -20,6 +20,7 @@ def test_restart_restores_same_pending_attempt_and_does_not_relaunch(monkeypatch
     owner.finish.side_effect = [None, None, object()]
     proof = SimpleNamespace(
         space_key="space",
+        navigation="VERIFIED_POPUP",
         proof=SimpleNamespace(
             confirmation=SimpleNamespace(
                 expected_channel_key="channel",
@@ -32,7 +33,9 @@ def test_restart_restores_same_pending_attempt_and_does_not_relaunch(monkeypatch
     continuation = module.KakaoCollectionContinuation(owner)
     assert [continuation.advance_once() for _ in range(3)] == ["DISPATCHED", "WAITING", "STORED"]
     owner.start_registered_room.assert_not_called()
-    owner.dispatch.assert_called_once_with("attempt", space_key="space", room=("channel", "room"))
+    owner.dispatch.assert_called_once_with(
+        "attempt", space_key="space", room=("channel", "room"), navigation="VERIFIED_POPUP"
+    )
     read.assert_called_once_with(owner.collections, "run")
     for call in owner.finish.call_args_list:
         assert call.args == ("attempt",)
@@ -58,7 +61,7 @@ def test_only_definite_unusable_output_finishes_as_failure(error, progress):
     owner.attempts.source_adoption_pin.return_value = (None, 0)
     owner.finish.side_effect = error
     continuation = module.KakaoCollectionContinuation(owner)
-    continuation._scope = ("run", "space", ("channel", "room"))
+    continuation._scope = ("run", "space", ("channel", "room"), "LIST")
     assert continuation.advance_once() == progress
     if progress == "FAILED":
         owner.browsers.record_unusable_one_room_output.assert_called_once_with("browser")

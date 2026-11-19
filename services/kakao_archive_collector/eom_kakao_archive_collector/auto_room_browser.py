@@ -8,7 +8,9 @@ from typing import Protocol
 
 from eom_kakao_archive_contracts.auto_room_command import (
     MAX_AUTO_ROOM_COMMAND_BYTES,
-    AutoRoomCommand,
+    AutoRoomInput,
+    AutoRoomPopupCommand,
+    decode_auto_room_input,
 )
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 
@@ -79,7 +81,7 @@ class AutoRoomPage(RoomTransferPage, Protocol):
 
 async def wait_for_room_command(
     fence: ProfileFence, stopping: asyncio.Event
-) -> AutoRoomCommand | None:
+) -> AutoRoomInput | None:
     """Only the trusted installed owner may create this per-epoch input."""
     owner = pwd.getpwnam("eom-catalog-manager").pw_uid
     path = REQUEST.with_name(f"{fence.browser_run_id}.capture.json")
@@ -101,7 +103,7 @@ async def wait_for_room_command(
                 continue
             break
         try:
-            return AutoRoomCommand.decode(raw, fence)
+            return decode_auto_room_input(raw, fence)
         except ValueError:
             raise BrowserRuntimeError("KAKAO_AUTO_ROOM_COMMAND_INVALID") from None
     if stopping.is_set():
@@ -109,7 +111,7 @@ async def wait_for_room_command(
     raise BrowserRuntimeError("KAKAO_AUTO_ROOM_COMMAND_UNAVAILABLE")
 
 
-def stage_room_workspace(command: AutoRoomCommand, *, root: Path = DOWNLOADS) -> tuple[Path, Path]:
+def stage_room_workspace(command: AutoRoomInput, *, root: Path = DOWNLOADS) -> tuple[Path, Path]:
     """Fixed worker-only filesystem materialization, not a new work claim."""
     attempt = root / command.command.execution.attempt_id
     try:
@@ -132,16 +134,23 @@ def stage_room_workspace(command: AutoRoomCommand, *, root: Path = DOWNLOADS) ->
 
 
 async def read_registered_room(
-    page: AutoRoomPage, command: AutoRoomCommand, *, incoming: Path, outputs: Path
+    page: AutoRoomPage, command: AutoRoomInput, *, incoming: Path, outputs: Path
 ) -> None:
     path = f"/space/{command.space_key}/channel/{command.channel_key}/chats"
-    target = _ORIGIN + path
+    popup_path = f"{path}/{command.room_key}"
+    direct = isinstance(command, AutoRoomPopupCommand)
+    destination = popup_path if direct else path
+    rejection = (
+        "KAKAO_AUTO_VERIFIED_POPUP_NOT_CONFIRMED" if direct else "KAKAO_AUTO_CHANNEL_NOT_CONFIRMED"
+    )
     try:
-        await page.goto(target, wait_until="domcontentloaded", timeout=ROOM_LOAD_SECONDS * 1000)
+        await page.goto(
+            _ORIGIN + destination, wait_until="domcontentloaded", timeout=ROOM_LOAD_SECONDS * 1000
+        )
     except Exception:
         raise BrowserRuntimeError("KAKAO_AUTO_CHANNEL_NAVIGATION_FAILED") from None
-    if download_page_path(page) != path:
-        raise BrowserRuntimeError("KAKAO_AUTO_CHANNEL_NOT_CONFIRMED")
+    if download_page_path(page) != destination:
+        raise BrowserRuntimeError(rejection)
 
     async def evaluate(candidate: AutoRoomPage, candidate_path: str, phase: str) -> object:
         return await asyncio.wait_for(
@@ -155,19 +164,18 @@ async def read_registered_room(
     until = loop.time() + ROOM_LOAD_SECONDS
     state: object = "PENDING"
     while state == "PENDING" and loop.time() < until:
-        state = await evaluate(page, path, "PROBE")
+        state = await evaluate(page, destination, "CONFIRM" if direct else "PROBE")
         if state == "PENDING":
             await asyncio.sleep(0.2)
 
     selected = page
-    if state == "READY":
+    if not direct and state == "READY":
         popups: list[AutoRoomPage] = []
 
         def opened(candidate: AutoRoomPage) -> None:
             if len(popups) < 2:
                 popups.append(candidate)
 
-        popup_path = f"{path}/{command.room_key}"
         page.on("popup", opened)
         try:
             state = await evaluate(page, path, "CLICK")
@@ -194,7 +202,7 @@ async def read_registered_room(
         finally:
             page.remove_listener("popup", opened)
     if state != "OPENED":
-        raise BrowserRuntimeError("KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED")
+        raise BrowserRuntimeError(rejection if direct else "KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED")
     result = await capture_open_room_attempt(
         selected,
         command.command,
