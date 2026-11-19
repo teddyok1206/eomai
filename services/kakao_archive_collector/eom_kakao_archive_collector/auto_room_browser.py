@@ -214,11 +214,26 @@ async def read_registered_room(
         if observed == popup_path:
             return rejection
         if observed != path:
-            return (
-                "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
-                if _account_origin(page)
-                else "KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION"
-            )
+            if not _account_origin(page):
+                return "KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION"
+            # After an account redirect, a read-only visit to the known list can
+            # distinguish a room-only block from account gating on both routes.
+            # This never retries, clicks, or changes the outcome to a capture.
+            try:
+                async with asyncio.timeout(LIST_DIAGNOSTIC_SECONDS):
+                    await page.goto(
+                        _ORIGIN + path,
+                        wait_until="domcontentloaded",
+                        timeout=LIST_DIAGNOSTIC_SECONDS * 1000,
+                    )
+                    probe = await observe(path, "PROBE", LIST_DIAGNOSTIC_SECONDS)
+            except Exception:
+                return "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
+            if probe in ("READY", "OPENED") and download_page_path(page) == path:
+                return "KAKAO_AUTO_POPUP_ACCOUNT_REDIRECT_WITH_VERIFIED_LIST"
+            if _account_origin(page):
+                return "KAKAO_AUTO_POPUP_AND_LIST_TO_ACCOUNT_ORIGIN"
+            return "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
         # A return to the exact known list is useful evidence, never fallback authority.
         probe = await observe(path, "PROBE", LIST_DIAGNOSTIC_SECONDS)
         message = {

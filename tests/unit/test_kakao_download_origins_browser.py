@@ -98,6 +98,7 @@ TEXT_ONLY = AUTO_HTML.replace(
         "auto-popup-direct-other-room",
         "auto-popup-direct-return-list",
         "auto-popup-direct-account",
+        "auto-popup-direct-account-list-authenticated",
         "auto-popup-direct-large-dom",
         "auto-popup-direct-delayed-list",
         "auto-popup-direct-delayed-body",
@@ -144,10 +145,15 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
             if (
                 host == "business.kakao.com"
                 and route == LIST
-                and receiver == "auto-persistent-other-page"
+                and receiver in {"auto-persistent-other-page", "auto-popup-direct-account"}
             ):
                 self.send_response(302)
-                self.send_header("Location", "/synthetic-sign-in")
+                self.send_header(
+                    "Location",
+                    "https://accounts.kakao.com/synthetic-sign-in"
+                    if receiver == "auto-popup-direct-account"
+                    else "/synthetic-sign-in",
+                )
                 body = b""
             elif (
                 host == "business.kakao.com"
@@ -157,6 +163,7 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                     "auto-popup-direct-other-room",
                     "auto-popup-direct-return-list",
                     "auto-popup-direct-account",
+                    "auto-popup-direct-account-list-authenticated",
                 }
             ):
                 self.send_response(302)
@@ -166,6 +173,9 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                         "auto-popup-direct-other-room": PAGE,
                         "auto-popup-direct-return-list": LIST,
                         "auto-popup-direct-account": "https://accounts.kakao.com/synthetic-sign-in",
+                        "auto-popup-direct-account-list-authenticated": (
+                            "https://accounts.kakao.com/synthetic-sign-in"
+                        ),
                     }[receiver],
                 )
                 body = b""
@@ -483,7 +493,8 @@ async def main():
        'auto-wrong-popup':'KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED',
        'auto-popup-direct-other-room':'KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION',
        'auto-popup-direct-return-list':'KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED',
-       'auto-popup-direct-account':'KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN',
+       'auto-popup-direct-account':'KAKAO_AUTO_POPUP_AND_LIST_TO_ACCOUNT_ORIGIN',
+       'auto-popup-direct-account-list-authenticated':'KAKAO_AUTO_POPUP_ACCOUNT_REDIRECT_WITH_VERIFIED_LIST',
        'auto-popup-direct-large-dom':'KAKAO_AUTO_ROOM_DOM_LIMIT',
        'auto-popup-direct-delayed-list':'KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED',
      }
@@ -495,7 +506,8 @@ async def main():
       else:
        raise AssertionError('wrong popup must not be read')
       redirected_to_list=sys.argv[2] in (
-          'auto-popup-direct-return-list','auto-popup-direct-delayed-list')
+          'auto-popup-direct-return-list','auto-popup-direct-delayed-list',
+          'auto-popup-direct-account-list-authenticated')
       clicks=0 if redirected_to_list else None if direct else 1
       assert await page.evaluate('window.roomClicks')==clicks
       assert (await page.evaluate('window.danger')) in (None,0)
@@ -603,5 +615,11 @@ asyncio.run(main())
     elif receiver.startswith("auto-popup-direct"):
         assert POPUP in visited_chat_pages
         assert (LIST in visited_chat_pages) == (
-            receiver in {"auto-popup-direct-return-list", "auto-popup-direct-delayed-list"}
+            receiver
+            in {
+                "auto-popup-direct-return-list",
+                "auto-popup-direct-delayed-list",
+                "auto-popup-direct-account",
+                "auto-popup-direct-account-list-authenticated",
+            }
         )
