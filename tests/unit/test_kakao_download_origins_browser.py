@@ -89,6 +89,8 @@ TEXT_ONLY = AUTO_HTML.replace(
         "room-direct-other-query",
         "room-direct-duplicate",
         "auto",
+        "auto-persistent",
+        "auto-persistent-other-page",
         "auto-text",
         "auto-popup",
         "auto-wrong-popup",
@@ -128,14 +130,30 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
         def do_GET(self):
             host = self.headers.get("Host")
             route = urlsplit(self.path).path
-            if host == "business.kakao.com" and route in {PAGE, LIST, POPUP}:
+            if (
+                host == "business.kakao.com"
+                and route == LIST
+                and receiver == "auto-persistent-other-page"
+            ):
+                self.send_response(302)
+                self.send_header("Location", "/synthetic-sign-in")
+                body = b""
+            elif host == "business.kakao.com" and route == "/synthetic-sign-in":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                body = b"<!doctype html><title>Synthetic sign-in page</title>"
+            elif host == "business.kakao.com" and route in {PAGE, LIST, POPUP}:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 body = (
                     (TEXT_ONLY if receiver == "auto-text" else AUTO_HTML) if route == LIST else HTML
                 )
-                if route == LIST and receiver in {"auto-popup", "auto-wrong-popup"}:
-                    opened = POPUP if receiver == "auto-popup" else PAGE
+                if route == LIST and receiver in {
+                    "auto-popup",
+                    "auto-wrong-popup",
+                    "auto-persistent",
+                }:
+                    opened = PAGE if receiver == "auto-wrong-popup" else POPUP
                     body = body.replace(
                         b"document.querySelector('.chat_popup').hidden=false",
                         f"window.open('{opened}?tracking=fixture','selected')".encode(),
@@ -225,7 +243,10 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
     script = r"""
 import asyncio, json, sys, tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 from playwright.async_api import async_playwright
+from eom_kakao_archive_collector import manual_driver
 from eom_kakao_archive_collector.auto_room_browser import read_registered_room
 from eom_kakao_archive_collector.manual_download import ManualDownloads
 from eom_kakao_archive_collector.open_room_capture import capture_open_room_attempt
@@ -239,6 +260,62 @@ from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
 from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadReceipt
 from eom_kakao_archive_contracts.render import canonical_bytes, sha256
+
+async def persistent_auto(command, root, incoming, outputs):
+ request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')
+ profile=root/'empty-profile'; profile.mkdir(mode=0o700)
+ start=manual_driver._start_playwright
+ async def with_loopback_proxy():
+  sdk=await start()
+  chromium=sdk.chromium
+  async def launch(profile_path, **options):
+   assert profile_path==str(profile) and options['env']['HOME']==str(profile)
+   assert options['headless'] and options['chromium_sandbox'] and options['accept_downloads']
+   assert options['executable_path']==chromium.executable_path
+   # Only this fixture supplies a proxy/certificate exception. DNS stays isolated.
+   return await chromium.launch_persistent_context(profile_path, **options,
+       proxy={'server':sys.argv[1]},ignore_https_errors=True,
+       args=['--disable-quic','--ignore-certificate-errors',
+             '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'])
+  return SimpleNamespace(stop=sdk.stop,chromium=SimpleNamespace(
+      executable_path=chromium.executable_path,launch_persistent_context=launch))
+ async def fixed_command(fence, stopping):
+  assert not stopping.is_set() and fence==command.execution.fence
+  return request
+ with patch.object(manual_driver,'_start_playwright',with_loopback_proxy), \
+      patch.object(manual_driver,'wait_for_room_command',fixed_command), \
+      patch.object(manual_driver,'stage_room_workspace',lambda _: (incoming,outputs)), \
+      patch.object(manual_driver.setup,'require_supervisor'), \
+      patch.object(manual_driver.setup,'PROFILE',profile):
+  sdk=await start()
+  try:
+   digest=manual_driver.setup.hash_executable(Path(sdk.chromium.executable_path))
+  finally:
+   await sdk.stop()
+  config=manual_driver.setup.AutoSetup(command.execution.fence,digest)
+  if sys.argv[2]=='auto-persistent-other-page':
+   try:
+    await manual_driver.run_auto(config,asyncio.Event())
+   except BrowserRuntimeError as error:
+    assert error.code=='KAKAO_AUTO_CHANNEL_NOT_CONFIRMED'
+   else:
+    raise AssertionError('a different page must not be read')
+   assert not tuple(outputs.iterdir())
+   print(json.dumps({'synthetic_real_chromium_redirect':'PASS','persistent_auto':'REFUSED'}))
+   return
+  await manual_driver.run_auto(config,asyncio.Event())
+ evidence=(outputs/'open-room.json').read_bytes()
+ proof=OpenRoomDownloadReceipt.decode(evidence)
+ assert proof.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
+ assert proof.raw_csv.sha256==sha256((outputs/'source.csv').read_bytes())
+ assert len(proof.photos)==1 and proof.unresolved_visible_bubbles==0
+ photo=proof.photos[0]
+ assert photo.document.path=='/space/synthetic/channel/p/chats/r'
+ assert photo.target=='/api/profiles/p/chats/r/message/photo/image'
+ assert photo.sha256==sha256((outputs.parent/photo.relative_path).read_bytes())
+ assert b'NEVER_PERSIST_QUERY' not in evidence
+ print(json.dumps({'synthetic_real_chromium_redirect':'PASS','persistent_auto':'PASS'}))
+
 async def main():
  command=CaptureCommand.model_validate_json(sys.argv[3])
  with tempfile.TemporaryDirectory(prefix='kakao-redirect-test-',dir=Path.home()/'.cache') as folder:
@@ -253,6 +330,9 @@ async def main():
    incoming=root/'incoming'; incoming.mkdir(mode=0o700); incoming.chmod(0o700)
    outputs=root/command.execution.attempt_id/'outputs'; outputs.mkdir(parents=True)
    outputs.chmod(0o750)
+  if sys.argv[2].startswith('auto-persistent'):
+   await persistent_auto(command,root,incoming,outputs)
+   return
   async with async_playwright() as sdk:
    browser=await sdk.chromium.launch(headless=True,channel='chromium',
        downloads_path=str(incoming),proxy={'server':sys.argv[1]},
@@ -433,4 +513,9 @@ asyncio.run(main())
             server.shutdown()
             thread.join(timeout=3)
     assert process.returncode == 0, process.stderr
-    assert json.loads(process.stdout)["synthetic_real_chromium_redirect"] == "PASS"
+    result = json.loads(process.stdout)
+    assert result["synthetic_real_chromium_redirect"] == "PASS"
+    if receiver == "auto-persistent":
+        assert result["persistent_auto"] == "PASS"
+    elif receiver == "auto-persistent-other-page":
+        assert result["persistent_auto"] == "REFUSED"

@@ -1,5 +1,16 @@
 # KakaoTalk 구현 체크포인트
 
+## 운영 재실행 대기 — 격리된 실제 Chromium의 AUTO 경로 확인
+
+운영 읽기 전용 대조 시 단일 방 수집 기록은 기존 실패 1건뿐이고 source revision은 0건이다.
+브라우저 종료 시각도 그대로다. 실제 카카오 접근·받은 자료·실패 이력은 바꾸지 않았다.
+
+새 회귀는 설치된 Chromium, 새 임시 profile과 loopback TLS에서 실제 AUTO driver의
+persistent launch·새 탭·등록 방 팝업·사진/CSV 수신·종료를 연결한다. 영수증과 수신 파일
+해시, 민감 query의 비저장을 검증한다. 가짜 로그인 페이지로 redirect된 경우에는
+`KAKAO_AUTO_CHANNEL_NOT_CONFIRMED` 사유로 결과/다운로드 없이 종료한다. 보호된 명령과
+workspace 생성은 fixture로 대체했으므로 운영 로그인·실제 provider 결과는 아니다.
+
 ## 브라우저 실패 단계 진단 운영 반영 — 실제 재실행 전
 
 수집기 `41316b63`을 기존 `ONE_ROOM` adapter 설정에 맞춰 반영했다. Catalog의
