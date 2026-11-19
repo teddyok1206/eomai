@@ -4,11 +4,13 @@ from contextlib import suppress
 from typing import cast
 
 from eom_catalog_contracts.kakao_archive_rpc import RequestId
+from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus, KakaoCollectionStatusView
 from eom_catalog_contracts.kakao_collection_rpc import (
     KAKAO_COLLECTION_ERRORS,
     KAKAO_COLLECTION_OPERATIONS,
     CollectionReply,
     ErrorCode,
+    GetKakaoRoomCollectionViewRequest,
     KakaoRoomCollectionFailure,
     KakaoRoomCollectionReply,
     Operation,
@@ -69,6 +71,7 @@ def dispatch_kakao_collection(
                 permissions=frozenset(),
                 source=ActorSource.APPLICATION_API,
             )
+            result: KakaoCollectionStatus | KakaoCollectionStatusView
             if isinstance(request, StartKakaoRoomCollectionRequest):
                 result = service.start_registered_room(
                     actor,
@@ -76,6 +79,8 @@ def dispatch_kakao_collection(
                     expected_policy_revision_id=request.expected_policy_revision_id,
                     idempotency_key=request.idempotency_key,
                 )
+            elif isinstance(request, GetKakaoRoomCollectionViewRequest):
+                result = service.get_status_view(actor, request.source_binding_id, request.run_id)
             else:
                 result = service.get_status(actor, request.source_binding_id, request.run_id)
             reply = KakaoRoomCollectionReply(

@@ -80,3 +80,14 @@ class KakaoCollectionStatus(FrozenModel):
             raise ValueError("KAKAO_ARCHIVE_COLLECTION_TIME_INVALID")
         validate_contract("kakao-collection-intent-v1", self.model_dump(mode="json"))
         return self
+
+
+class KakaoCollectionStatusView(FrozenModel):
+    schema_version: Literal["kakao-collection-status-view/1.0"] = "kakao-collection-status-view/1.0"
+    collection: KakaoCollectionStatus
+    failure_reason: Literal["KAKAO_LOGIN_REQUIRED"] | None
+
+    @model_validator(mode="after")
+    def valid_reason(self) -> Self:
+        validate_contract("catalog-kakao-collection-view-v1", self.model_dump(mode="json"))
+        return self

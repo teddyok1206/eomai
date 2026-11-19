@@ -14,13 +14,21 @@ const LABEL = Object.freeze({QUEUED: "대기 중", INVENTORY: "대화방 확인 
 const version = value => Number.isInteger(value) && value >= 1 && value <= 2147483647;
 
 function status(value, bindingId, runId = null) {
+  let failureReason = null;
+  if (runId !== null && value?.schema_version === "kakao-collection-status-view/1.0") {
+    failureReason = value.failure_reason;
+    value = value.collection;
+    if (failureReason !== null && (failureReason !== "KAKAO_LOGIN_REQUIRED" || value?.state !== "FAILED")) {
+      throw new Error("수집 실패 사유를 확인하지 못했습니다.");
+    }
+  }
   const created = Date.parse(value?.created_at), updated = Date.parse(value?.updated_at);
   if (value?.schema_version !== "kakao-collection-status/1.0" || value.source_binding_id !== bindingId ||
       !RUN.test(value.run_id || "") || (runId !== null && value.run_id !== runId) || !Object.hasOwn(LABEL, value.state) ||
       !version(value.resource_version) || !Number.isFinite(created) || !Number.isFinite(updated) || updated < created) {
     throw new Error("수집 상태가 요청한 작업과 다릅니다.");
   }
-  return value;
+  return {...value, failureReason};
 }
 
 function restore(raw, scope) {
@@ -51,7 +59,10 @@ export function createKakaoRoomCollection({document, api, explainError, schedule
     root.hidden = !scope;
     if (!scope) { root.replaceChildren(); return; }
     const view = scope, pending = submitting.has(view.key);
-    const liveMessage = node("p", view.message || (view.status ? LABEL[view.status.state] : ""), "form-message");
+    const needsLogin = view.status?.failureReason === "KAKAO_LOGIN_REQUIRED";
+    const label = needsLogin ? "카카오 로그인이 필요합니다. 위의 ‘카카오 로그인 준비’에서 확인한 뒤 다시 수집해 주세요." :
+      (view.status ? LABEL[view.status.state] : "");
+    const liveMessage = node("p", view.message || label, "form-message");
     liveMessage.setAttribute("role", "status"); liveMessage.setAttribute("aria-live", "polite");
     root.replaceChildren(node("h4", "선택한 대화방 수집"), liveMessage);
     if (view.roomName) root.insertBefore(node("p", view.roomName), liveMessage);
@@ -104,7 +115,7 @@ export function createKakaoRoomCollection({document, api, explainError, schedule
     if (scope !== view || view.checking || !view.intent?.runId) return;
     const runId = view.intent.runId; unwatch(); view.checking = true; draw();
     try {
-      const result = status(await api(`${BASE}/${encodeURIComponent(runId)}?source_binding_id=${encodeURIComponent(view.bindingId)}`), view.bindingId, runId);
+      const result = status(await api(`${BASE}/${encodeURIComponent(runId)}?source_binding_id=${encodeURIComponent(view.bindingId)}&include_failure_reason=true`), view.bindingId, runId);
       if (scope !== view || view.intent?.runId !== runId) return;
       if (view.status && result.resource_version < view.status.resource_version) throw new Error("이전 실행 상태가 반환됐습니다.");
       view.status = result; view.message = ""; watch(view);

@@ -3,7 +3,11 @@
 import httpx
 import pytest
 from eom_web_gui.gateways import GatewayError
-from eom_web_gui.kakao_collection_contracts import RoomCollectionStart, RoomCollectionStatus
+from eom_web_gui.kakao_collection_contracts import (
+    RoomCollectionStart,
+    RoomCollectionStatus,
+    RoomCollectionStatusView,
+)
 
 from tests.unit.kakao_room_fixtures import BINDING_ID, KEY, ROOM_ID
 from tests.web_gui.helpers import FakeGateway, login, make_client
@@ -30,6 +34,11 @@ VALUE = dict(
     created_at="2026-11-18T01:02:03Z",
     updated_at="2026-11-18T01:02:03Z",
 )
+VIEW = dict(
+    schema_version="kakao-collection-status-view/1.0",
+    collection=VALUE | {"state": "FAILED"},
+    failure_reason="KAKAO_LOGIN_REQUIRED",
+)
 
 
 class CollectionGateway(FakeGateway):
@@ -41,7 +50,12 @@ class CollectionGateway(FakeGateway):
         self.calls.append(("start", value, idempotency_key, if_match))
         return RoomCollectionStatus.model_validate(VALUE)
 
-    async def kakao_collection_status(self, session, binding, run_id):
+    async def kakao_collection_status(
+        self, session, binding, run_id, *, include_failure_reason=False
+    ):
+        if include_failure_reason:
+            self.calls.append(("get-view", binding, run_id))
+            return RoomCollectionStatusView.model_validate(VIEW)
         self.calls.append(("get", binding, run_id))
         return RoomCollectionStatus.model_validate(VALUE)
 
@@ -71,6 +85,12 @@ def test_studio_collection_post_requires_admin_cookie_csrf_and_original_pins(rol
         read = client.get(ROOT + "/" + RUN, params={"source_binding_id": BINDING_ID})
         assert read.status_code == 200 and read.headers["cache-control"] == "no-store"
         assert gateway.calls[-1] == ("get", BINDING_ID, RUN)
+        view = client.get(
+            ROOT + "/" + RUN,
+            params={"source_binding_id": BINDING_ID, "include_failure_reason": "true"},
+        )
+        assert view.status_code == 200 and view.json() == VIEW
+        assert gateway.calls[-1] == ("get-view", BINDING_ID, RUN)
 
 
 @pytest.fixture
@@ -97,5 +117,35 @@ async def test_gateway_rejects_other_run_and_binds_start_headers():
         assert calls[0].headers["If-Match"] == '"v1"'
         with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID"):
             await gateway.kakao_collection_status(_session(), BINDING_ID, RUN)
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_checks_exact_status_view_identity_and_reason():
+    cases = iter(
+        (
+            VIEW,
+            VIEW | {"collection": VALUE},
+            VIEW | {"collection": VALUE | {"state": "FAILED", "run_id": "kakaorun_" + "b" * 32}},
+        )
+    )
+
+    def handle(request):
+        assert request.url.params["include_failure_reason"] == "true"
+        return httpx.Response(200, json=_single(next(cases)))
+
+    gateway = http_gateway(handle)
+    try:
+        view = await gateway.kakao_collection_status(
+            _session(), BINDING_ID, RUN, include_failure_reason=True
+        )
+        assert isinstance(view, RoomCollectionStatusView)
+        assert view.failure_reason == "KAKAO_LOGIN_REQUIRED"
+        for _ in range(2):
+            with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID"):
+                await gateway.kakao_collection_status(
+                    _session(), BINDING_ID, RUN, include_failure_reason=True
+                )
     finally:
         await gateway.close()

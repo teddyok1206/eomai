@@ -223,10 +223,11 @@ from eom_catalog_contracts.kakao_capture_rpc import (
     parse_kakao_capture_reply,
     parse_kakao_capture_request,
 )
-from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus
+from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus, KakaoCollectionStatusView
 from eom_catalog_contracts.kakao_collection_rpc import (
     CollectionRequest,
     GetKakaoRoomCollectionRequest,
+    GetKakaoRoomCollectionViewRequest,
     KakaoRoomCollectionFailure,
     StartKakaoRoomCollectionRequest,
     check_collection_reply,
@@ -510,7 +511,7 @@ class CatalogApplicationClient:
         actor: ActorContext,
         idempotency_key: str,
     ) -> KakaoCollectionStatus:
-        return self._request_kakao_collection(
+        result = self._request_kakao_collection(
             StartKakaoRoomCollectionRequest.model_validate(
                 {
                     **self._kakao_identity(actor),
@@ -520,6 +521,8 @@ class CatalogApplicationClient:
                 }
             )
         )
+        assert isinstance(result, KakaoCollectionStatus)
+        return result
 
     def get_kakao_room_collection(
         self,
@@ -528,7 +531,7 @@ class CatalogApplicationClient:
         *,
         actor: ActorContext,
     ) -> KakaoCollectionStatus:
-        return self._request_kakao_collection(
+        result = self._request_kakao_collection(
             GetKakaoRoomCollectionRequest.model_validate(
                 {
                     **self._kakao_identity(actor),
@@ -537,8 +540,27 @@ class CatalogApplicationClient:
                 }
             )
         )
+        assert isinstance(result, KakaoCollectionStatus)
+        return result
 
-    def _request_kakao_collection(self, request: CollectionRequest) -> KakaoCollectionStatus:
+    def get_kakao_room_collection_view(
+        self, source_binding_id: str, run_id: str, *, actor: ActorContext
+    ) -> KakaoCollectionStatusView:
+        result = self._request_kakao_collection(
+            GetKakaoRoomCollectionViewRequest.model_validate(
+                {
+                    **self._kakao_identity(actor),
+                    "source_binding_id": source_binding_id,
+                    "run_id": run_id,
+                }
+            )
+        )
+        assert isinstance(result, KakaoCollectionStatusView)
+        return result
+
+    def _request_kakao_collection(
+        self, request: CollectionRequest
+    ) -> KakaoCollectionStatus | KakaoCollectionStatusView:
         try:
             validated = parse_collection_request(request.model_dump(mode="json"))
             reply = parse_collection_reply(

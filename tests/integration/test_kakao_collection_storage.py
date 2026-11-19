@@ -102,6 +102,12 @@ def test_collection_ingress_enqueues_once_and_status_does_not_act(collection):
         json.loads(dispatch_kakao_collection(collection.service, observe))["result"]
         == first["result"]
     )
+    view = json.loads(
+        dispatch_kakao_collection(
+            collection.service, observe | {"operation": "GET_KAKAO_ROOM_COLLECTION_VIEW"}
+        )
+    )["result"]
+    assert view["collection"] == first["result"] and view["failure_reason"] is None
     assert (
         json.loads(
             dispatch_kakao_collection(

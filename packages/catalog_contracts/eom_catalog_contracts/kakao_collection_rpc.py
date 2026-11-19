@@ -8,11 +8,13 @@ from .kakao_archive import KakaoBindingId
 from .kakao_archive_binding import KakaoPolicyRevisionId
 from .kakao_archive_rpc import IdempotencyKey, RequestId
 from .kakao_capability import ConfirmKakaoCapability
-from .kakao_collection import KakaoCollectionStatus, KakaoRunId
+from .kakao_collection import KakaoCollectionStatus, KakaoCollectionStatusView, KakaoRunId
 from .models import FrozenModel, UtcDatetime
 from .validation import validate_contract
 
-type Operation = Literal["START_KAKAO_ROOM_COLLECTION", "GET_KAKAO_ROOM_COLLECTION"]
+type Operation = Literal[
+    "START_KAKAO_ROOM_COLLECTION", "GET_KAKAO_ROOM_COLLECTION", "GET_KAKAO_ROOM_COLLECTION_VIEW"
+]
 type ErrorCode = Literal[
     "KAKAO_ARCHIVE_REQUEST_INVALID",
     "KAKAO_ARCHIVE_PERMISSION_DENIED",
@@ -45,17 +47,24 @@ class StartKakaoRoomCollectionRequest(_Identity):
     idempotency_key: IdempotencyKey
 
 
-class GetKakaoRoomCollectionRequest(_Identity):
-    operation: Literal["GET_KAKAO_ROOM_COLLECTION"] = "GET_KAKAO_ROOM_COLLECTION"
+class _CollectionIdentity(_Identity):
     source_binding_id: KakaoBindingId
     run_id: KakaoRunId
+
+
+class GetKakaoRoomCollectionRequest(_CollectionIdentity):
+    operation: Literal["GET_KAKAO_ROOM_COLLECTION"] = "GET_KAKAO_ROOM_COLLECTION"
+
+
+class GetKakaoRoomCollectionViewRequest(_CollectionIdentity):
+    operation: Literal["GET_KAKAO_ROOM_COLLECTION_VIEW"] = "GET_KAKAO_ROOM_COLLECTION_VIEW"
 
 
 class KakaoRoomCollectionReply(FrozenModel):
     operation: Operation
     request_id: RequestId
     status: Literal["OK"] = "OK"
-    result: KakaoCollectionStatus
+    result: KakaoCollectionStatus | KakaoCollectionStatusView
     error_code: None = None
 
 
@@ -68,7 +77,9 @@ class KakaoRoomCollectionFailure(FrozenModel):
 
 
 type CollectionRequest = Annotated[
-    StartKakaoRoomCollectionRequest | GetKakaoRoomCollectionRequest,
+    StartKakaoRoomCollectionRequest
+    | GetKakaoRoomCollectionRequest
+    | GetKakaoRoomCollectionViewRequest,
     Field(discriminator="operation"),
 ]
 type CollectionReply = Annotated[
@@ -78,13 +89,19 @@ _REQUEST: TypeAdapter[CollectionRequest] = TypeAdapter(CollectionRequest)
 _REPLY: TypeAdapter[CollectionReply] = TypeAdapter(CollectionReply)
 
 
+def _wire_schema(value: dict[str, object]) -> str:
+    if value.get("operation") == "GET_KAKAO_ROOM_COLLECTION_VIEW":
+        return "catalog-kakao-collection-view-v1"
+    return "catalog-kakao-collection-v1"
+
+
 def parse_collection_request(value: dict[str, object]) -> CollectionRequest:
-    validate_contract("catalog-kakao-collection-v1", value)
+    validate_contract(_wire_schema(value), value)
     return _REQUEST.validate_python(value)
 
 
 def parse_collection_reply(value: dict[str, object]) -> CollectionReply:
-    validate_contract("catalog-kakao-collection-v1", value)
+    validate_contract(_wire_schema(value), value)
     return _REPLY.validate_python(value)
 
 
@@ -93,10 +110,16 @@ def check_collection_reply(request: CollectionRequest, reply: CollectionReply) -
         raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
     if isinstance(reply, KakaoRoomCollectionFailure):
         return
+    result = reply.result
+    if isinstance(request, GetKakaoRoomCollectionViewRequest) != isinstance(
+        result, KakaoCollectionStatusView
+    ):
+        raise ValueError("KAKAO_ARCHIVE_RESULT_INVALID")
+    status = result.collection if isinstance(result, KakaoCollectionStatusView) else result
     if isinstance(request, StartKakaoRoomCollectionRequest):
-        matches = reply.result.source_binding_id == request.selection.source_binding_id
+        matches = status.source_binding_id == request.selection.source_binding_id
     else:
-        matches = (reply.result.source_binding_id, reply.result.run_id) == (
+        matches = (status.source_binding_id, status.run_id) == (
             request.source_binding_id,
             request.run_id,
         )

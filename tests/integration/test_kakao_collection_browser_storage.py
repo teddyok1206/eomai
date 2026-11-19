@@ -388,6 +388,10 @@ def test_missing_output_cannot_finish_a_live_browser_and_does_not_requeue(browse
         browser.h.actor, intent.source_binding_id, intent.run_id
     )
     assert status.state == "FAILED"
+    view = browser.collection.service.get_status_view(
+        browser.h.actor, intent.source_binding_id, intent.run_id
+    )
+    assert view.collection == status and view.failure_reason is None
 
 
 def test_unclean_start_exit_is_recorded_even_without_prior_owner_error(browser):

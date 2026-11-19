@@ -1002,6 +1002,10 @@ def test_room_auth_refusal_survives_loss_after_result_adoption(
                 KakaoSourceRevisionRecord.source_binding_id == row.source_binding_id
             )
         )
+    failure = owner.collections.get_status_view(
+        attempt.actor, data.reserved.source_binding_id, data.reserved.run_id
+    )
+    assert (failure.collection.state, failure.failure_reason) == ("FAILED", "KAKAO_LOGIN_REQUIRED")
 
 
 def test_room_auth_refusal_with_different_command_does_not_publish(attempt):

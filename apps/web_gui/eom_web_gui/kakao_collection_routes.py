@@ -37,7 +37,13 @@ def install_kakao_collection_routes(
         run_id: RunId,
         source_binding_id: Annotated[BindingId, Query()],
         session: Annotated[WebSession, Depends(require_session)],
+        include_failure_reason: Annotated[bool, Query()] = False,
     ) -> dict[str, object]:
-        result = await gateway.kakao_collection_status(session, source_binding_id, run_id)
+        if include_failure_reason:
+            result = await gateway.kakao_collection_status(
+                session, source_binding_id, run_id, include_failure_reason=True
+            )
+        else:
+            result = await gateway.kakao_collection_status(session, source_binding_id, run_id)
         response.headers["Cache-Control"] = "no-store"
         return result.model_dump(mode="json")

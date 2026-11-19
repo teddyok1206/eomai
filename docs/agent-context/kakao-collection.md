@@ -169,6 +169,9 @@ durable pending run을 선택한다. 원래 browser/attempt 및 source command�
 제안을 단일 `auth-refusal.json`으로 쓴다. `KakaoOneRoomCollection.finish`가 실제 브라우저
 종료 뒤 기존 result publisher와 attempt owner에 넘긴다. source나 새 수집을 만들지 않으며,
 원래 결과가 먼저 채택됐으면 작업 파일 없이 같은 단일 run을 종료한다.
+기존 상태 GET의 선택 `include_failure_reason`은 Catalog의 별도 읽기 `GET_KAKAO_ROOM_COLLECTION_VIEW`
+계약을 써 동일 run과 사유 코드만 가져온다. 기존 GET/POST 응답을 바꾸지 않으며 수집·로그인을
+실행할 권한이나 버튼으로 연결하지 않는다.
 
 ## 검증 경계
 

@@ -11,19 +11,21 @@ const bindingId='kakaobinding_'+'a'.repeat(32), roomA='kakaoroom_'+'b'.repeat(32
 const run='kakaorun_'+'d'.repeat(32), created='2026-11-18T01:02:03Z';
 const binding={state:'DRAFT', source_binding_id:bindingId,resource_version:3,policy_revision:{policy_revision_id:'kakaopolicyrev_'+'e'.repeat(32)}};
 const room=id=>({room_id:id,source_binding_id:bindingId,state:'ACTIVE',identity_level:'MANUAL_CONFIRMED'});
-const calls=[]; let lose=false, hold=false, release=null, state='QUEUED', version=1;
+const calls=[]; let lose=false, hold=false, release=null, state='QUEUED', version=1, reason=null;
 const api=async(path,options)=>{
  calls.push({path,options:options??null});
  if(options?.method==='POST'&&lose){lose=false;throw Error('lost reply');}
  if(hold)await new Promise(resolve=>{release=resolve;});
- return {schema_version:'kakao-collection-status/1.0',source_binding_id:bindingId,run_id:run,state,resource_version:version,
+ const collection={schema_version:'kakao-collection-status/1.0',source_binding_id:bindingId,run_id:run,state,resource_version:version,
     created_at:created,updated_at:created};
+ if(reason&&path.includes('include_failure_reason=true'))return {schema_version:'kakao-collection-status-view/1.0',collection,failure_reason:reason};
+ return collection;
 };
 const ui=createKakaoRoomCollection({document,api,explainError:()=>'fixture', schedule:setTimeout,unschedule:clearTimeout,pollMilliseconds:30000});
 ui.install(document.querySelector('#panel'));
 window.fixture={calls, select:(owner='owner-a',other=false,allowed=true)=>ui.setScope(owner,binding,room(other?roomB:roomA),allowed),
  lose:()=>{lose=true;},hold:()=>{hold=true;release=null;}, waiting:()=>Boolean(release),release:()=>{hold=false;release?.();},
- change:(next)=>{state=next;version++;}};
+ change:(next,hint=null)=>{state=next;reason=hint;version++;}};
 fixture.select();
 </script>`;
 const server = createServer((request,response) => {
@@ -67,6 +69,14 @@ try {
   await button('수집 상태 확인').waitFor();
   const fresh=(await page.evaluate(()=>fixture.calls)).find(call=>call.options?.method==='POST');
   assert.notEqual(fresh.options.headers['Idempotency-Key'],original.options.headers['Idempotency-Key']);
+  const countPosts = () => page.evaluate(()=>fixture.calls.filter(call=>call.options?.method==='POST').length);
+  const posts = await countPosts();
+  await page.evaluate(()=>fixture.change('FAILED','KAKAO_LOGIN_REQUIRED'));
+  await button('수집 상태 확인').click();
+  await page.getByText('카카오 로그인이 필요합니다.',{exact:false}).waitFor();
+  await button('수집 상태 확인').click();
+  await page.getByText('카카오 로그인이 필요합니다.',{exact:false}).waitFor();
+  assert.equal(await countPosts(), posts);
   assert.deepEqual(errors,[]);
   console.log('KAKAO_ROOM_COLLECTION_BROWSER=PASS');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }

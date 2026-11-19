@@ -172,7 +172,11 @@ from eom_web_gui.kakao_capture_contracts import (
     PhotoCheckResult,
     PhotoCheckSelection,
 )
-from eom_web_gui.kakao_collection_contracts import RoomCollectionStart, RoomCollectionStatus
+from eom_web_gui.kakao_collection_contracts import (
+    RoomCollectionStart,
+    RoomCollectionStatus,
+    RoomCollectionStatusView,
+)
 from eom_web_gui.kakao_concept_contracts import (
     ConceptCreate,
     ConceptHistory,
@@ -584,8 +588,13 @@ class ApplicationGateway(Protocol):
     ) -> RoomCollectionStatus: ...
 
     async def kakao_collection_status(
-        self, session: WebSession, source_binding_id: str, run_id: str
-    ) -> RoomCollectionStatus: ...
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        run_id: str,
+        *,
+        include_failure_reason: bool = False,
+    ) -> RoomCollectionStatus | RoomCollectionStatusView: ...
 
     async def kakao_manual_start(
         self, session: WebSession, value: ManualStart, idempotency_key: str
@@ -1662,15 +1671,41 @@ class HttpApplicationGateway:
         )
 
     async def kakao_collection_status(
-        self, session: WebSession, source_binding_id: str, run_id: str
-    ) -> RoomCollectionStatus:
+        self,
+        session: WebSession,
+        source_binding_id: str,
+        run_id: str,
+        *,
+        include_failure_reason: bool = False,
+    ) -> RoomCollectionStatus | RoomCollectionStatusView:
+        params: dict[str, str | int | float | bool | None] = {
+            "source_binding_id": source_binding_id
+        }
+        if include_failure_reason:
+            params["include_failure_reason"] = "true"
         response = await self._authorized(
             session,
             "GET",
             f"/api/v1/kakao-archive/collections/{quote(run_id, safe='')}",
-            params={"source_binding_id": source_binding_id},
+            params=params,
         )
-        return self._kakao_collection_result(self._data(response), source_binding_id, run_id)
+        data = self._data(response)
+        if (
+            include_failure_reason
+            and isinstance(data, dict)
+            and data.get("schema_version") == "kakao-collection-status-view/1.0"
+        ):
+            try:
+                view = RoomCollectionStatusView.model_validate(data)
+                if (view.collection.source_binding_id, view.collection.run_id) != (
+                    source_binding_id,
+                    run_id,
+                ):
+                    raise ValueError("different collection scope")
+                return view
+            except ValueError as error:
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+        return self._kakao_collection_result(data, source_binding_id, run_id)
 
     @staticmethod
     def _kakao_collection_result(

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/kakao-archive/catalog-kakao-collection-view-v1/1.0",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}, {"$ref": "#/$defs/failure"}, {"$ref": "#/$defs/view"}],
+  "$defs": {
+    "operation": {"const": "GET_KAKAO_ROOM_COLLECTION_VIEW"},
+    "request": {
+      "allOf": [{"$ref": "eom://schemas/kakao-archive/catalog-kakao-collection-v1/1.0#/$defs/identity"}, {
+        "type": "object", "required": ["operation", "source_binding_id", "run_id"],
+        "properties": {
+          "operation": {"$ref": "#/$defs/operation"},
+          "source_binding_id": {"$ref": "eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/binding"},
+          "run_id": {"$ref": "eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/run"}
+        }
+      }], "unevaluatedProperties": false
+    },
+    "view": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "collection", "failure_reason"],
+      "properties": {
+        "schema_version": {"const": "kakao-collection-status-view/1.0"},
+        "collection": {"$ref": "eom://schemas/kakao-archive/collection-intent-v1/1.0#/$defs/status"},
+        "failure_reason": {"enum": [null, "KAKAO_LOGIN_REQUIRED"]}
+      },
+      "if": {"properties": {"failure_reason": {"const": "KAKAO_LOGIN_REQUIRED"}}},
+      "then": {"properties": {"collection": {"properties": {"state": {"const": "FAILED"}}}}}
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "request_id", "status", "result", "error_code"],
+      "properties": {
+        "operation": {"$ref": "#/$defs/operation"},
+        "request_id": {"$ref": "eom://schemas/kakao-archive/catalog-kakao-collection-v1/1.0#/$defs/request-id"},
+        "status": {"const": "OK"}, "result": {"$ref": "#/$defs/view"}, "error_code": {"type": "null"}
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "request_id", "status", "result", "error_code"],
+      "properties": {
+        "operation": {"$ref": "#/$defs/operation"},
+        "request_id": {"$ref": "eom://schemas/kakao-archive/catalog-kakao-collection-v1/1.0#/$defs/request-id"},
+        "status": {"const": "ERROR"}, "result": {"type": "null"},
+        "error_code": {"$ref": "eom://schemas/kakao-archive/catalog-kakao-collection-v1/1.0#/$defs/failure/properties/error_code"}
+      }
+    }
+  }
+}

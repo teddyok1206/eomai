@@ -9,7 +9,7 @@ from unittest.mock import Mock
 from eom_api.app import create_app
 from eom_api.dependencies import get_authentication
 from eom_api.services.catalog_application_client import CatalogApplicationClient
-from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus
+from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus, KakaoCollectionStatusView
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_operator_identity import PermissionKey
 from fastapi import Request
@@ -35,6 +35,10 @@ def test_http_collection_start_and_read_use_separate_api_peer_operations(tmp_pat
     )
     owner.start_registered_room.return_value = published
     owner.get_status.return_value = published
+    owner.get_status_view.return_value = KakaoCollectionStatusView(
+        collection=published.model_copy(update={"state": "FAILED"}),
+        failure_reason="KAKAO_LOGIN_REQUIRED",
+    )
     directory = tmp_path / "collection-runtime"
     directory.mkdir()
     directory.chmod(0o750)
@@ -95,6 +99,14 @@ def test_http_collection_start_and_read_use_separate_api_peer_operations(tmp_pat
                 assert result.status_code == 200 and result.json()["data"]["state"] == "QUEUED"
             owner.start_registered_room.assert_called_once()
             assert owner.get_status.call_count == 2
+            result = client.get(
+                ROOT + "/" + RUN,
+                params={"source_binding_id": BINDING_ID, "include_failure_reason": "true"},
+            )
+            assert result.status_code == 200, result.text
+            assert result.json()["data"]["failure_reason"] == "KAKAO_LOGIN_REQUIRED"
+            assert result.json()["data"]["collection"]["state"] == "FAILED"
+            owner.get_status_view.assert_called_once()
             auth = replace(auth, permissions=frozenset({PermissionKey.KAKAO_ARCHIVE_READ}))
             assert client.post(ROOT, json=body, headers=headers).status_code == 403
             owner.start_registered_room.assert_called_once()

@@ -13,6 +13,7 @@ from eom_catalog_contracts.kakao_capability import ConfirmKakaoCapability
 from eom_catalog_contracts.kakao_collection import (
     AcceptedKakaoRoomCollection,
     KakaoCollectionStatus,
+    KakaoCollectionStatusView,
     KakaoRoomCollectionCreate,
 )
 from eom_identifiers import sha256_bytes
@@ -323,30 +324,64 @@ class KakaoCollectionService:
             session.flush()
             return self._receipt(session, row, replayed=False)
 
+    @staticmethod
+    def _authorized_status_run(
+        session: Session, actor: ActorContext, binding: str, run_id: str
+    ) -> Run:
+        owner, _ = authorize_kakao_binding_scope(
+            session, actor, binding, PermissionKey.KAKAO_ARCHIVE_READ, lock=False
+        )
+        row = session.scalar(
+            select(Run).where(
+                Run.run_id == run_id,
+                Run.source_binding_id == binding,
+                Run.owner_operator_id == owner,
+            )
+        )
+        if row is None:
+            raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
+        authorize_kakao_room_scope(
+            session,
+            actor,
+            binding,
+            row.anchor_room_id,
+            PermissionKey.KAKAO_ARCHIVE_READ,
+            lock=False,
+        )
+        validate_kakao_collection_pins(session, row)
+        return row
+
     def get_status(self, actor: ActorContext, binding: str, run_id: str) -> KakaoCollectionStatus:
         with self._sessions.begin() as session:
-            owner, _ = authorize_kakao_binding_scope(
-                session, actor, binding, PermissionKey.KAKAO_ARCHIVE_READ, lock=False
-            )
-            row = session.scalar(
-                select(Run).where(
-                    Run.run_id == run_id,
-                    Run.source_binding_id == binding,
-                    Run.owner_operator_id == owner,
+            return self._status(self._authorized_status_run(session, actor, binding, run_id))
+
+    def get_status_view(
+        self, actor: ActorContext, binding: str, run_id: str
+    ) -> KakaoCollectionStatusView:
+        with self._sessions.begin() as session:
+            row = self._authorized_status_run(session, actor, binding, run_id)
+            needs_login = (
+                row.state == "FAILED"
+                and session.scalar(
+                    select(Attempt.attempt_id)
+                    .join(Task, Task.task_id == Attempt.task_id)
+                    .where(
+                        Task.run_id == row.run_id,
+                        Task.ordinal == 1,
+                        Task.room_id == row.anchor_room_id,
+                        Task.state == "FAILED",
+                        Attempt.state == "RESULT_ACCEPTED",
+                        Attempt.result_status == "FAILED",
+                        Attempt.error_code == "AUTH_REQUIRED",
+                    )
+                    .limit(1)
                 )
+                is not None
             )
-            if row is None:
-                raise KakaoArchiveError("KAKAO_ARCHIVE_RESOURCE_NOT_FOUND")
-            authorize_kakao_room_scope(
-                session,
-                actor,
-                binding,
-                row.anchor_room_id,
-                PermissionKey.KAKAO_ARCHIVE_READ,
-                lock=False,
+            return KakaoCollectionStatusView(
+                collection=self._status(row),
+                failure_reason="KAKAO_LOGIN_REQUIRED" if needs_login else None,
             )
-            validate_kakao_collection_pins(session, row)
-            return self._status(row)
 
     def read_background_intent(self, run_id: str) -> StoredKakaoCollectionIntent:
         """Trusted composition only: reauthorize accepted intent, not expired HTTP auth.

@@ -50,3 +50,15 @@ class RoomCollectionStatus(WebModel):
         if self.updated_at < self.created_at:
             raise ValueError("invalid collection time")
         return self
+
+
+class RoomCollectionStatusView(WebModel):
+    schema_version: Literal["kakao-collection-status-view/1.0"]
+    collection: RoomCollectionStatus
+    failure_reason: Literal["KAKAO_LOGIN_REQUIRED"] | None
+
+    @model_validator(mode="after")
+    def valid_reason(self) -> Self:
+        if self.failure_reason is not None and self.collection.state != "FAILED":
+            raise ValueError("failure reason without a failed collection")
+        return self

@@ -5,7 +5,11 @@ from contextlib import contextmanager
 from typing import Annotated
 
 from eom_api_contracts import SingleResponse
-from eom_api_contracts.kakao_collection import KakaoCollectionStatus, KakaoRoomCollectionSelection
+from eom_api_contracts.kakao_collection import (
+    KakaoCollectionStatus,
+    KakaoCollectionStatusView,
+    KakaoRoomCollectionSelection,
+)
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
@@ -78,7 +82,7 @@ def start_collection(
 @router.get(
     "/{run_id}",
     operation_id="kakao_collection_status",
-    response_model=SingleResponse[KakaoCollectionStatus],
+    response_model=SingleResponse[KakaoCollectionStatus | KakaoCollectionStatusView],
     dependencies=[Depends(READ)],
 )
 def read_collection(
@@ -87,9 +91,16 @@ def read_collection(
     authentication: Auth,
     run_id: Annotated[str, Path(pattern=r"^kakaorun_[0-9a-f]{32}$")],
     source_binding_id: Annotated[str, Query(pattern=r"^kakaobinding_[0-9a-f]{32}$")],
-) -> SingleResponse[KakaoCollectionStatus]:
+    include_failure_reason: Annotated[bool, Query()] = False,
+) -> SingleResponse[KakaoCollectionStatus | KakaoCollectionStatusView]:
     with _boundary():
-        result = request.app.state.services.catalog_application.get_kakao_room_collection(
+        catalog = request.app.state.services.catalog_application
+        read = (
+            catalog.get_kakao_room_collection_view
+            if include_failure_reason
+            else catalog.get_kakao_room_collection
+        )
+        result = read(
             source_binding_id,
             run_id,
             actor=request.state.request_context.actor(),

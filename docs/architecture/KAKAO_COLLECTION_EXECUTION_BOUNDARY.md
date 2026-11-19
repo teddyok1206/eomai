@@ -1169,6 +1169,16 @@ Catalog 한 방 owner는 고정 workspace의 기존 제한 reader를 통해 이 
 잠금을 따른다. attempt당 고정 파일 한 개(32 KiB 상한), index lookup과 멱등 발행이며 새 저장
 형식·index·migration·외부 동작은 없다. 저널 파싱이나 추측으로는 실패 결과를 채택하지 않는다.
 
+### Studio의 로그인 필요 안내
+
+조회에서만 명시적으로 요청할 수 있는 상태 설명 계약을 별도로 둔다. 기존 collection status,
+POST와 GET 기본 응답은 그대로다. 새 조회는 이미 인가된 동일 방·run의 최초 task와 채택한
+C1 실패 결과를 조회해 `FAILED/AUTH_REQUIRED`이면 `KAKAO_LOGIN_REQUIRED`만 반환한다.
+채택한 근거가 없는 과거 실패를 추정하지 않는다. 권한, 상태, 브라우저 동작은 바뀌지 않는다.
+접근은 기존 run/ordinal unique key와 attempt FK/unique key 조회이며 상수 크기 응답이다.
+조회는 멱등이며 로그·화면·파일에 접근하지 않는다. v1에 새 필드를 넣거나 `FAILED`를 열린
+`AUTH_REQUIRED` state로 바꾸면 구 설치와 작업 상태 의미가 어긋나므로 별도 읽기 projection을 쓴다.
+
 epoch당 고정 입력/attempt 출력의 indexed path lookup, 제한된 DOM 탐색과 기존 원본 I/O만
 수행한다. 프로세스가 끊길 때 시작 표시와 원본을 남기고 같은 command를 자동 재실행하지
 않는다. 수락/재조회 권한·트랜잭션은 기존 Catalog owner에 남는다. 새 큐/DB/index/상시

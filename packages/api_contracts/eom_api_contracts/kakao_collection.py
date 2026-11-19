@@ -2,7 +2,7 @@
 
 from eom_catalog_contracts.kakao_archive_binding import KakaoPolicyRevisionId
 from eom_catalog_contracts.kakao_capability import ConfirmKakaoCapability
-from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus
+from eom_catalog_contracts.kakao_collection import KakaoCollectionStatus, KakaoCollectionStatusView
 from eom_catalog_contracts.models import FrozenModel
 
 
@@ -11,4 +11,4 @@ class KakaoRoomCollectionSelection(FrozenModel):
     expected_policy_revision_id: KakaoPolicyRevisionId
 
 
-__all__ = ["KakaoCollectionStatus", "KakaoRoomCollectionSelection"]
+__all__ = ["KakaoCollectionStatus", "KakaoCollectionStatusView", "KakaoRoomCollectionSelection"]
