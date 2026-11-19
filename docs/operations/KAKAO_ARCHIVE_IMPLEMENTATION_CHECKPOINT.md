@@ -17,6 +17,12 @@ Catalog socket·API readiness·Studio HTTPS를 확인했다. 새 migration, 로�
 운영 배포에 의한 수집 시작은 없다. 설치·복구 기록은
 `/var/lib/eom-kakao-account-route-release-353cb129/`에 있다.
 
+관리자가 같은 방에서 별개 요청을 시작했고, `2026-11-19 05:22:29 UTC`에 실제 수집기가
+`KAKAO_AUTO_POPUP_AND_LIST_TO_ACCOUNT_ORIGIN`으로 종료됐다. 방과 채널 목록 모두 카카오
+계정 화면으로 이동했다. 운영에서 `FAILED`와 원본 0건을 확인했다. 다음 확인은 같은 프로필을
+원격 모드에서 다시 열어 새 인증 없이 채널 목록이 열리는지 여부다. 이번 관측만으로
+프로필에 세션이 저장되지 않는지, 실행 모드에 따라 달라지는지는 단정하지 않는다.
+
 ## AUTO에서 MANUAL로 돌아갈 때의 원격 로그인 정체 수정
 
 운영에서 AUTO 브라우저 종료와 프로필 잠금 해제가 확인됐으나, 후속 MANUAL 요청이
