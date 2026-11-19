@@ -13,6 +13,13 @@ DOM 중 어느 조건인지 이 한 코드로는 구별할 수 없다. 사진·C
 격리 Chromium의 직접 방 성공·다른 방 이동 거부·목록 미접근을 포함한 소스 177건과 임시 DB
 7건이 통과했다. 실제 카카오에서 이 주소를 직접 열었을 때의 결과는 아직 검증 전이다.
 
+`ee8c0e1b`의 Platform과 새 계약을 Catalog 전용 설치에 넣고, 같은 계약 및 해당 collector를
+잠긴 브라우저 환경에 함께 설치했다. 운영 패키지의 schema 정본/미러와 RECORD 검사가 통과했다.
+Catalog socket·API ready·Studio HTTPS를 확인했다. 공유 API·Web·QUERY와 INDEX·자료 학습,
+DB head와 실제 프로필은 그대로다. 운영 확인 시점에서 이전 실패 2건과 원본 0건을 확인했으며,
+배포는 새 카카오 실행을 시작하지 않았다. 설치·복구 기록은
+`/var/lib/eom-kakao-popup-route-release-ee8c0e1b/`에 있다. `ONE_ROOM`만 유지한다.
+
 ## 종료가 확인된 방의 확정 수신물 오류 처리
 
 고정 명령과 다른 영수증 또는 읽은 파일의 크기/SHA·strict CSV 형식 오류는 실제 종료가
