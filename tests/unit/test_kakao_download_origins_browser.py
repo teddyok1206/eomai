@@ -92,6 +92,8 @@ TEXT_ONLY = AUTO_HTML.replace(
         "auto",
         "auto-persistent",
         "auto-persistent-other-page",
+        "auto-persistent-profile-handoff",
+        "auto-persistent-profile-session-only",
         "auto-text",
         "auto-popup",
         "auto-popup-direct",
@@ -108,6 +110,9 @@ TEXT_ONLY = AUTO_HTML.replace(
 def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_path, receiver):
     if not PYTHON.is_file() or not BROWSERS.is_dir():
         pytest.skip("explicit installed browser environment is unavailable")
+    profile_handoff = receiver.startswith("auto-persistent-profile-")
+    if profile_handoff and not Path("/usr/bin/Xtigervnc").is_file():
+        pytest.skip("isolated headed Chromium requires the installed X server")
     key, certificate = tmp_path / "fixture.key", tmp_path / "fixture.crt"
     subprocess.run(
         [
@@ -142,10 +147,20 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
             route = urlsplit(self.path).path
             if host == "business.kakao.com" and route in {PAGE, LIST, POPUP}:
                 visited_chat_pages.add(route)
-            if (
+            if host == "business.kakao.com" and route == "/fixture-session" and profile_handoff:
+                self.send_response(200)
+                age = "; Max-Age=600" if receiver.endswith("handoff") else ""
+                self.send_header(
+                    "Set-Cookie", f"fixture_session=yes; Secure; HttpOnly; Path=/{age}"
+                )
+                body = b"<!doctype html><title>Synthetic session</title>"
+            elif (
                 host == "business.kakao.com"
                 and route == LIST
-                and receiver in {"auto-persistent-other-page", "auto-popup-direct-account"}
+                and (
+                    receiver in {"auto-persistent-other-page", "auto-popup-direct-account"}
+                    or (profile_handoff and self.headers.get("Cookie") != "fixture_session=yes")
+                )
             ):
                 self.send_response(302)
                 self.send_header(
@@ -207,11 +222,15 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                         b"setTimeout(()=>document.documentElement.append(savedBody),450);"
                         b"</script></body>",
                     )
-                if route == LIST and receiver in {
-                    "auto-popup",
-                    "auto-wrong-popup",
-                    "auto-persistent",
-                }:
+                if route == LIST and (
+                    profile_handoff
+                    or receiver
+                    in {
+                        "auto-popup",
+                        "auto-wrong-popup",
+                        "auto-persistent",
+                    }
+                ):
                     opened = PAGE if receiver == "auto-wrong-popup" else POPUP
                     body = body.replace(
                         b"document.querySelector('.chat_popup').hidden=false",
@@ -316,7 +335,7 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
             pass
 
     script = r"""
-import asyncio, json, sys, tempfile
+import asyncio, json, os, secrets, select, struct, subprocess, sys, tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -336,6 +355,43 @@ from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
 from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadReceipt
 from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 
+def isolated_browser_options():
+ return dict(proxy={'server':sys.argv[1]},ignore_https_errors=True,
+     args=['--disable-quic','--ignore-certificate-errors',
+           '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'])
+
+async def seed_headed_profile(profile, root, sdk):
+ # This temporary display has neither an RFB endpoint nor unauthenticated X access.
+ auth=root/'fixture-xauth'
+ fields=(b'',b'',b'MIT-MAGIC-COOKIE-1',secrets.token_bytes(16))
+ auth.write_bytes(struct.pack('!H',65535)+b''.join(struct.pack('!H',len(v))+v for v in fields))
+ read,write=os.pipe()
+ try:
+  display=subprocess.Popen(['/usr/bin/Xtigervnc','-displayfd',str(write),'-nolisten','tcp',
+      '-rfbport','-1','-auth',str(auth),'-extension','GLX'],pass_fds=(write,),
+      stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  try:
+   assert select.select([read],[],[],5)[0], 'fixture display did not start'
+   number=os.read(read,8).strip().decode('ascii'); assert number.isdecimal()
+   environment=manual_driver.setup.browser_environment() | {
+       'DISPLAY':':'+number,'XAUTHORITY':str(auth)}
+   context=await sdk.chromium.launch_persistent_context(str(profile),headless=False,
+       chromium_sandbox=True,env=environment,no_viewport=True,**isolated_browser_options())
+   try:
+    page=context.pages[0]
+    await page.goto('https://business.kakao.com/fixture-session')
+    assert await page.title()=='Synthetic session'
+    assert (await context.cookies('https://business.kakao.com'))[0]['name']=='fixture_session'
+   finally:
+    await context.close()
+  finally:
+   display.terminate()
+   try: display.wait(timeout=5)
+   except subprocess.TimeoutExpired:
+    display.kill(); display.wait(timeout=2)
+ finally:
+  os.close(read); os.close(write)
+
 async def persistent_auto(command, root, incoming, outputs):
  request=AutoRoomCommand(command=command,space_key='synthetic',channel_key='p',room_key='r')
  profile=root/'empty-profile'; profile.mkdir(mode=0o700)
@@ -348,10 +404,8 @@ async def persistent_auto(command, root, incoming, outputs):
    assert options['headless'] and options['chromium_sandbox'] and options['accept_downloads']
    assert options['executable_path']==chromium.executable_path
    # Only this fixture supplies a proxy/certificate exception. DNS stays isolated.
-   return await chromium.launch_persistent_context(profile_path, **options,
-       proxy={'server':sys.argv[1]},ignore_https_errors=True,
-       args=['--disable-quic','--ignore-certificate-errors',
-             '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'])
+   return await chromium.launch_persistent_context(
+       profile_path, **options,**isolated_browser_options())
   return SimpleNamespace(stop=sdk.stop,chromium=SimpleNamespace(
       executable_path=chromium.executable_path,launch_persistent_context=launch))
  async def fixed_command(fence, stopping):
@@ -365,10 +419,12 @@ async def persistent_auto(command, root, incoming, outputs):
   sdk=await start()
   try:
    digest=manual_driver.setup.hash_executable(Path(sdk.chromium.executable_path))
+   if sys.argv[2].startswith('auto-persistent-profile-'):
+    await seed_headed_profile(profile,root,sdk)
   finally:
    await sdk.stop()
   config=manual_driver.setup.AutoSetup(command.execution.fence,digest)
-  if sys.argv[2]=='auto-persistent-other-page':
+  if sys.argv[2] in ('auto-persistent-other-page','auto-persistent-profile-session-only'):
    try:
     await manual_driver.run_auto(config,asyncio.Event())
    except BrowserRuntimeError as error:
@@ -608,9 +664,9 @@ asyncio.run(main())
     assert process.returncode == 0, process.stderr
     result = json.loads(process.stdout)
     assert result["synthetic_real_chromium_redirect"] == "PASS"
-    if receiver == "auto-persistent":
+    if receiver in {"auto-persistent", "auto-persistent-profile-handoff"}:
         assert result["persistent_auto"] == "PASS"
-    elif receiver == "auto-persistent-other-page":
+    elif receiver in {"auto-persistent-other-page", "auto-persistent-profile-session-only"}:
         assert result["persistent_auto"] == "REFUSED"
     elif receiver.startswith("auto-popup-direct"):
         assert POPUP in visited_chat_pages
