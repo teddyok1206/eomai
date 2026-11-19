@@ -12,6 +12,13 @@
 없는 이미지 pointer 및 전체 완료로 승격되지 않는 것을 확인했다. 합성 입력이며 운영 재실행의
 증거가 아니다.
 
+`b0d4e1d4` Platform wheel의 변경이 해당 두 Catalog 모듈뿐임을 비교하고, 기존 API와
+계약 wheel을 고정한 Catalog 전용 경로로 반영했다. 설치 member·Catalog socket·API ready·
+Studio HTTPS를 확인했다. 수집기/브라우저 프로필과 공유 API·Web·QUERY, INDEX·자료 학습은
+유지했으며 전체 방·주기 수집은 비활성 그대로다. 설치/직전 설정은
+`/var/lib/eom-kakao-unsupported-photo-release-b0d4e1d4/`에 보존했다. 배포가 새 카카오
+수집이나 이전 실패의 재처리를 시작하지 않았다.
+
 ## 사진 버튼이 클릭 전에 사라져도 방의 CSV 확보
 
 고정 사진 동작이 클릭 전에 거부되고 같은 페이지에 다운로드 이벤트가 없는 경우에는
