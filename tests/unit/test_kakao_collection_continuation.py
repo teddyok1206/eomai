@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_service import kakao_collection_continuation as module
 from eom_catalog_service.kakao_archive_authorization import KakaoArchiveError
+from eom_catalog_service.kakao_collection_attempt_service import UnusableKakaoOpenRoomOutput
 from eom_catalog_service.kakao_collection_service import PendingKakaoRoomRun
 
 
@@ -40,19 +41,28 @@ def test_restart_restores_same_pending_attempt_and_does_not_relaunch(monkeypatch
 
 
 @pytest.mark.parametrize(
-    "code", ["KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING", "KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID"]
+    ("error", "progress"),
+    [
+        (KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING"), "FAILED"),
+        (KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID"), "FAILED"),
+        (UnusableKakaoOpenRoomOutput("KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID"), "FAILED"),
+        (KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID"), "ERROR"),
+    ],
 )
-def test_unusable_receipt_finishes_as_failure_instead_of_retry(code):
+def test_only_definite_unusable_output_finishes_as_failure(error, progress):
     owner = Mock()
     owner.collections.next_pending_room.return_value = PendingKakaoRoomRun(
         "run", "attempt", "browser"
     )
     owner.attempts.get_attempt.return_value = SimpleNamespace(state="COMMAND_READY")
     owner.attempts.source_adoption_pin.return_value = (None, 0)
-    owner.finish.side_effect = KakaoArchiveError(code)
+    owner.finish.side_effect = error
     continuation = module.KakaoCollectionContinuation(owner)
     continuation._scope = ("run", "space", ("channel", "room"))
-    assert continuation.advance_once() == "FAILED"
-    owner.browsers.record_unusable_one_room_output.assert_called_once_with("browser")
+    assert continuation.advance_once() == progress
+    if progress == "FAILED":
+        owner.browsers.record_unusable_one_room_output.assert_called_once_with("browser")
+    else:
+        owner.browsers.record_unusable_one_room_output.assert_not_called()
     owner.start_registered_room.assert_not_called()
     owner.dispatch.assert_not_called()

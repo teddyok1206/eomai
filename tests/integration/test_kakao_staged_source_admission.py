@@ -444,6 +444,81 @@ def test_unreadable_open_room_receipt_fails_only_after_exact_browser_closure(sta
     runtime.ensure_started.assert_not_called()
 
 
+@pytest.mark.parametrize("fault", ["hash", "csv", "command", "temporary-io"])
+def test_closed_room_rejects_invalid_bytes_but_retries_temporary_io(staged, monkeypatch, fault):
+    data, browser = staged.data, staged.attempt.browser
+    room = ("channel-one", "room-one")
+    attempts = staged.attempt.service
+    attempts.prepare_auto_room(data.reserved.attempt_id, space_key="scope", expected_room=room)
+    outputs = staged.workspace / "outputs"
+    raw = (
+        b"invalid header"
+        if fault == "csv"
+        else csv_bytes([["2026-11-16 12:00:00", "synthetic", "question"]])
+    )
+    local_csv = outputs / "source.csv"
+    local_csv.write_bytes(raw)
+    receipt = OpenRoomDownloadReceipt(
+        command_sha256=sha256(b"foreign") if fault == "command" else data.command_pointer.sha256,
+        started_at=data.report.observed_start_at,
+        ended_at=data.report.observed_end_at,
+        raw_csv=CsvMember(
+            relative_path="outputs/source.csv",
+            sha256=sha256(b"foreign") if fault == "hash" else sha256(raw),
+            size_bytes=len(raw),
+        ),
+        csv_document=None,
+        photos=(),
+        unresolved_visible_bubbles=0,
+    )
+    local_receipt = outputs / "open-room.json"
+    local_receipt.write_bytes(receipt.encoded())
+    local_receipt.chmod(0o640)
+    runtime = Mock()
+    runtime.close.side_effect = lambda intent: closed(browser, intent)
+    browser.h.now = max(browser.h.now, datetime.now(UTC))
+    owner = KakaoOneRoomCollection(
+        engine=staged.attempt.engine,
+        collections=browser.collection.service,
+        browsers=browser.service,
+        attempts=attempts,
+        runtime=runtime,
+        observe_profile=browser.h.profile_proof,
+        result_publisher=staged.publisher,
+        source_commit="a" * 40,
+        output_root=staged.root,
+        worker_uid=os.getuid(),
+        control_gid=os.getgid(),
+    )
+    continuation = KakaoCollectionContinuation(owner)
+
+    def status():
+        return owner.collections.get_status(
+            staged.attempt.actor, data.command.source_binding_id, data.command.run_id
+        ).state
+
+    baseline = counts(staged.attempt)
+    if fault == "temporary-io":
+        with monkeypatch.context() as temporary:
+            temporary.setattr(
+                capture_inputs.KakaoCaptureOutputReader,
+                "__call__",
+                Mock(side_effect=OSError("synthetic transient read failure")),
+            )
+            assert continuation.advance_once() == "ERROR" and status() == "COLLECTING"
+            assert counts(staged.attempt) == baseline
+        assert continuation.advance_once() == "STORED" and status() == "PARTIAL"
+    else:
+        assert continuation.advance_once() == "FAILED" and status() == "FAILED"
+        assert attempts.get_attempt(data.reserved.attempt_id).state == "COMMAND_READY"
+        assert counts(staged.attempt) == baseline
+    assert continuation.advance_once() == "IDLE"
+    assert local_receipt.read_bytes() == receipt.encoded() and local_csv.read_bytes() == raw
+    runtime.close.assert_called_once()
+    runtime.ensure_started.assert_not_called()
+    runtime.browser.stage_auto_room.assert_not_called()
+
+
 def test_actual_files_admit_duplicate_occurrences_and_replay_without_workspace(staged):
     with Session(staged.attempt.engine) as session, session.begin():
         session.get(ApiSessionRecord, staged.attempt.actor.session_id).revoked_at = datetime.now(

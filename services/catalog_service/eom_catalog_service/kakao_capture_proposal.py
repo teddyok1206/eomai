@@ -38,6 +38,10 @@ from .kakao_photo_alignment import infer_scoped_photo_occurrence
 _PHOTO_MEMBER = re.compile(r"outputs/photo-[1-6]\.bin")
 
 
+class InvalidKakaoCaptureBytes(ValueError):
+    """Deterministic rejection of the supplied bytes, not I/O or decoder availability."""
+
+
 @dataclass(frozen=True, slots=True)
 class OpenRoomDownloadEvidence:
     """Trusted composition input, already scoped to the command's room and attempt."""
@@ -85,13 +89,13 @@ def _attachment(
 ) -> CaptureAttachment:
     raw = read_photo(photo)
     if type(raw) is not bytes or len(raw) != photo.size_bytes:
-        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+        raise InvalidKakaoCaptureBytes("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
     try:
         receipt = inspect_kakao_media(command.source_binding_id, raw)
     except InvalidKakaoMedia:
         receipt = None
     if (receipt.source_sha256 if receipt else sha256(raw)) != photo.sha256:
-        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+        raise InvalidKakaoCaptureBytes("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
     identity = f"eom:kakao:attachment:{command.snapshot_revision_id}:{row}:1"
     return CaptureAttachment(
         attachment_id="kakaoattachment_" + uuid5(NAMESPACE_URL, identity).hex,
@@ -140,14 +144,17 @@ def build_open_room_proposal(
             for photo in photos
         )
     ):
-        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_INVALID")
-    parsed = read_kakao_csv_messages(source)
+        raise InvalidKakaoCaptureBytes("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_INVALID")
+    try:
+        parsed = read_kakao_csv_messages(source)
+    except ValueError as error:
+        raise InvalidKakaoCaptureBytes(str(error)) from None
     if (
         evidence.raw_csv.relative_path != "outputs/source.csv"
         or evidence.raw_csv.sha256 != parsed.source_sha256
         or evidence.raw_csv.size_bytes != parsed.source_bytes
     ):
-        raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
+        raise InvalidKakaoCaptureBytes("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
     matches: list[tuple[int, RoomPhotoReceipt]] = []
     csv_doc = evidence.csv_document
     if csv_doc is not None:

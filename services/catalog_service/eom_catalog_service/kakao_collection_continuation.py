@@ -6,6 +6,7 @@ from typing import Literal
 from eom_orchestrator.kakao_collection_browser_runtime import KakaoCollectionBrowserRuntimeError
 
 from .kakao_archive_authorization import KakaoArchiveError
+from .kakao_collection_attempt_service import UnusableKakaoOpenRoomOutput
 from .kakao_collection_input_publication import read_registered_collection_room
 from .kakao_one_room_collection import KakaoOneRoomCollection
 
@@ -91,13 +92,13 @@ class KakaoCollectionContinuation:
             return "ERROR"
         except KakaoArchiveError as error:
             if (
-                error.code
+                isinstance(error, UnusableKakaoOpenRoomOutput)
+                or error.code
                 in {
                     "KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING",
                     "KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID",
                 }
-                and pending.browser_run_id
-            ):
+            ) and pending.browser_run_id:
                 owner.browsers.record_unusable_one_room_output(pending.browser_run_id)
                 return "FAILED"
             if error.code in {

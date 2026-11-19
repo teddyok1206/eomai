@@ -155,7 +155,8 @@ receipt→동일 browser의 종료→원본 수락·단일 run 종료를 기존 
 capability를 복제하지 않으며, 발행 뒤 pin 중단은 동일 member revision을 재사용한다.
 기존 Catalog runner의 `ONE_ROOM` 설정이 맞으면 `kakao_collection_continuation.py`가
 durable pending run을 선택한다. 원래 browser/attempt 및 source command의 CAS를 재사용하고
-수신물 없이 실제 종료된 한 방은 `FAILED`로 남긴다. 사용자의 상태 조회는 `get_status`만
+수신물이 없거나 고정 수신물의 내용이 확정적으로 잘못된 한 방은 실제 종료 확인 뒤 `FAILED`로
+남긴다. 일반 I/O·인가·발행 오류를 수신물 오류로 바꾸지 않는다. 사용자의 상태 조회는 `get_status`만
 호출한다. HTTP→보호된 API-peer의 collection 요청은 `kakao_collection_dispatch.py`에서
 검증하고, 기능이 꺼져 있으면 작업을 접수하지 않는다. Studio의 `kakao_collection_routes.py`
 및 `kakao-room-collection.js`는 admin/CSRF로 등록된 방 수집을 접수하고, 같은 탭에서

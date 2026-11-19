@@ -33,6 +33,7 @@ from eom_kakao_archive_contracts.open_room_download import OpenRoomDownloadRecei
 from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.kakao_capture_inputs import KakaoCaptureInputError
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel
 from sqlalchemy import Engine, select
@@ -47,6 +48,7 @@ from .kakao_archive_authorization import (
 from .kakao_archive_commands import kakao_command_sha256
 from .kakao_capability_models import KakaoCapabilityAcceptanceRecord as Capability
 from .kakao_capture_proposal import (
+    InvalidKakaoCaptureBytes,
     OpenRoomDownloadEvidence,
     RoomCaptureDocuments,
     build_open_room_proposal,
@@ -82,6 +84,10 @@ from .kakao_source_service import AcceptedKakaoSource, KakaoSourceService
 
 _INVALID = "KAKAO_ARCHIVE_CAPTURE_EVIDENCE_INVALID"
 type CaptureSourcePrincipal = ActorContext | KakaoCollectionSourceAccess
+
+
+class UnusableKakaoOpenRoomOutput(KakaoArchiveError):
+    """The fixed local handoff is invalid, before any accepted result publication."""
 
 
 def _identity(row: Attempt) -> KakaoCollectionAttempt:
@@ -587,7 +593,7 @@ class KakaoCollectionAttemptService:
                 receipt.command_sha256 != expected.command.sha256
                 or receipt.started_at < command.issued_at
             ):
-                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
+                raise UnusableKakaoOpenRoomOutput("KAKAO_ARCHIVE_CAPTURE_IDENTITY_MISMATCH")
             return build_open_room_proposal(
                 command,
                 capability,
@@ -606,6 +612,16 @@ class KakaoCollectionAttemptService:
             )
         except KakaoArchiveError:
             raise
+        except InvalidKakaoCaptureBytes:
+            raise UnusableKakaoOpenRoomOutput(_INVALID) from None
+        except KakaoCaptureInputError as error:
+            if str(error) in {
+                "KAKAO_CAPTURE_MEMBER_HASH_MISMATCH",
+                "KAKAO_CAPTURE_MEMBER_INVALID",
+                "KAKAO_CAPTURE_RECEIPT_INVALID",
+            }:
+                raise UnusableKakaoOpenRoomOutput(_INVALID) from None
+            raise KakaoArchiveError(_INVALID) from None
         except (ValueError, OSError):
             raise KakaoArchiveError(_INVALID) from None
 
