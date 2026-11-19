@@ -165,6 +165,11 @@ durable pending run을 선택한다. 원래 browser/attempt 및 source command�
 같은 owner/binding/room의 미확정 키 또는 수집 ID를 되찾는다. 접수 뒤는 GET만 쓴다.
 운영 활성화와 전체 방 주기 수집은 별도다.
 
+계정 화면으로 이동한 방과 목록이 모두 확인되면 collector는 기존 C1 `FAILED/AUTH_REQUIRED`
+제안을 단일 `auth-refusal.json`으로 쓴다. `KakaoOneRoomCollection.finish`가 실제 브라우저
+종료 뒤 기존 result publisher와 attempt owner에 넘긴다. source나 새 수집을 만들지 않으며,
+원래 결과가 먼저 채택됐으면 작업 파일 없이 같은 단일 run을 종료한다.
+
 ## 검증 경계
 
 `manual_observation.py`는 leaf element뿐 아니라 direct text/BR 조각도 관측한다. 원문 CSV가

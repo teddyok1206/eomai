@@ -37,6 +37,7 @@ from .render import (
 )
 
 SCHEMA_SHA256 = "sha256:9c9cd7cc4438a194acd157775261b4ac846e0b7ab12ee2aa05e79560777746ce"
+ROOM_AUTH_REFUSAL_NAME = "auth-refusal.json"
 CAPTURE_BYTES_LIMIT = 256 * 1024 * 1024
 MAX_FENCE = 2147483647
 RoomId = Annotated[str, Field(pattern=r"^kakaoroom_[0-9a-f]{32}$")]

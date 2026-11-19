@@ -8,7 +8,7 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eom_kakao_archive_contracts.capture import CsvMember
+from eom_kakao_archive_contracts.capture import ROOM_AUTH_REFUSAL_NAME, CsvMember
 from eom_kakao_archive_contracts.open_room_download import (
     MAX_OPEN_ROOM_RECEIPT_BYTES,
     OPEN_ROOM_RECEIPT_NAME,
@@ -79,6 +79,10 @@ class KakaoCaptureOutputReader:
     def read_result(self) -> bytes:
         """Fixed bounded proposal only; the accepted command's owner validates C1."""
         return self._read("outputs/result.json", maximum=32768)
+
+    def read_room_auth_refusal(self) -> bytes:
+        """Fixed C1 failure proposal, distinct from an ordinary staged result."""
+        return self._read(f"outputs/{ROOM_AUTH_REFUSAL_NAME}", maximum=32768)
 
     def open_room_download(self) -> OpenRoomDownloadReceipt:
         raw = self._read(f"outputs/{OPEN_ROOM_RECEIPT_NAME}", maximum=MAX_OPEN_ROOM_RECEIPT_BYTES)

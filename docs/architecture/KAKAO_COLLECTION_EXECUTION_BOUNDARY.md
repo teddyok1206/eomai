@@ -1152,6 +1152,23 @@ publication 경계 변경은 없다. lookup과 bounded DOM 검사 비용도 기�
 2초 안에 한 번 읽어 방 주소에서만 이동했는지 구분한다. 목록의 exact 방 관측이나 목록 역시
 계정 화면으로 이동했다는 고정 진단만 남긴다. 어떤 판정에서도 방 열기·다운로드·로그인·재시도는 없다.
 
+### 계정 화면 이동의 실패 결과 보존
+
+방과 검증된 채널 목록이 모두 계정 origin으로 이동하면 실행기는 기존 C1 `FAILED / AUTH_REQUIRED`
+결과를 고정된 로컬 `outputs/auth-refusal.json`에 한 번 기록한다. 같은 room·run·정확한 command digest와
+attempt/fence/adapter/capability를 그대로 쓰고 report나 source member는 없다. 확인되지 않은
+다른 이동과 실패는 기존 방 수신 처리로 남긴다. 브라우저는 로그인이나 다운로드를 하지 않는다.
+
+Catalog 한 방 owner는 고정 workspace의 기존 제한 reader를 통해 이 결과를 읽고, 실제 동일
+브라우저의 닫힘을 확인한 뒤 기존 C1 발행·인가·exact-key replay로 실패 근거를 채택한다.
+결과 채택과 단일 방 run 종료 사이의 중단은 이미 채택한 정확한 결과로 복구한다. run과 task는
+기존 `FAILED`로 종료해 자동 재시도나 새로운 상태/잠금 정책을 만들지 않는다. 성공/부분 수신은
+기존 source 흐름이며 실패 결과와 수신 영수증의 충돌을 성공으로 처리하지 않는다.
+
+정본은 기존 result Artifact와 Attempt pointer, 상태 트랜잭션은 기존 binding→profile→run→browser→task
+잠금을 따른다. attempt당 고정 파일 한 개(32 KiB 상한), index lookup과 멱등 발행이며 새 저장
+형식·index·migration·외부 동작은 없다. 저널 파싱이나 추측으로는 실패 결과를 채택하지 않는다.
+
 epoch당 고정 입력/attempt 출력의 indexed path lookup, 제한된 DOM 탐색과 기존 원본 I/O만
 수행한다. 프로세스가 끊길 때 시작 표시와 원본을 남기고 같은 command를 자동 재실행하지
 않는다. 수락/재조회 권한·트랜잭션은 기존 Catalog owner에 남는다. 새 큐/DB/index/상시

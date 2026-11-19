@@ -678,7 +678,18 @@ class KakaoCollectionAttemptService:
                 raise ValueError
             result = CaptureResult.model_validate_json(raw)
             if canonical_json_bytes(result.model_dump(mode="json")) != raw:
-                raise ValueError
+                raise UnusableKakaoOpenRoomOutput(_INVALID)
+            if result.report is None:
+                try:
+                    validate_capture_result(
+                        command,
+                        result,
+                        None,
+                        capability=capability,
+                        current_fence=command.execution.fence,
+                    )
+                except ValueError:
+                    raise UnusableKakaoOpenRoomOutput(_INVALID) from None
             authorize()
             report = None
             if result.report is not None:
@@ -1150,3 +1161,39 @@ class KakaoCollectionAttemptService:
                 raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
             task.state, run.state = outcome, outcome
             run.updated_at, run.resource_version = datetime.now(UTC), run.resource_version + 1
+
+    def finalize_one_room_auth_refusal(self, attempt_id: str) -> bool:
+        """Close an exact accepted refusal after its browser stopped. Never retry it."""
+        with self._sessions.begin() as session:
+            seed = session.get(Attempt, attempt_id)
+            if seed is None or (seed.state, seed.result_status, seed.error_code) != (
+                "RESULT_ACCEPTED",
+                "FAILED",
+                "AUTH_REQUIRED",
+            ):
+                return False
+            browser, _, run = lock_kakao_collection_browser(
+                session, seed.browser_run_id, profile_id=self.profile_id
+            )
+            task = session.scalar(
+                select(Task).where(Task.task_id == seed.task_id).with_for_update()
+            )
+            if (
+                browser.phase != "CLOSED"
+                or run.current_browser_run_id is not None
+                or task is None
+                or (task.run_id, task.ordinal, task.room_id, task.state)
+                != (run.run_id, 1, run.anchor_room_id, "FAILED")
+                or session.scalar(
+                    select(Task.task_id).where(Task.run_id == run.run_id, Task.ordinal > 1).limit(1)
+                )
+                is not None
+            ):
+                raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+            if run.state != "FAILED":
+                if run.state != "COLLECTING":
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
+                self._authorize(session, run)
+                run.state = "FAILED"
+                run.updated_at, run.resource_version = datetime.now(UTC), run.resource_version + 1
+            return True

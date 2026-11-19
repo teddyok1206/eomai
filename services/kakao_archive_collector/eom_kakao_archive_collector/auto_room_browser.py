@@ -13,9 +13,15 @@ from eom_kakao_archive_contracts.auto_room_command import (
     AutoRoomPopupCommand,
     decode_auto_room_input,
 )
+from eom_kakao_archive_contracts.capture import (
+    ROOM_AUTH_REFUSAL_NAME,
+    CaptureResult,
+    validate_capture_contract,
+)
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
+from eom_kakao_archive_contracts.render import canonical_bytes, sha256
 
-from .manual_capture_files import create_capture_directory
+from .manual_capture_files import create_capture_directory, write_capture_receipt
 from .manual_observation import download_page_path
 from .open_room_capture import capture_open_room_attempt
 from .profile import BrowserRuntimeError, protected_directory, read_protected
@@ -27,6 +33,7 @@ ROOM_COMMAND_WAIT = 120.0
 ROOM_LOAD_SECONDS = 10.0
 LIST_DIAGNOSTIC_SECONDS = 2.0
 _ORIGIN = "https://business.kakao.com"
+_ACCOUNT_REQUIRED = "KAKAO_AUTO_POPUP_AND_LIST_TO_ACCOUNT_ORIGIN"
 _DOM_FAILURES = frozenset(
     {
         "KAKAO_AUTO_ROOM_DOM_SCOPE_UNAVAILABLE",
@@ -232,7 +239,7 @@ async def read_registered_room(
             if probe in ("READY", "OPENED") and download_page_path(page) == path:
                 return "KAKAO_AUTO_POPUP_ACCOUNT_REDIRECT_WITH_VERIFIED_LIST"
             if _account_origin(page):
-                return "KAKAO_AUTO_POPUP_AND_LIST_TO_ACCOUNT_ORIGIN"
+                return _ACCOUNT_REQUIRED
             return "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
         # A return to the exact known list is useful evidence, never fallback authority.
         probe = await observe(path, "PROBE", LIST_DIAGNOSTIC_SECONDS)
@@ -244,7 +251,24 @@ async def read_registered_room(
 
     state = await observe(destination, "CONFIRM" if direct else "PROBE", ROOM_LOAD_SECONDS)
     if state == "PAGE_MOVED":
-        raise BrowserRuntimeError(await popup_rejection() if direct else rejection)
+        reason = await popup_rejection() if direct else rejection
+        if reason == _ACCOUNT_REQUIRED:
+            bound = command.command
+            refusal = CaptureResult(
+                execution=bound.execution,
+                run_id=bound.run_id,
+                source_binding_id=bound.source_binding_id,
+                room_id=bound.room_id,
+                command_sha256=sha256(canonical_bytes(bound.model_dump(mode="json"))),
+                adapter_release_sha256=bound.adapter_release_sha256,
+                capability_revision_id=bound.capability_revision_id,
+                status="FAILED",
+                error_code="AUTH_REQUIRED",
+                report=None,
+            ).model_dump(mode="json")
+            validate_capture_contract("result", refusal)
+            write_capture_receipt(outputs / ROOM_AUTH_REFUSAL_NAME, canonical_bytes(refusal))
+        raise BrowserRuntimeError(reason)
 
     selected = page
     if not direct and state == "READY":

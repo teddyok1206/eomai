@@ -3,6 +3,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from io import BytesIO
+from os import getgid, getuid
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Barrier
 from time import sleep
 from types import SimpleNamespace
@@ -21,16 +24,21 @@ from eom_catalog_service.kakao_archive_intake import publish_kakao_capture
 from eom_catalog_service.kakao_collection_attempt_models import (
     KakaoCollectionAttemptRecord as Attempt,
 )
-from eom_catalog_service.kakao_collection_attempt_service import KakaoCollectionAttemptService
+from eom_catalog_service.kakao_collection_attempt_service import (
+    KakaoCollectionAttemptService,
+    UnusableKakaoOpenRoomOutput,
+)
 from eom_catalog_service.kakao_collection_input_publication import prepare_kakao_registered_room
 from eom_catalog_service.kakao_collection_models import KakaoCollectionRunRecord as Run
 from eom_catalog_service.kakao_collection_models import KakaoCollectionTaskRecord as Task
 from eom_catalog_service.kakao_csv_parser import parse_kakao_csv
 from eom_catalog_service.kakao_one_room_collection import KakaoOneRoomCollection
+from eom_catalog_service.kakao_source_models import KakaoSourceRevisionRecord
 from eom_catalog_service.kakao_source_service import KakaoSourceService
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service.models import OperatorRecord
 from eom_kakao_archive_contracts.capture import (
+    ROOM_AUTH_REFUSAL_NAME,
     CaptureAttachment,
     CaptureCommand,
     CaptureInventory,
@@ -43,6 +51,7 @@ from eom_kakao_archive_contracts.capture import (
 from eom_kakao_archive_contracts.execution import WorkerExecution
 from eom_kakao_archive_contracts.render import LocalMember
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.kakao_collection_browser_runtime import KakaoCollectionBrowserRuntimeError
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import func, select, update
@@ -909,6 +918,113 @@ def test_failed_capture_history_cannot_be_replaced_by_success_or_restarted(attem
             .where(Attempt.attempt_id == result.attempt_id)
             .values(error_code="TIMEOUT")
         )
+
+
+@pytest.fixture
+def protected_auto_outputs():
+    with TemporaryDirectory(prefix="kakao-auto-refusal-", dir=Path.home() / ".cache") as folder:
+        root = Path(folder)
+        root.chmod(0o2750)
+        yield root
+
+
+def test_room_auth_refusal_survives_loss_after_result_adoption(
+    attempt, monkeypatch, protected_auto_outputs
+):
+    data = result_proposal(attempt, status="FAILED", error="AUTH_REQUIRED")
+    scope = attempt.browser
+    root = protected_auto_outputs
+    outputs = root / data.reserved.attempt_id / "outputs"
+    outputs.mkdir(parents=True)
+    outputs.parent.chmod(0o750)
+    outputs.chmod(0o750)
+    receipt = outputs / ROOM_AUTH_REFUSAL_NAME
+    receipt.write_bytes(canonical_json_bytes(data.result.model_dump(mode="json")))
+    receipt.chmod(0o640)
+    scope.h.now = max(scope.h.now, datetime.now(UTC))
+    runtime = Mock()
+    runtime.close.side_effect = lambda intent: closed(scope, intent)
+    runtime.running_handle.side_effect = [
+        object(),
+        KakaoCollectionBrowserRuntimeError("ATTEMPT_CLOSED"),
+    ]
+    owner = KakaoOneRoomCollection(
+        engine=attempt.engine,
+        collections=scope.collection.service,
+        browsers=scope.service,
+        attempts=attempt.service,
+        runtime=runtime,
+        observe_profile=scope.h.profile_proof,
+        result_publisher=ControlFileSetPublisher(attempt.engine, attempt.artifacts.settings),
+        source_commit="a" * 40,
+        output_root=root,
+        worker_uid=getuid(),
+        control_gid=getgid(),
+    )
+    args = dict(
+        room=("channel-one", "room-one"),
+        idempotency_key="auth-refused-no-source",
+        expected_source_revision_id=None,
+        expected_resource_version=0,
+    )
+    assert owner.finish(data.reserved.attempt_id, **args) is None
+    runtime.close.assert_not_called()
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(
+            attempt.service,
+            "finalize_one_room_auth_refusal",
+            Mock(side_effect=RuntimeError("lost after adoption")),
+        )
+        with pytest.raises(RuntimeError, match="lost after adoption"):
+            owner.finish(data.reserved.attempt_id, **args)
+    with Session(attempt.engine) as session:
+        row = session.get(Attempt, data.reserved.attempt_id)
+        assert (row.result_status, row.error_code, row.report_sha256) == (
+            "FAILED",
+            "AUTH_REQUIRED",
+            None,
+        )
+        pointer = row.result_artifact_revision_id, row.result_sha256
+        assert session.get(Run, row.run_id).state == "COLLECTING"
+    receipt.unlink()
+    for _ in range(2):
+        with pytest.raises(KakaoArchiveError, match="KAKAO_ARCHIVE_CAPTURE_AUTH_REQUIRED"):
+            owner.finish(data.reserved.attempt_id, **args)
+    runtime.close.assert_called_once()
+    assert runtime.running_handle.call_count == 2
+    with Session(attempt.engine) as session:
+        row = session.get(Attempt, data.reserved.attempt_id)
+        assert (row.result_artifact_revision_id, row.result_sha256) == pointer
+        assert session.get(Run, row.run_id).state == "FAILED"
+        assert session.get(Task, row.task_id).state == "FAILED"
+        assert not session.scalar(
+            select(KakaoSourceRevisionRecord.source_revision_id).where(
+                KakaoSourceRevisionRecord.source_binding_id == row.source_binding_id
+            )
+        )
+
+
+def test_room_auth_refusal_with_different_command_does_not_publish(attempt):
+    data = result_proposal(attempt, status="FAILED", error="AUTH_REQUIRED")
+    raw = data.result.model_dump(mode="json")
+    raw["command_sha256"] = "sha256:" + "0" * 64
+    publisher = ControlFileSetPublisher(attempt.engine, attempt.artifacts.settings)
+    with pytest.raises(UnusableKakaoOpenRoomOutput, match="CAPTURE_EVIDENCE_INVALID"):
+        attempt.service.publish_and_accept_result(
+            data.reserved.attempt_id,
+            publisher=publisher,
+            source_commit="a" * 40,
+            read_result=lambda: canonical_json_bytes(raw),
+            read_member=lambda _: pytest.fail("a failure has no source members"),
+        )
+    assert attempt.service.get_attempt(data.reserved.attempt_id).state == "COMMAND_READY"
+    assert (
+        publisher.find_published_primary_member(
+            idempotency_key="kakao:capture-result:" + data.reserved.attempt_id,
+            artifact_type="control_kakao_capture_result",
+        )
+        is None
+    )
 
 
 def test_current_owner_revocation_during_artifact_io_blocks_adoption(attempt, monkeypatch):

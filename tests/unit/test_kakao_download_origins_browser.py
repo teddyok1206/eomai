@@ -348,7 +348,8 @@ from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_collector.room_read_actions import RoomReadAction, trigger_room_read_action
 from eom_kakao_archive_collector.room_read_transfer import receive_room_transfer
 from eom_kakao_archive_contracts.auto_room_command import AutoRoomCommand,AutoRoomPopupCommand
-from eom_kakao_archive_contracts.capture import CaptureCommand
+from eom_kakao_archive_contracts.capture import ROOM_AUTH_REFUSAL_NAME,CaptureCommand,CaptureResult
+from eom_kakao_archive_contracts.capture import validate_capture_contract
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 from eom_kakao_archive_contracts.manual_download import ManualDownloadResult
 from eom_kakao_archive_contracts.manual_observation import ManualPageObservation
@@ -567,7 +568,18 @@ async def main():
       clicks=0 if redirected_to_list else None if direct else 1
       assert await page.evaluate('window.roomClicks')==clicks
       assert (await page.evaluate('window.danger')) in (None,0)
-      assert not tuple(outputs.iterdir())
+      if sys.argv[2]=='auto-popup-direct-account':
+       assert {p.name for p in outputs.iterdir()}=={ROOM_AUTH_REFUSAL_NAME}
+       raw=(outputs/ROOM_AUTH_REFUSAL_NAME).read_bytes()
+       result=CaptureResult.model_validate_json(raw)
+       validate_capture_contract('result',result.model_dump(mode='json'))
+       assert raw==canonical_bytes(result.model_dump(mode='json'))
+       assert (result.execution,result.run_id,result.room_id)==(
+           command.execution,command.run_id,command.room_id)
+       assert result.command_sha256==sha256(canonical_bytes(command.model_dump(mode='json')))
+       assert (result.status,result.error_code,result.report)==('FAILED','AUTH_REQUIRED',None)
+      else:
+       assert not tuple(outputs.iterdir())
       await context.close(); await browser.close()
       print(json.dumps({'synthetic_real_chromium_redirect':'PASS','wrong_popup':'REFUSED'}))
       return

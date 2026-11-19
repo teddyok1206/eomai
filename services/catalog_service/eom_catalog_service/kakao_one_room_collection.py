@@ -8,6 +8,7 @@ from typing import Literal
 from eom_catalog_contracts.kakao_collection_attempt import KakaoCollectionAttempt
 from eom_catalog_contracts.kakao_manual import KakaoManualFreshProfile
 from eom_kakao_archive_contracts.auto_room_command import RoomNavigation
+from eom_kakao_archive_contracts.capture import CaptureResult
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.kakao_capture_inputs import KakaoCaptureInputError, KakaoCaptureOutputReader
 from eom_orchestrator.kakao_collection_browser_runtime import (
@@ -40,6 +41,22 @@ def _receipt_state(reader: KakaoCaptureOutputReader) -> Literal["PRESENT", "MISS
             return "INVALID"
         raise
     return "PRESENT"
+
+
+def _read_auth_refusal(reader: KakaoCaptureOutputReader) -> bytes | None:
+    try:
+        raw = reader.read_room_auth_refusal()
+    except KakaoCaptureInputError as error:
+        if str(error) == "KAKAO_CAPTURE_INPUT_MISSING":
+            return None
+        raise
+    try:
+        result = CaptureResult.model_validate_json(raw)
+        if (result.status, result.error_code, result.report) == ("FAILED", "AUTH_REQUIRED", None):
+            return raw
+    except ValueError:
+        pass
+    raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID")
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,9 +167,28 @@ class KakaoOneRoomCollection:
                     raise KakaoArchiveError("KAKAO_ARCHIVE_PRECONDITION_FAILED")
 
         self.close(attempt.browser_run_id)
+        if attempt.state == "RESULT_ACCEPTED" and self.attempts.finalize_one_room_auth_refusal(
+            attempt_id
+        ):
+            raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_AUTH_REQUIRED")
         # Receipt could have appeared between the first lookup and the final exit.
         if receipt == "MISSING" and reader is not None:
             receipt = _receipt_state(reader)
+        if reader is not None:
+            refusal = _read_auth_refusal(reader)
+            if refusal is not None:
+                if receipt != "MISSING":
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID")
+                self.attempts.publish_and_accept_result(
+                    attempt_id,
+                    publisher=self.result_publisher,
+                    source_commit=self.source_commit,
+                    read_result=lambda: refusal,
+                    read_member=reader,
+                )
+                if not self.attempts.finalize_one_room_auth_refusal(attempt_id):
+                    raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_RECEIPT_INVALID")
+                raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_AUTH_REQUIRED")
         if receipt == "MISSING":
             raise KakaoArchiveError("KAKAO_ARCHIVE_CAPTURE_OUTPUT_MISSING")
         if receipt == "INVALID":

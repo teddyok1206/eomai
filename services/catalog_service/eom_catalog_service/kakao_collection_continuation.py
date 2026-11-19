@@ -93,6 +93,9 @@ class KakaoCollectionContinuation:
                 return "FAILED"
             return "ERROR"
         except KakaoArchiveError as error:
+            if error.code == "KAKAO_ARCHIVE_CAPTURE_AUTH_REQUIRED":
+                self._scope, self._dispatched = None, None
+                return "FAILED"
             if (
                 isinstance(error, UnusableKakaoOpenRoomOutput)
                 or error.code
