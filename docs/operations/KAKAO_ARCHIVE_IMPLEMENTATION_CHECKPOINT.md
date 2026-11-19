@@ -12,17 +12,25 @@ HTTP·계약·화면 경계 검사 25건, 선택한 Chromium 화면 검사 및 �
 
 `2026-11-19 05:52 UTC`에 Catalog `da5c8e32`, 수집기 `5d05ae00` 및 해당 공유 계약을 운영에
 먼저 반영했다. 기존 API·Web·QUERY/INDEX 및 자료 작업의 설치를 유지했고, Catalog socket과
-기존 API readiness·Studio HTTPS를 확인했다. API·Web의 새 조회 및 표시 패키지는 설치 전이다.
+기존 API readiness·Studio HTTPS를 확인했다. 이 시점에는 API·Web 패키지를 교체하지 않았다.
 이 단계에서는 카카오 접속, 로그인, 수집, 정본 변경 또는 DB migration이 없었다. 설치·복구 기록은
 `/var/lib/eom-kakao-status-runtime-release-da5c8e32/`에 있다.
 
-## 수집 실패에서 ‘카카오 로그인 필요’ 근거 보존 — 소스
+`2026-11-19 06:01 UTC`에 API·Web `da5c8e32`를 운영에 반영했다. 처음에는 API stop이
+systemd `Requires=` 관계의 QUERY도 정지시켜, 이전 API·Web을 복원하고 QUERY를 다시 기동했다.
+두 번째에는 API 준비→기존 QUERY 및 의존 서비스 기동→Studio 기동 순서를 확인했다. QUERY의
+설치·설정, INDEX 및 자료 실행 환경, Catalog 및 ONE_ROOM은 유지했다. API readiness와 Studio
+HTTPS는 200, 비로그인 상태 조회는 양쪽 모두 401이며 HTTPS 정적 파일에서 새 표시 코드가 확인됐다.
+수집 7건·원본 0건·열린 원격 세션 0건은 그대로였으므로 실제 계정 인증과 사용자 화면의 새 실패
+표시는 별도 검증이다. 설치·복구 기록은 `/var/lib/eom-kakao-status-api-web-release-da5c8e32-v2/`에 있다.
+
+## 수집 실패에서 ‘카카오 로그인 필요’ 근거 보존
 
 확인된 방과 목록이 모두 계정 화면으로 이동했다면 수집기가 기존 C1 `FAILED/AUTH_REQUIRED`
 결과만 기록한다. Catalog는 실제 브라우저 종료 뒤 원래 시도의 명령과 대조해 실패 근거를
 저장한다. 중단 후 재조회는 기존 결과만 사용하며 원본, 자동 로그인, 새 수집을 만들지 않는다.
-기존 정상 수신 결과 파일, 데이터베이스 스키마 및 과거 실패에는 변경이 없다. 공개 Studio
-상태는 아직 일반 `FAILED`이며, 이 변경은 운영에 배포하지 않았다.
+기존 정상 수신 결과 파일, 데이터베이스 스키마 및 과거 실패에는 변경이 없다. 공개 Studio의
+정본 상태는 `FAILED`로 유지하며 위 선택 조회에서만 로그인 안내를 표시한다.
 격리 실행 회귀 78건 및 최종 소스의 집중 임시 PostgreSQL 21건이 통과했다. 중단 후 재사용과
 다른 명령을 가리키는 실패 제안의 거부를 포함한다. 실제 카카오 계정이나 학생 자료는 사용하지 않았다.
 
