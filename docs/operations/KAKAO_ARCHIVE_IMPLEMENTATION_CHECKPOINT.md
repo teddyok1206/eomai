@@ -10,6 +10,12 @@
 명령/CSV/SHA는 중복 발행·재실행 없이 종료되고 일시적인 읽기 장애는 같은 작업으로
 `PARTIAL` 원본까지 복구됐다. 운영 DB나 실제 카카오로 이 경로를 시험하지 않았다.
 
+`6df5f58f` Platform wheel을 Catalog 전용으로 설치했다. 변경은 이 수락 흐름의 세 Catalog
+모듈뿐이며 기존 API·계약 wheel, Web·QUERY·INDEX·자료 학습, 수집기 `990dc7ef`와
+`ONE_ROOM` 설정을 유지했다. Catalog socket·API ready·Studio HTTPS를 확인했다.
+설치·복구 기록은 `/var/lib/eom-kakao-sealed-failure-release-6df5f58f/`에 있다. 새 카카오
+수집과 기존 실패 재처리를 시작하지 않았으며 전체 방·주기 수집도 활성화하지 않았다.
+
 ## 행을 확인한 사진이 지원 형식이 아닌 경우
 
 사진 수신 파일의 크기·SHA와 CSV 행 정합은 그대로 확인한다. 지원하지 않는 정적 이미지나
