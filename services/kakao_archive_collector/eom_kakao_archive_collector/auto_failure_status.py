@@ -1,0 +1,38 @@
+"""Small fixed child-exit vocabulary; no free-form browser errors cross the supervisor."""
+
+from enum import IntEnum
+
+
+class AutoFailureStatus(IntEnum):
+    KAKAO_BROWSER_AUTO_UNAVAILABLE = 80
+    KAKAO_AUTO_ROOM_COMMAND_UNAVAILABLE = 81
+    KAKAO_AUTO_ROOM_COMMAND_INVALID = 82
+    KAKAO_AUTO_ROOM_WORKSPACE_UNAVAILABLE = 83
+    KAKAO_AUTO_ROOM_ALREADY_STARTED = 84
+    KAKAO_AUTO_PLAYWRIGHT_START_FAILED = 85
+    KAKAO_AUTO_CHROMIUM_LAUNCH_FAILED = 86
+    KAKAO_AUTO_PAGE_OPEN_FAILED = 87
+    KAKAO_AUTO_CHANNEL_NAVIGATION_FAILED = 88
+    KAKAO_AUTO_CHANNEL_NOT_CONFIRMED = 89
+    KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED = 90
+    KAKAO_OPEN_ROOM_EVIDENCE_UNAVAILABLE = 91
+    KAKAO_OPEN_ROOM_MENU_ALREADY_OPEN = 92
+    KAKAO_ROOM_READ_ACTION_UNAVAILABLE = 93
+    KAKAO_ROOM_READ_ACTION_UNCERTAIN = 94
+    KAKAO_ROOM_TRANSFER_UNASSOCIATED = 95
+    KAKAO_ROOM_TRANSFER_UNCERTAIN = 96
+    KAKAO_ROOM_TRANSFER_FAILED = 97
+    KAKAO_AUTO_CONTEXT_CLOSE_FAILED = 98
+    KAKAO_AUTO_TRANSPORT_STOP_FAILED = 99
+    KAKAO_BROWSER_CHROMIUM_RELEASE_MISMATCH = 100
+
+
+def encode_auto_failure(code: str) -> int:
+    return AutoFailureStatus.__members__.get(code, AutoFailureStatus.KAKAO_BROWSER_AUTO_UNAVAILABLE)
+
+
+def decode_auto_failure(exit_status: int) -> str | None:
+    try:
+        return AutoFailureStatus(exit_status).name
+    except ValueError:
+        return None

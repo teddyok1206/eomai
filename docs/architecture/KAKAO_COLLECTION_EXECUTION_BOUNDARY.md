@@ -1093,6 +1093,12 @@ CSV를 확인하기 위해 사진 동작을 다시 실행하는 방법은 불확
 
 ### 고정 AUTO browser의 단일 방 실행
 
+브라우저 자식의 stdout/stderr는 계속 폐기한다. AUTO 종료 시 부모에게 알려줄 진단은
+고정된 단계별 exit status로만 전달하고, supervisor가 같은 고정 목록의 코드만 journal에
+기록한다. systemd에 반환하는 기존 실패 상태는 그대로라서 실패 실행이 재해석되거나
+재시도되지 않는다. URL, 예외 메시지, 인증, 화면 내용은 전달하지 않는다. 모르는 오류는
+일반적인 AUTO 오류로 남기고, MANUAL 종료 계약과 기존 workspace는 변경하지 않는다.
+
 기존 systemd supervisor의 AUTO profile lock 아래에서만 headless Chromium을 실행한다.
 Catalog owner가 현재 RUNNING epoch·받아들인 C1 command·등록된 provider room을 확인하고
 정해진 browser-run member에 1건만 원자 발행한다. command의 hash, profile/run/attempt/fence와

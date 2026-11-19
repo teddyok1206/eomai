@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import driver_setup as setup
+from .auto_failure_status import encode_auto_failure
 from .auto_room_browser import (
     AutoRoomPage,
     read_registered_room,
@@ -255,33 +256,42 @@ async def run_auto(config: setup.AutoSetup, stopping: asyncio.Event) -> None:
         return
     setup.require_supervisor()
     incoming, outputs = stage_room_workspace(command)
-    playwright = await _start_playwright()
+    try:
+        playwright = await _start_playwright()
+    except Exception:
+        raise BrowserRuntimeError("KAKAO_AUTO_PLAYWRIGHT_START_FAILED") from None
     try:
         chromium = playwright.chromium
         setup.require_chromium(Path(chromium.executable_path), config.chromium_sha256)
         if stopping.is_set():
             return
-        context = await asyncio.wait_for(
-            chromium.launch_persistent_context(
-                str(setup.PROFILE),
-                headless=True,
-                chromium_sandbox=True,
-                accept_downloads=True,
-                executable_path=chromium.executable_path,  # Same pinned binary as MANUAL.
-                downloads_path=str(incoming),
-                timeout=START_SECONDS * 1000,
-                env=setup.browser_environment(),
-                handle_sigterm=False,
-                handle_sigint=False,
-                handle_sighup=False,
-                no_viewport=False,
-            ),
-            timeout=START_SECONDS + 1,
-        )
+        try:
+            context = await asyncio.wait_for(
+                chromium.launch_persistent_context(
+                    str(setup.PROFILE),
+                    headless=True,
+                    chromium_sandbox=True,
+                    accept_downloads=True,
+                    executable_path=chromium.executable_path,  # Same pinned binary as MANUAL.
+                    downloads_path=str(incoming),
+                    timeout=START_SECONDS * 1000,
+                    env=setup.browser_environment(),
+                    handle_sigterm=False,
+                    handle_sigint=False,
+                    handle_sighup=False,
+                    no_viewport=False,
+                ),
+                timeout=START_SECONDS + 1,
+            )
+        except Exception:
+            raise BrowserRuntimeError("KAKAO_AUTO_CHROMIUM_LAUNCH_FAILED") from None
         try:
             if stopping.is_set():
                 return
-            page = await asyncio.wait_for(context.new_page(), timeout=START_SECONDS)
+            try:
+                page = await asyncio.wait_for(context.new_page(), timeout=START_SECONDS)
+            except Exception:
+                raise BrowserRuntimeError("KAKAO_AUTO_PAGE_OPEN_FAILED") from None
             work = asyncio.create_task(
                 read_registered_room(page, command, incoming=incoming, outputs=outputs)
             )
@@ -296,9 +306,19 @@ async def run_auto(config: setup.AutoSetup, stopping: asyncio.Event) -> None:
                         task.cancel()
                 await asyncio.gather(work, stop, return_exceptions=True)
         finally:
-            await asyncio.wait_for(context.close(), timeout=CLOSE_SECONDS)
+            failed = sys.exception() is not None
+            try:
+                await asyncio.wait_for(context.close(), timeout=CLOSE_SECONDS)
+            except Exception:
+                if not failed:
+                    raise BrowserRuntimeError("KAKAO_AUTO_CONTEXT_CLOSE_FAILED") from None
     finally:
-        await asyncio.wait_for(playwright.stop(), timeout=PLAYWRIGHT_STOP_SECONDS)
+        failed = sys.exception() is not None
+        try:
+            await asyncio.wait_for(playwright.stop(), timeout=PLAYWRIGHT_STOP_SECONDS)
+        except Exception:
+            if not failed:
+                raise BrowserRuntimeError("KAKAO_AUTO_TRANSPORT_STOP_FAILED") from None
 
 
 async def _run(config: setup.ManualSetup | setup.AutoSetup) -> None:
@@ -316,18 +336,21 @@ def main() -> int:
     if len(sys.argv) != 5 or sys.argv[1] != "--request" or sys.argv[3] != "--profile":
         print("KAKAO_BROWSER_FIXED_INPUT_REQUIRED", file=sys.stderr)
         return 78
-    unavailable = "KAKAO_BROWSER_MANUAL_UNAVAILABLE"
+    auto = False
     try:
         config = setup.validate_setup(Path(sys.argv[2]), Path(sys.argv[4]))
-        if isinstance(config, setup.AutoSetup):
-            unavailable = "KAKAO_BROWSER_AUTO_UNAVAILABLE"
+        auto = isinstance(config, setup.AutoSetup)
         asyncio.run(_run(config))
         return 0
     except BrowserRuntimeError as error:
+        if auto:
+            return encode_auto_failure(error.code)
         print(error.code, file=sys.stderr)
         return 78
     except Exception:
-        print(unavailable, file=sys.stderr)
+        if auto:
+            return encode_auto_failure("KAKAO_BROWSER_AUTO_UNAVAILABLE")
+        print("KAKAO_BROWSER_MANUAL_UNAVAILABLE", file=sys.stderr)
         return 78
 
 

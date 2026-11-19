@@ -20,6 +20,7 @@ import pytest
 from eom_kakao_archive_collector import driver_setup as setup
 from eom_kakao_archive_collector import manual_driver as driver
 from eom_kakao_archive_collector import supervisor
+from eom_kakao_archive_collector.auto_failure_status import encode_auto_failure
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence
 
@@ -48,6 +49,36 @@ def test_supervised_driver_and_chromium_use_private_writable_home(monkeypatch):
     assert setup.child_environment()["HOME"] == str(setup.PROFILE)
 
 
+@pytest.mark.parametrize(
+    "mode,code,reason",
+    [
+        ("AUTO", "KAKAO_AUTO_PAGE_OPEN_FAILED", "KAKAO_AUTO_PAGE_OPEN_FAILED"),
+        ("AUTO", "private diagnostic details", "KAKAO_BROWSER_AUTO_UNAVAILABLE"),
+        ("MANUAL", "KAKAO_TEST_MANUAL_FAILURE", None),
+    ],
+)
+def test_supervisor_reports_only_fixed_auto_failure(monkeypatch, capsys, mode, code, reason):
+    config = (
+        setup.AutoSetup(fence(mode), SHA)
+        if mode == "AUTO"
+        else setup.ManualSetup(fence(mode), SHA, SHA)
+    )
+    monkeypatch.setattr(sys, "argv", ["driver", "--request", "/r", "--profile", "/p"])
+    monkeypatch.setattr(driver.setup, "validate_setup", Mock(return_value=config))
+    monkeypatch.setattr(driver, "_run", AsyncMock(side_effect=BrowserRuntimeError(code)))
+    status = driver.main()
+    assert status == (encode_auto_failure(code) if reason else 78)
+    assert capsys.readouterr().err == ("" if reason else code + "\n")
+
+    monkeypatch.setattr(sys, "argv", ["eom-kakao-browser-supervisor"])
+    monkeypatch.setattr(supervisor, "_prepare", Mock(return_value=(Path("/r"), SHA)))
+    monkeypatch.setattr(supervisor.signal, "signal", Mock())
+    monkeypatch.setattr(supervisor.grp, "getgrnam", lambda _: SimpleNamespace(gr_gid=999))
+    monkeypatch.setattr(supervisor, "supervise", Mock(return_value=status))
+    assert supervisor.main() == 78
+    assert capsys.readouterr().err == (reason + "\n" if reason else "")
+
+
 def fence(mode="MANUAL"):
     return ProfileFence.model_validate(
         {
@@ -60,7 +91,8 @@ def fence(mode="MANUAL"):
     )
 
 
-def test_auto_uses_bound_command_and_closes_without_starting_remote_display(monkeypatch):
+@pytest.mark.parametrize("page_fails", [False, True])
+def test_auto_uses_bound_command_and_closes_without_remote_display(monkeypatch, page_fails):
     auto = setup.AutoSetup(fence("AUTO"), SHA)
     request, page = Mock(), Mock()
     context = SimpleNamespace(new_page=AsyncMock(return_value=page), close=AsyncMock())
@@ -83,9 +115,17 @@ def test_auto_uses_bound_command_and_closes_without_starting_remote_display(monk
     monkeypatch.setattr(driver, "_start_playwright", AsyncMock(return_value=playwright))
     monkeypatch.setattr(driver, "_start_xvnc", display)
     monkeypatch.setattr(driver, "read_registered_room", collect)
-    asyncio.run(driver.run_auto(auto, asyncio.Event()))
+    if page_fails:
+        context.new_page.side_effect = RuntimeError("private page diagnostic")
+        context.close.side_effect = RuntimeError("private close diagnostic")
+        playwright.stop.side_effect = RuntimeError("private stop diagnostic")
+        with pytest.raises(BrowserRuntimeError, match=r"^KAKAO_AUTO_PAGE_OPEN_FAILED$"):
+            asyncio.run(driver.run_auto(auto, asyncio.Event()))
+        collect.assert_not_awaited()
+    else:
+        asyncio.run(driver.run_auto(auto, asyncio.Event()))
+        collect.assert_awaited_once_with(page, request, incoming=incoming, outputs=outputs)
     display.assert_not_called()
-    collect.assert_awaited_once_with(page, request, incoming=incoming, outputs=outputs)
     validate.assert_called_once_with(Path(chromium.executable_path), SHA)
     arguments = chromium.launch_persistent_context.call_args.kwargs
     assert arguments["headless"] and arguments["chromium_sandbox"]

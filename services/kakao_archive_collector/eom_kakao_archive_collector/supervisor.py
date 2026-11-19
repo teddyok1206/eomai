@@ -18,6 +18,7 @@ from pathlib import Path
 
 from eom_kakao_archive_contracts.kakao_remote import ProfileFence, validate_remote_contract
 
+from .auto_failure_status import decode_auto_failure
 from .profile import BrowserRuntimeError, profile_lock, protected_directory, read_protected
 
 REQUEST = Path("/var/lib/eom-kakao-runtime/browser/request.json")
@@ -155,7 +156,7 @@ def main() -> int:
             "PATH": "/usr/bin:/bin",
             "TMPDIR": "/tmp",
         }
-        return supervise(
+        status = supervise(
             lambda: subprocess.Popen(
                 [str(DRIVER), "--request", str(snapshot), "--profile", str(PROFILE)],
                 stdin=subprocess.DEVNULL,
@@ -173,6 +174,11 @@ def main() -> int:
             stopping=stopping,
             notify_ready=lambda: _notify(digest),
         )
+        reason = decode_auto_failure(status)
+        if reason is not None:
+            print(reason, file=sys.stderr, flush=True)
+            return 78  # Keep the existing systemd failure result, never retry here.
+        return status
     except BrowserRuntimeError as error:
         print(error.code, file=sys.stderr)
         return 75 if error.code == "KAKAO_BROWSER_PROFILE_BUSY" else 78
