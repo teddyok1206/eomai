@@ -11,6 +11,12 @@
 CSV를 확보하고 사라진 사진만 미확정으로 남기는 동작을 확인했다. 운영 재실행은 아직
 없으며 이 수정이 이전 조기 종료의 원인에 해당하는지는 확인되지 않았다.
 
+`990dc7ef` 수집기만 운영에 반영했다. 집중 회귀 113건과 설치 member, Catalog socket,
+API ready, Studio HTTPS를 확인했다. Catalog 설치 코드는 `19030c3c` 그대로이며 adapter
+hash만 전환했다. API·Web·QUERY 및 INDEX·자료 학습 설정/실행은 기존과 같다. 보호된
+설치 증거는 `/var/lib/eom-kakao-photo-refused-release-990dc7ef/`에 있다. 기존 실패 이력은
+보존하며 `ONE_ROOM` 외의 범위를 활성화하지 않았다.
+
 ## 운영 재실행 대기 — 격리된 실제 Chromium의 AUTO 경로 확인
 
 운영 읽기 전용 대조 시 단일 방 수집 기록은 기존 실패 1건뿐이고 source revision은 0건이다.
