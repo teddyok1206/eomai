@@ -40,8 +40,10 @@ _DOM_FAILURES = frozenset(
 # Deliberately no heuristics for unknown provider UI: a selected room is not a
 # display name, and sending/control areas are never navigation targets.
 _OPEN_ROOM = r"""({path, room, phase}) => {
-  if (location.origin !== 'https://business.kakao.com' || location.pathname !== path ||
-      window.top !== window || !document.body) return 'KAKAO_AUTO_ROOM_DOM_SCOPE_UNAVAILABLE';
+  if (location.origin !== 'https://business.kakao.com' || location.pathname !== path)
+    return 'PAGE_MOVED';
+  if (window.top !== window) return 'KAKAO_AUTO_ROOM_DOM_SCOPE_UNAVAILABLE';
+  if (!document.body || document.readyState === 'loading') return 'PENDING';
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
   for (let count = 0; walker.nextNode(); count++)
     if (count === 8192) return 'KAKAO_AUTO_ROOM_DOM_LIMIT';
@@ -188,40 +190,46 @@ async def read_registered_room(
             timeout=ROOM_LOAD_SECONDS,
         )
 
-    loop = asyncio.get_running_loop()
-    observed = download_page_path(page)
-    if observed != destination:
-        if not direct:
-            raise BrowserRuntimeError(rejection)
+    async def observe(candidate_path: str, phase: str, seconds: float) -> object:
+        """A read-only evaluation may straddle SPA navigation, never a click replay."""
+        latest: object = "PENDING"
+        try:
+            async with asyncio.timeout(seconds):
+                while True:
+                    if download_page_path(page) != candidate_path:
+                        return "PAGE_MOVED"
+                    try:
+                        latest = await evaluate(page, candidate_path, phase)
+                    except Exception:
+                        # The old document's execution context can disappear mid-read.
+                        latest = "PENDING"
+                    if latest not in ("PENDING", "PAGE_MOVED"):
+                        return latest
+                    await asyncio.sleep(0.2)
+        except TimeoutError:
+            return latest
+
+    async def popup_rejection() -> str:
+        observed = download_page_path(page)
+        if observed == popup_path:
+            return rejection
         if observed != path:
-            raise BrowserRuntimeError(
+            return (
                 "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
                 if _account_origin(page)
                 else "KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION"
             )
         # A return to the exact known list is useful evidence, never fallback authority.
-        try:
-            async with asyncio.timeout(LIST_DIAGNOSTIC_SECONDS):
-                probe = await evaluate(page, path, "PROBE")
-                while probe == "PENDING":
-                    await asyncio.sleep(0.2)
-                    probe = await evaluate(page, path, "PROBE")
-        except Exception:
-            probe = None
+        probe = await observe(path, "PROBE", LIST_DIAGNOSTIC_SECONDS)
         message = {
             "READY": "KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED",
             "OPENED": "KAKAO_AUTO_POPUP_TO_LIST_ALREADY_OPEN",
         }.get(probe if isinstance(probe, str) else "")
-        raise BrowserRuntimeError(
-            message or _dom_failure(probe, "KAKAO_AUTO_POPUP_TO_LIST_TARGET_NOT_OBSERVED")
-        )
+        return message or _dom_failure(probe, "KAKAO_AUTO_POPUP_TO_LIST_TARGET_NOT_OBSERVED")
 
-    until = loop.time() + ROOM_LOAD_SECONDS
-    state: object = "PENDING"
-    while state == "PENDING" and loop.time() < until:
-        state = await evaluate(page, destination, "CONFIRM" if direct else "PROBE")
-        if state == "PENDING":
-            await asyncio.sleep(0.2)
+    state = await observe(destination, "CONFIRM" if direct else "PROBE", ROOM_LOAD_SECONDS)
+    if state == "PAGE_MOVED":
+        raise BrowserRuntimeError(await popup_rejection() if direct else rejection)
 
     selected = page
     if not direct and state == "READY":
@@ -236,6 +244,7 @@ async def read_registered_room(
             state = await evaluate(page, path, "CLICK")
             if state == "TRIGGERED":
                 state = "PENDING"
+                loop = asyncio.get_running_loop()
                 until = loop.time() + ROOM_LOAD_SECONDS
                 while state == "PENDING" and loop.time() < until:
                     if len(popups) > 1:

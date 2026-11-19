@@ -99,6 +99,8 @@ TEXT_ONLY = AUTO_HTML.replace(
         "auto-popup-direct-return-list",
         "auto-popup-direct-account",
         "auto-popup-direct-large-dom",
+        "auto-popup-direct-delayed-list",
+        "auto-popup-direct-delayed-body",
         "auto-wrong-popup",
     ],
 )
@@ -182,6 +184,19 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                 )
                 if route == POPUP and receiver == "auto-popup-direct-large-dom":
                     body = body.replace(b"</body>", b"<i></i>" * 8200 + b"</body>")
+                if route == POPUP and receiver == "auto-popup-direct-delayed-list":
+                    body = (
+                        b"<!doctype html><script>setTimeout(()=>location.replace("
+                        + json.dumps(LIST).encode()
+                        + b"),450)</script><body>Loading</body>"
+                    )
+                if route == POPUP and receiver == "auto-popup-direct-delayed-body":
+                    body = body.replace(
+                        b"</body>",
+                        b"<script>const savedBody=document.body;savedBody.remove();"
+                        b"setTimeout(()=>document.documentElement.append(savedBody),450);"
+                        b"</script></body>",
+                    )
                 if route == LIST and receiver in {
                     "auto-popup",
                     "auto-wrong-popup",
@@ -470,6 +485,7 @@ async def main():
        'auto-popup-direct-return-list':'KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED',
        'auto-popup-direct-account':'KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN',
        'auto-popup-direct-large-dom':'KAKAO_AUTO_ROOM_DOM_LIMIT',
+       'auto-popup-direct-delayed-list':'KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED',
      }
      if sys.argv[2] in refusals:
       try:
@@ -478,7 +494,9 @@ async def main():
        assert error.code==refusals[sys.argv[2]],error.code
       else:
        raise AssertionError('wrong popup must not be read')
-      clicks=0 if sys.argv[2]=='auto-popup-direct-return-list' else None if direct else 1
+      redirected_to_list=sys.argv[2] in (
+          'auto-popup-direct-return-list','auto-popup-direct-delayed-list')
+      clicks=0 if redirected_to_list else None if direct else 1
       assert await page.evaluate('window.roomClicks')==clicks
       assert (await page.evaluate('window.danger')) in (None,0)
       assert not tuple(outputs.iterdir())
@@ -584,4 +602,6 @@ asyncio.run(main())
         assert result["persistent_auto"] == "REFUSED"
     elif receiver.startswith("auto-popup-direct"):
         assert POPUP in visited_chat_pages
-        assert (LIST in visited_chat_pages) == (receiver == "auto-popup-direct-return-list")
+        assert (LIST in visited_chat_pages) == (
+            receiver in {"auto-popup-direct-return-list", "auto-popup-direct-delayed-list"}
+        )
