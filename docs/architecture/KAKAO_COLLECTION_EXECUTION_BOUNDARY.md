@@ -1047,6 +1047,13 @@ gate의 AUTO 소유, 실제 epoch/attempt, guarded activation과 full inventory�
   공개 요청을 받지 않는다. 다운로드 증거를 곧바로 완전한 원본으로 받아들이는 방식은
   서로 다른 학생의 사진을 섞거나 중복을 숨길 수 있어 사용하지 않는다.
 
+행에 대응하는 검증된 수신 파일이 지원하지 않는 이미지라면 기존 `failed` /
+`UNSUPPORTED_MEDIA` attachment occurrence를 같은 행에 남긴다. 잘못된 파일을 이미지
+Artifact로 만들지 않는다. 크기·SHA 불일치, 읽기 실패 및 decoder 미설치는 여전히 source
+입력/운영 오류다. 다운로드와 정합의 identity, row/attachment 정렬과 C1 schema, 현재 owner
+인가 및 source commit 위치는 바뀌지 않는다. 성공 경로는 decoder가 계산한 SHA를 재사용하고,
+decoder가 지원 불가로 끝났을 때만 수신 바이트의 SHA를 별도로 확인한다.
+
 사진이 관측 시점의 대화 끝에 있으면 양쪽에 텍스트가 없어도 제한적으로 정합할 수 있다.
 먼저 파일이 어느 말풍선에서 받았는지 기존 증거로 확인해야 한다. 그 다음 사진부터 화면
 가장자리까지 빠짐없는 단일 사진열과 반대쪽의 서로 다른 완전한 두 텍스트를 요구한다.

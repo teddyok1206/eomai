@@ -6,10 +6,14 @@ from datetime import timedelta
 import pytest
 from eom_catalog_contracts.kakao_archive import KakaoMessageNormalization, KakaoMessageObservation
 from eom_catalog_service.kakao_capture_proposal import (
+    OpenRoomDownloadEvidence,
     PartialRoomEvidence,
+    build_open_room_proposal,
     build_partial_room_capture,
 )
-from eom_kakao_archive_contracts.capture import CaptureResult, CaptureRoomReport
+from eom_kakao_archive_contracts.capture import CaptureResult, CaptureRoomReport, CsvMember
+from eom_kakao_archive_contracts.manual_observation import ManualDocument
+from eom_kakao_archive_contracts.open_room_download import RoomPhotoReceipt
 from eom_kakao_archive_contracts.render import sha256
 
 from tests.unit.test_kakao_capture_contracts import (
@@ -20,6 +24,7 @@ from tests.unit.test_kakao_capture_contracts import (
     command,
     inventory,
 )
+from tests.unit.test_kakao_photo_alignment import TARGET, document
 
 RAW = (
     b"DATE,USER,MESSAGE\r\n"
@@ -113,3 +118,64 @@ def test_inconsistent_inventory_or_source_observations_are_rejected():
                 messages=(KakaoMessageObservation(row_ordinal=1, source_message_id="fake"),),
             ),
         )
+
+
+def test_aligned_unsupported_media_remains_an_unavailable_occurrence():
+    raw = (
+        RAW.splitlines()[0]
+        + b"\n"
+        + """2026-11-16 12:00:00,anonymous,first
+2026-11-16 12:00:00,anonymous,사진
+2026-11-16 12:00:00,anonymous,last
+""".encode()
+    )
+    page = ManualDocument.model_validate(
+        document([("text", "first"), ("photo", TARGET), ("text", "last")])
+    )
+    invalid_image = b"<!doctype html><title>Not an image</title>"
+    photo = RoomPhotoReceipt(
+        relative_path="outputs/photo-1.bin",
+        sha256=sha256(invalid_image),
+        size_bytes=len(invalid_image),
+        target=TARGET,
+        document=page,
+    )
+    evidence = OpenRoomDownloadEvidence(
+        raw_csv=CsvMember(
+            relative_path="outputs/source.csv", sha256=sha256(raw), size_bytes=len(raw)
+        ),
+        started_at=NOW,
+        ended_at=NOW + timedelta(seconds=2),
+        expected_room=("channel1", "room1"),
+        csv_document=page,
+        photos=(photo,),
+    )
+    cap, rooms = capability(), inventory()
+    cmd = command(cap, rooms)
+
+    def assemble(download, read=lambda _: invalid_image):
+        return build_open_room_proposal(
+            cmd, cap, rooms, source=raw, evidence=download, read_photo=read
+        )
+
+    output = assemble(evidence)
+    assert output.result.status == "PARTIAL" and output.report.raw_csv == evidence.raw_csv
+    assert len(output.report.attachments) == output.report.attachment_bubbles_observed == 1
+    assert output.report.unresolved_attachment_bubbles == 0
+    unavailable = output.report.attachments[0]
+    assert unavailable.row_ordinal == 2 and unavailable.association == "SEQUENCE_INFERRED"
+    assert (
+        unavailable.availability == "failed" and unavailable.failure_reason == "UNSUPPORTED_MEDIA"
+    )
+    assert unavailable.member is None and unavailable.width_px is None
+    parsed = KakaoMessageNormalization.model_validate_json(output.normalization_bytes)
+    assert parsed.messages[1].attachments[0].availability == "failed"
+    altered = photo.model_copy(update={"sha256": sha256(b"tampered")})
+    with pytest.raises(ValueError, match="CAPTURE_DOWNLOAD_MISMATCH"):
+        assemble(replace(evidence, photos=(altered,)))
+
+    def unreadable(_):
+        raise OSError("READ_UNAVAILABLE")
+
+    with pytest.raises(OSError, match="READ_UNAVAILABLE"):
+        assemble(evidence, read=unreadable)

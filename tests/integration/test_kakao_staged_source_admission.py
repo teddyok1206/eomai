@@ -259,7 +259,10 @@ def test_scoped_downloads_align_to_distinct_rows_and_replay_through_source_admis
     assert admit(staged).replayed
 
 
-def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(staged):
+@pytest.mark.parametrize("supported_media", [True, False])
+def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(
+    staged, supported_media
+):
     data = staged.data
     room = ("channel-one", "room-one")
     attempts = staged.attempt.service
@@ -289,7 +292,7 @@ def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(s
     for name in ("result.json", "room-report.json", "normalization.json"):
         (outputs / name).unlink()
     (outputs / "source.csv").write_bytes(raw)
-    image = photo()
+    image = photo() if supported_media else b"not a supported photo"
     path = outputs / "photo-1.bin"
     path.write_bytes(image)
     path.chmod(0o640)
@@ -369,6 +372,9 @@ def test_open_room_worker_receipt_admits_without_materializing_extra_proposals(s
     accepted = controller.finish(data.reserved.attempt_id, **options)
     assert len(accepted.resolution.rows) == 4
     assert len(accepted.resolution.admission.attachments) == 1
+    attachment = accepted.resolution.admission.attachments[0]
+    assert (attachment.original is not None) == supported_media
+    assert (attachment.media_receipt is not None) == supported_media
     assert not (outputs / "normalization.json").exists()
     with pytest.raises(KakaoArchiveError, match="COLLECTION_TERMINAL"):
         attempts.prepare_auto_room(data.reserved.attempt_id, space_key="scope", expected_room=room)

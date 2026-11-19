@@ -31,6 +31,10 @@ from eom_catalog_service.artifacts import CatalogArtifactService
 _EXTENSIONS = {"image/png": "png", "image/jpeg": "jpeg", "image/webp": "webp"}
 
 
+class InvalidKakaoMedia(ValueError):
+    """The supplied bytes cannot be admitted as a supported static image."""
+
+
 @dataclass(frozen=True, slots=True)
 class KakaoMediaPublication:
     receipt: KakaoMediaBlobReceipt
@@ -43,7 +47,7 @@ def inspect_kakao_media(source_binding_id: str, source: bytes) -> KakaoMediaBlob
     """Inspect bounded headers before decoding pixels; never rewrite original bytes."""
     binding = TypeAdapter(KakaoBindingId).validate_python(source_binding_id)
     if type(source) is not bytes or not 0 < len(source) <= MAX_MEDIA_BYTES:
-        raise ValueError("KAKAO_ARCHIVE_MEDIA_SIZE_INVALID")
+        raise InvalidKakaoMedia("KAKAO_ARCHIVE_MEDIA_SIZE_INVALID")
     # This decoder is an explicit optional Kakao runtime dependency. Feature-off
     # Catalog imports must not require a browser/PDF environment or ambient packages.
     try:
@@ -63,23 +67,18 @@ def inspect_kakao_media(source_binding_id: str, source: bytes) -> KakaoMediaBlob
                 or not 0 < height <= 30_000
                 or width * height > MAX_MEDIA_PIXELS
             ):
-                raise ValueError("KAKAO_ARCHIVE_MEDIA_DIMENSIONS_INVALID")
+                raise InvalidKakaoMedia("KAKAO_ARCHIVE_MEDIA_DIMENSIONS_INVALID")
             if getattr(image, "n_frames", 1) != 1:
-                raise ValueError("KAKAO_ARCHIVE_MEDIA_ANIMATION_UNSUPPORTED")
+                raise InvalidKakaoMedia("KAKAO_ARCHIVE_MEDIA_ANIMATION_UNSUPPORTED")
             image.verify()
         with Image.open(io.BytesIO(source), formats=("PNG", "JPEG", "WEBP")) as image:
             image.load()
             if image.size != (width, height):
-                raise ValueError("KAKAO_ARCHIVE_MEDIA_DIMENSIONS_INVALID")
-    except ValueError as error:
-        if str(error) in {
-            "KAKAO_ARCHIVE_MEDIA_DIMENSIONS_INVALID",
-            "KAKAO_ARCHIVE_MEDIA_ANIMATION_UNSUPPORTED",
-        }:
-            raise
-        raise ValueError("KAKAO_ARCHIVE_MEDIA_DECODE_FAILED") from None
-    except Exception:
-        raise ValueError("KAKAO_ARCHIVE_MEDIA_DECODE_FAILED") from None
+                raise InvalidKakaoMedia("KAKAO_ARCHIVE_MEDIA_DIMENSIONS_INVALID")
+    except (InvalidKakaoMedia, MemoryError):
+        raise
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        raise InvalidKakaoMedia("KAKAO_ARCHIVE_MEDIA_DECODE_FAILED") from None
     return KakaoMediaBlobReceipt.model_validate(
         dict(
             source_binding_id=binding,

@@ -32,7 +32,7 @@ from eom_kakao_archive_contracts.open_room_download import RoomPhotoReceipt
 from eom_kakao_archive_contracts.render import LocalMember, canonical_bytes, sha256
 
 from .kakao_csv_parser import parse_kakao_csv, read_kakao_csv_messages
-from .kakao_media_publication import inspect_kakao_media
+from .kakao_media_publication import InvalidKakaoMedia, inspect_kakao_media
 from .kakao_photo_alignment import infer_scoped_photo_occurrence
 
 _PHOTO_MEMBER = re.compile(r"outputs/photo-[1-6]\.bin")
@@ -84,10 +84,13 @@ def _attachment(
     read_photo: Callable[[RoomPhotoReceipt], bytes],
 ) -> CaptureAttachment:
     raw = read_photo(photo)
-    if len(raw) != photo.size_bytes:
+    if type(raw) is not bytes or len(raw) != photo.size_bytes:
         raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
-    receipt = inspect_kakao_media(command.source_binding_id, raw)
-    if receipt.source_sha256 != photo.sha256:
+    try:
+        receipt = inspect_kakao_media(command.source_binding_id, raw)
+    except InvalidKakaoMedia:
+        receipt = None
+    if (receipt.source_sha256 if receipt else sha256(raw)) != photo.sha256:
         raise ValueError("KAKAO_ARCHIVE_CAPTURE_DOWNLOAD_MISMATCH")
     identity = f"eom:kakao:attachment:{command.snapshot_revision_id}:{row}:1"
     return CaptureAttachment(
@@ -97,17 +100,21 @@ def _attachment(
         row_ordinal=row,
         album_ordinal=1,
         association="SEQUENCE_INFERRED",
-        availability="available",
+        availability="failed" if receipt is None else "available",
         quality_level="unknown",
-        member=LocalMember(
-            relative_path=photo.relative_path,
-            media_type=receipt.media_type,
-            sha256=photo.sha256,
-            size_bytes=photo.size_bytes,
+        member=(
+            None
+            if receipt is None
+            else LocalMember(
+                relative_path=photo.relative_path,
+                media_type=receipt.media_type,
+                sha256=photo.sha256,
+                size_bytes=photo.size_bytes,
+            )
         ),
-        width_px=receipt.width_px,
-        height_px=receipt.height_px,
-        failure_reason=None,
+        width_px=None if receipt is None else receipt.width_px,
+        height_px=None if receipt is None else receipt.height_px,
+        failure_reason="UNSUPPORTED_MEDIA" if receipt is None else None,
     )
 
 
