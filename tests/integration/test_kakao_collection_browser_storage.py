@@ -17,6 +17,7 @@ from eom_catalog_service.kakao_collection_browser_models import (
 )
 from eom_catalog_service.kakao_collection_browser_service import KakaoCollectionBrowserService
 from eom_catalog_service.kakao_collection_models import KakaoCollectionRunRecord as Run
+from eom_catalog_service.kakao_manual_composition import build_kakao_manual_runtime
 from eom_catalog_service.kakao_manual_models import KakaoManualSessionRecord as Lease
 from eom_catalog_service.kakao_manual_models import KakaoProfileRuntimeRecord as Profile
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -324,9 +325,28 @@ def test_unknown_stop_keeps_profile_busy_then_closure_releases_exact_epoch(brows
         fence_epoch=manual_intent.fence_epoch,
         mode="MANUAL",
     )
-    assert closed_kakao_browser_pin(
-        browser.h.engine, current, collection_profile_fence(result)
-    ) == (result.command_sha256, result.dispatch_boot_id)
+    environment = {
+        "EOM_KAKAO_MANUAL_MODE": "ENABLED",
+        "EOM_KAKAO_PROFILE_ID": current.profile_id,
+        **dict.fromkeys(
+            (
+                "EOM_KAKAO_BROWSER_TEMPLATE_SHA256",
+                "EOM_KAKAO_BROWSER_DRIVER_SHA256",
+                "EOM_KAKAO_GATEWAY_TEMPLATE_SHA256",
+                "EOM_KAKAO_GATEWAY_SUPERVISOR_SHA256",
+                "EOM_KAKAO_INITIAL_PROFILE_MANIFEST_SHA256",
+            ),
+            "sha256:" + "a" * 64,
+        ),
+    }
+    composition = build_kakao_manual_runtime(browser.h.engine, environment)
+    assert composition is not None and composition.fixed_runtime is not None
+    resolver = composition.fixed_runtime.resolve_auto_predecessor
+    assert resolver is not None
+    assert resolver(current, collection_profile_fence(result)) == (
+        result.command_sha256,
+        result.dispatch_boot_id,
+    )
     replay = browser.service.accept_closed(
         result.browser_run_id,
         observe_stopped=lambda _: pytest.fail("never stop the newer MANUAL browser"),

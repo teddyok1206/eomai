@@ -19,7 +19,6 @@ from .kakao_archive_authorization import KakaoArchiveError
 if TYPE_CHECKING:
     from eom_orchestrator.kakao_manual_runtime import FixedKakaoManualRuntime
 
-    from .kakao_browser_history import closed_kakao_browser_pin
     from .kakao_manual_coordinator import KakaoManualCoordinator
     from .kakao_manual_dispatch import KakaoManualApplication
 
@@ -79,6 +78,7 @@ def build_kakao_manual_runtime(
     from eom_orchestrator.kakao_manual_runtime import FixedKakaoManualRuntime
     from eom_orchestrator.kakao_profile_observation import InstalledKakaoProfileObserver
 
+    from .kakao_browser_history import closed_kakao_browser_pin
     from .kakao_manual_coordinator import KakaoManualCoordinator
     from .kakao_manual_dispatch import KakaoManualApplication
     from .kakao_manual_service import KakaoManualService

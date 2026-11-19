@@ -1,5 +1,17 @@
 # KakaoTalk 구현 체크포인트
 
+## AUTO에서 MANUAL로 돌아갈 때의 원격 로그인 정체 수정
+
+운영에서 AUTO 브라우저 종료와 프로필 잠금 해제가 확인됐으나, 후속 MANUAL 요청이
+`PREPARING`에 머물러 다른 요청에 `KAKAO_ARCHIVE_REMOTE_PROFILE_BUSY`가 반환됐다.
+실행 환경의 읽기 전용 진단에서 MANUAL 입력은 새 브라우저에 아직 전달되지 않았고,
+닫힌 AUTO 선행 실행을 확인하는 callback에서 `NameError`가 났다. 해당 함수 import가
+타입 검사 전용 블록에 있었던 것을 활성 런타임의 지연 import로 옮겼다.
+
+기존 MANUAL 제어 24건 및 guarded disposable PostgreSQL 3건 검증을 통과했다. 통합 검사는
+정상 owner composition을 통해 실제 닫힌 AUTO fence를 읽는다. 이전 수집 실패나 이미 수락된
+로그인 요청을 직접 변경하거나 브라우저를 새로 시작하지 않는다.
+
 ## 운영 재수집에서 카카오 계정 화면 이동 확인
 
 `2026-11-19 04:56:37 UTC` 관리자 요청은 화면 준비를 기다리는 운영 수집기에서
