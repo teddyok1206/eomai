@@ -1,14 +1,20 @@
 # KakaoTalk 구현 체크포인트
 
-## Studio 수집 상태의 로그인 필요 안내 — 소스
+## Studio 수집 상태의 로그인 필요 안내
 
 Studio의 같은 run 조회는 선택 `include_failure_reason`으로 `FAILED/AUTH_REQUIRED`의 정확한
 채택 근거가 있을 때만 ‘카카오 로그인 필요’를 표시한다. 수집 실패/상태 버전을 다시 쓰지 않고
 과거 일반 실패에는 사유를 추정하지 않는다. 기존 조회 및 시작 응답은 그대로이며 조회가 작업을
 접수하거나 재실행하지 않는다. 운영 설치 때는 새 읽기를 지원하는 Catalog를 API/Web보다 먼저
-준비하고, 수집기와 공유 계약을 함께 검증한다. 아직 운영 미배포다.
+준비하고, 수집기와 공유 계약을 함께 검증한다.
 HTTP·계약·화면 경계 검사 25건, 선택한 Chromium 화면 검사 및 임시 PostgreSQL 4건을
 통과했다. 현재 역할로만 조회하고, 정상·과거 실패와 같은 요청의 재조회에서 새 작업은 없다.
+
+`2026-11-19 05:52 UTC`에 Catalog `da5c8e32`, 수집기 `5d05ae00` 및 해당 공유 계약을 운영에
+먼저 반영했다. 기존 API·Web·QUERY/INDEX 및 자료 작업의 설치를 유지했고, Catalog socket과
+기존 API readiness·Studio HTTPS를 확인했다. API·Web의 새 조회 및 표시 패키지는 설치 전이다.
+이 단계에서는 카카오 접속, 로그인, 수집, 정본 변경 또는 DB migration이 없었다. 설치·복구 기록은
+`/var/lib/eom-kakao-status-runtime-release-da5c8e32/`에 있다.
 
 ## 수집 실패에서 ‘카카오 로그인 필요’ 근거 보존 — 소스
 
