@@ -8,7 +8,11 @@ import pytest
 from eom_kakao_archive_collector import open_room_capture as capture
 from eom_kakao_archive_collector.manual_capture_files import DownloadedFile
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
-from eom_kakao_archive_collector.room_read_transfer import CompletedUnassociatedPhoto, RoomTransfer
+from eom_kakao_archive_collector.room_read_transfer import (
+    CompletedUnassociatedPhoto,
+    RefusedPhotoAction,
+    RoomTransfer,
+)
 from eom_kakao_archive_contracts.manual_observation import ManualDocument
 
 PATH = "/space/work/channel/channel/chats"
@@ -147,5 +151,39 @@ def test_completed_unbound_photo_preserves_verified_inputs_and_exports_csv_once(
         capture.RoomReadAction.DOWNLOAD_IMAGE,
         capture.RoomReadAction.DOWNLOAD_IMAGE,
         capture.RoomReadAction.EXPORT_CSV,
+    ]
+    menu.assert_awaited_once()
+
+
+def test_refused_photo_keeps_its_position_and_collects_other_inputs(monkeypatch):
+    value = document([(FIRST, False), (SECOND, False)])
+    photo = RoomTransfer(DownloadedFile(10, "sha256:" + "a" * 64), value)
+    csv = RoomTransfer(DownloadedFile(20, "sha256:" + "b" * 64), value)
+    monkeypatch.setattr(capture, "observe_room_document", AsyncMock(return_value=value))
+    monkeypatch.setattr(capture, "reserve_download_payload", Mock())
+    read = AsyncMock(
+        side_effect=(RefusedPhotoAction("KAKAO_ROOM_READ_ACTION_UNAVAILABLE"), photo, csv)
+    )
+    menu = AsyncMock(return_value=True)
+    monkeypatch.setattr(capture, "receive_room_transfer", read)
+    monkeypatch.setattr(capture, "trigger_room_read_action", menu)
+    result = asyncio.run(
+        capture.capture_open_room(
+            Mock(),
+            channel_key="channel",
+            room_key="room",
+            incoming=Path("/synthetic/incoming"),
+            outputs=Path("/synthetic/outputs"),
+        )
+    )
+    assert result.csv is csv and result.error_code is None
+    assert result.unresolved_visible_bubbles == 1
+    assert [(stored.image_path, stored.member_name) for stored in result.photos] == [
+        (SECOND, "photo-2.bin")
+    ]
+    assert [args.kwargs["destination"].name for args in read.await_args_list] == [
+        "photo-1.bin",
+        "photo-2.bin",
+        "source.csv",
     ]
     menu.assert_awaited_once()

@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from eom_kakao_archive_collector import room_read_transfer as transfer
 from eom_kakao_archive_collector.profile import BrowserRuntimeError
-from eom_kakao_archive_collector.room_read_actions import RoomReadAction, RoomReadActivation
+from eom_kakao_archive_collector.room_read_actions import (
+    RoomReadAction,
+    RoomReadActionRefused,
+    RoomReadActivation,
+)
 
 
 @pytest.fixture
@@ -65,6 +69,39 @@ def test_uncertain_transfer_keeps_start_fence_and_never_clicks_again(workspace, 
     with pytest.raises(BrowserRuntimeError, match="TRANSFER_ALREADY_STARTED"):
         asyncio.run(fetch(page, workspace))
     trigger.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("image", "outcome", "error_type"),
+    [
+        (True, "UNAVAILABLE", transfer.RefusedPhotoAction),
+        (False, "UNAVAILABLE", RoomReadActionRefused),
+        (True, "malformed", BrowserRuntimeError),
+        (True, "other-page", RoomReadActionRefused),
+        (True, "download", RoomReadActionRefused),
+    ],
+)
+def test_only_explicit_refusal_without_side_effect_separates_photo(
+    workspace, image, outcome, error_type
+):
+    _, destination = workspace
+    page = Page()
+    download = SimpleNamespace(url="https://other.invalid/", cancel=AsyncMock())
+
+    def evaluate(*_args):
+        if outcome == "other-page":
+            page.url += "/other"
+        if outcome == "download":
+            page.listeners["download"](download)
+        return {"unexpected": True} if outcome == "malformed" else "UNAVAILABLE"
+
+    page.evaluate.side_effect = evaluate
+    with pytest.raises(error_type, match="READ_ACTION_UNAVAILABLE") as failure:
+        asyncio.run(fetch(page, workspace, image=image))
+    assert type(failure.value) is error_type
+    assert destination.with_suffix(".started").is_file() and not destination.exists()
+    assert not page.listeners
+    assert download.cancel.await_count == int(outcome == "download")
 
 
 @pytest.mark.parametrize("duplicate", [False, True])

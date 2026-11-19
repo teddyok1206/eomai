@@ -83,6 +83,7 @@ TEXT_ONLY = AUTO_HTML.replace(
         "manual-dom-multiple",
         "scoped",
         "room",
+        "room-photo-refused",
         "room-direct-cdn",
         "room-direct-link",
         "room-direct-preview",
@@ -157,6 +158,18 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                     body = body.replace(
                         b"document.querySelector('.chat_popup').hidden=false",
                         f"window.open('{opened}?tracking=fixture','selected')".encode(),
+                    )
+                if route == PAGE and receiver == "room-photo-refused":
+                    body = body.replace(
+                        b"<a id=download class=btn_save",
+                        b"<a id=download class=btn_save "
+                        b"onclick=\"document.querySelector('#expired').remove()\"",
+                    ).replace(
+                        b"</div></div>\n</div>\n<div id=menu",
+                        b"</div></div><div class=item_chat id=expired><div class=set_chat>"
+                        b"<a class=link_pic><img class=thumb_g alt=photo></a>"
+                        b'<a class=btn_save href="/api/profiles/p/chats/r/message/later/image">'
+                        b"photo</a></div></div></div><div id=menu",
                     )
                 if (
                     route == PAGE
@@ -431,10 +444,13 @@ async def main():
      capture=await capture_open_room_attempt(
        page,command,channel_key='p',room_key='r',incoming=incoming,outputs=outputs)
      assert capture.error_code is None and capture.csv and len(capture.photos)==1
-     assert capture.unresolved_visible_bubbles==0
+     assert capture.unresolved_visible_bubbles==int(sys.argv[2]=='room-photo-refused')
     evidence=(outputs/'open-room.json').read_bytes()
     proof=OpenRoomDownloadReceipt.decode(evidence)
     assert (outputs/'source.csv').read_bytes()==b'DATE,USER,MESSAGE'+bytes([10])
+    if sys.argv[2]=='room-photo-refused':
+     assert proof.unresolved_visible_bubbles==1
+     assert (outputs/'photo-2.started').is_file() and not (outputs/'photo-2.bin').exists()
     if sys.argv[2]=='auto-text':
      assert not proof.photos and not (outputs/'photo-1.bin').exists()
      document=proof.csv_document

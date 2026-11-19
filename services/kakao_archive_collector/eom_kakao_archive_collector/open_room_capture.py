@@ -22,6 +22,7 @@ from .profile import BrowserRuntimeError
 from .room_read_actions import RoomReadAction, trigger_room_read_action
 from .room_read_transfer import (
     CompletedUnassociatedPhoto,
+    RefusedPhotoAction,
     RoomTransfer,
     RoomTransferPage,
     observe_room_document,
@@ -138,6 +139,9 @@ async def capture_open_room(
                     destination=outputs / name,
                     image_path=target,
                 )
+            except RefusedPhotoAction:
+                # The fixed read guard did not click; a fresh guard may read the next photo.
+                continue
             except CompletedUnassociatedPhoto:
                 # Do not collect more ambiguous photos; the independent CSV can still be read.
                 break

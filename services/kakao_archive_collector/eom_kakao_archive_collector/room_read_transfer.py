@@ -23,7 +23,7 @@ from .manual_observation import (
     download_target,
 )
 from .profile import BrowserRuntimeError
-from .room_read_actions import RoomReadAction, activate_room_read_action
+from .room_read_actions import RoomReadAction, RoomReadActionRefused, activate_room_read_action
 
 _EVENT_SECONDS = 8
 _TRANSFER_SECONDS = 60
@@ -52,6 +52,10 @@ class RoomTransfer:
 
 class CompletedUnassociatedPhoto(BrowserRuntimeError):
     """An observed direct photo transfer ended, but its bytes cannot be assigned."""
+
+
+class RefusedPhotoAction(BrowserRuntimeError):
+    """The photo was not clicked and no download event was observed."""
 
 
 class _TransferMatch(Enum):
@@ -137,9 +141,14 @@ async def receive_room_transfer(
         for name, callback in (("request", request_event), ("download", download_event)):
             page.on(name, callback)
             listeners.append((name, callback))
-        activation = await activate_room_read_action(
-            page, action, channel_key=channel_key, room_key=room_key, image_path=image_path
-        )
+        try:
+            activation = await activate_room_read_action(
+                page, action, channel_key=channel_key, room_key=room_key, image_path=image_path
+            )
+        except RoomReadActionRefused as error:
+            if image and not received.done() and download_page_path(page) == path:
+                raise RefusedPhotoAction(error.code) from None
+            raise
         try:
             download, match = await asyncio.wait_for(asyncio.shield(received), _EVENT_SECONDS)
             if duplicates or match is _TransferMatch.UNASSOCIATED:

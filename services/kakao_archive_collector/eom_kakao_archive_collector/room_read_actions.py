@@ -27,6 +27,10 @@ class RoomActionPage(Protocol):
     async def evaluate(self, expression: str, arg: object) -> object: ...
 
 
+class RoomReadActionRefused(BrowserRuntimeError):
+    """The fixed evaluator explicitly returned before it clicked."""
+
+
 @dataclass(frozen=True, slots=True)
 class RoomReadActivation:
     triggered: bool
@@ -195,6 +199,8 @@ async def activate_room_read_action(
         raise BrowserRuntimeError("KAKAO_ROOM_READ_ACTION_UNCERTAIN") from None
     if response == "TRIGGERED":
         return RoomReadActivation(True)
+    if response == "UNAVAILABLE":
+        raise RoomReadActionRefused("KAKAO_ROOM_READ_ACTION_UNAVAILABLE")
     if response == "ALREADY_OPEN" and action is RoomReadAction.OPEN_EXPORT_MENU:
         return RoomReadActivation(False)
     if (
