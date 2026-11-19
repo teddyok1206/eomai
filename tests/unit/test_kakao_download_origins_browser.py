@@ -96,6 +96,9 @@ TEXT_ONLY = AUTO_HTML.replace(
         "auto-popup",
         "auto-popup-direct",
         "auto-popup-direct-other-room",
+        "auto-popup-direct-return-list",
+        "auto-popup-direct-account",
+        "auto-popup-direct-large-dom",
         "auto-wrong-popup",
     ],
 )
@@ -147,12 +150,27 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
             elif (
                 host == "business.kakao.com"
                 and route == POPUP
-                and receiver == "auto-popup-direct-other-room"
+                and receiver
+                in {
+                    "auto-popup-direct-other-room",
+                    "auto-popup-direct-return-list",
+                    "auto-popup-direct-account",
+                }
             ):
                 self.send_response(302)
-                self.send_header("Location", PAGE)
+                self.send_header(
+                    "Location",
+                    {
+                        "auto-popup-direct-other-room": PAGE,
+                        "auto-popup-direct-return-list": LIST,
+                        "auto-popup-direct-account": "https://accounts.kakao.com/synthetic-sign-in",
+                    }[receiver],
+                )
                 body = b""
-            elif host == "business.kakao.com" and route == "/synthetic-sign-in":
+            elif (
+                host in {"business.kakao.com", "accounts.kakao.com"}
+                and route == "/synthetic-sign-in"
+            ):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 body = b"<!doctype html><title>Synthetic sign-in page</title>"
@@ -162,6 +180,8 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
                 body = (
                     (TEXT_ONLY if receiver == "auto-text" else AUTO_HTML) if route == LIST else HTML
                 )
+                if route == POPUP and receiver == "auto-popup-direct-large-dom":
+                    body = body.replace(b"</body>", b"<i></i>" * 8200 + b"</body>")
                 if route == LIST and receiver in {
                     "auto-popup",
                     "auto-wrong-popup",
@@ -250,7 +270,11 @@ def test_real_redirect_event_and_direct_dom_text_with_no_private_subtree(tmp_pat
 
     class Proxy(BaseHTTPRequestHandler):
         def do_CONNECT(self):
-            if self.path not in {"business.kakao.com:443", "k.kakaocdn.net:443"}:
+            if self.path not in {
+                "business.kakao.com:443",
+                "k.kakaocdn.net:443",
+                "accounts.kakao.com:443",
+            }:
                 self.send_error(403)
                 return
             self.connection.settimeout(10)
@@ -440,16 +464,23 @@ async def main():
      direct=sys.argv[2].startswith('auto-popup-direct')
      wire=AutoRoomPopupCommand if direct else AutoRoomCommand
      request=wire(command=command,space_key='synthetic',channel_key='p',room_key='r')
-     if sys.argv[2] in ('auto-wrong-popup','auto-popup-direct-other-room'):
+     refusals={
+       'auto-wrong-popup':'KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED',
+       'auto-popup-direct-other-room':'KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION',
+       'auto-popup-direct-return-list':'KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED',
+       'auto-popup-direct-account':'KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN',
+       'auto-popup-direct-large-dom':'KAKAO_AUTO_ROOM_DOM_LIMIT',
+     }
+     if sys.argv[2] in refusals:
       try:
        await read_registered_room(page,request,incoming=incoming,outputs=outputs)
       except BrowserRuntimeError as error:
-       assert error.code==('KAKAO_AUTO_VERIFIED_POPUP_NOT_CONFIRMED' if direct else
-                          'KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED')
+       assert error.code==refusals[sys.argv[2]],error.code
       else:
        raise AssertionError('wrong popup must not be read')
-      assert await page.evaluate('window.roomClicks')==(None if direct else 1)
-      assert await page.evaluate('window.danger')==0
+      clicks=0 if sys.argv[2]=='auto-popup-direct-return-list' else None if direct else 1
+      assert await page.evaluate('window.roomClicks')==clicks
+      assert (await page.evaluate('window.danger')) in (None,0)
       assert not tuple(outputs.iterdir())
       await context.close(); await browser.close()
       print(json.dumps({'synthetic_real_chromium_redirect':'PASS','wrong_popup':'REFUSED'}))
@@ -552,4 +583,5 @@ asyncio.run(main())
     elif receiver == "auto-persistent-other-page":
         assert result["persistent_auto"] == "REFUSED"
     elif receiver.startswith("auto-popup-direct"):
-        assert POPUP in visited_chat_pages and LIST not in visited_chat_pages
+        assert POPUP in visited_chat_pages
+        assert (LIST in visited_chat_pages) == (receiver == "auto-popup-direct-return-list")

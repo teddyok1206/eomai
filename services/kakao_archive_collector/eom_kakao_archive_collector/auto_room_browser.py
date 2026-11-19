@@ -5,6 +5,7 @@ import os
 import pwd
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlsplit
 
 from eom_kakao_archive_contracts.auto_room_command import (
     MAX_AUTO_ROOM_COMMAND_BYTES,
@@ -24,23 +25,34 @@ from .supervisor import REQUEST
 DOWNLOADS = Path("/var/lib/eom-kakao/downloads")
 ROOM_COMMAND_WAIT = 120.0
 ROOM_LOAD_SECONDS = 10.0
+LIST_DIAGNOSTIC_SECONDS = 2.0
 _ORIGIN = "https://business.kakao.com"
+_DOM_FAILURES = frozenset(
+    {
+        "KAKAO_AUTO_ROOM_DOM_SCOPE_UNAVAILABLE",
+        "KAKAO_AUTO_ROOM_DOM_LIMIT",
+        "KAKAO_AUTO_ROOM_POPUP_CONFLICT",
+        "KAKAO_AUTO_ROOM_LIST_ROWS_AMBIGUOUS",
+        "KAKAO_AUTO_ROOM_LIST_BUTTON_UNCONFIRMED",
+    }
+)
 
 # Deliberately no heuristics for unknown provider UI: a selected room is not a
 # display name, and sending/control areas are never navigation targets.
 _OPEN_ROOM = r"""({path, room, phase}) => {
   if (location.origin !== 'https://business.kakao.com' || location.pathname !== path ||
-      window.top !== window || !document.body) return 'UNAVAILABLE';
+      window.top !== window || !document.body) return 'KAKAO_AUTO_ROOM_DOM_SCOPE_UNAVAILABLE';
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  for (let count = 0; walker.nextNode(); count++) if (count === 8192) return 'UNAVAILABLE';
+  for (let count = 0; walker.nextNode(); count++)
+    if (count === 8192) return 'KAKAO_AUTO_ROOM_DOM_LIMIT';
   const visible = node => node instanceof HTMLElement && node.isConnected &&
     !node.closest('[hidden],[inert],[aria-hidden="true"],[contenteditable],form') &&
     node.checkVisibility({visibilityProperty:true,opacityProperty:true});
   const popups = Array.from(document.querySelectorAll('.chat_popup')).filter(visible);
-  if (popups.length > 1) return 'UNAVAILABLE';
+  if (popups.length > 1) return 'KAKAO_AUTO_ROOM_POPUP_CONFLICT';
   if (popups.length === 1) {
     const shownRoom = popups[0].getAttribute('data-chat-id');
-    if (shownRoom !== null) return shownRoom === room ? 'OPENED' : 'UNAVAILABLE';
+    if (shownRoom !== null) return shownRoom === room ? 'OPENED' : 'KAKAO_AUTO_ROOM_POPUP_CONFLICT';
     const prefix = '/api/profiles/' + path.split('/')[4] + '/chats/' + room + '/';
     const links = Array.from(popups[0].querySelectorAll('.item_chat .set_chat a.btn_save'))
       .filter(visible);
@@ -56,12 +68,12 @@ _OPEN_ROOM = r"""({path, room, phase}) => {
     .filter(row => visible(row) && row.getAttribute('data-chat-id') === room &&
       !row.closest('.chat_popup'));
   if (!rows.length) return 'PENDING';
-  if (rows.length !== 1) return 'UNAVAILABLE';
+  if (rows.length !== 1) return 'KAKAO_AUTO_ROOM_LIST_ROWS_AMBIGUOUS';
   const candidates = Array.from(rows[0].querySelectorAll(':scope > button[type="button"]'))
     .filter(node => visible(node) && !node.disabled && !node.form &&
       node.getAttribute('aria-disabled') !== 'true' &&
       node.getAttribute('data-chat-id') === room);
-  if (candidates.length !== 1) return 'UNAVAILABLE';
+  if (candidates.length !== 1) return 'KAKAO_AUTO_ROOM_LIST_BUTTON_UNCONFIRMED';
   if (phase === 'PROBE') return 'READY';
   if (phase !== 'CLICK') return 'UNAVAILABLE';
   const target = candidates[0];
@@ -77,6 +89,24 @@ _OPEN_ROOM = r"""({path, room, phase}) => {
 
 class AutoRoomPage(RoomTransferPage, Protocol):
     async def goto(self, url: str, *, wait_until: str, timeout: float) -> object: ...
+
+
+def _account_origin(page: AutoRoomPage) -> bool:
+    try:
+        url = urlsplit(page.url)
+        return (
+            url.scheme == "https"
+            and url.hostname == "accounts.kakao.com"
+            and url.port in {None, 443}
+            and url.username is None
+            and url.password is None
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _dom_failure(result: object, fallback: str) -> str:
+    return result if isinstance(result, str) and result in _DOM_FAILURES else fallback
 
 
 async def wait_for_room_command(
@@ -149,8 +179,6 @@ async def read_registered_room(
         )
     except Exception:
         raise BrowserRuntimeError("KAKAO_AUTO_CHANNEL_NAVIGATION_FAILED") from None
-    if download_page_path(page) != destination:
-        raise BrowserRuntimeError(rejection)
 
     async def evaluate(candidate: AutoRoomPage, candidate_path: str, phase: str) -> object:
         return await asyncio.wait_for(
@@ -161,6 +189,33 @@ async def read_registered_room(
         )
 
     loop = asyncio.get_running_loop()
+    observed = download_page_path(page)
+    if observed != destination:
+        if not direct:
+            raise BrowserRuntimeError(rejection)
+        if observed != path:
+            raise BrowserRuntimeError(
+                "KAKAO_AUTO_POPUP_TO_ACCOUNT_ORIGIN"
+                if _account_origin(page)
+                else "KAKAO_AUTO_POPUP_TO_OTHER_DESTINATION"
+            )
+        # A return to the exact known list is useful evidence, never fallback authority.
+        try:
+            async with asyncio.timeout(LIST_DIAGNOSTIC_SECONDS):
+                probe = await evaluate(page, path, "PROBE")
+                while probe == "PENDING":
+                    await asyncio.sleep(0.2)
+                    probe = await evaluate(page, path, "PROBE")
+        except Exception:
+            probe = None
+        message = {
+            "READY": "KAKAO_AUTO_POPUP_TO_LIST_TARGET_VERIFIED",
+            "OPENED": "KAKAO_AUTO_POPUP_TO_LIST_ALREADY_OPEN",
+        }.get(probe if isinstance(probe, str) else "")
+        raise BrowserRuntimeError(
+            message or _dom_failure(probe, "KAKAO_AUTO_POPUP_TO_LIST_TARGET_NOT_OBSERVED")
+        )
+
     until = loop.time() + ROOM_LOAD_SECONDS
     state: object = "PENDING"
     while state == "PENDING" and loop.time() < until:
@@ -202,7 +257,9 @@ async def read_registered_room(
         finally:
             page.remove_listener("popup", opened)
     if state != "OPENED":
-        raise BrowserRuntimeError(rejection if direct else "KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED")
+        raise BrowserRuntimeError(
+            _dom_failure(state, rejection if direct else "KAKAO_AUTO_ROOM_SELECTOR_UNVERIFIED")
+        )
     result = await capture_open_room_attempt(
         selected,
         command.command,
