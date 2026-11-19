@@ -9,8 +9,16 @@
 타입 검사 전용 블록에 있었던 것을 활성 런타임의 지연 import로 옮겼다.
 
 기존 MANUAL 제어 24건 및 guarded disposable PostgreSQL 3건 검증을 통과했다. 통합 검사는
-정상 owner composition을 통해 실제 닫힌 AUTO fence를 읽는다. 이전 수집 실패나 이미 수락된
-로그인 요청을 직접 변경하거나 브라우저를 새로 시작하지 않는다.
+정상 owner composition을 통해 실제 닫힌 AUTO fence를 읽는다.
+
+`2026-11-19 05:13 UTC`에 `1f31516a`의 Catalog 실행 코드만 운영에 반영했다. Catalog socket,
+API readiness와 Studio HTTPS를 확인했고 API/Web, collector `680f33e7`, `ONE_ROOM`, GPU와
+자료 작업의 설치 경로는 유지했다. 새 DB migration은 없으며 설치·복구 기록은
+`/var/lib/eom-kakao-manual-handoff-release-1f31516a/`에 있다.
+
+관리자가 이미 시작한 `05:05:14 UTC` MANUAL 요청이 공식 조정기를 통해 `ACTIVE`로 진행했고
+브라우저 및 원격 화면 서비스가 기동했다. 이전 수집 실패 5건과 정식 원본 0건은 그대로다.
+카카오 인증 완료나 실제 사진·CSV 수집 성공은 이 확인에 포함되지 않는다.
 
 ## 운영 재수집에서 카카오 계정 화면 이동 확인
 
